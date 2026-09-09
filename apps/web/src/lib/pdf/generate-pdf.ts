@@ -15,12 +15,9 @@ async function pdfFromHtml(html: string, filename: string): Promise<PdfResult> {
   let browser;
   if (isVercel) {
     const chromium = (await import("@sparticuz/chromium-min")).default;
-    const remote = process.env.CHROMIUM_REMOTE_EXEC_PATH;
-    if (!remote) {
-      throw new Error(
-        "Falta CHROMIUM_REMOTE_EXEC_PATH (URL del pack de chromium para Vercel)"
-      );
-    }
+    const remote =
+      process.env.CHROMIUM_REMOTE_EXEC_PATH ??
+      "https://github.com/Sparticuz/chromium/releases/download/v152.0.0/chromium-v152.0.0-pack.x64.tar";
     browser = await puppeteer.launch({
       executablePath: await chromium.executablePath(remote),
       args: chromium.args,
