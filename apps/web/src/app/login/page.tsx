@@ -42,20 +42,19 @@ export default function LoginPage() {
     <div className="grid min-h-screen bg-surface text-on-surface lg:grid-cols-2">
       <section className="relative hidden overflow-hidden bg-[#eef3fb] text-[#081a34] dark:bg-[#081a34] dark:text-white lg:flex lg:flex-col lg:justify-between lg:p-12">
         <div className="pointer-events-none absolute inset-0 opacity-20 [background:radial-gradient(circle_at_20%_20%,#ffffff_0,transparent_45%),radial-gradient(circle_at_85%_75%,#8590a6_0,transparent_45%)] dark:[background:radial-gradient(circle_at_20%_20%,#3c5878_0,transparent_45%),radial-gradient(circle_at_85%_75%,#172d49_0,transparent_45%)]" />
-        <div className="relative overflow-hidden rounded-xl bg-[#dbe7f5]/70 p-6 min-h-[120px] dark:bg-[#0b2540]/70">
+        <div className="relative overflow-hidden rounded-xl p-6 min-h-[120px]">
           <img
             src="/fondo.gif"
             alt=""
             aria-hidden
-            className="absolute inset-0 h-full w-full scale-105 object-cover opacity-85 blur-md"
+            className="absolute inset-0 h-full w-full scale-105 object-cover blur-[2px]"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#eef3fb]/90 via-[#eef3fb]/30 to-[#eef3fb]/0 dark:from-[#081a34]/80 dark:via-[#081a34]/20 dark:to-[#081a34]/0" />
-          <div className="relative flex items-center gap-3">
-            <img src="/logo-white-mode.png" alt="CP System ERP" className="h-12 w-16 object-contain dark:hidden" />
-            <img src="/logo-black-mode.png" alt="CP System ERP" className="hidden h-12 w-16 object-contain dark:block" />
+          <div className="absolute inset-0 bg-slate-950/45" />
+          <div className="relative flex items-center gap-3 text-white">
+            <img src="/logo-black-mode.png" alt="CP System ERP" className="h-12 w-16 object-contain" />
             <div>
-              <span className="block font-headline-md font-bold">CP System ERP</span>
-              <span className="font-label-md uppercase tracking-wider text-[#294261] dark:text-white/80">Sistema de gestión integral ERP</span>
+              <span className="block font-headline-md font-bold text-white">CP System ERP</span>
+              <span className="font-label-md uppercase tracking-wider text-white/85">Sistema de gestión integral ERP</span>
             </div>
           </div>
         </div>
