@@ -5,7 +5,7 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build",
+    "//build": "tauri build (solo CI desktop-job; fuera de Turbo para no romper el build de Vercel)",
     "lint": "eslint src --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
