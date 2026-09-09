@@ -3,6 +3,7 @@ import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 /** Requiere contract.read + activity.read. Devuelve métricas + actividad reciente. */
 export async function GET(req: Request) {

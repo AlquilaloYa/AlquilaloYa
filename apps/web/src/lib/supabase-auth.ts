@@ -34,6 +34,7 @@ export async function loginWithPassword(
     headers: { "Content-Type": "application/json", apikey: anon },
     body: JSON.stringify({ email, password }),
     cache: "no-store",
+    signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) return null;
   const data = (await res.json()) as {
@@ -61,6 +62,7 @@ export async function verifyAccessToken(
     const res = await fetch(`${url}/auth/v1/user`, {
       headers: { Authorization: `Bearer ${accessToken}`, apikey: anon },
       cache: "no-store",
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { email?: string; id?: string };
@@ -84,6 +86,7 @@ export async function refreshSession(
       headers: { "Content-Type": "application/json", apikey: anon },
       body: JSON.stringify({ refresh_token: refreshToken }),
       cache: "no-store",
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
     const d = (await res.json()) as { access_token?: string; refresh_token?: string };
