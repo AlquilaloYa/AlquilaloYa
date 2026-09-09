@@ -1,4 +1,4 @@
-export interface SeparacionRecord {
+﻿export interface SeparacionRecord {
   departamentoId: string;
   contactoId: string;
   montoSeparacion: number;
@@ -15,8 +15,6 @@ export interface SeparacionRecord {
   baucherSeparacion: string;
   estado: "SEPARADO" | "GARANTIA_COMPLETADA" | "INACTIVO_48H" | "INACTIVO_168H" | "PERDER_TODO" | "CONTRATO_PREVIO" | "CONTRATO_REAL";
 }
-
-export const SEPARACION_STORAGE_KEY = "sc_separaciones_flow_v1";
 
 export function getTipoSeparacion(sep: SeparacionRecord): "500" | "TOTAL" | "FLUCTUANTE" {
   if (sep.tipoSeparacion) return sep.tipoSeparacion;
@@ -68,13 +66,76 @@ export function obtenerTiempoRestante(sep: SeparacionRecord): { texto: string; c
   };
 }
 
-export function leerSeparaciones(): SeparacionRecord[] {
-  if (typeof window === "undefined") return [];
+
+import { apiFetch } from "./api";
+
+const LEGACY_SEP_KEY = "sc_separaciones_flow_v1";
+
+export async function leerSeparaciones(): Promise<SeparacionRecord[]> {
   try {
-    const raw = window.localStorage.getItem(SEPARACION_STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as SeparacionRecord[];
+    const res = await apiFetch("/api/separaciones");
+    if (!res.ok) return [];
+    return (await res.json()) as SeparacionRecord[];
   } catch {
     return [];
+  }
+}
+
+/** Crea o reemplaza la separación de un departamento (1 activa por depto). */
+export async function guardarSeparacion(
+  sep: SeparacionRecord
+): Promise<SeparacionRecord> {
+  const res = await apiFetch("/api/separaciones", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(sep),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? "No se pudo guardar la separación");
+  }
+  return (await res.json()) as SeparacionRecord;
+}
+
+export async function quitarSeparacion(departamentoId: string): Promise<void> {
+  const res = await apiFetch(
+    `/api/separaciones?departamentoId=${encodeURIComponent(departamentoId)}`,
+    { method: "DELETE" }
+  );
+  if (!res.ok && res.status !== 404) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? "No se pudo quitar la separación");
+  }
+}
+
+/**
+ * Migración de una sola vez: separaciones de este navegador → BD.
+ * Remapa contactoId por el mapa viejo→nuevo (de contactos) si se provee.
+ * Solo si la BD está vacía y hay datos locales.
+ */
+export async function migrarSeparacionesLocales(
+  contactoIdMap?: Map<string, string>
+): Promise<void> {
+  if (typeof window === "undefined") return;
+  const raw = window.localStorage.getItem(LEGACY_SEP_KEY);
+  if (!raw) return;
+  window.localStorage.removeItem(LEGACY_SEP_KEY);
+  try {
+    const locales = JSON.parse(raw) as SeparacionRecord[];
+    if (!Array.isArray(locales) || locales.length === 0) return;
+    const server = await leerSeparaciones();
+    if (server.length > 0) return;
+    for (const s of locales) {
+      try {
+        // Remapear el contacto local viejo al id de BD; si no hay mapeo,
+        // se deja sin contacto (null en el server).
+        const contactoId = contactoIdMap?.get(s.contactoId) ?? "";
+        await guardarSeparacion({ ...s, contactoId });
+      } catch {
+        /* siguiente */
+      }
+    }
+  } catch {
+    /* ilegible */
   }
 }

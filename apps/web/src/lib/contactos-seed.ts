@@ -1,4 +1,5 @@
 import { PersonType } from "@contract/domain/client";
+import { apiFetch } from "./api";
 
 export interface ArchivoAdjunto {
   id: string;
@@ -29,63 +30,80 @@ export interface ContactSeed {
   mascotasItems?: string[];
 }
 
+/** Clave LEGACY (localStorage) usada solo por la migración de una sola vez. */
 export const CONTACTOS_STORAGE_KEY = "sc_contactos_v7";
 
-const NATURALES: [string, string][] = [];
-
-const JURIDICAS: string[] = [];
-
-function numeroTelefono(i: number): string {
-  const movil = String(900000000 + i * 13721);
-  return "+51" + movil;
-}
-
-function booleanoDe(i: number, salto: number): boolean {
-  return Math.floor(i / salto) % 2 !== 0;
-}
-
-export function seedContactos(): ContactSeed[] {
-  const naturales: ContactSeed[] = NATURALES.map(([nombre, apellido], i) => ({
-    id: `n${i + 1}`,
-    nombre,
-    apellido,
-    tipoPersona: PersonType.NATURAL,
-    dni: String(40000000 + i * 9843).padEnd(8, "0").slice(0, 8),
-    ruc: null,
-    email: `${nombre.toLowerCase().replace(/[^a-z]/g, "")}.${apellido.toLowerCase().replace(/[^a-z]/g, "")}@example.com`,
-    telefono: numeroTelefono(i),
-    copiaDni: [],
-    copiaBoletas: [],
-    copiaAntecedentes: [],
-    mascotas: booleanoDe(i, 2),
-  }));
-
-  const juridicas: ContactSeed[] = JURIDICAS.map((nombre, i) => ({
-    id: `j${i + 1}`,
-    nombre,
-    apellido: "",
-    tipoPersona: PersonType.LEGAL,
-    dni: `R20${String(300000000 + i * 1234)}`,
-    ruc: String(20100000001 + i * 9873),
-    email: `contacto${i + 1}@${nombre.toLowerCase().replace(/[^a-z]/g, "").slice(0, 12)}.pe`,
-    telefono: "+51" + String(100000000 + i * 89121).slice(0, 9),
-    copiaDni: [],
-    copiaBoletas: [],
-    copiaAntecedentes: [],
-    mascotas: booleanoDe(i + 60, 4),
-  }));
-
-  return [...naturales, ...juridicas];
-}
-
-export function leerContactos(): ContactSeed[] {
-  const stored = localStorage.getItem(CONTACTOS_STORAGE_KEY);
-  if (stored) {
-    try {
-      return JSON.parse(stored) as ContactSeed[];
-    } catch {
-      return seedContactos();
-    }
+export async function obtenerContactos(): Promise<ContactSeed[]> {
+  try {
+    const res = await apiFetch("/api/contactos");
+    if (!res.ok) return [];
+    return (await res.json()) as ContactSeed[];
+  } catch {
+    return [];
   }
-  return seedContactos();
+}
+
+export async function crearContacto(data: ContactSeed): Promise<ContactSeed> {
+  const res = await apiFetch("/api/contactos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? "No se pudo crear el contacto");
+  }
+  return (await res.json()) as ContactSeed;
+}
+
+export async function actualizarContacto(data: ContactSeed): Promise<ContactSeed> {
+  const res = await apiFetch("/api/contactos", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? "No se pudo actualizar el contacto");
+  }
+  return (await res.json()) as ContactSeed;
+}
+
+export async function eliminarContacto(id: string): Promise<void> {
+  const res = await apiFetch(`/api/contactos?id=${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? "No se pudo eliminar el contacto");
+  }
+}
+
+/**
+ * Migración de una sola vez: contactos de este navegador (localStorage) → BD.
+ * Solo si la BD está vacía y hay datos locales. Devuelve el mapa viejoId→nuevoId.
+ */
+export async function migrarContactosLocales(): Promise<Map<string, string>> {
+  const mapa = new Map<string, string>();
+  if (typeof window === "undefined") return mapa;
+  const raw = window.localStorage.getItem(CONTACTOS_STORAGE_KEY);
+  if (!raw) return mapa;
+  window.localStorage.removeItem(CONTACTOS_STORAGE_KEY);
+  try {
+    const locales = JSON.parse(raw) as ContactSeed[];
+    if (!Array.isArray(locales) || locales.length === 0) return mapa;
+    const server = await obtenerContactos();
+    if (server.length > 0) return mapa;
+    for (const c of locales) {
+      try {
+        const creado = await crearContacto(c);
+        mapa.set(c.id, creado.id);
+      } catch {
+        /* siguiente */
+      }
+    }
+  } catch {
+    /* datos corruptos: ya se descartó la clave */
+  }
+  return mapa;
 }

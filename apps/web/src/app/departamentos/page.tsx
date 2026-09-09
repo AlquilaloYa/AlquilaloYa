@@ -8,8 +8,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@contract/ui/component
 import { Label } from "@contract/ui/components/label";
 import { apiFetch } from "@/lib/api";
 import { RefreshCw, Upload } from "lucide-react";
-import { leerContactos, type ContactSeed as ContactoAsig } from "@/lib/contactos-seed";
-import { inventarioDepartamento, guardarInventarioDepartamento } from "@/lib/inventarios-departamento";
+import { obtenerContactos, type ContactSeed as ContactoAsig } from "@/lib/contactos-seed";
+import {
+  inventarioDepartamento,
+  guardarInventarioDepartamento,
+  cargarInventarios,
+} from "@/lib/inventarios-departamento";
+import {
+  type SeparacionRecord,
+  leerSeparaciones,
+  guardarSeparacion,
+  quitarSeparacion,
+} from "@/lib/separaciones";
+import { migrarDatosLocales } from "@/lib/migracion-local";
 
 interface DepartmentView {
   id: string;
@@ -26,26 +37,6 @@ interface DepartmentView {
   activo: boolean;
   disponibilidad: { disponible: false; fechaFin: string; dias: number } | null;
 }
-
-interface SeparacionRecord {
-  departamentoId: string;
-  contactoId: string;
-  montoSeparacion: number;
-  tipoSeparacion: "500" | "TOTAL" | "FLUCTUANTE";
-  garantiaExtendida: boolean;
-  baucherGarantiaExtendida?: string | null;
-  fechaGarantiaExtendida?: string | null;
-  fechaSeparacion: string;
-  diasTiempo?: number;
-  fechaLimiteManual?: string;
-  fechaLimite48h: string;
-  fechaLimite120h: string;
-  fechaLimite168h: string;
-  baucherSeparacion: string;
-  estado: "SEPARADO" | "GARANTIA_COMPLETADA" | "INACTIVO_48H" | "INACTIVO_168H" | "PERDER_TODO" | "CONTRATO_PREVIO" | "CONTRATO_REAL";
-}
-
-const SEPARACION_STORAGE_KEY = "sc_separaciones_flow_v1";
 
 export default function DepartamentosPage() {
   const [departments, setDepartments] = useState<DepartmentView[]>([]);
@@ -130,21 +121,14 @@ export default function DepartamentosPage() {
       const loadedDepartments = (await res.json()) as DepartmentView[];
       setDepartments(loadedDepartments);
 
-      const storedSep = localStorage.getItem(SEPARACION_STORAGE_KEY);
-      if (storedSep) {
-        try {
-          const parsed = JSON.parse(storedSep) as SeparacionRecord[];
-          const validDepartmentIds = new Set(loadedDepartments.map((d) => d.id));
-          const validSeparaciones = parsed.filter((sep) => validDepartmentIds.has(sep.departamentoId));
-          if (validSeparaciones.length !== parsed.length) {
-            localStorage.setItem(SEPARACION_STORAGE_KEY, JSON.stringify(validSeparaciones));
-          }
-          setSeparaciones(validSeparaciones);
-        } catch {
-          localStorage.removeItem(SEPARACION_STORAGE_KEY);
-          setSeparaciones([]);
-        }
-      }
+      await migrarDatosLocales();
+      const [seps, ctos] = await Promise.all([
+        leerSeparaciones(),
+        obtenerContactos(),
+      ]);
+      await cargarInventarios(true);
+      setSeparaciones(seps);
+      setContactos(ctos);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -154,15 +138,6 @@ export default function DepartamentosPage() {
 
   useEffect(() => {
     load();
-    setContactos(leerContactos());
-    const storedSep = localStorage.getItem(SEPARACION_STORAGE_KEY);
-    if (storedSep) {
-      try {
-        setSeparaciones(JSON.parse(storedSep) as SeparacionRecord[]);
-      } catch {
-        setSeparaciones([]);
-      }
-    }
   }, [load]);
 
   function getTipoSeparacion(sep: SeparacionRecord): "500" | "TOTAL" | "FLUCTUANTE" {
@@ -346,10 +321,10 @@ export default function DepartamentosPage() {
       baucherSeparacion: baucherUrl,
       estado: "SEPARADO",
     };
-    setSeparaciones((prev) => {
-      const next = [...prev.filter((s) => s.departamentoId !== elegidoId), nuevaSep];
-      localStorage.setItem(SEPARACION_STORAGE_KEY, JSON.stringify(next));
-      return next;
+    setSeparaciones((prev) => [...prev.filter((s) => s.departamentoId !== elegidoId), nuevaSep]);
+    void guardarSeparacion(nuevaSep).catch((err: Error) => {
+      setError(err.message ?? "No se pudo registrar la separación");
+      void load();
     });
     setError(null);
     setElegidoId(null);
@@ -362,10 +337,10 @@ export default function DepartamentosPage() {
   }
 
   function quitarAsignacion(deptId: string) {
-    setSeparaciones((prev) => {
-      const next = prev.filter((s) => s.departamentoId !== deptId);
-      localStorage.setItem(SEPARACION_STORAGE_KEY, JSON.stringify(next));
-      return next;
+    setSeparaciones((prev) => prev.filter((s) => s.departamentoId !== deptId));
+    void quitarSeparacion(deptId).catch((err: Error) => {
+      setError(err.message ?? "No se pudo quitar la separación");
+      void load();
     });
     if (elegidoId === deptId) {
       setElegidoId(null);
@@ -413,8 +388,8 @@ export default function DepartamentosPage() {
       setError("Es obligatorio subir el baucher de la garantía extendida.");
       return;
     }
-    setSeparaciones((prev) => {
-      const next = prev.map((s) =>
+    setSeparaciones((prev) =>
+      prev.map((s) =>
         s.departamentoId === deptId
           ? {
               ...s,
@@ -423,10 +398,20 @@ export default function DepartamentosPage() {
               fechaGarantiaExtendida: new Date().toISOString(),
             }
           : s
-      );
-      localStorage.setItem(SEPARACION_STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
+      )
+    );
+    const actual = separaciones.find((s) => s.departamentoId === deptId);
+    if (actual) {
+      void guardarSeparacion({
+        ...actual,
+        garantiaExtendida: true,
+        baucherGarantiaExtendida: baucherGarantiaUrl,
+        fechaGarantiaExtendida: new Date().toISOString(),
+      }).catch((err: Error) => {
+        setError(err.message ?? "No se pudo activar la garantía");
+        void load();
+      });
+    }
     setError(null);
     cerrarModalGarantia();
   }
@@ -800,7 +785,11 @@ export default function DepartamentosPage() {
                     })()}
                   </button>
                   <div className="flex justify-end">
-                  <Button onClick={() => { guardarInventarioDepartamento(inventarioDeptId, inventarioItems); setInventarioDeptId(null); }}>
+                  <Button onClick={() => {
+                    void guardarInventarioDepartamento(inventarioDeptId, inventarioItems)
+                      .then(() => setInventarioDeptId(null))
+                      .catch((err: Error) => setError(err.message ?? "No se pudo guardar el inventario"));
+                  }}>
                     Guardar inventario
                   </Button>
                   </div>

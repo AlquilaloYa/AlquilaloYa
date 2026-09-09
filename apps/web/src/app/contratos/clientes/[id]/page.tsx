@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, FileText } from "lucide-react";
@@ -156,21 +156,32 @@ export default function ClienteContratoPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [previewVoucher]);
 
-  const contacto = useMemo(() => {
-    try {
-      const raw = localStorage.getItem("sc_contactos_v6");
-      if (!raw) return null;
-      const lista = JSON.parse(raw) as ContactoDetalle[];
-      return (
-        lista.find(
-          (x) =>
-            (cliente?.ruc && x.ruc === cliente.ruc) ||
-            x.dni === (cliente?.documentoIdentidad ?? "")
-        ) ?? null
-      );
-    } catch {
-      return null;
+  const [contacto, setContacto] = useState<ContactoDetalle | null>(null);
+  useEffect(() => {
+    const dni = cliente?.documentoIdentidad;
+    if (!dni) {
+      setContacto(null);
+      return;
     }
+    let vivo = true;
+    void (async () => {
+      try {
+        const r = await apiFetch(
+          `/api/contactos?dni=${encodeURIComponent(dni)}`
+        );
+        if (!r.ok) {
+          if (vivo) setContacto(null);
+          return;
+        }
+        const lista = (await r.json()) as ContactoDetalle[];
+        if (vivo) setContacto(lista[0] ?? null);
+      } catch {
+        if (vivo) setContacto(null);
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
   }, [cliente]);
 
   const fechaInicio = contrato?.fechaInicio

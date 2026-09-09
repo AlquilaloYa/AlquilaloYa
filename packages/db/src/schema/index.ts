@@ -10,3 +10,4 @@ export * from "./documents";
 export * from "./contracts";
 export * from "./payments";
 export * from "./integrations";
+export * from "./ops";

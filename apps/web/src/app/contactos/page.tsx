@@ -10,10 +10,12 @@ import { Label } from "@contract/ui/components/label";
 import { PersonType } from "@contract/domain/client";
 import { Plus, FileText, X, Check, Upload } from "lucide-react";
 import {
-  CONTACTOS_STORAGE_KEY as STORAGE_KEY,
-  seedContactos,
   type ContactSeed as ContactView,
+  obtenerContactos,
+  crearContacto,
+  actualizarContacto,
 } from "@/lib/contactos-seed";
+import { migrarDatosLocales } from "@/lib/migracion-local";
 import type { DatosExtraidos } from "@/lib/pdf/extraer-datos-form";
 import type { ArchivoAdjunto } from "@/lib/contactos-seed";
 import { MASCOTAS, MASCOTAS_TOTAL, type GrupoChecklist } from "@/lib/catalogos";
@@ -480,22 +482,11 @@ export default function ContactosPage() {
   }
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        setContactos(JSON.parse(stored) as ContactView[]);
-        return;
-      } catch {
-        /* ignore */
-      }
-    }
-    setContactos(seedContactos());
+    void (async () => {
+      await migrarDatosLocales();
+      setContactos(await obtenerContactos());
+    })();
   }, []);
-
-  function persist(next: ContactView[]) {
-    setContactos(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  }
 
   function validate(): string | null {
     if (!form.nombre.trim() || !form.apellido.trim()) {
@@ -533,7 +524,7 @@ export default function ContactosPage() {
     return null;
   }
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     const problema = validate();
@@ -558,12 +549,21 @@ export default function ContactosPage() {
       mascotas: (form.mascotasItems ?? []).length > 0,
       mascotasItems: form.mascotasItems ?? [],
     };
-    if (form.id) {
-      const resto = contactos.filter((c) => c.id !== form.id);
-      persist([nuevo, ...resto]);
-      setEditandoId(null);
-    } else {
-      persist([nuevo, ...contactos]);
+    try {
+      if (form.id) {
+        const guardado = await actualizarContacto(nuevo);
+        setContactos((prev) => [
+          guardado,
+          ...prev.filter((c) => c.id !== guardado.id),
+        ]);
+        setEditandoId(null);
+      } else {
+        const guardado = await crearContacto(nuevo);
+        setContactos((prev) => [guardado, ...prev]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar.");
+      return;
     }
     setForm({
       id: "",

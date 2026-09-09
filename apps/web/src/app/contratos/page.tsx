@@ -11,9 +11,10 @@ import {
   getTipoSeparacion,
   type SeparacionRecord,
 } from "@/lib/separaciones";
-import { leerContactos, type ContactSeed, type ArchivoAdjunto } from "@/lib/contactos-seed";
+import { obtenerContactos, type ContactSeed, type ArchivoAdjunto } from "@/lib/contactos-seed";
 import { MASCOTAS, etiquetasDeIds } from "@/lib/catalogos";
-import { inventarioDepartamento } from "@/lib/inventarios-departamento";
+import { inventarioDepartamento, cargarInventarios } from "@/lib/inventarios-departamento";
+import { migrarDatosLocales } from "@/lib/migracion-local";
 import { Download, Plus, X } from "lucide-react";
 
 type ContractApi = {
@@ -193,11 +194,13 @@ export default function ContratosPage() {
   }, [load]);
 
   useEffect(() => {
-    setSeparaciones(leerSeparaciones());
-    setContactos(leerContactos());
-    const onStorage = () => setSeparaciones(leerSeparaciones());
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    void (async () => {
+      await migrarDatosLocales();
+      const [seps, ctos] = await Promise.all([leerSeparaciones(), obtenerContactos()]);
+      await cargarInventarios(true);
+      setSeparaciones(seps);
+      setContactos(ctos);
+    })();
   }, []);
 
   useEffect(() => {
@@ -210,14 +213,6 @@ export default function ContratosPage() {
       .then((d) => {
         const loadedDepartments = d as DepartmentApi[];
         setDepartments(loadedDepartments);
-        const validDepartmentIds = new Set(loadedDepartments.map((department) => department.id));
-        const validSeparaciones = leerSeparaciones().filter(
-          (sep) => UUID_PATTERN.test(sep.departamentoId) && validDepartmentIds.has(sep.departamentoId)
-        );
-        if (validSeparaciones.length !== leerSeparaciones().length) {
-          localStorage.setItem("sc_separaciones_flow_v1", JSON.stringify(validSeparaciones));
-          setSeparaciones(validSeparaciones);
-        }
       })
       .catch(() => undefined);
     apiFetch("/api/templates").then((r) => r.json())

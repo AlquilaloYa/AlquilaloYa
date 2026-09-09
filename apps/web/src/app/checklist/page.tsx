@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
-import { leerContactos, type ContactSeed } from "@/lib/contactos-seed";
+import { obtenerContactos, type ContactSeed } from "@/lib/contactos-seed";
 import { FileText, ListChecks, Plus, Save, Download, Trash2, Upload, Eye, Printer } from "lucide-react";
 
 type ChecklistTemplate = {
@@ -61,7 +61,7 @@ export default function ChecklistPage() {
 
   useEffect(() => {
     const loadedTemplates = readTemplates();
-    setContacts(leerContactos());
+    void obtenerContactos().then(setContacts);
     setTemplates(loadedTemplates);
     const first = loadedTemplates[0];
     if (first) {

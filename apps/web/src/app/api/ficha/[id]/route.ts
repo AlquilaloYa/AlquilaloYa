@@ -48,6 +48,7 @@ export async function GET(
         fechaFin: schema.contracts.fechaFin,
         estado: schema.contracts.estado,
         muebleriaItems: schema.contracts.muebleriaItems,
+        mascotasItems: schema.contracts.mascotasItems,
         departamentoNombre: schema.departments.nombre,
         departamentoCodigo: schema.departments.codigo,
       })
