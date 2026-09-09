@@ -66,6 +66,11 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Ignora assets estáticos y el favicon; aplica al resto (incluidas rutas API).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt).*)"],
+  // Ignora assets estáticos (archivos con extensión), el favicon y _next;
+  // aplica al resto (incluidas rutas API). Sin esto, los archivos de /public
+  // (logo, GIF de fondo, icono, imagenes de contratos) eran secuestrados por
+  // el guard de sesion y devolvian HTML en vez de la imagen.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|.*\\..*).*)",
+  ],
 };

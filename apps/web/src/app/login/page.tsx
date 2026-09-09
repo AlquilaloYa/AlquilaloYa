@@ -42,14 +42,14 @@ export default function LoginPage() {
     <div className="grid min-h-screen bg-surface text-on-surface lg:grid-cols-2">
       <section className="relative hidden overflow-hidden bg-[#eef3fb] text-[#081a34] dark:bg-[#081a34] dark:text-white lg:flex lg:flex-col lg:justify-between lg:p-12">
         <div className="pointer-events-none absolute inset-0 opacity-20 [background:radial-gradient(circle_at_20%_20%,#ffffff_0,transparent_45%),radial-gradient(circle_at_85%_75%,#8590a6_0,transparent_45%)] dark:[background:radial-gradient(circle_at_20%_20%,#3c5878_0,transparent_45%),radial-gradient(circle_at_85%_75%,#172d49_0,transparent_45%)]" />
-        <div className="relative overflow-hidden rounded-xl bg-[#dbe7f5]/70 p-4 dark:bg-[#0b2540]/70">
+        <div className="relative overflow-hidden rounded-xl bg-[#dbe7f5]/70 p-6 min-h-[120px] dark:bg-[#0b2540]/70">
           <img
             src="/fondo.gif"
             alt=""
             aria-hidden
-            className="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-xl"
+            className="absolute inset-0 h-full w-full scale-105 object-cover opacity-85 blur-md"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#eef3fb]/80 via-[#eef3fb]/40 to-[#eef3fb]/80 dark:from-[#081a34]/70 dark:via-[#081a34]/30 dark:to-[#081a34]/70" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#eef3fb]/90 via-[#eef3fb]/30 to-[#eef3fb]/0 dark:from-[#081a34]/80 dark:via-[#081a34]/20 dark:to-[#081a34]/0" />
           <div className="relative flex items-center gap-3">
             <img src="/logo-white-mode.png" alt="CP System ERP" className="h-12 w-16 object-contain dark:hidden" />
             <img src="/logo-black-mode.png" alt="CP System ERP" className="hidden h-12 w-16 object-contain dark:block" />
