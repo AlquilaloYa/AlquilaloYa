@@ -43,21 +43,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Resuelve la sesión real desde el servidor (cookie httpOnly).
   useEffect(() => {
     let alive = true;
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 12_000);
     (async () => {
       try {
-        const res = await fetch("/api/auth/me", { credentials: "same-origin" });
+        const res = await fetch("/api/auth/me", {
+          credentials: "same-origin",
+          signal: ctrl.signal,
+          cache: "no-store",
+        });
         if (res.ok && alive) {
           const data = (await res.json()) as { user?: SessionUser };
           setUser(data.user ?? null);
         }
       } catch {
-        /* sin sesión */
+        /* sin sesión o fallo de red/timeout */
       } finally {
+        clearTimeout(timeout);
         if (alive) setLoading(false);
       }
     })();
     return () => {
       alive = false;
+      clearTimeout(timeout);
+      ctrl.abort();
     };
   }, []);
 

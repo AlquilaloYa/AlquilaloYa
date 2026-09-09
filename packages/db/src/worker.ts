@@ -30,8 +30,16 @@ function getGlobal(): GlobalPool {
 
 function createPool(): PoolRef {
   const queryClient = postgres(env.DATABASE_URL, {
-    // Limita conexiones por pool para no agotar el pooler compartido.
-    max: 5,
+    // Pool pequeño: en serverless cada instancia abre su propio pool.
+    max: 3,
+    // prepare:false desactiva sentencias preparadas: requisito para el
+    // pooler de TRANSACCIONES de Supabase (puerto 6543) y seguro con sesión.
+    prepare: false,
+    // Sin estos timeouts, postgres.js reintenta conexiones infinitamente y
+    // un endpoint (p. ej. /api/auth/me) puede quedar colgado para siempre.
+    connect_timeout: 5,
+    timeout: 10,
+    idle_timeout: 20,
     // Fuerza UTF-8 en cada conexión: sin esto, el pooler de Supabase puede
     // devolver los acentos (los bytes UTF-8 de la BD) con encoding ASCII,
     // corrompiendo "Á"/"ó" en las respuestas de la API.
