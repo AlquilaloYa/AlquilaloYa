@@ -5,6 +5,7 @@ import { generateHtmlPdf } from "@/lib/pdf/generate-pdf";
 import { renderChecklistHtml } from "@/lib/pdf/render-checklist-html";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {

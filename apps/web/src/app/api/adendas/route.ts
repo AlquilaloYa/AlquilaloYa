@@ -7,6 +7,7 @@ import { generateAdendaPdf } from "@/lib/pdf/generate-pdf";
 import { registerGeneratedDocument } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 /**
  * POST /api/adendas  body: { contractId, titulo, contenido }

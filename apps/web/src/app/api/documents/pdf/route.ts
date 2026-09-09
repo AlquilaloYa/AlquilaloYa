@@ -14,6 +14,7 @@ import {
 } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 /**
  * GET /api/documents/pdf — descarga de documentos (Fase 4: storage-first).
