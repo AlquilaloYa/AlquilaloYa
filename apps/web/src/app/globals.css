@@ -1,0 +1,235 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== LexLedger-style Material palette ===== */
+:root {
+  --primary: 214 100% 6%;
+  --on-primary: 0 0% 100%;
+  --primary-container: 212 100% 14%;
+  --on-primary-container: 0 0% 100%;
+  --primary-fixed-dim: 217 33% 80%;
+
+  --secondary: 160 100% 21%;
+  --on-secondary: 0 0% 100%;
+  --secondary-container: 157 92% 70%;
+  --on-secondary-container: 164 100% 22%;
+
+  --tertiary: 32 100% 6%;
+  --tertiary-container: 35 100% 23%;
+  --on-tertiary-container: 41 100% 39%;
+
+  --error: 0 72% 39%;
+  --on-error: 0 0% 100%;
+  --error-container: 6 100% 92%;
+  --on-error-container: 350 100% 27%;
+
+  --background: 228 100% 98%;
+  --on-background: 216 65% 12%;
+  --surface: 228 100% 98%;
+  --on-surface: 216 65% 12%;
+  --surface-variant: 216 100% 91%;
+  --on-surface-variant: 222 4% 29%;
+
+  --surface-dim: 216 62% 86%;
+  --surface-bright: 222 100% 99%;
+  --surface-container-lowest: 0 0% 100%;
+  --surface-container-low: 219 100% 96%;
+  --surface-container: 217 100% 93%;
+  --surface-container-high: 216 100% 90%;
+  --surface-container-highest: 216 100% 87%;
+
+  --outline: 222 2% 46%;
+  --outline-variant: 225 5% 79%;
+
+  --inverse-surface: 212 39% 20%;
+  --inverse-on-surface: 220 100% 96%;
+  --inverse-primary: 217 33% 80%;
+
+  --muted: 217 100% 93%;
+  --muted-foreground: 222 4% 29%;
+  --accent: 157 92% 70%;
+  --accent-foreground: 164 100% 22%;
+  --ring: 214 100% 6%;
+  --border: 225 5% 79%;
+  --input: 225 5% 79%;
+  --card: 0 0% 100%;
+  --card-foreground: 216 65% 12%;
+
+  --radius: 0.5rem;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --primary: 217 33% 80%;
+  --on-primary: 222 47% 10%;
+  --primary-container: 214 100% 14%;
+  --on-primary-container: 216 17% 58%;
+
+  --secondary: 156 91% 57%;
+  --on-secondary: 0 0% 0%;
+  --secondary-container: 155 93% 26%;
+  --on-secondary-container: 157 92% 70%;
+
+  --tertiary: 36 100% 77%;
+  --on-tertiary: 33 100% 8%;
+  --tertiary-container: 35 100% 23%;
+  --on-tertiary-container: 41 100% 39%;
+
+  --error: 6 100% 89%;
+  --on-error: 0 100% 20%;
+  --error-container: 0 100% 31%;
+  --on-error-container: 6 100% 92%;
+
+  --background: 214 100% 6%;
+  --on-background: 216 100% 91%;
+  --surface: 214 100% 6%;
+  --on-surface: 216 100% 91%;
+  --surface-variant: 216 100% 14%;
+  --on-surface-variant: 216 17% 58%;
+
+  --surface-dim: 215 46% 10%;
+  --surface-bright: 212 45% 16%;
+  --surface-container-lowest: 214 100% 4%;
+  --surface-container-low: 215 46% 10%;
+  --surface-container: 215 47% 12%;
+  --surface-container-high: 215 41% 14%;
+  --surface-container-highest: 214 34% 16%;
+
+  --outline: 216 14% 55%;
+  --outline-variant: 217 10% 30%;
+
+  --inverse-surface: 216 100% 91%;
+  --inverse-on-surface: 212 39% 20%;
+  --inverse-primary: 214 100% 6%;
+
+  --muted: 215 47% 12%;
+  --muted-foreground: 216 17% 58%;
+  --accent: 156 91% 57%;
+  --accent-foreground: 155 93% 26%;
+  --ring: 217 33% 80%;
+  --border: 217 10% 30%;
+  --input: 217 10% 30%;
+  --card: 215 47% 12%;
+  --card-foreground: 216 100% 91%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground, var(--on-surface)));
+}
+
+::selection {
+  background-color: hsl(var(--primary) / 0.2);
+}
+
+/* Contraste explícito para las clases de texto usadas sobre botones de acción. */
+.text-on-primary,
+.text-primary-foreground {
+  color: hsl(var(--on-primary)) !important;
+}
+
+.text-on-secondary,
+.text-secondary-foreground {
+  color: hsl(var(--on-secondary)) !important;
+}
+
+.text-on-error,
+.text-destructive-foreground {
+  color: hsl(var(--on-error)) !important;
+}
+
+.table-scroll-viewport::-webkit-scrollbar:horizontal {
+  height: 0;
+}
+
+body,
+.theme-transition {
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+[data-theme="dark"] select option {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+[data-theme="dark"] select option:hover,
+[data-theme="dark"] select option:focus {
+  background-color: #e4e4e7;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    --font-geist: var(--font-inter);
+  }
+}
+
+@layer utilities {
+  .font-label-md {
+    font-family: var(--font-geist), var(--font-inter), sans-serif;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+  .font-mono-label {
+    font-family: var(--font-geist), var(--font-inter), sans-serif;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+  }
+  .font-display {
+    font-family: var(--font-inter), sans-serif;
+    font-size: 36px;
+    line-height: 44px;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+  }
+  .font-headline-lg {
+    font-family: var(--font-inter), sans-serif;
+    font-size: 28px;
+    line-height: 36px;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+  .font-headline-md {
+    font-family: var(--font-inter), sans-serif;
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 600;
+  }
+  .font-body-lg {
+    font-family: var(--font-inter), sans-serif;
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 400;
+  }
+  .font-body-md {
+    font-family: var(--font-inter), sans-serif;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 400;
+  }
+  .font-body-sm {
+    font-family: var(--font-inter), sans-serif;
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 400;
+  }
+  .uppercase-track {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+}

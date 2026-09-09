@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788562419449,
+      "tag": "0000_pale_golden_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788799427169,
+      "tag": "0001_department_guarantee",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788803424817,
+      "tag": "0002_contract_mascotas",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788804571572,
+      "tag": "0003_documents_snapshot_nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788817406992,
+      "tag": "0004_client_domicilio",
+      "breakpoints": true
+    }
+  ]
+}

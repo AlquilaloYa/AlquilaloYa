@@ -1,0 +1,31 @@
+{
+  "name": "contract-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sistema interno de gestión y generación de contratos",
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,yaml,yml}\"",
+    "db:generate": "pnpm --filter @contract/db generate",
+    "db:migrate": "pnpm --filter @contract/db migrate",
+    "db:push": "pnpm --filter @contract/db push",
+    "db:seed": "pnpm --filter @contract/db seed",
+    "db:users": "pnpm --filter @contract/db users",
+    "db:backup": "bash scripts/backup.sh",
+    "db:restore": "bash scripts/restore.sh"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^2.1.3",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+# Salidas locales de scripts (p. ej. contraseñas de usuarios) — NUNCA versionar
+*.local.json
+!.env.example
+
+# Tauri
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
+# Database
+*.sqlite
+*.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Descargas locales (instaladores, exports) — no versionar
+Nueva carpeta/
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+
+# Artefactos locales de desarrollo
+apps/desktop/src-tauri/build-*.txt
+scripts/.tmp-*

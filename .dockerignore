@@ -1,0 +1,36 @@
+# Dependencias y artefactos
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+out
+build
+
+# Entorno y secretos (NUNCA en la imagen)
+.env
+.env.*
+!.env.example
+*.local
+
+# Control de versiones / editores
+.git
+.gitignore
+.vscode
+.idea
+
+# Logs y temporales
+*.log
+npm-debug.log*
+coverage
+**/coverage
+opencode-tool-output
+*.tsbuildinfo
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Docs
+*.md

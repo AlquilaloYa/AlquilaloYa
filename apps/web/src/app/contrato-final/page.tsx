@@ -1,0 +1,188 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { DashboardShell } from "@/components/dashboard-shell";
+import { TableScroll } from "@/components/table-scroll";
+import { apiFetch } from "@/lib/api";
+import { FileCheck, Download } from "lucide-react";
+
+type FinalContractApi = {
+  id: string;
+  codigoContrato: string;
+  clienteId: string;
+  departamentoId: string;
+  montoCanonMensual: string;
+  depositoGarantia: string;
+  mantenimiento?: string;
+  fechaInicio: string;
+  fechaFin: string;
+  estado: string;
+  snapshotId: string | null;
+  createdAt: string;
+  clienteNombre: string;
+  apellidoCliente: string;
+  departamentoNombre: string;
+};
+
+const ESTADO_LABELS: Record<string, { label: string; color: string }> = {
+  FIRMADO: { label: "Firmado", color: "bg-green-500" },
+  NOTARIADO: { label: "Notariado", color: "bg-primary" },
+  ACTIVO: { label: "Activo", color: "bg-primary" },
+  VIGENTE: { label: "Vigente", color: "bg-green-600" },
+  RENOVADO: { label: "Renovado", color: "bg-blue-500" },
+};
+
+export default function ContratoFinalPage() {
+  const [contracts, setContracts] = useState<FinalContractApi[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch("/api/contracts");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      const data = (await res.json()) as FinalContractApi[];
+      // Filtrar solo contratos finalizados/firmados
+      setContracts(data.filter((c) => ["FIRMADO", "NOTARIADO", "ACTIVO", "VIGENTE", "RENOVADO"].includes(c.estado)));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function fmtFecha(iso: string): string {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleDateString("es-PE", { year: "numeric", month: "short", day: "numeric" });
+  }
+
+  function fmtPrecio(val: string): string {
+    return `S/ ${Number(val).toLocaleString("es-PE", { minimumFractionDigits: 2 })}`;
+  }
+
+  async function descargarContratoNotariado(contract: FinalContractApi) {
+    setDownloadingId(contract.id);
+    setError(null);
+    try {
+      const documentsResponse = await apiFetch(`/api/documents?contractId=${encodeURIComponent(contract.id)}`);
+      if (!documentsResponse.ok) throw new Error("No se pudieron cargar los documentos del contrato");
+      const documents = (await documentsResponse.json()) as Array<{
+        id: string;
+        tipo: string;
+        filename?: string | null;
+      }>;
+      const notarized = documents.find((document) => document.tipo === "CONTRATO_NOTARIADO");
+      if (!notarized) throw new Error("Este contrato aún no tiene un contrato notariado adjunto");
+
+      const fileResponse = await apiFetch(`/api/documents/pdf?documentId=${encodeURIComponent(notarized.id)}`);
+      if (!fileResponse.ok) throw new Error("No se pudo descargar el contrato notariado");
+      const blob = await fileResponse.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = notarized.filename || `contrato-notariado-${contract.codigoContrato}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
+  return (
+    <DashboardShell>
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-3">
+          <FileCheck className="h-6 w-6 text-primary" />
+          <h2 className="font-headline-lg text-primary">Contratos Finales</h2>
+        </div>
+
+        {error ? (
+          <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
+            Error: {error}
+          </div>
+        ) : loading ? (
+          <p className="text-sm text-muted-foreground">Cargando contratos finales…</p>
+        ) : contracts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No hay contratos finalizados aún.</p>
+        ) : (
+          <TableScroll className="w-full rounded-md border">
+            <div className="max-h-[40rem] overflow-y-auto">
+              <table className="w-full min-w-[900px] text-sm">
+                <thead className="sticky top-0 z-10 bg-[#151a24] text-left text-xs text-white/80">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Código</th>
+                    <th className="px-3 py-2 font-medium">Cliente</th>
+                    <th className="px-3 py-2 font-medium">Departamento</th>
+                    <th className="px-3 py-2 font-medium">Canon</th>
+                    <th className="px-3 py-2 font-medium">Garantía</th>
+                    <th className="px-3 py-2 font-medium">Inicio</th>
+                    <th className="px-3 py-2 font-medium">Fin</th>
+                    <th className="px-3 py-2 font-medium">Estado</th>
+                    <th className="px-3 py-2 font-medium">Documento</th>
+                    <th className="px-3 py-2 font-medium">Gestión</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contracts.map((c) => {
+                    const meta = ESTADO_LABELS[c.estado] ?? { label: c.estado, color: "bg-muted" };
+                    return (
+                      <tr key={c.id} className="border-t hover:bg-muted/50">
+                        <td className="px-3 py-2 font-mono-label font-medium">{c.codigoContrato}</td>
+                        <td className="px-3 py-2">{[c.clienteNombre, c.apellidoCliente].filter(Boolean).join(" ")}</td>
+                        <td className="px-3 py-2">{c.departamentoNombre}</td>
+                        <td className="px-3 py-2 font-semibold">{fmtPrecio(c.montoCanonMensual)}</td>
+                        <td className="px-3 py-2">{c.depositoGarantia ? fmtPrecio(c.depositoGarantia) : "—"}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{fmtFecha(c.fechaInicio)}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{fmtFecha(c.fechaFin)}</td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-white ${meta.color}`}>
+                            <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
+                            {meta.label}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => void descargarContratoNotariado(c)}
+                            disabled={downloadingId === c.id}
+                            className="inline-flex items-center gap-1 text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            {downloadingId === c.id ? "Descargando…" : "Descargar contrato notariado"}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Link
+                            href={`/contrato-final/${c.id}`}
+                            className="inline-flex items-center rounded bg-primary px-3 py-1.5 font-label-md text-on-primary hover:bg-primary/90"
+                          >
+                            Cliente y documentos
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </TableScroll>
+        )}
+      </div>
+    </DashboardShell>
+  );
+}

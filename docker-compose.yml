@@ -1,0 +1,51 @@
+# Staging/producción local del ERP de contratos (Fase 7).
+# Uso:  docker compose up --build
+# Variables: copiar .env.example a .env y ajustar (DB, Supabase, encryption key).
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: contract-erp-web:latest
+    container_name: contract-erp-web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      LOG_LEVEL: info
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Base de datos local para staging/paridad. Si usas Supabase administrado,
+  # apunta DATABASE_URL a tu pooler en .env y comenta este servicio.
+  postgres:
+    image: postgres:16-alpine
+    container_name: contract-erp-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: contract_system
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d contract_system"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

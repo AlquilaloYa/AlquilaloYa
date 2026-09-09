@@ -1,0 +1,35 @@
+{
+  "name": "@contract/validation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+"exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./department": "./src/department.ts",
+    "./contract": "./src/contract.ts",
+    "./user": "./src/user.ts"
+  },
+  "scripts": {
+    "lint": "eslint src --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@contract/domain": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@contract/tsconfig": "workspace:*",
+    "@eslint/js": "9.11.1",
+    "@types/node": "^22.7.4",
+    "eslint": "^9.11.1",
+    "eslint-config-prettier": "9.1.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "8.69.0",
+    "vitest": "^2.1.2"
+  }
+}
+

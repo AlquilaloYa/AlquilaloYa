@@ -1,0 +1,25 @@
+{
+  "name": "@contract/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "lint": "eslint src --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "@contract/tsconfig": "workspace:*",
+    "@eslint/js": "9.11.1",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/cli": "^2.11.4",
+    "@types/node": "^22.7.4",
+    "eslint": "^9.11.1",
+    "eslint-config-prettier": "9.1.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "8.69.0",
+    "vitest": "^2.1.2"
+  }
+}

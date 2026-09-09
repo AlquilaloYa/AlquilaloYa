@@ -1,0 +1,31 @@
+{
+  "name": "@contract/integrations",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./core": "./src/core/index.ts",
+    "./rest": "./src/rest/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint src --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@contract/domain": "workspace:*",
+    "@contract/db": "workspace:*",
+    "@contract/config": "workspace:*"
+  },
+  "devDependencies": {
+    "@contract/tsconfig": "workspace:*",
+    "@eslint/js": "9.11.1",
+    "@types/node": "^22.7.4",
+    "eslint": "^9.11.1",
+    "eslint-config-prettier": "9.1.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "8.69.0",
+    "vitest": "^2.1.2"
+  }
+}

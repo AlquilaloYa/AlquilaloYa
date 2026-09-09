@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 60" width="80" height="60">
+  <g fill="#000000">
+    <!-- C -->
+    <path d="M 32 20 
+             A 14 14 0 1 0 32 40 
+             L 32 34 
+             A 8 8 0 1 1 32 26 
+             Z" />
+    <!-- Vertical building element -->
+    <rect x="36" y="8" width="3" height="44" rx="1" />
+    <path d="M 36 8 L 42 4 L 42 12 L 36 12 Z" />
+    <!-- P -->
+    <path d="M 44 16 
+             L 52 16 
+             A 10 10 0 0 1 52 36 
+             L 44 36 
+             L 44 30 
+             L 52 30 
+             A 4 4 0 0 0 52 22 
+             L 44 22 
+             Z" />
+    <rect x="44" y="36" width="3" height="16" />
+  </g>
+</svg>

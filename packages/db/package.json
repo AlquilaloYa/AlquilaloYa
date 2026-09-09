@@ -1,0 +1,42 @@
+{
+  "name": "@contract/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "scripts": {
+    "generate": "drizzle-kit generate",
+    "migrate": "drizzle-kit migrate",
+    "push": "drizzle-kit push",
+    "seed": "tsx src/seed.ts",
+    "users": "tsx scripts/create-app-users.ts",
+    "lint": "eslint src --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@contract/config": "workspace:*",
+    "@contract/domain": "workspace:*",
+    "@neondatabase/serverless": "^0.10.1",
+    "drizzle-orm": "^0.36.1",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@contract/tsconfig": "workspace:*",
+    "@eslint/js": "9.11.1",
+    "@types/node": "^22.7.4",
+    "drizzle-kit": "^0.27.1",
+    "eslint": "^9.11.1",
+    "eslint-config-prettier": "9.1.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "8.69.0",
+    "vitest": "^2.1.2"
+  }
+}
+
