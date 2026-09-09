@@ -43,8 +43,8 @@ export default function LoginPage() {
       <section className="relative hidden overflow-hidden bg-[#eef3fb] text-[#081a34] dark:bg-[#081a34] dark:text-white lg:flex lg:flex-col lg:justify-between lg:p-12">
         <div className="pointer-events-none absolute inset-0 opacity-20 [background:radial-gradient(circle_at_20%_20%,#ffffff_0,transparent_45%),radial-gradient(circle_at_85%_75%,#8590a6_0,transparent_45%)] dark:[background:radial-gradient(circle_at_20%_20%,#3c5878_0,transparent_45%),radial-gradient(circle_at_85%_75%,#172d49_0,transparent_45%)]" />
         <div className="relative flex items-center gap-3">
-          <img src="/logo-dark.svg" alt="CP System ERP" className="h-12 w-16 object-contain dark:hidden" />
-          <img src="/logo-light.svg" alt="CP System ERP" className="hidden h-12 w-16 object-contain dark:block" />
+          <img src="/logo-white-mode.png" alt="CP System ERP" className="h-12 w-16 object-contain dark:hidden" />
+          <img src="/logo-black-mode.png" alt="CP System ERP" className="hidden h-12 w-16 object-contain dark:block" />
           <div>
             <span className="block font-headline-md font-bold">CP System ERP</span>
             <span className="font-label-md uppercase tracking-wider text-[#294261] dark:text-white/80">Sistema de gestión integral ERP</span>
@@ -75,7 +75,8 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
             <div className="flex items-center gap-2">
-              <img src="/logo-dark.svg" alt="CP System ERP" className="h-9 w-12 object-contain" />
+              <img src="/logo-white-mode.png" alt="CP System ERP" className="h-9 w-12 object-contain dark:hidden" />
+              <img src="/logo-black-mode.png" alt="CP System ERP" className="hidden h-9 w-12 object-contain dark:block" />
               <span className="font-headline-md font-bold text-primary">CP System ERP</span>
             </div>
           </div>

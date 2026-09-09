@@ -177,8 +177,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <>
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded">
-                  <img src="/logo-dark.svg" alt="CP" className="h-8 w-auto dark:hidden" />
-                  <img src="/logo-light.svg" alt="CP" className="h-8 w-auto hidden dark:block" />
+                  <img src="/logo-white-mode.png" alt="CP" className="h-8 w-auto object-contain dark:hidden" />
+                  <img src="/logo-black-mode.png" alt="CP" className="h-8 w-auto object-contain hidden dark:block" />
                 </div>
                 <div>
                   <h1 className="font-headline-md font-bold leading-tight text-primary dark:text-white">
