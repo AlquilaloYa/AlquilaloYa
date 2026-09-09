@@ -9,12 +9,19 @@ export interface PdfResult {
 }
 
 async function pdfFromHtml(html: string, filename: string): Promise<PdfResult> {
-  const { chromium } = await import("playwright");
+  const puppeteer = (await import("puppeteer-core")).default;
+  const isVercel = process.env.VERCEL === "1";
 
-  const browser = await chromium.launch({ channel: "chrome" });
+  const browser = isVercel
+    ? await puppeteer.launch({
+        executablePath: await (await import("@sparticuz/chromium")).default.executablePath(),
+        args: (await import("@sparticuz/chromium")).default.args,
+        headless: true,
+      })
+    : await puppeteer.launch({ channel: "chrome", headless: true });
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle" });
+    await page.setContent(html, { waitUntil: "load" });
     const bytes = await page.pdf({
       format: "A4",
       printBackground: true,
@@ -35,7 +42,9 @@ export async function generateHtmlPdf(html: string, filename: string): Promise<P
 }
 
 /**
- * Genera el PDF del contrato usando Playwright + Chrome del sistema.
+ * Genera el PDF del contrato usando puppeteer-core:
+ * - en Vercel, Chromium serverless de @sparticuz/chromium;
+ * - en local/servidor, Chrome del sistema (channel: "chrome").
  * Si se provee templateHtml, lo usa como base; de lo contrario formato genérico.
  */
 export async function generateContractPdf(

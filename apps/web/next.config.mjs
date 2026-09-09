@@ -37,6 +37,14 @@ const nextConfig = {
   // (repos Drizzle). Sin `output: "export"` para permitir runtime de servidor.
   output: undefined,
   poweredByHeader: false,
+  experimental: {
+    // Binarios/deps del servidor que no deben bundlearse (PDF en runtime Node).
+    serverComponentsExternalPackages: [
+      "puppeteer-core",
+      "@sparticuz/chromium",
+      "pdfjs-dist",
+    ],
+  },
   async headers() {
     return [
       {
