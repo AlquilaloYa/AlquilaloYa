@@ -12,13 +12,24 @@ async function pdfFromHtml(html: string, filename: string): Promise<PdfResult> {
   const puppeteer = (await import("puppeteer-core")).default;
   const isVercel = process.env.VERCEL === "1";
 
-  const browser = isVercel
-    ? await puppeteer.launch({
-        executablePath: await (await import("@sparticuz/chromium")).default.executablePath(),
-        args: (await import("@sparticuz/chromium")).default.args,
-        headless: true,
-      })
-    : await puppeteer.launch({ channel: "chrome", headless: true });
+  let browser;
+  if (isVercel) {
+    const chromium = (await import("@sparticuz/chromium-min")).default;
+    const remote = process.env.CHROMIUM_REMOTE_EXEC_PATH;
+    if (!remote) {
+      throw new Error(
+        "Falta CHROMIUM_REMOTE_EXEC_PATH (URL del pack de chromium para Vercel)"
+      );
+    }
+    browser = await puppeteer.launch({
+      executablePath: await chromium.executablePath(remote),
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      headless: true,
+    });
+  } else {
+    browser = await puppeteer.launch({ channel: "chrome", headless: true });
+  }
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "load" });

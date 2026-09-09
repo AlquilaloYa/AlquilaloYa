@@ -41,24 +41,9 @@ const nextConfig = {
     // Binarios/deps del servidor que no deben bundlearse (PDF en runtime Node).
     serverComponentsExternalPackages: [
       "puppeteer-core",
-      "@sparticuz/chromium",
+      "@sparticuz/chromium-min",
       "pdfjs-dist",
     ],
-    // Vercel excluye bin/ del paquete de Chromium sin trazado explícito.
-    outputFileTracingIncludes: {
-      "/api/documents/pdf": [
-        "./node_modules/@sparticuz/chromium/bin/**",
-        "./node_modules/.pnpm/**/node_modules/@sparticuz/chromium/bin/**",
-      ],
-      "/api/checklist/pdf": [
-        "./node_modules/@sparticuz/chromium/bin/**",
-        "./node_modules/.pnpm/**/node_modules/@sparticuz/chromium/bin/**",
-      ],
-      "/api/adendas": [
-        "./node_modules/@sparticuz/chromium/bin/**",
-        "./node_modules/.pnpm/**/node_modules/@sparticuz/chromium/bin/**",
-      ],
-    },
   },
   async headers() {
     return [
