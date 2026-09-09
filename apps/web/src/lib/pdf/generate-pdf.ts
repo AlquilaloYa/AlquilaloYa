@@ -24,7 +24,6 @@ async function pdfFromHtml(html: string, filename: string): Promise<PdfResult> {
     browser = await puppeteer.launch({
       executablePath: await chromium.executablePath(remote),
       args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
       headless: true,
     });
   } else {
