@@ -1,5 +1,6 @@
 export * as schema from "./schema/index";
 export * from "./repositories/index";
+export { encryptJson, decryptJson, fingerprint } from "./crypto/credential-cipher";
 export { db, queryClient } from "./worker";
 export type { ClientRow, NewClientRow } from "./schema/clients";
 export type { DepartmentRow, NewDepartmentRow } from "./schema/departments";

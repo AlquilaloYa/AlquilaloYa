@@ -12,3 +12,5 @@ export * from "./payments";
 export * from "./integrations";
 export * from "./ops";
 export * from "./tasks";
+export * from "./agenda";
+export * from "./hr";

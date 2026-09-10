@@ -28,6 +28,8 @@ import {
   ListChecks,
   Kanban,
   Briefcase,
+  CalendarClock,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -53,6 +55,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/workflow", label: "Workflow", icon: Workflow, section: "Workflow", permission: "contract.read" },
   { href: "/checklist", label: "Checklist", icon: ListChecks, section: "Checklist" },
   { href: "/work-123", label: "Work 123", icon: Kanban, section: "Work 123", permission: "contract.read" },
+  { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
+  { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "contract.read" },
   { href: "/actividad", label: "Actividad", icon: Activity, section: "Actividad", permission: "activity.read" },
   { href: "/integraciones", label: "Integraciones", icon: Plug, section: "Integraciones", permission: "integration.read" },
 ];

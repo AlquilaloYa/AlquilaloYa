@@ -15,6 +15,13 @@ export const env = createEnv({
     SUPABASE_STORAGE_BUCKET: z.string().default("documents"),
     REDIS_URL: z.string().url().optional(),
     CONNECTOR_ENCRYPTION_KEY: z.string().min(24).default(CONNECTOR_KEY_DEFAULT),
+    /** Google Calendar (agenda personal por usuario). Se configuraran despues. */
+    GOOGLE_CLIENT_ID: z.string().optional(),
+    GOOGLE_CLIENT_SECRET: z.string().optional(),
+    GOOGLE_REDIRECT_URI: z.string().optional(),
+    GOOGLE_CALENDAR_SCOPE: z
+      .string()
+      .default("https://www.googleapis.com/auth/calendar.events"),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,
