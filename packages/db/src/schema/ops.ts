@@ -91,3 +91,62 @@ export const departmentInventories = pgTable(
 export type ContactRow = typeof contacts.$inferSelect;
 export type SeparationRow = typeof separations.$inferSelect;
 export type DepartmentInventoryRow = typeof departmentInventories.$inferSelect;
+
+/** Preguntas del banco usado por las inspecciones (checklist). */
+export const inspectionQuestions = pgTable(
+  "inspection_questions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    texto: text("texto").notNull(),
+    orden: integer("orden").notNull().default(0),
+    activa: boolean("activa").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("inspection_questions_orden_idx").on(table.orden)]
+);
+
+/** Inspección (checklist ✓/✗) sobre un contacto/departamento. */
+export const inspections = pgTable(
+  "inspections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    contactoId: uuid("contacto_id").references(() => contacts.id, {
+      onDelete: "set null",
+    }),
+    contactoNombre: varchar("contacto_nombre", { length: 511 }).notNull().default(""),
+    nombre: varchar("nombre", { length: 255 }).notNull().default(""),
+    numero: varchar("numero", { length: 20 }).notNull().default(""),
+    personaInspecciona: varchar("persona_inspecciona", { length: 255 }).notNull().default(""),
+    inspectorId: varchar("inspector_id", { length: 255 }).notNull().default(""),
+    inspectorNombre: varchar("inspector_nombre", { length: 255 }).notNull().default(""),
+    departamentoId: uuid("departamento_id"),
+    departamentoNombre: varchar("departamento_nombre", { length: 255 }).notNull().default(""),
+    asignadoA: varchar("asignado_a", { length: 255 }).notNull().default(""),
+    fecha: timestamp("fecha", { withTimezone: true }).notNull().defaultNow(),
+    estado: varchar("estado", { length: 30 }).notNull().default("BORRADOR"),
+    items: jsonb("items").notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("inspections_estado_idx").on(table.estado),
+    index("inspections_fecha_idx").on(table.fecha),
+    index("inspections_contacto_idx").on(table.contactoId),
+  ]
+);
+
+export type InspectionQuestionRow = typeof inspectionQuestions.$inferSelect;
+export type InspectionRow = typeof inspections.$inferSelect;
+
+/** Plantilla reutilizable de checklist: nombre + preguntas agrupadas por categoria. */
+export const inspectionTemplates = pgTable("inspection_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nombre: varchar("nombre", { length: 255 }).notNull(),
+  categorias: jsonb("categorias").notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type InspectionTemplateRow = typeof inspectionTemplates.$inferSelect;

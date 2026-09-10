@@ -48,7 +48,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/pagos", label: "Cobranza", icon: Banknote, section: "Cobranza", permission: "contract.read" },
   { href: "/plantillas", label: "Plantillas", icon: FilePlus2, section: "Plantillas", permission: "template.read" },
   { href: "/workflow", label: "Workflow", icon: Workflow, section: "Workflow", permission: "contract.read" },
-  { href: "/checklist", label: "checkList Entrega", icon: ListChecks, section: "checkList Entrega" },
+  { href: "/checklist", label: "Checklist", icon: ListChecks, section: "Checklist" },
   { href: "/actividad", label: "Actividad", icon: Activity, section: "Actividad", permission: "activity.read" },
   { href: "/integraciones", label: "Integraciones", icon: Plug, section: "Integraciones", permission: "integration.read" },
 ];
