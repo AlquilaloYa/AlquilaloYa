@@ -111,6 +111,15 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     expect(html).not.toContain("[ESPECIE]");
   });
 
+  it("usa el día de inicio del contrato como [DÍA DE PAGO]", () => {
+    const html = renderContractHtml(
+      snapshot(),
+      "<p>los días [DÍA DE PAGO] de cada mes</p>"
+    );
+    expect(html).toContain("los días 10 de cada mes");
+    expect(html).not.toContain("[DÍA DE PAGO]");
+  });
+
   it("mantiene la proporción del DNI dentro del área imprimible A4", () => {
     const html = renderContractHtml(snapshot(), "<h1>Contrato</h1><div>[DNI]</div>");
     expect(html).toContain("max-width:165mm");

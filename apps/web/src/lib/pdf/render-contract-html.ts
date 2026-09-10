@@ -178,7 +178,7 @@ export function renderContractHtml(
       "[NÚMERO DE DEPTO]": field(departamento, ["codigo"]) || "________________",
       "[MONTO RENTA]": formatCurrency(monto),
       "[TOTAL MONTO]": totalMonto,
-      "[DÍA DE PAGO]": "05",
+      "[DÍA DE PAGO]": inicioFecha ? inicioFecha.dia.padStart(2, "0") : "05",
       "[MONTO GARANTÍA]": formatCurrency(garantia),
       "[MONTO TOTAL GARANTÍA NUMEROS]": formatCurrency(garantia),
       "[MONTO TOTAL GARANTÍA LETRAS]": formatCurrency(garantia),
