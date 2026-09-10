@@ -11,6 +11,8 @@ export type InspectionItem = {
   texto: string;
   resultado: "OK" | "NEGATIVO" | "";
   motivo?: string;
+  tareaId?: string;
+  tareaAsignado?: string;
 };
 
 type Body = {

@@ -26,6 +26,8 @@ import {
   Plug,
   Workflow,
   ListChecks,
+  Kanban,
+  Briefcase,
   type LucideIcon,
 } from "lucide-react";
 
@@ -36,19 +38,21 @@ interface NavItem {
   section: string;
   phase?: string;
   permission?: Permission;
+  group?: "contratos";
 }
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "Dashboard" },
-  { href: "/contactos", label: "Contactos", icon: Contact, section: "Contactos" },
-  { href: "/departamentos", label: "Uni/Dep", icon: Building2, section: "Departamentos", permission: "department.read" },
-  { href: "/contratos", label: "Pre contrato", icon: FileText, section: "Contratos", permission: "contract.read" },
-  { href: "/contrato-final", label: "Contrato Final", icon: FileCheck, section: "Contrato Final", permission: "contract.read" },
+  { href: "/contactos", label: "Contactos", icon: Contact, section: "Contactos", group: "contratos" },
+  { href: "/departamentos", label: "Uni/Dep", icon: Building2, section: "Departamentos", permission: "department.read", group: "contratos" },
+  { href: "/contratos", label: "Pre contrato", icon: FileText, section: "Contratos", permission: "contract.read", group: "contratos" },
+  { href: "/contrato-final", label: "Contrato Final", icon: FileCheck, section: "Contrato Final", permission: "contract.read", group: "contratos" },
+  { href: "/plantillas", label: "Plantillas", icon: FilePlus2, section: "Plantillas", permission: "template.read", group: "contratos" },
   { href: "/clientes", label: "Clientes", icon: Star, section: "Clientes", permission: "client.read" },
   { href: "/pagos", label: "Cobranza", icon: Banknote, section: "Cobranza", permission: "contract.read" },
-  { href: "/plantillas", label: "Plantillas", icon: FilePlus2, section: "Plantillas", permission: "template.read" },
   { href: "/workflow", label: "Workflow", icon: Workflow, section: "Workflow", permission: "contract.read" },
   { href: "/checklist", label: "Checklist", icon: ListChecks, section: "Checklist" },
+  { href: "/work-123", label: "Work 123", icon: Kanban, section: "Work 123", permission: "contract.read" },
   { href: "/actividad", label: "Actividad", icon: Activity, section: "Actividad", permission: "activity.read" },
   { href: "/integraciones", label: "Integraciones", icon: Plug, section: "Integraciones", permission: "integration.read" },
 ];
@@ -81,7 +85,7 @@ function NavLink({
 }: {
   item: NavItem;
   collapsed: boolean;
-  onNavigate?: () => void;
+  onNavigate?: (() => void) | undefined;
 }) {
   const pathname = usePathname();
   const active = pathname === item.href;
@@ -116,18 +120,76 @@ function NavLink({
   );
 }
 
+function NavGroup({
+  label,
+  icon: Icon,
+  items,
+  collapsed,
+  open,
+  onToggle,
+  onNavigate,
+}: {
+  label: string;
+  icon: LucideIcon;
+  items: NavItem[];
+  collapsed: boolean;
+  open: boolean;
+  onToggle: () => void;
+  onNavigate?: (() => void) | undefined;
+}) {
+  const pathname = usePathname();
+  const childActive = items.some((item) => pathname === item.href);
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        title={collapsed ? label : undefined}
+        aria-label={label}
+        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+          childActive
+            ? "text-primary dark:text-white"
+            : "text-on-surface-variant hover:bg-surface-container-high dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white"
+        } ${collapsed ? "justify-center px-0" : ""}`}
+      >
+        <Icon className="h-[18px] w-[18px] shrink-0" />
+        {!collapsed ? <span className="flex-1 text-left">{label}</span> : null}
+        {!collapsed ? (
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+        ) : null}
+      </button>
+      {open ? (
+        <div className={collapsed ? "mt-1" : "ml-5 mt-1 flex flex-col gap-1 border-l border-outline-variant/40 pl-2 dark:border-white/10"}>
+          {items.map((item) => (
+            <NavLink key={item.href} item={item} collapsed={collapsed} onNavigate={onNavigate} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [configurationOpen, setConfigurationOpen] = useState(false);
+  const [contractsOpen, setContractsOpen] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/login");
     }
   }, [loading, user, router]);
+
+  useEffect(() => {
+    if (NAV_ITEMS.some((n) => n.group === "contratos" && n.href === pathname)) {
+      setContractsOpen(true);
+    }
+  }, [pathname]);
 
   if (loading) {
     return (
@@ -175,17 +237,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <div className={`mb-8 flex items-center ${collapsed ? "justify-center px-0" : "justify-between gap-2 px-5"}`}>
           {!collapsed ? (
             <>
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded">
-                  <img src="/logo-white-mode.png" alt="CP" className="h-8 w-auto object-contain dark:hidden" />
-                  <img src="/logo-black-mode.png" alt="CP" className="h-8 w-auto object-contain hidden dark:block" />
-                </div>
-                <div>
-                  <h1 className="font-headline-md font-bold leading-tight text-primary dark:text-white">
-                    CP ERP
-                  </h1>
-                </div>
-              </div>
+              <h1 className="font-headline-md font-bold leading-tight text-primary dark:text-white">
+                CP System ERP
+              </h1>
               <button
                 onClick={() => setCollapsed(true)}
                 className="flex h-8 w-8 items-center justify-center rounded text-on-surface-variant transition-colors hover:bg-surface-container-high dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white"
@@ -208,14 +262,37 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 px-2">
-          {visibleNav(user.role).map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              collapsed={collapsed}
-              onNavigate={() => setMobileOpen(false)}
-            />
-          ))}
+          {(() => {
+            const items = visibleNav(user.role);
+            const groupItems = items.filter((n) => n.group === "contratos");
+            let groupRendered = false;
+            return items.map((item) => {
+              if (item.group !== "contratos") {
+                return (
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    collapsed={collapsed}
+                    onNavigate={() => setMobileOpen(false)}
+                  />
+                );
+              }
+              if (groupRendered) return null;
+              groupRendered = true;
+              return (
+                <NavGroup
+                  key="group-sistema-contratos"
+                  label="Sistema de Contratos"
+                  icon={Briefcase}
+                  items={groupItems}
+                  collapsed={collapsed}
+                  open={contractsOpen}
+                  onToggle={() => setContractsOpen((open) => !open)}
+                  onNavigate={() => setMobileOpen(false)}
+                />
+              );
+            });
+          })()}
         </nav>
 
         <div className="mt-auto border-t border-outline-variant/30 pt-4 px-2 dark:border-white/10">

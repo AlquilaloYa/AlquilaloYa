@@ -25,7 +25,7 @@ export interface ContactSeed {
     nombre: string;
     parentesco: string;
     telefono: string;
-  };
+  } | null;
   mascotas?: boolean;
   mascotasItems?: string[];
 }

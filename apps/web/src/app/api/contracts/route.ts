@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 import { buildContractServices } from "@/lib/contract-app";
+import { sincronizarTareasContrato } from "@/lib/tareas-contrato";
 import type { CreateContractInput } from "@contract/domain";
 
 export const dynamic = "force-dynamic";
@@ -202,6 +203,11 @@ export async function POST(request: Request) {
       muebleriaItems: body.muebleriaItems ?? [],
       mascotasItems: body.mascotasItems ?? [],
     });
+    try {
+      await sincronizarTareasContrato(created.id);
+    } catch {
+      /* las tareas automaticas no deben bloquear la creacion del contrato */
+    }
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     return NextResponse.json(

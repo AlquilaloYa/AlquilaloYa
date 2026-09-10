@@ -27,6 +27,8 @@ type InspeccionItem = {
   texto: string;
   resultado: "OK" | "NEGATIVO" | "";
   motivo?: string;
+  tareaId?: string;
+  tareaAsignado?: string;
 };
 type Inspeccion = {
   id: string;
@@ -65,6 +67,13 @@ type SpeechRecognitionLike = {
 function fechaLocalInput(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function fechaLimiteDefecto(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function fmtFecha(iso: string | null): string {
@@ -135,6 +144,9 @@ export default function InspeccionesPage() {
   const [addTexto, setAddTexto] = useState("");
   const [addTarget, setAddTarget] = useState<string | null>(null);
 
+  // Asignación de observaciones negativas a tareas
+  const [asig, setAsig] = useState<Record<string, { persona: string; fecha: string }>>({});
+
   const recRef = useRef<SpeechRecognitionLike | null>(null);
   const [recitando, setRecitando] = useState<string | null>(null);
 
@@ -188,6 +200,70 @@ export default function InspeccionesPage() {
     setPreguntaTexto({});
     setVista("crear");
     setMensaje(null);
+  }
+
+  async function asignarTarea(ins: Inspeccion, idx: number) {
+    const items = itemsDe(ins);
+    const item = items[idx];
+    if (!item || item.resultado !== "NEGATIVO") return;
+    if (!item.motivo?.trim()) return notify("Primero describí el problema de esta revisión negativa", false);
+    const clave = `${ins.id}:${idx}`;
+    const persona = (asig[clave]?.persona ?? item.tareaAsignado ?? ins.asignadoA ?? "").trim();
+    if (!persona) return notify("Indicá a quién se le asigna la resolución", false);
+    const limite = asig[clave]?.fecha || fechaLimiteDefecto();
+    setBusy(true);
+    try {
+      const titulo = `Inspección ${ins.nombre} · ${item.texto}`.slice(0, 250);
+      const descripcion = [
+        `Problema: ${item.motivo}`,
+        item.categoria && item.categoria !== "General" ? `Categoría: ${item.categoria}` : null,
+        `Departamento: ${ins.departamentoNombre}${ins.numero ? ` (N° ${ins.numero})` : ""}`,
+        `Inspeccionó: ${ins.personaInspecciona}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      let tareaId = item.tareaId;
+      if (tareaId) {
+        const res = await apiFetch("/api/tareas", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: tareaId, titulo, descripcion, asignadoA: persona, fechaLimite: limite }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error((body as { error?: string }).error ?? "No se pudo actualizar la tarea");
+        }
+      } else {
+        const res = await apiFetch("/api/tareas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ titulo, descripcion, asignadoA: persona, fechaLimite: limite, estado: "PENDIENTE" }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error((body as { error?: string }).error ?? "No se pudo crear la tarea");
+        }
+        const tarea = (await res.json()) as { id: string };
+        tareaId = tarea.id;
+      }
+      const next = items.map((x, j) => (j === idx ? { ...x, tareaId, tareaAsignado: persona } : x));
+      setItems(ins.id, next);
+      await guardarLista(ins, false, next);
+      setAsig((prev) => {
+        const sinClave = { ...prev };
+        delete sinClave[clave];
+        return sinClave;
+      });
+      notify(
+        item.tareaId
+          ? `Tarea reasignada a ${persona}.`
+          : `Observación convertida en tarea para ${persona}. Aparece en Work 123.`
+      );
+    } catch (error) {
+      notify((error as Error).message, false);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function onElegirPlantilla(id: string) {
@@ -457,8 +533,8 @@ export default function InspeccionesPage() {
     URL.revokeObjectURL(url);
   }
 
-  async function guardarLista(ins: Inspeccion, completar: boolean) {
-    const items = itemsDe(ins);
+  async function guardarLista(ins: Inspeccion, completar: boolean, itemsOverride?: InspeccionItem[]) {
+    const items = itemsOverride ?? itemsDe(ins);
     if (completar) {
       if (items.some((i) => !i.resultado)) {
         return notify("Respondé todas las preguntas antes de finalizar", false);
@@ -477,7 +553,7 @@ export default function InspeccionesPage() {
           nombre: ins.nombre,
           numero: ins.numero,
           items,
-          estado: completar ? "COMPLETADO" : "BORRADOR",
+          estado: completar ? "COMPLETADO" : ins.estado === "COMPLETADO" ? "COMPLETADO" : "BORRADOR",
         }),
       });
       const saved = (await res.json()) as Inspeccion & { error?: string };
@@ -618,6 +694,53 @@ export default function InspeccionesPage() {
                 className={`h-10 w-10 shrink-0 rounded border ${recitando === `${ins.id}:${idx}` ? "animate-pulse border-destructive bg-destructive text-white" : "border-outline-variant text-on-surface-variant hover:bg-surface-container"}`}
               >
                 <Mic className="mx-auto h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {item.tareaId ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/50 bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-500/20 dark:text-blue-200">
+                  Tarea asignada a {item.tareaAsignado || "—"}
+                </span>
+              ) : (
+                <span className="text-xs font-medium text-on-surface-variant">
+                  Asignar resolución (crea una tarea en Work 123):
+                </span>
+              )}
+              <input
+                value={asig[`${ins.id}:${idx}`]?.persona ?? item.tareaAsignado ?? ins.asignadoA ?? ""}
+                onChange={(e) =>
+                  setAsig((prev) => ({
+                    ...prev,
+                    [`${ins.id}:${idx}`]: {
+                      persona: e.target.value,
+                      fecha: prev[`${ins.id}:${idx}`]?.fecha ?? fechaLimiteDefecto(),
+                    },
+                  }))
+                }
+                placeholder="Persona responsable…"
+                className="h-8 w-44 rounded border border-outline-variant bg-transparent px-2 text-xs"
+              />
+              <input
+                type="date"
+                value={asig[`${ins.id}:${idx}`]?.fecha ?? fechaLimiteDefecto()}
+                onChange={(e) =>
+                  setAsig((prev) => ({
+                    ...prev,
+                    [`${ins.id}:${idx}`]: {
+                      persona: prev[`${ins.id}:${idx}`]?.persona ?? item.tareaAsignado ?? ins.asignadoA ?? "",
+                      fecha: e.target.value,
+                    },
+                  }))
+                }
+                className="h-8 rounded border border-outline-variant bg-transparent px-2 text-xs"
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void asignarTarea(ins, idx)}
+                className="rounded border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary disabled:opacity-50"
+              >
+                {item.tareaId ? "Reasignar tarea" : "Asignar y crear tarea"}
               </button>
             </div>
           </div>

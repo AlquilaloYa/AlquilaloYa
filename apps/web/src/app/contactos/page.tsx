@@ -498,11 +498,13 @@ export default function ContactosPage() {
     if (form.tipoPersona === PersonType.LEGAL && !form.ruc?.trim()) {
       return "El RUC es obligatorio para persona jurídica.";
     }
-    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
-    if (!emailOk) {
+    if (
+      form.email.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
+    ) {
       return "El email no es válido.";
     }
-    if (normalizarTelefono(form.telefono).length < 7) {
+    if (form.telefono.trim() && normalizarTelefono(form.telefono).length < 7) {
       return "El teléfono no es válido.";
     }
     if ((form.copiaDni ?? []).length === 0) {
@@ -511,14 +513,8 @@ export default function ContactosPage() {
     if ((form.copiaBoletas ?? []).length === 0) {
       return "Debes adjuntar la copia de boletas.";
     }
-    const emergencia = form.contactoEmergencia;
-    if (!emergencia?.nombre.trim()) {
-      return "El nombre del contacto de emergencia es obligatorio.";
-    }
-    if (!emergencia.parentesco.trim()) {
-      return "El parentesco del contacto de emergencia es obligatorio.";
-    }
-    if (normalizarTelefono(emergencia.telefono).length < 7) {
+    const telEmergencia = normalizarTelefono(form.contactoEmergencia?.telefono ?? "");
+    if (telEmergencia && telEmergencia.length < 7) {
       return "El teléfono del contacto de emergencia no es válido.";
     }
     return null;
@@ -534,18 +530,25 @@ export default function ContactosPage() {
     }
     const conPrefijo = (t: string) =>
       `${PREFIJO_PAIS} ${normalizarTelefono(t)}`.trim();
+    const emergenciaForm = form.contactoEmergencia;
+    const emergenciaLlena = Boolean(
+      emergenciaForm &&
+        (emergenciaForm.nombre.trim() ||
+          emergenciaForm.parentesco.trim() ||
+          emergenciaForm.telefono.trim())
+    );
     const nuevo: ContactView = {
       ...form,
       id: form.id || `c-${Date.now()}`,
-      telefono: conPrefijo(form.telefono),
-      ...(form.contactoEmergencia
+      telefono: form.telefono.trim() ? conPrefijo(form.telefono) : "",
+      contactoEmergencia: emergenciaLlena && emergenciaForm
         ? {
-            contactoEmergencia: {
-              ...form.contactoEmergencia,
-              telefono: conPrefijo(form.contactoEmergencia.telefono),
-            },
+            ...emergenciaForm,
+            telefono: emergenciaForm.telefono.trim()
+              ? conPrefijo(emergenciaForm.telefono)
+              : "",
           }
-        : {}),
+        : null,
       mascotas: (form.mascotasItems ?? []).length > 0,
       mascotasItems: form.mascotasItems ?? [],
     };
@@ -829,7 +832,7 @@ export default function ContactosPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Email *</Label>
+                <Label>Email (opcional)</Label>
                 <Input
                   type="email"
                   value={form.email}
@@ -837,7 +840,7 @@ export default function ContactosPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Teléfono *</Label>
+                <Label>Teléfono (opcional)</Label>
                 <TelefonoInput
                   value={normalizarTelefono(form.telefono)}
                   onChange={(telefono) => setForm({ ...form, telefono })}
@@ -951,11 +954,11 @@ export default function ContactosPage() {
               <fieldset className="grid gap-4 rounded-lg border border-input bg-surface-container-lowest/40 p-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="sm:col-span-2 lg:col-span-3">
                   <Label className="text-sm font-semibold">
-                    Contacto de emergencia (obligatorio)
+                    Contacto de emergencia (opcional)
                   </Label>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Nombre *</Label>
+                  <Label>Nombre</Label>
                   <Input
                     value={form.contactoEmergencia?.nombre ?? ""}
                     onChange={(e) =>
@@ -971,7 +974,7 @@ export default function ContactosPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Parentesco *</Label>
+                  <Label>Parentesco</Label>
                   <Input
                     value={form.contactoEmergencia?.parentesco ?? ""}
                     onChange={(e) =>
@@ -987,7 +990,7 @@ export default function ContactosPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Teléfono *</Label>
+                  <Label>Teléfono</Label>
                   <TelefonoInput
                     value={normalizarTelefono(
                       form.contactoEmergencia?.telefono ?? ""

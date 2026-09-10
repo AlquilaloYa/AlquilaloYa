@@ -3,6 +3,7 @@ import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 import { buildContractServices } from "@/lib/contract-app";
 import { ensureContractPdfDocument } from "@/lib/documents";
+import { sincronizarTareasContrato } from "@/lib/tareas-contrato";
 import type { UpdateDraftInput } from "@contract/domain";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,11 @@ export async function PATCH(request: Request, { params }: Ctx) {
       name: auth.user.name,
     });
     const updated = await contractService.updateDraft(params.id, body);
+    try {
+      await sincronizarTareasContrato(params.id);
+    } catch {
+      /* las tareas automaticas no deben bloquear la edicion del contrato */
+    }
     return NextResponse.json(updated);
   } catch (error) {
     return NextResponse.json(
