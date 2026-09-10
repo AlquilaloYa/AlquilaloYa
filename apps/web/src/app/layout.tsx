@@ -11,8 +11,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Sistema de Contratos",
-  description: "Sistema interno de gestión y generación de contratos",
+  title: "CP System ERP",
+  description:
+    "Conecta tus departamentos, potencia a tu gente. El ERP integral que impulsa el futuro de tu empresa.",
 };
 
 function ThemeInitScript() {
