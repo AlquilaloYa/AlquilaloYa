@@ -130,14 +130,15 @@ function detalleGarantia(
   const fechaTexto = fecha ? fecha.split("T")[0] : "________";
   const garantiaTexto = formatCurrency(garantia);
   const garantiaLetras = montoEnLetras(garantia);
+  const apertura = `En la fecha del presente documento, EL ARRENDATARIO(A) deberá de entregar a LA ARRENDADORA la garantía total de S/ ${garantiaTexto} (${garantiaLetras}).`;
 
   if (tipo === "FLUCTUANTE") {
-    return `La garantía total es de S/ ${garantiaTexto} (${garantiaLetras}). El arrendatario ha reservado previamente el inmueble mediante una separación fluctuante de S/ ${formatCurrency(monto)} (${montoEnLetras(monto)}), realizada el día ${fechaTexto}, quedando obligado a cancelar el saldo restante al momento de la firma y notarización del contrato.`;
+    return `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación fluctuante de S/ ${formatCurrency(monto)} (${montoEnLetras(monto)}), realizada el día ${fechaTexto}, quedando obligado a cancelar el saldo restante al momento de la firma y notarización del contrato.`;
   }
   if (tipo === "TOTAL") {
-    return `El arrendatario entregará la garantía total de S/ ${garantiaTexto} (${garantiaLetras}) a la firma de este documento.`;
+    return `${apertura} El arrendatario la entregará íntegramente a la firma de este documento.`;
   }
-  return `La garantía total es de S/ ${garantiaTexto} (${garantiaLetras}). El arrendatario ha reservado previamente el inmueble mediante una separación de S/ 500.00 (quinientos con 00/100 soles), quedando obligado a cancelar el saldo restante al momento de la firma y notarización del contrato.`;
+  return `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación de S/ 500.00 (quinientos con 00/100 soles), quedando obligado a cancelar el saldo restante al momento de la firma y notarización del contrato.`;
 }
 
 /**
