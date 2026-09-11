@@ -120,6 +120,18 @@ function tieneCopiaDni(attachments: unknown): boolean {
   return Array.isArray(attachments) && attachments.length > 0;
 }
 
+/** Marca para la "Copia de baucher" (dataURL o nota si no hay). */
+function baucherMarkup(baucher: string): string {
+  if (!baucher) {
+    return '<p style="text-align:center;">No se adjuntó copia de baucher.</p>';
+  }
+  if (baucher.startsWith("data:application/pdf")) {
+    return '<p class="dni-note" style="text-align:center;font-size:11pt;">Se adjunta copia del baucher en formato PDF. La página real se incorpora en la versión para notaría.</p>';
+  }
+  const src = escapeHtml(baucher);
+  return `<img src="${src}" alt="Copia de baucher" class="dni-image" style="display:block;margin:16px auto 0;width:auto;height:auto;max-width:165mm;max-height:200mm;object-fit:contain;" />`;
+}
+
 function detalleGarantia(
   garantia: string,
   separacionDetalle: Record<string, unknown>,
@@ -174,6 +186,7 @@ export function renderContractHtml(
   const dni = dniMarkup(contrato.copiaDni);
   const dniAnnex = buildDniAnnex(dni);
   const hayDni = tieneCopiaDni(contrato.copiaDni);
+  const baucher = baucherMarkup(field(separacionDetalle, ["baucherSeparacion"]));
 
   const totalMonto = (montoNumerico(monto) + 50).toFixed(2);
 
@@ -238,6 +251,9 @@ export function renderContractHtml(
       html = /<\/body>/i.test(html)
         ? html.replace(/<\/body>/i, dniAnnex + "</body>")
         : html + dniAnnex;
+    }
+    if (html.includes("[BAUCHER]")) {
+      html = html.split("[BAUCHER]").join(baucher);
     }
     return html;
   }

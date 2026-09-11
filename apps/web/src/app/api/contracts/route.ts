@@ -100,6 +100,7 @@ export async function POST(request: Request) {
         monto: string;
         garantiaExtendida?: boolean;
         fecha?: string | null;
+        baucherSeparacion?: string | null;
       } | null;
       copiaDni?: Array<{
         nombre: string;
@@ -194,6 +195,11 @@ export async function POST(request: Request) {
             monto: body.separacionDetalle.monto,
             garantiaExtendida: Boolean(body.separacionDetalle.garantiaExtendida),
             fecha: body.separacionDetalle.fecha ?? null,
+            baucherSeparacion:
+              typeof body.separacionDetalle.baucherSeparacion === "string" &&
+              body.separacionDetalle.baucherSeparacion.startsWith("data:")
+                ? body.separacionDetalle.baucherSeparacion
+                : null,
           }
         : null,
       copiaDni: Array.isArray(body.copiaDni)

@@ -1056,6 +1056,7 @@ function CreateContractModal({
                 monto: Number(clienteSel.separacion.montoSeparacion).toFixed(2),
                 garantiaExtendida: clienteSel.separacion.garantiaExtendida,
                 fecha: clienteSel.separacion.fechaSeparacion,
+                baucherSeparacion: clienteSel.separacion.baucherSeparacion ?? null,
               }
             : null,
           copiaDni: (clienteSel.copiaDni ?? []).map((archivo) => ({

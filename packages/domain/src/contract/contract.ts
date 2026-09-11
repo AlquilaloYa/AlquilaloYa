@@ -12,6 +12,7 @@ export interface ContractSeparationDetail {
   monto: string;
   garantiaExtendida: boolean;
   fecha: string | null;
+  baucherSeparacion?: string | null;
 }
 
 export interface ContractDniAttachment {
