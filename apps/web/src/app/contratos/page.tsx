@@ -151,6 +151,9 @@ const NEXT_TRANSITIONS: Record<
     { action: "resolver", label: "Resolver", allowed: true },
     { action: "cancelar", label: "Cancelar", allowed: true },
   ],
+  CANCELADO: [
+    { action: "eliminar", label: "Eliminar", allowed: true },
+  ],
 };
 
 export default function ContratosPage() {
@@ -298,7 +301,33 @@ export default function ContratosPage() {
       setRenewing(row);
       return;
     }
+    if (action === "eliminar") {
+      void eliminarContrato(row);
+      return;
+    }
     void runAction(row.id, action);
+  }
+
+  async function eliminarContrato(row: ContractApi) {
+    const ok = window.confirm(
+      `¿Eliminar definitivamente el contrato ${row.codigoContrato ?? ""} (${row.estado})?\nSe borrará junto con sus documentos y pagos asociados. Esta acción no se puede deshacer.`
+    );
+    if (!ok) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/contracts/${row.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "No se pudo eliminar el contrato");
+        return;
+      }
+      await load();
+    } catch (e) {
+      setError((e as Error).message ?? "No se pudo eliminar el contrato");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const filtered = contracts.filter((c) => {
@@ -492,7 +521,11 @@ res.push({
                               key={t.action}
                               disabled={!t.allowed || busy}
                               onClick={() => handleAction(r, t.action)}
-                              className="rounded border border-outline-variant px-2 py-1 font-label-md text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-transparent"
+                              className={
+                                t.action === "eliminar"
+                                  ? "flex items-center gap-1 rounded border border-destructive px-2 py-1 font-label-md text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
+                                  : "rounded border border-outline-variant px-2 py-1 font-label-md text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-transparent"
+                              }
                             >
                               {t.label}
                             </button>

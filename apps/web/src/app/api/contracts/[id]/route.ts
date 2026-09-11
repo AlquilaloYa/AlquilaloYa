@@ -52,10 +52,63 @@ export async function PATCH(request: Request, { params }: Ctx) {
       /* las tareas automaticas no deben bloquear la edicion del contrato */
     }
     return NextResponse.json(updated);
-  } catch (error) {
+} catch (error) {
     return NextResponse.json(
       { error: (error as Error).message },
       { status: 400 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/contracts/:id
+ * Elimina definitivamente un contrato CANCELADO y sus dependencias
+ * (pagos, tareas automáticas, documentos, snapshot, cláusulas/anexos).
+ */
+export async function DELETE(req: Request, { params }: Ctx) {
+  try {
+    const dbModule = await import("@contract/db");
+    const auth = await requireUser(dbModule, req);
+    if ("error" in auth) return auth.error;
+    const denied = requirePermission(auth.user.role, Permission.CONTRACT_CANCEL);
+    if (denied) return denied;
+
+    const { db, schema } = dbModule as {
+      db: typeof import("@contract/db").db;
+      schema: typeof import("@contract/db").schema;
+    };
+    const { eq } = await import("drizzle-orm");
+
+    const [contract] = await db
+      .select({ id: schema.contracts.id, estado: schema.contracts.estado, snapshotId: schema.contracts.snapshotId })
+      .from(schema.contracts)
+      .where(eq(schema.contracts.id, params.id))
+      .limit(1);
+    if (!contract) {
+      return NextResponse.json({ error: "Contrato no encontrado" }, { status: 404 });
+    }
+    if (contract.estado !== "CANCELADO") {
+      return NextResponse.json(
+        { error: "Solo se pueden eliminar contratos cancelados" },
+        { status: 400 }
+      );
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.delete(schema.payments).where(eq(schema.payments.contractId, params.id));
+      await tx.delete(schema.tasks).where(eq(schema.tasks.origenContratoId, params.id));
+      await tx.delete(schema.documents).where(eq(schema.documents.contractId, params.id));
+      await tx.delete(schema.contracts).where(eq(schema.contracts.id, params.id));
+      if (contract.snapshotId) {
+        await tx.delete(schema.contractSnapshots).where(eq(schema.contractSnapshots.id, contract.snapshotId));
+      }
+    });
+
+    return NextResponse.json({ ok: true, id: params.id });
+  } catch (error) {
+    return NextResponse.json(
+      { error: (error as Error).message },
+      { status: 500 }
     );
   }
 }
