@@ -61,12 +61,12 @@ function addMonths(iso: string, months: number): string {
 }
 
 function fmtMes(iso: string): string {
-  const [y, m] = iso.split("-").map(Number);
+  const [y, m, d] = iso.split("-").map(Number);
   const meses = [
     "enero", "febrero", "marzo", "abril", "mayo", "junio",
     "julio", "agosto", "setiembre", "octubre", "noviembre", "diciembre",
   ];
-  return `${String(m).padStart(2, "0")}/${y} (${meses[(m as number) - 1]})`;
+  return `${d} de ${meses[(m as number) - 1]} de ${y}`;
 }
 
 /** Períodos mensuales del canon entre las fechas contractuales. */
