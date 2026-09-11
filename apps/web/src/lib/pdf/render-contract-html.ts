@@ -17,6 +17,19 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * Regresa solo el segmento final del codigo del departamento (despues del
+ * ultimo guion). Ej: "BEN2195-18" -> "18", "ANG170-8C" -> "8C". Si no hay
+ * guion, devuelve el codigo tal cual.
+ */
+function codigoCorto(codigo: string): string {
+  const s = (codigo ?? "").trim();
+  if (!s) return s;
+  const idx = s.lastIndexOf("-");
+  if (idx < 0) return s;
+  return s.slice(idx + 1).trim() || s;
+}
+
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "setiembre", "octubre", "noviembre", "diciembre",
@@ -140,6 +153,9 @@ export function renderContractHtml(
   const departamento = snapshot.datosDepartamento as Record<string, unknown>;
   const contrato = snapshot.datosContrato as Record<string, unknown>;
 
+  const codigoDepto = codigoCorto(field(departamento, ["codigo"]));
+  const piso = field(departamento, ["piso"]);
+
   const clienteNombre = field(cliente, ["nombres", "nombreCompleto", "razonSocial", "nomCliente"]);
   const clienteApellidos = field(cliente, ["apellidos"]);
   const clienteDocumento = field(cliente, ["documentoIdentidad", "documento", "ruc"]);
@@ -175,7 +191,8 @@ export function renderContractHtml(
       "[NÚMERO]": clienteDocumento || "________________",
       "[NACIONALIDAD]": "Peruana",
       "[DOMICILIO]": field(cliente, ["domicilio"]) || "________________",
-      "[NÚMERO DE DEPTO]": field(departamento, ["codigo"]) || "________________",
+      "[NÚMERO DE DEPTO]": codigoDepto || "________________",
+      "[PISO]": piso,
       "[MONTO RENTA]": formatCurrency(monto),
       "[TOTAL MONTO]": totalMonto,
       "[DÍA DE PAGO]": inicioFecha ? inicioFecha.dia.padStart(2, "0") : "05",
@@ -244,7 +261,7 @@ export function renderContractHtml(
   <p>Conste el contrato de arrendamiento que celebran de una parte la Srta. <span class="bold">LA ARRENDADORA</span>, y de otra parte el Sr.(a) <span class="bold">${escapeHtml(clienteNombreCompleto || "________________")}</span>, identificado con D.N.I. N° <span class="bold">${escapeHtml(clienteDocumento || "________________")}</span>, de nacionalidad <span class="bold">Peruana</span>, domiciliado en <span class="bold">${escapeHtml(field(cliente, ["domicilio"]) || "________________")}</span> y a quien en lo sucesivo se denominará <span class="bold">EL ARRENDATARIO (A)</span>; en los términos contenidos en las cláusulas siguientes:</p>
 
   <h2>Antecedentes</h2>
-  <p><span class="bold">PRIMERA.-</span> LA ARRENDADORA es propietaria y alquila el departamento N° <span class="bold">${escapeHtml(field(departamento, ["codigo"]) || "________________")}</span> ubicado en ${escapeHtml(field(departamento, ["personaPago"]) || "________________")}, al cual en adelante se le denominará EL INMUEBLE.</p>
+  <p><span class="bold">PRIMERA.-</span> LA ARRENDADORA es propietaria y alquila el departamento N° <span class="bold">${escapeHtml(codigoDepto || "________________")}</span>${piso ? `, Piso ${escapeHtml(piso)}` : ""} ubicado en ${escapeHtml(field(departamento, ["personaPago"]) || "________________")}, al cual en adelante se le denominará EL INMUEBLE.</p>
 
   <h2>Renta: Forma y Oportunidad de Pago</h2>
   <p><span class="bold">CUARTA.-</span> Las partes acuerdan que el monto de la renta que pagará EL ARRENDATARIO(A) asciende a la suma de S/ <span class="bold">${escapeHtml(formatCurrency(monto))}</span> más mantenimiento de S/ 50.00, un total de S/ <span class="bold">${escapeHtml(totalMonto)}</span> por mes.</p>
