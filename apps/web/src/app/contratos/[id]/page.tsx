@@ -360,7 +360,7 @@ export default function ContratoDetailPage() {
               </div>
 
               <div className="rounded-lg bg-surface-container-lowest p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between gap-2">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <h3 className="flex items-center gap-2 font-headline-md text-primary">
                     <ShieldCheck className="h-5 w-5" />
                     Documentos
@@ -378,16 +378,17 @@ export default function ContratoDetailPage() {
                         Nueva adenda
                       </button>
                     ) : null}
-                     {contract.snapshot ? (
-                       <button
-                         onClick={descargarPdf}
-                         disabled={descargando}
-                         className="inline-flex shrink-0 items-center gap-2 rounded bg-primary px-3 py-2 font-label-md text-on-primary shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
-                       >
-                         <Download className="h-4 w-4" />
-                         {descargando ? "Generando…" : "Descargar PDF (contrato + copia DNI)"}
-                       </button>
-                     ) : null}
+                      {contract.snapshot ? (
+                        <button
+                          onClick={descargarPdf}
+                          disabled={descargando}
+                          title="Descargar PDF del contrato con copia de DNI"
+                          className="inline-flex items-center gap-2 rounded bg-primary px-3 py-2 font-label-md text-on-primary shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <Download className="h-4 w-4" />
+                          {descargando ? "Generando…" : "Descargar PDF"}
+                        </button>
+                      ) : null}
                    </div>
                 </div>
                 {errorPdf ? (
