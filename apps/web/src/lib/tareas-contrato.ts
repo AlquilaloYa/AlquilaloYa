@@ -92,7 +92,7 @@ export async function sincronizarTareasContrato(
   for (const ev of eventos) {
     const limite = fechaMediodia(ev.fecha);
     if (!limite) continue;
-    const descripcion = `Contrato ${c.codigoContrato} · Cliente: ${cliente} · ${depto} · ${ev.detalle}. Generada automáticamente por CP System ERP.`;
+    const descripcion = `Contrato ${c.codigoContrato} · Cliente: ${cliente} · ${depto} · ${ev.detalle}. Generada automáticamente por AlquilaYa ERP.`;
     const prev = existentes.find((t) => t.origenEvento === ev.kind);
     if (!prev) {
       await db.insert(schema.tasks).values({

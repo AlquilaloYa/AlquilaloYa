@@ -11,8 +11,8 @@ export default function HomePage() {
       />
       <div className="absolute inset-0 bg-slate-950/70" />
       <div className="relative">
-        <img src="/logo-black-mode.png" alt="CP System ERP" className="mx-auto h-28 w-auto object-contain" />
-        <h1 className="mt-8 font-display text-white">CP System ERP</h1>
+        <img src="/logo-black-mode.png" alt="AlquilaYa ERP" className="mx-auto h-28 w-auto object-contain" />
+        <h1 className="mt-8 font-display text-white">AlquilaYa ERP</h1>
         <p className="mt-4 max-w-2xl font-body-md text-white/85">
           Conecta tus departamentos, potencia a tu gente.
         </p>

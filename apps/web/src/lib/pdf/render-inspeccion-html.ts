@@ -101,7 +101,7 @@ td.n { text-align: center; }
 </style></head>
 <body>
 <h1>${data.titulo ? esc(data.titulo).toUpperCase() : "CHECKLIST DE INSPECCION"}</h1>
-<p class="sistema">CP System ERP</p>
+<p class="sistema">AlquilaYa ERP</p>
 <h2>Datos de la inspeccion</h2>
 <table class="datos">
   <tr><td class="lbl">N&uacute;mero de departamento:</td><td>${esc(data.numero || "—")}</td></tr>
@@ -118,7 +118,7 @@ ${hallazgos}
   <div>Persona que inspecciona: ${esc(data.personaInspecciona)}</div>
   <div>${data.asignadoA ? `Responsable de atencion: ${esc(data.asignadoA)}` : "Responsable de atencion"}</div>
 </div>
-<p class="pie">Documento generado por CP System ERP el ${esc(fechaLegal(new Date().toISOString()))}</p>
+<p class="pie">Documento generado por AlquilaYa ERP el ${esc(fechaLegal(new Date().toISOString()))}</p>
 </body>
 </html>`;
 }

@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "CP System ERP",
+  title: "AlquilaYa ERP",
   description:
     "Conecta tus departamentos, potencia a tu gente. El ERP integral que impulsa el futuro de tu empresa.",
 };

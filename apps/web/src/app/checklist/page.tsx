@@ -585,6 +585,14 @@ export default function InspeccionesPage() {
         await descargarPdf(ins);
         notify("PDF descargado");
       } else if (tipo === "eliminar") {
+        const nombre = ins.nombre || ins.departamentoNombre;
+        if (
+          !window.confirm(
+            `¿Eliminar el checklist "${nombre}" (${ins.estado === "COMPLETADO" ? "completado" : "guardado"})? Esta acción no se puede deshacer.`
+          )
+        ) {
+          return;
+        }
         const res = await apiFetch(`/api/inspecciones?id=${ins.id}`, { method: "DELETE" });
         if (!res.ok) throw new Error("No se pudo eliminar");
         await cargar();
@@ -985,44 +993,57 @@ export default function InspeccionesPage() {
                 });
                 return (
                   <div key={ins.id} className="rounded-xl bg-surface-container-lowest shadow-sm">
-                    <button
-                      type="button"
-                      onClick={() => setExpandida(abierta ? null : ins.id)}
-                      className="flex w-full flex-wrap items-center justify-between gap-2 p-4 text-left"
-                    >
-                      <div>
-                        <p className="font-label-md text-on-surface">
-                          {abierta ? <ChevronUp className="mr-1 inline h-4 w-4" /> : <ChevronDown className="mr-1 inline h-4 w-4" />}
-                          {ins.nombre || ins.departamentoNombre}
-                        </p>
-                        <p className="text-xs text-on-surface-variant">
-                          N° {ins.numero || "—"} · {ins.departamentoNombre} · {fmtFecha(ins.fecha)} · Inspecciona:{" "}
-                          {ins.personaInspecciona} · Registró: {ins.inspectorNombre}
-                          {ins.asignadoA ? ` · Asignado: ${ins.asignadoA}` : ""}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-3 text-xs">
-                        <span className="rounded-full border border-outline-variant px-2 py-0.5 text-on-surface-variant">
-                          {respondidas}/{items.length} respondidas
-                        </span>
-                        {negativos > 0 ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-destructive">
-                            <XCircle className="h-3 w-3" />
-                            {negativos} {negativos === 1 ? "observación" : "observaciones"}
+                    <div className="flex items-center gap-2 p-4">
+                      <button
+                        type="button"
+                        onClick={() => setExpandida(abierta ? null : ins.id)}
+                        className="flex flex-1 flex-wrap items-center justify-between gap-2 text-left"
+                      >
+                        <div>
+                          <p className="font-label-md text-on-surface">
+                            {abierta ? <ChevronUp className="mr-1 inline h-4 w-4" /> : <ChevronDown className="mr-1 inline h-4 w-4" />}
+                            {ins.nombre || ins.departamentoNombre}
+                          </p>
+                          <p className="text-xs text-on-surface-variant">
+                            N° {ins.numero || "—"} · {ins.departamentoNombre} · {fmtFecha(ins.fecha)} · Inspecciona:{" "}
+                            {ins.personaInspecciona} · Registró: {ins.inspectorNombre}
+                            {ins.asignadoA ? ` · Asignado: ${ins.asignadoA}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 text-xs">
+                          <span className="rounded-full border border-outline-variant px-2 py-0.5 text-on-surface-variant">
+                            {respondidas}/{items.length} respondidas
                           </span>
-                        ) : respondidas > 0 && respondidas === items.length ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-primary">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Sin observaciones
+                          {negativos > 0 ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-destructive">
+                              <XCircle className="h-3 w-3" />
+                              {negativos} {negativos === 1 ? "observación" : "observaciones"}
+                            </span>
+                          ) : respondidas > 0 && respondidas === items.length ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-primary">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Sin observaciones
+                            </span>
+                          ) : null}
+                          <span
+                            className={`rounded-full px-2 py-0.5 ${ins.estado === "COMPLETADO" ? "bg-primary/15 text-primary" : "border border-outline-variant text-on-surface-variant"}`}
+                          >
+                            {ins.estado === "COMPLETADO" ? "Completado" : "Guardado"}
                           </span>
-                        ) : null}
-                        <span
-                          className={`rounded-full px-2 py-0.5 ${ins.estado === "COMPLETADO" ? "bg-primary/15 text-primary" : "border border-outline-variant text-on-surface-variant"}`}
+                        </div>
+                      </button>
+                      {ins.estado === "COMPLETADO" && !abierta ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          title="Eliminar checklist completado"
+                          onClick={() => void accion(ins, "eliminar")}
+                          className="inline-flex shrink-0 items-center gap-1 rounded border border-destructive/40 px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
                         >
-                          {ins.estado === "COMPLETADO" ? "Completado" : "Guardado"}
-                        </span>
-                      </div>
-                    </button>
+                          <Trash2 className="h-3.5 w-3.5" />Eliminar
+                        </button>
+                      ) : null}
+                    </div>
 
                     {abierta ? (
                       <div className="border-t border-outline-variant p-4">

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "CP System ERP",
+  "productName": "AlquilaYa ERP",
   "version": "0.1.0",
   "identifier": "com.contract.system",
   "build": {
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "CP System ERP",
+        "title": "AlquilaYa ERP",
         "width": 1200,
         "height": 800,
         "resizable": true,

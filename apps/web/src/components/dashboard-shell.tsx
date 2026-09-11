@@ -244,7 +244,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           {!collapsed ? (
             <>
               <h1 className="font-headline-md font-bold leading-tight text-primary dark:text-white">
-                CP System ERP
+                AlquilaYa ERP
               </h1>
               <button
                 onClick={() => setCollapsed(true)}
