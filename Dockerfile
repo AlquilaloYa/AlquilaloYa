@@ -29,6 +29,10 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 # ---- Build ----
 FROM deps AS build
 COPY . .
+# next build ejecuta los modulos de las rutas al recolectar datos y
+# packages/config/env.ts valida DATABASE_URL al importarse. Se usa un valor
+# dummy (no secret): el runtime recibe el DATABASE_URL real del orquestador.
+ENV DATABASE_URL="postgresql://build:***@localhost:5432/build"
 RUN pnpm --filter @contract/web build
 
 # ---- Runtime ----
