@@ -46,8 +46,8 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "Dashboard" },
+  { href: "/directorio", label: "Directorio", icon: BookUser, section: "Directorio" },
   { href: "/contactos", label: "Contactos", icon: Contact, section: "Contactos", group: "contratos" },
-  { href: "/directorio", label: "Directorio", icon: BookUser, section: "Directorio", group: "contratos" },
   { href: "/departamentos", label: "Uni/Dep", icon: Building2, section: "Departamentos", permission: "department.read", group: "contratos" },
   { href: "/contratos", label: "Pre contrato", icon: FileText, section: "Contratos", permission: "contract.read", group: "contratos" },
   { href: "/contrato-final", label: "Contrato Final", icon: FileCheck, section: "Contrato Final", permission: "contract.read", group: "contratos" },
