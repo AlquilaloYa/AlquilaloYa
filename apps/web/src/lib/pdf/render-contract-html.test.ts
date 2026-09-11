@@ -52,6 +52,7 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     "<p>Departamento N° [NÚMERO DE DEPTO] desde el [DÍA INICIO] de [MES INICIO] de [AÑO INICIO] hasta el [DÍA FIN] de [MES FIN] de [AÑO FIN].</p>",
     "<p>Garantía de S/ [MONTO GARANTÍA].</p>",
     "<p>[DETALLE GARANTIA]</p>",
+    "<p>[DETALLE GARANTIA CONT.] El mencionado depósito en garantía.</p>",
     "<div>[DNI]</div>",
   ].join("\n");
 
@@ -72,7 +73,9 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     expect(html).toContain("separación fluctuante de S/ 750.00");
     expect(html).toContain("realizada el día 5 de marzo de 2025");
     expect(html).not.toContain("notarización del contrato");
-    expect(html).toContain("por la diferencia a la firma del contrato, en calidad de depósito");
+    expect(html).toContain("realizada el día 5 de marzo de 2025.</p>");
+    expect(html).toContain("<p>La diferencia a la firma del contrato, en calidad de depósito");
+    expect(html).not.toContain("por la diferencia");
     expect(html).toContain('<img src="data:image/png;base64,abc"');
   });
 
@@ -82,6 +85,7 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     expect(html).not.toContain("[NOMBRE DEL ARRENDATARIO]");
     expect(html).not.toContain("[DOMICILIO]");
     expect(html).not.toContain("[MONTO GARANTÍA]");
+    expect(html).not.toContain("[DETALLE GARANTIA");
   });
 
   it("anexa la copia de DNI al final si la plantilla no usa [DNI]", () => {

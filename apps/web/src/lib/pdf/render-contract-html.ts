@@ -135,7 +135,7 @@ function baucherMarkup(baucher: string): string {
 function detalleGarantia(
   garantia: string,
   separacionDetalle: Record<string, unknown>
-): string {
+): { parte1: string; parte2: string } {
   const tipo = field(separacionDetalle, ["tipo"]);
   const monto = field(separacionDetalle, ["monto"]) || "500.00";
   const fecha = field(separacionDetalle, ["fecha"]);
@@ -144,14 +144,24 @@ function detalleGarantia(
   const garantiaTexto = formatCurrency(garantia);
   const garantiaLetras = montoEnLetras(garantia);
   const apertura = `En la fecha del presente documento, EL ARRENDATARIO(A) deberá de entregar a LA ARRENDADORA la garantía total de S/ ${garantiaTexto} (${garantiaLetras}).`;
+  const cierre = "La diferencia a la firma del contrato, en calidad de depósito, en garantía del absoluto cumplimiento de todas las obligaciones asumidas en virtud de este contrato.";
 
   if (tipo === "FLUCTUANTE") {
-    return `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación fluctuante de S/ ${formatCurrency(monto)} (${montoEnLetras(monto)}), realizada el día ${fechaTexto}, por la diferencia a la firma del contrato, en calidad de depósito, en garantía del absoluto cumplimiento de todas las obligaciones asumidas en virtud de este contrato.`;
+    return {
+      parte1: `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación fluctuante de S/ ${formatCurrency(monto)} (${montoEnLetras(monto)}), realizada el día ${fechaTexto}.`,
+      parte2: cierre,
+    };
   }
   if (tipo === "TOTAL") {
-    return `${apertura} El arrendatario la entregará íntegramente a la firma de este documento.`;
+    return {
+      parte1: `${apertura} El arrendatario la entregará íntegramente a la firma de este documento.`,
+      parte2: "",
+    };
   }
-  return `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación de S/ 500.00 (quinientos con 00/100 soles), realizada el día ${fechaTexto}, por la diferencia a la firma del contrato, en calidad de depósito, en garantía del absoluto cumplimiento de todas las obligaciones asumidas en virtud de este contrato.`;
+  return {
+    parte1: `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación de S/ 500.00 (quinientos con 00/100 soles), realizada el día ${fechaTexto}.`,
+    parte2: cierre,
+  };
 }
 
 /**
@@ -218,7 +228,8 @@ export function renderContractHtml(
       "[MONTO FLUCTUANTE LETRAS]": montoSeparacion || "________",
       "[FECHA DE ABONO]": fechaSeparacion?.split("T")[0] ?? "________",
       "[TIPO SEPARACION]": tipoSeparacion || "________",
-      "[DETALLE GARANTIA]": detalleGarantia(garantia, separacionDetalle),
+      "[DETALLE GARANTIA]": detalleGarantia(garantia, separacionDetalle).parte1,
+      "[DETALLE GARANTIA CONT.]": detalleGarantia(garantia, separacionDetalle).parte2,
       "[INVENTARIO]": (Array.isArray(contrato.muebleriaItems) ? contrato.muebleriaItems : [])
         .map(String)
         .join("; ") || "________________",
