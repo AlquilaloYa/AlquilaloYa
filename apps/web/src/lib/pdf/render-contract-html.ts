@@ -140,7 +140,8 @@ function detalleGarantia(
   const tipo = field(separacionDetalle, ["tipo"]);
   const monto = field(separacionDetalle, ["monto"]) || "500.00";
   const fecha = field(separacionDetalle, ["fecha"]);
-  const fechaTexto = fecha ? fecha.split("T")[0] : "________";
+  const fSep = parseFecha(fecha);
+  const fechaTexto = fSep ? `${fSep.dia} de ${fSep.mes} de ${fSep.año}` : "________";
   const garantiaTexto = formatCurrency(garantia);
   const garantiaLetras = montoEnLetras(garantia);
   const apertura = `En la fecha del presente documento, EL ARRENDATARIO(A) deberá de entregar a LA ARRENDADORA la garantía total de S/ ${garantiaTexto} (${garantiaLetras}).`;
@@ -151,7 +152,7 @@ function detalleGarantia(
   if (tipo === "TOTAL") {
     return `${apertura} El arrendatario la entregará íntegramente a la firma de este documento${firma}.`;
   }
-  return `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación de S/ 500.00 (quinientos con 00/100 soles), quedando obligado a cancelar el saldo restante al momento de la firma y notarización del contrato${firma}.`;
+  return `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación de S/ 500.00 (quinientos con 00/100 soles), realizada el día ${fechaTexto}, quedando obligado a cancelar el saldo restante al momento de la firma y notarización del contrato${firma}.`;
 }
 
 /**

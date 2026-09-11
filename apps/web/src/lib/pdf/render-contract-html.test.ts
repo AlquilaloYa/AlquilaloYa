@@ -70,7 +70,7 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     expect(html).toContain("2025");
     expect(html).toContain("2026");
     expect(html).toContain("separación fluctuante de S/ 750.00");
-    expect(html).toContain("2025-03-05");
+    expect(html).toContain("realizada el día 5 de marzo de 2025");
     expect(html).toContain('<img src="data:image/png;base64,abc"');
   });
 
