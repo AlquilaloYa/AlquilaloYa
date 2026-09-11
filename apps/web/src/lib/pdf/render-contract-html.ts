@@ -146,12 +146,12 @@ function detalleGarantia(
   const apertura = `En la fecha del presente documento, EL ARRENDATARIO(A) deberá de entregar a LA ARRENDADORA la garantía total de S/ ${garantiaTexto} (${garantiaLetras}).`;
 
   if (tipo === "FLUCTUANTE") {
-    return `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación fluctuante de S/ ${formatCurrency(monto)} (${montoEnLetras(monto)}), realizada el día ${fechaTexto}, quedando obligado a cancelar el saldo restante al momento de la firma.`;
+    return `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación fluctuante de S/ ${formatCurrency(monto)} (${montoEnLetras(monto)}), realizada el día ${fechaTexto}, por la diferencia a la firma del contrato, en calidad de depósito, en garantía del absoluto cumplimiento de todas las obligaciones asumidas en virtud de este contrato.`;
   }
   if (tipo === "TOTAL") {
     return `${apertura} El arrendatario la entregará íntegramente a la firma de este documento.`;
   }
-  return `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación de S/ 500.00 (quinientos con 00/100 soles), realizada el día ${fechaTexto}, quedando obligado a cancelar el saldo restante al momento de la firma.`;
+  return `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación de S/ 500.00 (quinientos con 00/100 soles), realizada el día ${fechaTexto}, por la diferencia a la firma del contrato, en calidad de depósito, en garantía del absoluto cumplimiento de todas las obligaciones asumidas en virtud de este contrato.`;
 }
 
 /**
