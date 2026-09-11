@@ -95,10 +95,30 @@ export class DrizzleDashboardRepository {
 
     const firmas = await db
       .select({
-        id: schema.contracts.id,
         departamentoId: schema.contracts.departamentoId,
         fechaFin: schema.contracts.fechaFin,
+      })
+      .from(schema.contracts)
+      .where(eq(schema.contracts.estado, "FIRMADO"));
+
+    const ocupadas = new Set(firmas.map((c) => c.departamentoId)).size;
+
+    let mantenimiento = 0;
+    let aPuntoDeFinalizar = 0;
+    for (const c of firmas) {
+      if (c.fechaFin && c.fechaFin >= hoyStr && c.fechaFin <= finMantenimientoStr) {
+        mantenimiento++;
+      }
+      if (c.fechaFin && c.fechaFin >= hoyStr && c.fechaFin <= finProximoStr) {
+        aPuntoDeFinalizar++;
+      }
+    }
+
+    const porVencer = await db
+      .select({
+        id: schema.contracts.id,
         codigoContrato: schema.contracts.codigoContrato,
+        fechaFin: schema.contracts.fechaFin,
         cliente: sql<string>`trim(coalesce(${schema.clients.nombres}, '') || ' ' || coalesce(${schema.clients.apellidos}, ''))`,
         departamento: schema.departments.codigo,
       })
@@ -108,33 +128,33 @@ export class DrizzleDashboardRepository {
         schema.departments,
         eq(schema.departments.id, schema.contracts.departamentoId)
       )
-      .where(eq(schema.contracts.estado, "FIRMADO"));
+      .where(
+        and(
+          inArray(schema.contracts.estado, [
+            "EMITIDO",
+            "PENDIENTE_FIRMA",
+            "FIRMADO",
+            "NOTARIADO",
+          ]),
+          gte(schema.contracts.fechaFin, hoyStr),
+          lte(schema.contracts.fechaFin, finProximoStr)
+        )
+      )
+      .orderBy(schema.contracts.fechaFin);
 
-    const ocupadas = new Set(firmas.map((c) => c.departamentoId)).size;
-
-    let mantenimiento = 0;
-    let aPuntoDeFinalizar = 0;
-    const proximosAVencer: ProximoAVencer[] = [];
-    for (const c of firmas) {
-      if (c.fechaFin && c.fechaFin >= hoyStr && c.fechaFin <= finMantenimientoStr) {
-        mantenimiento++;
-      }
-      if (c.fechaFin && c.fechaFin >= hoyStr && c.fechaFin <= finProximoStr) {
-        aPuntoDeFinalizar++;
-        const dias = Math.round(
-          (new Date(`${c.fechaFin}T12:00:00`).getTime() - hoy.getTime()) / 86400000
-        );
-        proximosAVencer.push({
-          id: c.id,
-          codigoContrato: c.codigoContrato,
-          cliente: c.cliente || "—",
-          departamento: c.departamento ?? null,
-          fechaFin: c.fechaFin,
-          diasRestantes: Math.max(0, dias),
-        });
-      }
-    }
-    proximosAVencer.sort((a, b) => a.diasRestantes - b.diasRestantes);
+    const proximosAVencer: ProximoAVencer[] = porVencer.map((c) => {
+      const dias = Math.round(
+        (new Date(`${c.fechaFin}T12:00:00`).getTime() - hoy.getTime()) / 86400000
+      );
+      return {
+        id: c.id,
+        codigoContrato: c.codigoContrato,
+        cliente: c.cliente || "—",
+        departamento: c.departamento ?? null,
+        fechaFin: c.fechaFin,
+        diasRestantes: Math.max(0, dias),
+      };
+    });
 
     const hoyInicioAnioStr = toDateStr(new Date(hoy.getFullYear(), 0, 1));
     const pagosAnio = await db
