@@ -22,7 +22,7 @@ export function cronogramaMeses(inicio: Date, fin: Date): Date[] {
   const out: Date[] = [];
   for (let i = 0; i < 120; i++) {
     const d = addMonths(inicio, i);
-    if (d.getTime() > fin.getTime()) break;
+    if (d.getTime() >= fin.getTime()) break;
     out.push(d);
   }
   return out;

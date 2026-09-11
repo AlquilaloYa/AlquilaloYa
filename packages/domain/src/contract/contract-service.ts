@@ -78,7 +78,7 @@ function cronogramaPeriodos(
   const periodos: Array<{ mes: string; monto: string }> = [];
   let cursor = fechaInicio;
   let guard = 0;
-  while (cursor <= fechaFin && guard < 240) {
+  while (cursor < fechaFin && guard < 240) {
     periodos.push({
       mes: fmtMes(cursor),
       monto: MONTO.format(Number(montoCanonMensual) || 0),

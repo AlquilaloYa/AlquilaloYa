@@ -89,7 +89,7 @@ export default function PagosPage() {
         (hoy.getFullYear() - ini.getFullYear()) * 12 +
         (hoy.getMonth() - ini.getMonth());
       const cuota = addMonths(ini, k);
-      if (cuota.getTime() > fin.getTime()) {
+      if (cuota.getTime() >= fin.getTime()) {
         out.push({
           contrato: c,
           periodo: localDateStr(fin),
