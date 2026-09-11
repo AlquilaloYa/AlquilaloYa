@@ -8,6 +8,15 @@ import { useAuth } from "@/lib/auth-context";
 import { FileText, AlertTriangle, Activity } from "lucide-react";
 import { DonutChart } from "@/components/donut-chart";
 
+interface ProximoAVencer {
+  id: string;
+  codigoContrato: string;
+  cliente: string;
+  departamento: string | null;
+  fechaFin: string;
+  diasRestantes: number;
+}
+
 interface Resumen {
   unidadesTotales: number;
   ocupadas: number;
@@ -15,6 +24,7 @@ interface Resumen {
   tasaOcupacion: number;
   mantenimiento: number;
   aPuntoDeFinalizar: number;
+  proximosAVencer?: ProximoAVencer[];
   ingresosYTD: number;
   egresos: number;
   resultadosYTD: number;
@@ -164,7 +174,41 @@ return (
             Cargando métricas…
           </div>
         ) : (
-          <div className="grid grid-cols-12 gap-4">
+          <>
+            {data.resumen.proximosAVencer && data.resumen.proximosAVencer.length > 0 ? (
+              <div className="rounded-lg border border-amber-400/60 bg-amber-400/10 p-4">
+                <div className="mb-2 flex items-center gap-2 font-label-md text-amber-700 dark:text-amber-300">
+                  <AlertTriangle className="h-4 w-4" />
+                  {data.resumen.proximosAVencer.length}{" "}
+                  {data.resumen.proximosAVencer.length === 1
+                    ? "contrato vence en el próximo mes:"
+                    : "contratos vencen en el próximo mes:"}
+                </div>
+                <ul className="space-y-1">
+                  {data.resumen.proximosAVencer.map((p) => (
+                    <li key={p.id}>
+                      <Link
+                        href={`/contratos/${p.id}`}
+                        className="font-body-sm text-on-surface hover:text-primary hover:underline"
+                      >
+                        <span className="font-semibold">{p.codigoContrato}</span>
+                        {" · "}
+                        {p.cliente}
+                        {p.departamento ? ` · ${p.departamento}` : ""} · vence el{" "}
+                        {new Date(`${p.fechaFin}T12:00:00`).toLocaleDateString("es-PE")} (
+                        {p.diasRestantes === 0
+                          ? "hoy"
+                          : p.diasRestantes === 1
+                            ? "en 1 día"
+                            : `en ${p.diasRestantes} días`}
+                        )
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <div className="grid grid-cols-12 gap-4">
             {stats.map((s) => (
               <div
                 key={s.label}
@@ -254,6 +298,7 @@ return (
               </div>
             </div>
           </div>
+          </>
         )}
       </div>
     </DashboardShell>

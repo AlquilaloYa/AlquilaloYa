@@ -16,6 +16,15 @@ export interface DashboardMetrics {
   erroresGeneracion: number;
 }
 
+export interface ProximoAVencer {
+  id: string;
+  codigoContrato: string;
+  cliente: string;
+  departamento: string | null;
+  fechaFin: string;
+  diasRestantes: number;
+}
+
 export interface ResumenPortafolio {
   unidadesTotales: number;
   ocupadas: number;
@@ -23,6 +32,7 @@ export interface ResumenPortafolio {
   tasaOcupacion: number;
   mantenimiento: number;
   aPuntoDeFinalizar: number;
+  proximosAVencer: ProximoAVencer[];
   ingresosYTD: number;
   egresos: number;
   resultadosYTD: number;
@@ -85,24 +95,46 @@ export class DrizzleDashboardRepository {
 
     const firmas = await db
       .select({
+        id: schema.contracts.id,
         departamentoId: schema.contracts.departamentoId,
         fechaFin: schema.contracts.fechaFin,
+        codigoContrato: schema.contracts.codigoContrato,
+        cliente: sql<string>`trim(coalesce(${schema.clients.nombres}, '') || ' ' || coalesce(${schema.clients.apellidos}, ''))`,
+        departamento: schema.departments.codigo,
       })
       .from(schema.contracts)
+      .leftJoin(schema.clients, eq(schema.clients.id, schema.contracts.clienteId))
+      .leftJoin(
+        schema.departments,
+        eq(schema.departments.id, schema.contracts.departamentoId)
+      )
       .where(eq(schema.contracts.estado, "FIRMADO"));
 
     const ocupadas = new Set(firmas.map((c) => c.departamentoId)).size;
 
     let mantenimiento = 0;
     let aPuntoDeFinalizar = 0;
+    const proximosAVencer: ProximoAVencer[] = [];
     for (const c of firmas) {
       if (c.fechaFin && c.fechaFin >= hoyStr && c.fechaFin <= finMantenimientoStr) {
         mantenimiento++;
       }
       if (c.fechaFin && c.fechaFin >= hoyStr && c.fechaFin <= finProximoStr) {
         aPuntoDeFinalizar++;
+        const dias = Math.round(
+          (new Date(`${c.fechaFin}T12:00:00`).getTime() - hoy.getTime()) / 86400000
+        );
+        proximosAVencer.push({
+          id: c.id,
+          codigoContrato: c.codigoContrato,
+          cliente: c.cliente || "—",
+          departamento: c.departamento ?? null,
+          fechaFin: c.fechaFin,
+          diasRestantes: Math.max(0, dias),
+        });
       }
     }
+    proximosAVencer.sort((a, b) => a.diasRestantes - b.diasRestantes);
 
     const hoyInicioAnioStr = toDateStr(new Date(hoy.getFullYear(), 0, 1));
     const pagosAnio = await db
@@ -199,6 +231,7 @@ export class DrizzleDashboardRepository {
         : 0,
       mantenimiento,
       aPuntoDeFinalizar,
+      proximosAVencer,
       ingresosYTD,
       egresos,
       resultadosYTD,
