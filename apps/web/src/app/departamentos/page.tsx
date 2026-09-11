@@ -66,6 +66,7 @@ export default function DepartamentosPage() {
   const [contactoAsignado, setContactoAsignado] = useState<string | null>(null);
   const [, setProtocoloSeleccionado] = useState<string>("");
   const [baucherUrl, setBaucherUrl] = useState<string>("");
+  const [fechaSeparacion, setFechaSeparacion] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [tipoSeparacion, setTipoSeparacion] = useState<"500" | "TOTAL" | "FLUCTUANTE">("500");
   const [montoFluctuante, setMontoFluctuante] = useState("");
   const [diasTiempo, setDiasTiempo] = useState("1");
@@ -304,15 +305,21 @@ export default function DepartamentosPage() {
       return;
     }
 
-    const ahora = new Date();
-    const fechaLimiteManual = new Date(ahora.getTime() + dias * 24 * 60 * 60 * 1000).toISOString();
+    const base = fechaSeparacion
+      ? new Date(`${fechaSeparacion}T12:00:00`)
+      : new Date();
+    if (Number.isNaN(base.getTime())) {
+      setError("La fecha de separación no es válida.");
+      return;
+    }
+    const fechaLimiteManual = new Date(base.getTime() + dias * 24 * 60 * 60 * 1000).toISOString();
     const nuevaSep: SeparacionRecord = {
       departamentoId: elegidoId,
       contactoId: contactoAsignado,
       montoSeparacion: monto,
       tipoSeparacion: tipoSeparacion,
       garantiaExtendida: false,
-      fechaSeparacion: ahora.toISOString(),
+      fechaSeparacion: base.toISOString(),
       diasTiempo: dias,
       fechaLimiteManual,
       fechaLimite48h: fechaLimiteManual,
@@ -331,6 +338,7 @@ export default function DepartamentosPage() {
     setContactoAsignado(null);
     setProtocoloSeleccionado("");
     setBaucherUrl("");
+    setFechaSeparacion(new Date().toISOString().slice(0, 10));
     setTipoSeparacion("500");
     setMontoFluctuante("");
     setDiasTiempo("1");
@@ -501,7 +509,18 @@ export default function DepartamentosPage() {
                   onChange={(e) => setDiasTiempo(e.target.value)}
                   placeholder="Ej. 7"
                 />
-                <p className="text-xs text-muted-foreground">El vencimiento se calculará desde hoy.</p>
+                <p className="text-xs text-muted-foreground">El vencimiento se calculará desde la fecha de separación.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Fecha de separación</Label>
+                <input
+                  type="date"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={fechaSeparacion}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setFechaSeparacion(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Día en que se realizó la separación.</p>
               </div>
               <div className="space-y-1.5">
                 <Label>Baucher</Label>
@@ -528,7 +547,7 @@ export default function DepartamentosPage() {
               <Button onClick={asignarDepartamento} disabled={!elegidoId || !contactoAsignado || !baucherUrl}>
                 Asignar departamento
               </Button>
-              <Button variant="outline" onClick={() => { setElegidoId(null); setContactoAsignado(null); setProtocoloSeleccionado(""); setBaucherUrl(""); }}>
+              <Button variant="outline" onClick={() => { setElegidoId(null); setContactoAsignado(null); setProtocoloSeleccionado(""); setBaucherUrl(""); setFechaSeparacion(new Date().toISOString().slice(0, 10)); }}>
                 Limpiar
               </Button>
             </div>
@@ -717,6 +736,11 @@ export default function DepartamentosPage() {
                               {sepContacto && sep && (
                                 <div className="text-xs text-muted-foreground mt-1">
                                   Monto: {fmtPrecio(sep.montoSeparacion.toString())}
+                                </div>
+                              )}
+                              {sepContacto && sep && (
+                                <div className="text-xs text-muted-foreground">
+                                  Fecha: {new Date(sep.fechaSeparacion).toLocaleDateString("es-PE")}
                                 </div>
                               )}
                               {sepContacto && (
