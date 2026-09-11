@@ -51,6 +51,7 @@ export async function GET(
         mascotasItems: schema.contracts.mascotasItems,
         departamentoNombre: schema.departments.nombre,
         departamentoCodigo: schema.departments.codigo,
+        personaPago: schema.departments.personaPago,
       })
       .from(schema.contracts)
       .leftJoin(
