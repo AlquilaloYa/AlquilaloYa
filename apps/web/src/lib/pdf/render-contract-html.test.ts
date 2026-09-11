@@ -71,6 +71,8 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     expect(html).toContain("2026");
     expect(html).toContain("separación fluctuante de S/ 750.00");
     expect(html).toContain("realizada el día 5 de marzo de 2025");
+    expect(html).not.toContain("notarización del contrato");
+    expect(html).toContain("al momento de la firma.");
     expect(html).toContain('<img src="data:image/png;base64,abc"');
   });
 
