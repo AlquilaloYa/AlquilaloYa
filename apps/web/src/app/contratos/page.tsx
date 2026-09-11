@@ -453,6 +453,7 @@ res.push({
                   <th className="whitespace-nowrap p-4 font-label-md text-on-surface-variant">Mantenimiento</th>
                   <th className="p-4 font-label-md text-on-surface-variant">Estado</th>
                   <th className="whitespace-nowrap p-4 font-label-md text-on-surface-variant">Creado</th>
+                  <th className="whitespace-nowrap p-4 font-label-md text-on-surface-variant">Fecha inicio</th>
                   <th className="whitespace-nowrap p-4 font-label-md text-on-surface-variant">Fecha fin</th>
                   <th className="p-4 text-right font-label-md text-on-surface-variant">Acciones</th>
                 </tr>
@@ -500,7 +501,10 @@ res.push({
                         {new Date(r.createdAt).toLocaleDateString("es-PE")}
                       </td>
                       <td className="whitespace-nowrap p-4 font-body-sm text-on-surface-variant">
-                        {new Date(r.fechaFin).toLocaleDateString("es-PE")}
+                        {new Date(`${r.fechaInicio}T12:00:00`).toLocaleDateString("es-PE")}
+                      </td>
+                      <td className="whitespace-nowrap p-4 font-body-sm text-on-surface-variant">
+                        {new Date(`${r.fechaFin}T12:00:00`).toLocaleDateString("es-PE")}
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -537,7 +541,7 @@ res.push({
                 })}
                 {!loading && filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-8 text-center font-body-md text-on-surface-variant">
+                    <td colSpan={10} className="p-8 text-center font-body-md text-on-surface-variant">
                       No se encontraron contratos con los filtros aplicados.
                     </td>
                   </tr>
