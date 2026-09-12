@@ -77,6 +77,14 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     expect(html).toContain("<p>La diferencia a la firma del contrato, en calidad de depósito");
     expect(html).not.toContain("por la diferencia");
     expect(html).toContain('<img src="data:image/png;base64,abc"');
+    expect(html).toContain("a LA ARRENDADORA la garantía total");
+  });
+
+  it("usa EL ARRENDADOR cuando la plantilla no menciona LA ARRENDADORA", () => {
+    const tplM = "<p>EL ARRENDADOR</p><p>[DETALLE GARANTIA]</p>";
+    const html = renderContractHtml(snapshot(), tplM);
+    expect(html).toContain("a EL ARRENDADOR la garantía total");
+    expect(html).not.toContain("LA ARRENDADORA");
   });
 
   it("no deja placeholders sin reemplazar", () => {

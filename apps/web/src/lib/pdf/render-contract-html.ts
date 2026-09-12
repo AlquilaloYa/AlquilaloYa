@@ -134,7 +134,8 @@ function baucherMarkup(baucher: string): string {
 
 function detalleGarantia(
   garantia: string,
-  separacionDetalle: Record<string, unknown>
+  separacionDetalle: Record<string, unknown>,
+  templateHtml?: string | null
 ): { parte1: string; parte2: string } {
   const tipo = field(separacionDetalle, ["tipo"]);
   const monto = field(separacionDetalle, ["monto"]) || "500.00";
@@ -143,7 +144,13 @@ function detalleGarantia(
   const fechaTexto = fSep ? `${fSep.dia} de ${fSep.mes} de ${fSep.año}` : "________";
   const garantiaTexto = formatCurrency(garantia);
   const garantiaLetras = montoEnLetras(garantia);
-  const apertura = `En la fecha del presente documento, EL ARRENDATARIO(A) deberá de entregar a LA ARRENDADORA la garantía total de S/ ${garantiaTexto} (${garantiaLetras}).`;
+  const arrendador =
+    templateHtml &&
+    /EL ARRENDADOR\b/.test(templateHtml) &&
+    !/LA ARRENDADORA/.test(templateHtml)
+      ? "EL ARRENDADOR"
+      : "LA ARRENDADORA";
+  const apertura = `En la fecha del presente documento, EL ARRENDATARIO(A) deberá de entregar a ${arrendador} la garantía total de S/ ${garantiaTexto} (${garantiaLetras}).`;
   const cierre = "La diferencia a la firma del contrato, en calidad de depósito, en garantía del absoluto cumplimiento de todas las obligaciones asumidas en virtud de este contrato.";
 
   if (tipo === "FLUCTUANTE") {
@@ -228,8 +235,8 @@ export function renderContractHtml(
       "[MONTO FLUCTUANTE LETRAS]": montoSeparacion || "________",
       "[FECHA DE ABONO]": fechaSeparacion?.split("T")[0] ?? "________",
       "[TIPO SEPARACION]": tipoSeparacion || "________",
-      "[DETALLE GARANTIA]": detalleGarantia(garantia, separacionDetalle).parte1,
-      "[DETALLE GARANTIA CONT.]": detalleGarantia(garantia, separacionDetalle).parte2,
+      "[DETALLE GARANTIA]": detalleGarantia(garantia, separacionDetalle, templateHtml).parte1,
+      "[DETALLE GARANTIA CONT.]": detalleGarantia(garantia, separacionDetalle, templateHtml).parte2,
       "[INVENTARIO]": (Array.isArray(contrato.muebleriaItems) ? contrato.muebleriaItems : [])
         .map(String)
         .join("; ") || "________________",
