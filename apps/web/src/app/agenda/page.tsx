@@ -50,7 +50,7 @@ export default function AgendaPage() {
   const [configured, setConfigured] = useState(true);
   const [connected, setConnected] = useState(false);
   const [events, setEvents] = useState<GEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
 
