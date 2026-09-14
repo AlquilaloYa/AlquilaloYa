@@ -70,14 +70,28 @@ export function resolverDepartamentoInventarioId(
   return null;
 }
 
-/** Inventario (bienes propios) de un departamento, filtrando el catálogo. */
+/** Prefijo de los bienes agregados manualmente (fuera del catálogo). */
+export const CUSTOM_ITEM_PREFIX = "CUSTOM:";
+
+export function customItemLabel(id: string): string {
+  return id.startsWith(CUSTOM_ITEM_PREFIX) ? id.slice(CUSTOM_ITEM_PREFIX.length).trim() : id;
+}
+
+/** Inventario (bienes propios) de un departamento: catálogo filtrado + manuales. */
 export function inventarioDepartamento(departamentoId: string | null | undefined): GrupoChecklist[] {
   const seleccionados = departamentoId ? (cache ?? {})[departamentoId] : undefined;
-  const permitidos = new Set(seleccionados ?? []);
-  return INVENTARIO_MUEBLERIA.map((grupo) => ({
+  const ids = seleccionados ?? [];
+  const permitidos = new Set(ids);
+  const grupos = INVENTARIO_MUEBLERIA.map((grupo) => ({
     ...grupo,
     items: grupo.items.filter(([id]) => permitidos.has(id)),
   })).filter((grupo) => grupo.items.length > 0);
+  const custom = [...new Set(ids.filter((id) => id.startsWith(CUSTOM_ITEM_PREFIX)).map((id) => id.trim()))]
+    .map((id) => [id, customItemLabel(id)] as [string, string]);
+  if (custom.length > 0) {
+    grupos.push({ categoria: "Adicionales", items: custom });
+  }
+  return grupos;
 }
 
 export function inventarioDepartamentoIds(departamentoId: string | null | undefined): string[] {
