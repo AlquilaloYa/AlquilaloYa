@@ -217,6 +217,8 @@ export default function AutomatizacionesPage() {
           </div>
         )}
 
+        <BotsYConexiones />
+
         <section className="rounded-xl border border-input p-4">
           <h3 className="mb-2 font-headline-md font-bold text-primary">Ejecuciones recientes</h3>
           {runs.length === 0 ? (
@@ -280,5 +282,198 @@ export default function AutomatizacionesPage() {
         </div>
       )}
     </DashboardShell>
+  );
+}
+
+const CANALES_BOT = ["WHATSAPP", "MESSENGER", "TIKTOK", "WEB", "EMAIL", "TODOS"] as const;
+
+interface BotRegla {
+  id: string;
+  nombre: string;
+  canal: string;
+  keywords: string[];
+  plantillaId: string | null;
+  cuerpo: string;
+  unaPorConversacion: boolean;
+  activa: boolean;
+}
+
+interface Plantilla {
+  id: string;
+  nombre: string;
+  cuerpo: string;
+}
+
+function BotsYConexiones() {
+  const [bots, setBots] = useState<BotRegla[]>([]);
+  const [plantillas, setPlantillas] = useState<Plantilla[]>([]);
+  const [estado, setEstado] = useState<{ variables: Record<string, boolean>; webhooks: { meta: string; canonico: string } } | null>(null);
+  const [modal, setModal] = useState<null | { nombre: string; canal: string; keywords: string; plantillaId: string; cuerpo: string }>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const [b, p, e] = await Promise.all([
+      apiFetch("/api/bots").then((r) => (r.ok ? r.json() : [])),
+      apiFetch("/api/plantillas").then((r) => (r.ok ? r.json() : [])),
+      apiFetch("/api/canales/estado").then((r) => (r.ok ? r.json() : null)),
+    ]);
+    setBots(b as BotRegla[]);
+    setPlantillas(p as Plantilla[]);
+    setEstado(e);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function guardar() {
+    if (!modal?.nombre.trim()) return;
+    setBusy(true);
+    setErr(null);
+    const res = await apiFetch("/api/bots", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nombre: modal.nombre.trim(),
+        canal: modal.canal,
+        keywords: modal.keywords.split(",").map((k) => k.trim()).filter(Boolean),
+        plantillaId: modal.plantillaId || null,
+        cuerpo: modal.cuerpo.trim(),
+      }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      setErr((await res.json().catch(() => ({}))).error ?? "No se pudo crear");
+      return;
+    }
+    setModal(null);
+    await load();
+  }
+
+  async function toggle(b: BotRegla) {
+    await apiFetch("/api/bots", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: b.id, activa: !b.activa }),
+    });
+    await load();
+  }
+
+  async function eliminar(b: BotRegla) {
+    if (!window.confirm(`¿Eliminar la regla de bot "${b.nombre}"?`)) return;
+    await apiFetch(`/api/bots?id=${encodeURIComponent(b.id)}`, { method: "DELETE" });
+    await load();
+  }
+
+  return (
+    <>
+      <section className="rounded-xl border border-input p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h3 className="font-headline-md font-bold text-primary">Bots de respuesta</h3>
+            <p className="text-sm text-muted-foreground">Responden automáticamente con una plantilla cuando un mensaje entrante coincide con una palabra clave.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setModal({ nombre: "", canal: "WHATSAPP", keywords: "", plantillaId: "", cuerpo: "" })}
+            className="flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:opacity-90"
+          >
+            <Plus className="h-4 w-4" /> Nuevo bot
+          </button>
+        </div>
+        {bots.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Sin bots. Crea uno para responder “precio”, “disponibilidad”, etc.</p>
+        ) : (
+          <div className="space-y-2">
+            {bots.map((b) => (
+              <div key={b.id} className={`flex items-center justify-between gap-3 rounded-lg border border-input p-3 ${b.activa ? "" : "opacity-60"}`}>
+                <div className="min-w-0">
+                  <p className="font-medium text-on-surface">{b.nombre} <span className="ml-1 rounded bg-accent px-1.5 text-[10px] text-muted-foreground">{b.canal}</span></p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {b.keywords.length ? `Si dice: ${b.keywords.join(", ")} → ` : "A todo mensaje → "}
+                    {b.cuerpo || (plantillas.find((p) => p.id === b.plantillaId)?.cuerpo ?? "usa plantilla")}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" onClick={() => void toggle(b)} className={`relative h-6 w-11 rounded-full ${b.activa ? "bg-green-500" : "bg-muted"}`} aria-label="Activar">
+                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${b.activa ? "left-[22px]" : "left-0.5"}`} />
+                  </button>
+                  <button type="button" onClick={() => void eliminar(b)} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-input p-4">
+        <h3 className="mb-2 font-headline-md font-bold text-primary">Conexiones de canales</h3>
+        {!estado ? (
+          <p className="text-sm text-muted-foreground">Cargando estado…</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5 text-sm">
+              {Object.entries(estado.variables).map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between gap-2">
+                  <code className="text-xs text-on-surface-variant">{k}</code>
+                  <span className={v ? "text-xs font-medium text-green-600 dark:text-green-400" : "text-xs text-muted-foreground"}>
+                    {v ? "configurado" : "no definido"}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2 text-sm">
+              <p className="text-xs text-muted-foreground">Configura estas URLs como webhook (Meta → tu App → Webhooks):</p>
+              <div>
+                <p className="text-[11px] font-medium text-on-surface-variant">WhatsApp / Messenger</p>
+                <code className="block break-all rounded bg-accent px-2 py-1 text-[11px]">{estado.webhooks.meta}</code>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium text-on-surface-variant">Gateway canónico (TikTok / otros)</p>
+                <code className="block break-all rounded bg-accent px-2 py-1 text-[11px]">{estado.webhooks.canonico}</code>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {modal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setModal(null)}>
+          <div className="w-full max-w-md rounded-xl bg-background p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-headline-md font-bold text-primary">Nuevo bot</h3>
+              <button type="button" onClick={() => setModal(null)}><X className="h-4 w-4" /></button>
+            </div>
+            {err && <p className="mb-2 rounded bg-destructive/10 px-2 py-1 text-sm text-destructive">{err}</p>}
+            <div className="space-y-3 text-sm">
+              <input className="h-9 w-full rounded-lg border border-input bg-background px-2" placeholder="Nombre * (ej. Respuesta de precio)" value={modal.nombre} onChange={(e) => setModal({ ...modal, nombre: e.target.value })} />
+              <div className="grid grid-cols-2 gap-2">
+                <select className="h-9 rounded-lg border border-input bg-background px-2" value={modal.canal} onChange={(e) => setModal({ ...modal, canal: e.target.value })}>
+                  {CANALES_BOT.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select
+                  className="h-9 rounded-lg border border-input bg-background px-2"
+                  value={modal.plantillaId}
+                  onChange={(e) => {
+                    const pid = e.target.value;
+                    const tpl = plantillas.find((p) => p.id === pid);
+                    setModal({ ...modal, plantillaId: pid, cuerpo: tpl ? tpl.cuerpo : modal.cuerpo });
+                  }}
+                >
+                  <option value="">(sin plantilla)</option>
+                  {plantillas.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+              </div>
+              <input className="h-9 w-full rounded-lg border border-input bg-background px-2" placeholder="Palabras clave separadas por coma (vacío = siempre)" value={modal.keywords} onChange={(e) => setModal({ ...modal, keywords: e.target.value })} />
+              <textarea rows={3} className="w-full rounded-lg border border-input bg-background p-2" placeholder="Mensaje de respuesta…" value={modal.cuerpo} onChange={(e) => setModal({ ...modal, cuerpo: e.target.value })} />
+              <button type="button" onClick={() => void guardar()} disabled={busy || !modal.nombre.trim() || !(modal.cuerpo.trim() || modal.plantillaId)} className="w-full rounded-lg bg-primary py-2 font-semibold text-primary-foreground disabled:opacity-40">
+                {busy ? "Guardando…" : "Crear bot"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
