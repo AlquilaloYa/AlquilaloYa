@@ -16,7 +16,7 @@ try {
     if (!rows[0]) {
       const created = await tx`
         INSERT INTO templates (clave, nombre)
-        VALUES (${"ANG_LARGO"}, ${"Contrato_de_Arrendamiento_y_Documentos_Anexos_Miguel_Angamos"})
+        VALUES (${"ANG_LARGO"}, ${"Miguel_ extensión_ madre_ Angamos"})
         RETURNING id`;
       templateId = created[0].id;
     } else {
