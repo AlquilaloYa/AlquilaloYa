@@ -73,25 +73,53 @@ export function resolverDepartamentoInventarioId(
 /** Prefijo de los bienes agregados manualmente (fuera del catálogo). */
 export const CUSTOM_ITEM_PREFIX = "CUSTOM:";
 
-export function customItemLabel(id: string): string {
-  return id.startsWith(CUSTOM_ITEM_PREFIX) ? id.slice(CUSTOM_ITEM_PREFIX.length).trim() : id;
+/** Categorías disponibles para bienes manuales. */
+export const CUSTOM_ITEM_CATEGORIAS = ["Cocina", "Dormitorio", "Baño"] as const;
+
+/**
+ * Descompone un bien manual. Formato: "CUSTOM:Categoría:etiqueta".
+ * El formato legacy "CUSTOM:etiqueta" cae en "Adicionales".
+ */
+export function parseCustomItem(id: string): { categoria: string; etiqueta: string } {
+  const resto = id.startsWith(CUSTOM_ITEM_PREFIX) ? id.slice(CUSTOM_ITEM_PREFIX.length).trim() : id;
+  const sep = resto.indexOf(":");
+  if (sep > 0) {
+    return { categoria: resto.slice(0, sep).trim(), etiqueta: resto.slice(sep + 1).trim() };
+  }
+  return { categoria: "Adicionales", etiqueta: resto };
 }
 
-/** Inventario (bienes propios) de un departamento: catálogo filtrado + manuales. */
-export function inventarioDepartamento(departamentoId: string | null | undefined): GrupoChecklist[] {
-  const seleccionados = departamentoId ? (cache ?? {})[departamentoId] : undefined;
-  const ids = seleccionados ?? [];
+export function customItemLabel(id: string): string {
+  return parseCustomItem(id).etiqueta;
+}
+
+/** Convierte una lista de ids (catálogo + CUSTOM:categoría:etiqueta) en grupos por sección. */
+export function gruposDesdeItems(ids: readonly string[]): GrupoChecklist[] {
   const permitidos = new Set(ids);
+  const custom = [...new Set(ids.filter((id) => id.startsWith(CUSTOM_ITEM_PREFIX)).map((id) => id.trim()))].map(
+    (id) => ({ id, ...parseCustomItem(id) })
+  );
+  const customEn = (categoria: string) =>
+    custom
+      .filter((c) => c.categoria.toLowerCase() === categoria.toLowerCase())
+      .map((c) => [c.id, c.etiqueta] as [string, string]);
   const grupos = INVENTARIO_MUEBLERIA.map((grupo) => ({
     ...grupo,
-    items: grupo.items.filter(([id]) => permitidos.has(id)),
+    items: [...grupo.items.filter(([id]) => permitidos.has(id)), ...customEn(grupo.categoria)],
   })).filter((grupo) => grupo.items.length > 0);
-  const custom = [...new Set(ids.filter((id) => id.startsWith(CUSTOM_ITEM_PREFIX)).map((id) => id.trim()))]
-    .map((id) => [id, customItemLabel(id)] as [string, string]);
-  if (custom.length > 0) {
-    grupos.push({ categoria: "Adicionales", items: custom });
+  const restantes = custom
+    .filter((c) => !INVENTARIO_MUEBLERIA.some((grupo) => grupo.categoria.toLowerCase() === c.categoria.toLowerCase()))
+    .map((c) => [c.id, c.etiqueta] as [string, string]);
+  if (restantes.length > 0) {
+    grupos.push({ categoria: "Adicionales", items: restantes });
   }
   return grupos;
+}
+
+/** Inventario (bienes propios) de un departamento: catálogo filtrado + manuales por sección. */
+export function inventarioDepartamento(departamentoId: string | null | undefined): GrupoChecklist[] {
+  const seleccionados = departamentoId ? (cache ?? {})[departamentoId] : undefined;
+  return gruposDesdeItems(seleccionados ?? []);
 }
 
 export function inventarioDepartamentoIds(departamentoId: string | null | undefined): string[] {

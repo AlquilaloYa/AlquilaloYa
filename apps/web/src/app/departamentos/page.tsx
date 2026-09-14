@@ -12,6 +12,7 @@ import { obtenerContactos, type ContactSeed as ContactoAsig } from "@/lib/contac
 import {
   inventarioDepartamento,
   CUSTOM_ITEM_PREFIX,
+  CUSTOM_ITEM_CATEGORIAS,
   guardarInventarioDepartamento,
   cargarInventarios,
 } from "@/lib/inventarios-departamento";
@@ -78,17 +79,19 @@ export default function DepartamentosPage() {
   const [inventarioDeptId, setInventarioDeptId] = useState<string | null>(null);
   const [inventarioItems, setInventarioItems] = useState<string[]>([]);
   const [nuevoItemInventario, setNuevoItemInventario] = useState("");
+  const [nuevoItemCategoria, setNuevoItemCategoria] = useState<string>(CUSTOM_ITEM_CATEGORIAS[0]);
 
   function abrirInventario(departamentoId: string) {
     setInventarioDeptId(departamentoId);
     setInventarioItems(inventarioDepartamento(departamentoId).flatMap((grupo) => grupo.items.map(([id]) => id)));
     setNuevoItemInventario("");
+    setNuevoItemCategoria(CUSTOM_ITEM_CATEGORIAS[0]);
   }
 
   function anadirItemInventario() {
     const texto = nuevoItemInventario.trim();
     if (!texto) return;
-    const id = `${CUSTOM_ITEM_PREFIX}${texto}`;
+    const id = `${CUSTOM_ITEM_PREFIX}${nuevoItemCategoria}:${texto}`;
     setInventarioItems((items) => (items.includes(id) ? items : [...items, id]));
     setNuevoItemInventario("");
   }
@@ -806,40 +809,38 @@ export default function DepartamentosPage() {
                   ))}
                 </div>
                 <div className="mt-4 rounded-lg border border-dashed border-input p-3">
-                  <h4 className="mb-2 font-medium">Bienes adicionales (manuales)</h4>
-                  <div className="space-y-2">
-                    {inventarioItems
-                      .filter((itemId) => itemId.startsWith(CUSTOM_ITEM_PREFIX))
-                      .map((itemId) => (
-                        <div key={itemId} className="flex items-center justify-between gap-2 text-sm">
-                          <span>{itemId.slice(CUSTOM_ITEM_PREFIX.length)}</span>
-                          <button
-                            type="button"
-                            className="font-label-md text-destructive hover:underline"
-                            onClick={() => setInventarioItems((items) => items.filter((id) => id !== itemId))}
-                          >
-                            Quitar
-                          </button>
-                        </div>
+                  <h4 className="mb-2 font-medium">Añadir bien adicional (manual)</h4>
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Elige el tipo de bien; se mostrará dentro de esa sección.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={nuevoItemCategoria}
+                      onChange={(e) => setNuevoItemCategoria(e.target.value)}
+                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      {CUSTOM_ITEM_CATEGORIAS.map((categoria) => (
+                        <option key={categoria} value={categoria}>
+                          {categoria}
+                        </option>
                       ))}
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        placeholder='Ej. "2 TV LED 32"" o "Sofá nuevo"'
-                        className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
-                        value={nuevoItemInventario}
-                        onChange={(e) => setNuevoItemInventario(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            anadirItemInventario();
-                          }
-                        }}
-                      />
-                      <Button type="button" variant="outline" size="sm" onClick={anadirItemInventario} disabled={!nuevoItemInventario.trim()}>
-                        Añadir
-                      </Button>
-                    </div>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder='Ej. "2 TV LED 32"" o "Sofá nuevo"'
+                      className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                      value={nuevoItemInventario}
+                      onChange={(e) => setNuevoItemInventario(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          anadirItemInventario();
+                        }
+                      }}
+                    />
+                    <Button type="button" variant="outline" size="sm" onClick={anadirItemInventario} disabled={!nuevoItemInventario.trim()}>
+                      Añadir
+                    </Button>
                   </div>
                 </div>
                 <div className="mt-5 flex items-center justify-between">
