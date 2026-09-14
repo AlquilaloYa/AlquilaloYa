@@ -34,6 +34,7 @@ import {
   Filter,
   MessageSquare,
   Zap,
+  Megaphone,
   type LucideIcon,
 } from "lucide-react";
 
@@ -44,13 +45,13 @@ interface NavItem {
   section: string;
   phase?: string;
   permission?: Permission;
-  group?: "contratos";
+  group?: "contratos" | "marketing";
 }
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "Dashboard" },
-  { href: "/pipeline", label: "Pipeline", icon: Filter, section: "Pipeline", permission: "client.read" },
-  { href: "/mensajes", label: "Mensajes", icon: MessageSquare, section: "Mensajes", permission: "client.read" },
+  { href: "/pipeline", label: "Pipeline", icon: Filter, section: "Pipeline", permission: "client.read", group: "marketing" },
+  { href: "/mensajes", label: "Mensajes", icon: MessageSquare, section: "Mensajes", permission: "client.read", group: "marketing" },
   { href: "/automatizaciones", label: "Automatizaciones", icon: Zap, section: "Automatizaciones", permission: "client.read" },
   { href: "/directorio", label: "Directorio", icon: BookUser, section: "Directorio" },
   { href: "/contactos", label: "Contactos", icon: Contact, section: "Contactos", group: "contratos" },
@@ -190,6 +191,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [contractsOpen, setContractsOpen] = useState(true);
+  const [marketingOpen, setMarketingOpen] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -200,6 +202,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (NAV_ITEMS.some((n) => n.group === "contratos" && n.href === pathname)) {
       setContractsOpen(true);
+    }
+    if (NAV_ITEMS.some((n) => n.group === "marketing" && n.href === pathname)) {
+      setMarketingOpen(true);
     }
   }, [pathname]);
 
@@ -276,10 +281,32 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <nav className="flex flex-1 flex-col gap-1 px-2">
           {(() => {
             const items = visibleNav(user.role);
-            const groupItems = items.filter((n) => n.group === "contratos");
-            let groupRendered = false;
+            const gruposNav: Array<{
+              key: NonNullable<NavItem["group"]>;
+              label: string;
+              icon: LucideIcon;
+              open: boolean;
+              onToggle: () => void;
+            }> = [
+              {
+                key: "marketing",
+                label: "Marketing",
+                icon: Megaphone,
+                open: marketingOpen,
+                onToggle: () => setMarketingOpen((open) => !open),
+              },
+              {
+                key: "contratos",
+                label: "Sistema de Contratos",
+                icon: Briefcase,
+                open: contractsOpen,
+                onToggle: () => setContractsOpen((open) => !open),
+              },
+            ];
+            const renderedGroups = new Set<NonNullable<NavItem["group"]>>();
             return items.map((item) => {
-              if (item.group !== "contratos") {
+              const groupKey = item.group;
+              if (!groupKey) {
                 return (
                   <NavLink
                     key={item.href}
@@ -289,17 +316,20 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   />
                 );
               }
-              if (groupRendered) return null;
-              groupRendered = true;
+              if (renderedGroups.has(groupKey)) return null;
+              renderedGroups.add(groupKey);
+              const grupo = gruposNav.find((g) => g.key === groupKey);
+              if (!grupo) return null;
+              const groupItems = items.filter((n) => n.group === groupKey);
               return (
                 <NavGroup
-                  key="group-sistema-contratos"
-                  label="Sistema de Contratos"
-                  icon={Briefcase}
+                  key={grupo.key}
+                  label={grupo.label}
+                  icon={grupo.icon}
                   items={groupItems}
                   collapsed={collapsed}
-                  open={contractsOpen}
-                  onToggle={() => setContractsOpen((open) => !open)}
+                  open={grupo.open}
+                  onToggle={grupo.onToggle}
                   onNavigate={() => setMobileOpen(false)}
                 />
               );
