@@ -52,7 +52,7 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     "<p>Departamento N° [NÚMERO DE DEPTO] desde el [DÍA INICIO] de [MES INICIO] de [AÑO INICIO] hasta el [DÍA FIN] de [MES FIN] de [AÑO FIN].</p>",
     "<p>Garantía de S/ [MONTO GARANTÍA].</p>",
     "<p>[DETALLE GARANTIA]</p>",
-    "<p>[DETALLE GARANTIA CONT.] El mencionado depósito en garantía.</p>",
+    "<p>El mencionado depósito en garantía.</p>",
     "<div>[DNI]</div>",
   ].join("\n");
 
@@ -70,21 +70,35 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     expect(html).toContain("marzo");
     expect(html).toContain("2025");
     expect(html).toContain("2026");
-    expect(html).toContain("separación fluctuante de S/ 750.00");
-    expect(html).toContain("realizada el día 5 de marzo de 2025");
+    expect(html).toContain("ya abonó S/ 750.00");
+    expect(html).toContain("el día 05 de marzo del 2025; la diferencia a la firma del contrato, en calidad de depósito");
     expect(html).not.toContain("notarización del contrato");
-    expect(html).toContain("realizada el día 5 de marzo de 2025.</p>");
-    expect(html).toContain("<p>La diferencia a la firma del contrato, en calidad de depósito");
     expect(html).not.toContain("por la diferencia");
     expect(html).toContain('<img src="data:image/png;base64,abc"');
-    expect(html).toContain("a LA ARRENDADORA la garantía total");
+    expect(html).toContain("a EL ARRENDADOR(A) la suma de S/");
   });
 
-  it("usa EL ARRENDADOR cuando la plantilla no menciona LA ARRENDADORA", () => {
-    const tplM = "<p>EL ARRENDADOR</p><p>[DETALLE GARANTIA]</p>";
-    const html = renderContractHtml(snapshot(), tplM);
-    expect(html).toContain("a EL ARRENDADOR la garantía total");
-    expect(html).not.toContain("LA ARRENDADORA");
+  it("separación normal: ya abonó S/ 500.00 con fecha", () => {
+    const snp = snapshot();
+    (snp.datosContrato as Record<string, unknown>).separacionDetalle = {
+      monto: "500.00",
+      fecha: "2026-09-07T00:00:00.000Z",
+    };
+    const html = renderContractHtml(snp, "<p>[DETALLE GARANTIA]</p>");
+    expect(html).toContain("ya abonó S/ 500.00 (quinientos con 00/100 soles) el día 07 de setiembre del 2026; la diferencia a la firma del contrato");
+    expect(html).not.toContain("fluctuante");
+  });
+
+  it("separación total: entrega íntegra a la firma, sin abono previo", () => {
+    const snp = snapshot();
+    (snp.datosContrato as Record<string, unknown>).separacionDetalle = {
+      tipo: "TOTAL",
+      monto: "1550.00",
+      fecha: "2026-09-07T00:00:00.000Z",
+    };
+    const html = renderContractHtml(snp, "<p>[DETALLE GARANTIA]</p>");
+    expect(html).toContain("que entregará íntegramente a la firma de este documento");
+    expect(html).not.toContain("ya abonó");
   });
 
   it("no deja placeholders sin reemplazar", () => {

@@ -239,7 +239,7 @@ export class ContractService {
     if (contract.separacion) {
       clausulas.push({
         versionId: randomUUID(),
-        contenido: `CLÁUSULA DE SEPARACIÓN — El arrendatario declara haber entregado la suma de S/ ${contract.separacionDetalle?.monto ?? "500.00"} por concepto de separación del departamento. Dicha suma será imputada al pago del canon de arrendamiento, o retenida por la arrendadora en caso de que el arrendatario incumpla la separación pactada.`,
+        contenido: `CLÁUSULA DE SEPARACIÓN — El arrendatario(a) declara haber entregado la suma de S/ ${contract.separacionDetalle?.monto ?? "500.00"} por concepto de separación del departamento. Dicha suma será imputada al pago del canon de arrendamiento, o retenida por el arrendador(a) en caso de que el arrendatario(a) incumpla la separación pactada.`,
       });
     }
 
@@ -247,7 +247,7 @@ export class ContractService {
     clausulas.push({
       versionId: randomUUID(),
       contenido:
-        "CLÁUSULA DE INVENTARIO DE MUEBLES — El arrendador entrega al arrendatario, y este declara recibir en buen estado de conservación, los siguientes muebles y enseres: " +
+        "CLÁUSULA DE INVENTARIO DE MUEBLES — El arrendador(a) entrega al arrendatario(a), y este(a) declara recibir en buen estado de conservación, los siguientes muebles y enseres: " +
         (items.length > 0 ? items.join(", ") : "—") +
         ".",
     });

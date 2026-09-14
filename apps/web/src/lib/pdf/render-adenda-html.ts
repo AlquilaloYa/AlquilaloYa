@@ -92,7 +92,7 @@ export function renderAdendaHtml(snapshot: ContractSnapshot): string {
   </table>
 
   <div class="signature">
-    <div><span class="line">Firma del arrendador</span></div>
+    <div><span class="line">Firma del arrendador(a)</span></div>
     <div><span class="line">Firma del arrendatario</span></div>
   </div>
 </body>

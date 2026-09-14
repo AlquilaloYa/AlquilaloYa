@@ -67,7 +67,8 @@ function numeroEnLetras(numero: string): string {
   if (entero < 100) return `${decenas[Math.floor(entero / 10)]}${entero % 10 ? ` y ${unidades[entero % 10]}` : ""}`;
   if (entero < 1000) {
     if (entero === 100) return "cien";
-    return `${centenas[Math.floor(entero / 100)]} ${numeroEnLetras(String(entero % 100))}`.trim();
+    const restoC = entero % 100;
+    return `${centenas[Math.floor(entero / 100)]}${restoC ? ` ${numeroEnLetras(String(restoC))}` : ""}`.trim();
   }
   if (entero < 1000000) {
     const miles = Math.floor(entero / 1000);
@@ -134,41 +135,28 @@ function baucherMarkup(baucher: string): string {
 
 function detalleGarantia(
   garantia: string,
-  separacionDetalle: Record<string, unknown>,
-  templateHtml?: string | null
-): { parte1: string; parte2: string } {
+  separacionDetalle: Record<string, unknown>
+): string {
   const tipo = field(separacionDetalle, ["tipo"]);
   const monto = field(separacionDetalle, ["monto"]) || "500.00";
   const fecha = field(separacionDetalle, ["fecha"]);
   const fSep = parseFecha(fecha);
-  const fechaTexto = fSep ? `${fSep.dia} de ${fSep.mes} de ${fSep.año}` : "________";
+  const fechaTexto = fSep
+    ? `${String(fSep.dia).padStart(2, "0")} de ${fSep.mes} del ${fSep.año}`
+    : "________";
   const garantiaTexto = formatCurrency(garantia);
   const garantiaLetras = montoEnLetras(garantia);
-  const arrendador =
-    templateHtml &&
-    /EL ARRENDADOR\b/.test(templateHtml) &&
-    !/LA ARRENDADORA/.test(templateHtml)
-      ? "EL ARRENDADOR"
-      : "LA ARRENDADORA";
-  const apertura = `En la fecha del presente documento, EL ARRENDATARIO(A) deberá de entregar a ${arrendador} la garantía total de S/ ${garantiaTexto} (${garantiaLetras}).`;
-  const cierre = "La diferencia a la firma del contrato, en calidad de depósito, en garantía del absoluto cumplimiento de todas las obligaciones asumidas en virtud de este contrato.";
+  const apertura = `En la fecha del presente documento, EL ARRENDATARIO(A) entregará a EL ARRENDADOR(A) la suma de S/ ${garantiaTexto} (${garantiaLetras})`;
+  const cierre =
+    "la diferencia a la firma del contrato, en calidad de depósito, en garantía del absoluto cumplimiento de todas las obligaciones asumidas en virtud de este contrato.";
 
   if (tipo === "FLUCTUANTE") {
-    return {
-      parte1: `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación fluctuante de S/ ${formatCurrency(monto)} (${montoEnLetras(monto)}), realizada el día ${fechaTexto}.`,
-      parte2: cierre,
-    };
+    return `${apertura}, ya abonó S/ ${formatCurrency(monto)} (${montoEnLetras(monto)}) el día ${fechaTexto}; ${cierre}`;
   }
   if (tipo === "TOTAL") {
-    return {
-      parte1: `${apertura} El arrendatario la entregará íntegramente a la firma de este documento.`,
-      parte2: "",
-    };
+    return `${apertura}, que entregará íntegramente a la firma de este documento, en calidad de depósito, en garantía del absoluto cumplimiento de todas las obligaciones asumidas en virtud de este contrato.`;
   }
-  return {
-    parte1: `${apertura} El arrendatario ha reservado previamente el inmueble mediante una separación de S/ 500.00 (quinientos con 00/100 soles), realizada el día ${fechaTexto}.`,
-    parte2: cierre,
-  };
+  return `${apertura}, ya abonó S/ 500.00 (${montoEnLetras("500.00")}) el día ${fechaTexto}; ${cierre}`;
 }
 
 /**
@@ -221,7 +209,7 @@ export function renderContractHtml(
       "[NOMBRE COMPLETO]": clienteNombreCompleto || "________________",
       "[NÚMERO DNI]": clienteDocumento || "________________",
       "[NÚMERO]": clienteDocumento || "________________",
-      "[NACIONALIDAD]": "Peruana",
+      "[NACIONALIDAD]": "Peruano(a)",
       "[DOMICILIO]": field(cliente, ["domicilio"]) || "________________",
       "[NÚMERO DE DEPTO]": codigoDepto || "________________",
       "[PISO]": piso,
@@ -235,8 +223,7 @@ export function renderContractHtml(
       "[MONTO FLUCTUANTE LETRAS]": montoSeparacion || "________",
       "[FECHA DE ABONO]": fechaSeparacion?.split("T")[0] ?? "________",
       "[TIPO SEPARACION]": tipoSeparacion || "________",
-      "[DETALLE GARANTIA]": detalleGarantia(garantia, separacionDetalle, templateHtml).parte1,
-      "[DETALLE GARANTIA CONT.]": detalleGarantia(garantia, separacionDetalle, templateHtml).parte2,
+      "[DETALLE GARANTIA]": detalleGarantia(garantia, separacionDetalle),
       "[INVENTARIO]": (Array.isArray(contrato.muebleriaItems) ? contrato.muebleriaItems : [])
         .map(String)
         .join("; ") || "________________",
@@ -294,10 +281,10 @@ export function renderContractHtml(
 <body>
   <h1>Contrato de Arrendamiento de Bien Inmueble a Plazo Determinado</h1>
 
-  <p>Conste el contrato de arrendamiento que celebran de una parte la Srta. <span class="bold">LA ARRENDADORA</span>, y de otra parte el Sr.(a) <span class="bold">${escapeHtml(clienteNombreCompleto || "________________")}</span>, identificado con D.N.I. N° <span class="bold">${escapeHtml(clienteDocumento || "________________")}</span>, de nacionalidad <span class="bold">Peruana</span>, domiciliado en <span class="bold">${escapeHtml(field(cliente, ["domicilio"]) || "________________")}</span> y a quien en lo sucesivo se denominará <span class="bold">EL ARRENDATARIO (A)</span>; en los términos contenidos en las cláusulas siguientes:</p>
+  <p>Conste el contrato de arrendamiento que celebran de una parte el Sr.(a) <span class="bold">EL ARRENDADOR(A)</span>, y de otra parte el Sr.(a) <span class="bold">${escapeHtml(clienteNombreCompleto || "________________")}</span>, identificado(a) con D.N.I. N° <span class="bold">${escapeHtml(clienteDocumento || "________________")}</span>, de nacionalidad <span class="bold">Peruano(a)</span>, domiciliado(a) en <span class="bold">${escapeHtml(field(cliente, ["domicilio"]) || "________________")}</span> y a quien en lo sucesivo se denominará <span class="bold">EL ARRENDATARIO (A)</span>; en los términos contenidos en las cláusulas siguientes:</p>
 
   <h2>Antecedentes</h2>
-  <p><span class="bold">PRIMERA.-</span> LA ARRENDADORA es propietaria y alquila el departamento N° <span class="bold">${escapeHtml(codigoDepto || "________________")}</span>${piso ? `, Piso ${escapeHtml(piso)}` : ""} ubicado en ${escapeHtml(field(departamento, ["personaPago"]) || "________________")}, al cual en adelante se le denominará EL INMUEBLE.</p>
+  <p><span class="bold">PRIMERA.-</span> EL ARRENDADOR(A) es propietario(a) y alquila el departamento N° <span class="bold">${escapeHtml(codigoDepto || "________________")}</span>${piso ? `, Piso ${escapeHtml(piso)}` : ""} ubicado en ${escapeHtml(field(departamento, ["personaPago"]) || "________________")}, al cual en adelante se le denominará EL INMUEBLE.</p>
 
   <h2>Renta: Forma y Oportunidad de Pago</h2>
   <p><span class="bold">CUARTA.-</span> Las partes acuerdan que el monto de la renta que pagará EL ARRENDATARIO(A) asciende a la suma de S/ <span class="bold">${escapeHtml(formatCurrency(monto))}</span> más mantenimiento de S/ 50.00, un total de S/ <span class="bold">${escapeHtml(totalMonto)}</span> por mes.</p>
@@ -306,7 +293,7 @@ export function renderContractHtml(
   <p><span class="bold">QUINTA.-</span> Las partes convienen fijar un plazo de duración determinada para el presente contrato, el cual será del <span class="bold">${escapeHtml(inicioFecha?.dia ?? "___")}</span> de <span class="bold">${escapeHtml(inicioFecha?.mes ?? "__________")}</span> hasta el día <span class="bold">${escapeHtml(finFecha?.dia ?? "___")}</span> de <span class="bold">${escapeHtml(finFecha?.mes ?? "__________")}</span>.</p>
 
   <h2>Cláusula de Garantía</h2>
-  <p><span class="bold">DÉCIMO SEXTA.-</span> EL ARRENDATARIO(A) entregará a LA ARRENDADORA la suma de S/ <span class="bold">${escapeHtml(formatCurrency(garantia))}</span> en calidad de depósito, en garantía del cumplimiento de todas las obligaciones asumidas.</p>
+  <p><span class="bold">DÉCIMO SEXTA.-</span> EL ARRENDATARIO(A) entregará a EL ARRENDADOR(A) la suma de S/ <span class="bold">${escapeHtml(formatCurrency(garantia))}</span> en calidad de depósito, en garantía del cumplimiento de todas las obligaciones asumidas.</p>
 
   ${clausulas ? `<h2>Cláusulas Específicas</h2>\n${clausulas}` : ""}
 
@@ -315,7 +302,7 @@ export function renderContractHtml(
       <tr>
         <td>
           <div class="signature-line"></div>
-          <p><span class="bold">LA ARRENDADORA</span></p>
+          <p><span class="bold">EL ARRENDADOR(A)</span></p>
         </td>
         <td>
           <div class="signature-line"></div>

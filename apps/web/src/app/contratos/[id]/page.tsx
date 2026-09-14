@@ -736,7 +736,7 @@ export default function ContratoDetailPage() {
                       <div className="mb-1 border-t border-neutral-400 pt-2 text-center text-xs text-neutral-500">
                         {String(contract.snapshot.datosDepartamento.nombre ?? "")}
                       </div>
-                      <p className="text-center text-xs uppercase tracking-wider text-neutral-500">Firma del arrendador</p>
+                      <p className="text-center text-xs uppercase tracking-wider text-neutral-500">Firma del arrendador(a)</p>
                     </div>
                   </div>
                 </div>
