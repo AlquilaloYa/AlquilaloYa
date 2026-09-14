@@ -17,10 +17,9 @@ type TemplateVersionApi = {
 };
 
 const TEMPLATE_LABEL: Record<string, string> = {
-  PN_LARGO: "PN · Largo",
-  PN_CORTO: "PN · Corto",
-  PJ_LARGO: "PJ · Largo",
-  PJ_CORTO: "PJ · Corto",
+  PN_LARGO: "Emely_ Benavides",
+  ANG_LARGO: "Miguel_ extensión_ madre_ Angamos",
+  ANG_EMELY: "EMELY_EXTENCION_MADRE_ANGAMOS",
 };
 
 export default function PlantillasPage() {
