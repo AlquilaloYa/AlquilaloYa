@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import {
@@ -315,15 +316,14 @@ export default function PipelinePage() {
           <span className="whitespace-nowrap text-sm text-muted-foreground">
             {filtrados.length} leads: <span className="font-semibold text-on-surface">{fmtMoneda(totalMonto)}</span>
           </span>
-          <button
-            type="button"
-            disabled
-            title="Próximamente: reglas, plantillas de mensajes y bots automáticos"
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-input px-3 text-sm font-medium text-muted-foreground opacity-60"
+          <Link
+            href="/automatizaciones"
+            title="Configurar reglas y plantillas automáticas"
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-input px-3 text-sm font-medium text-on-surface transition-colors hover:bg-accent"
           >
             <Sparkles className="h-4 w-4 text-amber-400" />
             AUTOMATIZA
-          </button>
+          </Link>
           <button
             type="button"
             onClick={openCrear}
