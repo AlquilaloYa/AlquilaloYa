@@ -31,6 +31,7 @@ import {
   CalendarClock,
   Users,
   BookUser,
+  Filter,
   type LucideIcon,
 } from "lucide-react";
 
@@ -46,6 +47,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "Dashboard" },
+  { href: "/pipeline", label: "Pipeline", icon: Filter, section: "Pipeline", permission: "client.read" },
   { href: "/directorio", label: "Directorio", icon: BookUser, section: "Directorio" },
   { href: "/contactos", label: "Contactos", icon: Contact, section: "Contactos", group: "contratos" },
   { href: "/departamentos", label: "Uni/Dep", icon: Building2, section: "Departamentos", permission: "department.read", group: "contratos" },
