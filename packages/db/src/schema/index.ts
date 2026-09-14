@@ -14,4 +14,5 @@ export * from "./ops";
 export * from "./tasks";
 export * from "./agenda";
 export * from "./leads";
+export * from "./messaging";
 export * from "./hr";
