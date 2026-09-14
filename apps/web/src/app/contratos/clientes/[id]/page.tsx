@@ -466,7 +466,9 @@ export default function ClienteContratoPage() {
                         : "Pendiente";
                     const penalidad =
                       diasMora > 0
-                        ? Number(pago?.penalidad ?? 0) || PENALIDAD_MORA
+                        ? pago?.penalidad == null
+                          ? PENALIDAD_MORA
+                          : Number(pago.penalidad)
                         : 0;
                     const voucherSel = vouchers[pStr];
                     return (

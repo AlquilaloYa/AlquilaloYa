@@ -53,3 +53,5 @@ test-results/
 # Artefactos locales de desarrollo
 apps/desktop/src-tauri/build-*.txt
 scripts/.tmp-*
+.vercel
+.env*

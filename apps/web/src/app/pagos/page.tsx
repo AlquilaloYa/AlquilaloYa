@@ -133,7 +133,11 @@ export default function PagosPage() {
         estadoPago,
         diasMora,
         penalidad:
-          diasMora > 0 ? Number(pago?.penalidad ?? 0) || MOROSIDAD : 0,
+          diasMora > 0
+            ? pago?.penalidad == null
+              ? MOROSIDAD
+              : Number(pago.penalidad)
+            : 0,
         pago,
       });
     }
