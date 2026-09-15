@@ -69,8 +69,9 @@ export function AdendaModal({
         </div>
         <p className="mb-4 font-body-sm text-on-surface-variant">
           Se genera el PDF con la plantilla formal de adenda para el contrato{" "}
-          <span className="font-mono-label">{codigoContrato}</span> y se registra como documento.
-          No modifica el contrato emitido.
+          <span className="font-mono-label">{codigoContrato}</span>. Al confirmar, la adenda
+          extiende el contrato hasta la fecha de fin indicada y crea las cuotas de cobranza de
+          los meses nuevos (el departamento queda ocupado hasta esa fecha).
         </p>
         <div className="space-y-3">
           <div>

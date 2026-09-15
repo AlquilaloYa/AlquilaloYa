@@ -221,6 +221,19 @@ export async function POST(request: Request) {
     let cuotasNuevas: string[] = [];
     let camposContrato: Record<string, unknown> = {};
 
+    const fechaInicioAdenda = esExtension
+      ? undefined
+      : (body.fechaInicioAdenda ?? "").slice(0, 10);
+    const fechaFinAdenda = esExtension
+      ? undefined
+      : (body.fechaFinAdenda ?? "").slice(0, 10);
+
+    // La adenda con plazo es también una extensión: actualiza la fecha de fin
+    // del contrato y genera las cuotas de los meses nuevos, con lo que el
+    // departamento y la cobranza pasan a ocupado hasta el fin de la adenda.
+    const esAdendaConPlazo = !esExtension && Boolean(fechaInicioAdenda && fechaFinAdenda);
+    const extiende = esExtension || esAdendaConPlazo;
+
     if (esExtension) {
       if (!body.nuevaFechaFin) {
         return NextResponse.json(
@@ -229,6 +242,17 @@ export async function POST(request: Request) {
         );
       }
       nuevaFechaFin = String(body.nuevaFechaFin).slice(0, 10);
+    } else if (esAdendaConPlazo && fechaInicioAdenda && fechaFinAdenda) {
+      if (!(fechaFinAdenda > fechaInicioAdenda)) {
+        return NextResponse.json(
+          { error: "La fecha fin de la adenda debe ser posterior a la fecha de inicio" },
+          { status: 400 }
+        );
+      }
+      nuevaFechaFin = fechaFinAdenda;
+    }
+
+    if (extiende) {
       if (!(nuevaFechaFin > fechaFinActual)) {
         return NextResponse.json(
           { error: `La nueva fecha de fin debe ser posterior a la fecha de término actual (${fechaFinActual})` },
@@ -267,18 +291,6 @@ export async function POST(request: Request) {
     }
 
     const baseSnapshot = contract.snapshot;
-    const fechaInicioAdenda = esExtension
-      ? undefined
-      : (body.fechaInicioAdenda ?? "").slice(0, 10);
-    const fechaFinAdenda = esExtension
-      ? undefined
-      : (body.fechaFinAdenda ?? "").slice(0, 10);
-    if (!esExtension && fechaInicioAdenda && fechaFinAdenda && !(fechaFinAdenda > fechaInicioAdenda)) {
-      return NextResponse.json(
-        { error: "La fecha fin de la adenda debe ser posterior a la fecha de inicio" },
-        { status: 400 }
-      );
-    }
     const datosContrato = {
       ...(baseSnapshot.datosContrato as Record<string, unknown>),
       codigoContrato: codigoAdenda,
