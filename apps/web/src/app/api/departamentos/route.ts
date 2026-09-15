@@ -33,7 +33,7 @@ export async function GET(req: Request) {
       })
       .from(schema.contracts)
       .where(
-        inArray(schema.contracts.estado, ["FIRMADO", "ACTIVO", "VIGENTE"])
+        inArray(schema.contracts.estado, ["FIRMADO", "ACTIVO", "VIGENTE", "NOTARIADO"])
       );
 
     function diasRestantes(fecha: string): number {
