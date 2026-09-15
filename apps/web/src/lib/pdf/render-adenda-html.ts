@@ -21,17 +21,70 @@ function richRow(label: string, value: string): string {
   return `<tr><td class="label">${escapeHtml(label)}</td><td>${escapeHtml(value || "—")}</td></tr>`;
 }
 
+const MESES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "setiembre", "octubre", "noviembre", "diciembre",
+];
+
+function parseFecha(iso: string): { dia: string; mes: string; año: string } | null {
+  if (!iso) return null;
+  const datePart = iso.split("T")[0];
+  if (!datePart) return null;
+  const parts = datePart.split("-");
+  if (parts.length < 3) return null;
+  const d = parseInt(parts[2] ?? "", 10);
+  const m = parseInt(parts[1] ?? "", 10);
+  if (isNaN(d) || isNaN(m)) return null;
+  return { dia: String(d), mes: MESES[m - 1] ?? "", año: parts[0] ?? "" };
+}
+
+function numeroEnLetras(numero: number): string {
+  const entero = Math.floor(numero);
+  const unidades = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve"];
+  const especiales: Record<number, string> = { 10: "diez", 11: "once", 12: "doce", 13: "trece", 14: "catorce", 15: "quince", 20: "veinte" };
+  const decenas = ["", "", "veinte", "treinta", "cuarenta", "cincuenta", "sesenta", "setenta", "ochenta", "noventa"];
+  const centenas = ["", "ciento", "doscientos", "trescientos", "cuatrocientos", "quinientos", "seiscientos", "setecientos", "ochocientos", "novecientos"];
+  if (entero < 10) return unidades[entero] ?? "cero";
+  if (especiales[entero]) return especiales[entero];
+  if (entero < 100) return `${decenas[Math.floor(entero / 10)]}${entero % 10 ? ` y ${unidades[entero % 10]}` : ""}`;
+  if (entero < 1000) {
+    if (entero === 100) return "cien";
+    const resto = entero % 100;
+    return `${centenas[Math.floor(entero / 100)]}${resto ? ` ${numeroEnLetras(resto)}` : ""}`.trim();
+  }
+  if (entero < 1000000) {
+    const miles = Math.floor(entero / 1000);
+    const resto = entero % 1000;
+    const milesTexto = miles === 1 ? "mil" : `${numeroEnLetras(miles)} mil`;
+    return `${milesTexto}${resto ? ` ${numeroEnLetras(resto)}` : ""}`;
+  }
+  return String(entero);
+}
+
+function codigoCorto(codigo: string): string {
+  const s = (codigo ?? "").trim();
+  if (!s) return s;
+  const idx = s.lastIndexOf("-");
+  if (idx < 0) return s;
+  return s.slice(idx + 1).trim() || s;
+}
+
 /**
  * Renderiza el HTML de la ADENDA a partir de un snapshot de adenda,
  * donde el texto del anexo "ADENDA" vive en snapshot.anexos[0].contenido
  * y los comparecientes/inmueble se copian del snapshot contractual.
  * Si el snapshot es de extensión (tipoDocumento ADENDA_EXTENSION) usa
  * el layout especial con las fechas de término anterior y nueva.
+ * Si el snapshot de adenda incluye fechaInicioAdenda/fechaFinAdenda usa
+ * la plantilla formal (modelo Benavides) con el nuevo plazo de la adenda.
  */
 export function renderAdendaHtml(snapshot: ContractSnapshot): string {
   const contrato = snapshot.datosContrato as Record<string, unknown>;
   if (contrato.tipoDocumento === "ADENDA_EXTENSION") {
     return renderExtensionAdendaHtml(snapshot);
+  }
+  if (contrato.fechaInicioAdenda && contrato.fechaFinAdenda) {
+    return renderAdendaPlantillaHtml(snapshot);
   }
   const cliente = snapshot.datosCliente as Record<string, unknown>;
   const departamento = snapshot.datosDepartamento as Record<string, unknown>;
@@ -100,6 +153,163 @@ export function renderAdendaHtml(snapshot: ContractSnapshot): string {
     <div><span class="line">Firma del arrendador(a)</span></div>
     <div><span class="line">Firma del arrendatario</span></div>
   </div>
+</body>
+</html>`;
+}
+
+/** Plantilla formal de adenda (modelo Benavides) usando datos del snapshot. */
+export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
+  const contrato = snapshot.datosContrato as Record<string, unknown>;
+  const cliente = snapshot.datosCliente as Record<string, unknown>;
+  const departamento = snapshot.datosDepartamento as Record<string, unknown>;
+
+  const clienteNombre = field(cliente, ["nombres", "nombreCompleto", "razonSocial", "nomCliente"]);
+  const clienteApellidos = field(cliente, ["apellidos"]);
+  const clienteDocumento = field(cliente, ["documentoIdentidad", "documento", "ruc"]);
+
+  const numeroAdenda = field(contrato, ["numeroAdenda"]) || "1";
+  const fechaInicioOriginal = parseFecha(field(contrato, ["fechaInicio"]));
+  const fechaFinOriginal = parseFecha(field(contrato, ["fechaFin"]));
+  const fechaInicioAdenda = parseFecha(field(contrato, ["fechaInicioAdenda"]));
+  const fechaFinAdenda = parseFecha(field(contrato, ["fechaFinAdenda"]));
+  const montoRenta = parseFloat(field(contrato, ["montoCanonMensual"])) || 0;
+
+  const deptoNumero = field(departamento, ["numero"]) || codigoCorto(field(departamento, ["codigo"]));
+  const piso = field(departamento, ["piso"]);
+  const nombreCompleto = [clienteNombre, clienteApellidos].filter(Boolean).join(" ") || "________________";
+  const domicilio = field(cliente, ["domicilio"]) || "________________";
+
+  const nacimiento = field(cliente, ["nacionalidad"]) || "Peruano(a)";
+  const montoRentaTxt = Math.round(montoRenta).toString();
+  const montoLetras = `${numeroEnLetras(Math.floor(montoRenta))} con ${String(Math.round((montoRenta % 1) * 100)).padStart(2, "0")}/100 soles`;
+
+  const fmt = (obj: { dia: string; mes: string; año: string } | null): string =>
+    obj ? `${obj.dia} de ${obj.mes} del ${obj.año}` : "________________";
+
+  const finOriginal = fmt(fechaFinOriginal);
+  const inicioOriginal = fmt(fechaInicioOriginal);
+  const inicioAdenda = fmt(fechaInicioAdenda);
+  const finAdenda = fmt(fechaFinAdenda);
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Primera Adenda al Contrato de Arrendamiento</title>
+    <style>
+        @page { size: A4; margin: 20mm; }
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #000000;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            min-height: 297mm;
+            height: auto;
+        }
+        h1 {
+            text-align: center;
+            font-size: 13pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-top: 0;
+            margin-bottom: 25px;
+            line-height: 1.3;
+        }
+        h2 {
+            font-size: 11pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-top: 18px;
+            margin-bottom: 8px;
+        }
+        p {
+            font-size: 10pt;
+            text-align: justify;
+            margin-bottom: 12px;
+        }
+        .bold { font-weight: bold; }
+        .section-block { page-break-inside: avoid; break-inside: avoid; margin-bottom: 12px; }
+        .signature-section {
+            margin-top: 50px;
+            width: 100%;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        .signature-table { width: 100%; border-collapse: collapse; }
+        .signature-table td { width: 50%; vertical-align: top; padding: 0 15px; text-align: center; }
+        .signature-line { border-top: 1px solid #000000; margin-top: 60px; margin-bottom: 8px; }
+        .footer {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 9pt;
+            color: #555555;
+            border-top: 1px solid #cccccc;
+            padding-top: 8px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>ADENDA N° ${numeroAdenda} AL CONTRATO DE<br>ARRENDAMIENTO</h1>
+
+    <div class="section-block">
+        <p>Conste por el presente documento la <span class="bold">ADENDA AL CONTRATO DE ARRENDAMIENTO</span> de fecha <span class="bold">${finOriginal}</span> que celebran de una parte la Srta. <span class="bold">Emely Alexandra CARPIO PINTO</span>, identificada con D.N.I. N° <span class="bold">76373620</span>, domiciliada en <span class="bold">Av. Alfredo Benavides 2195, distrito de Miraflores, Departamento y Provincia de Lima</span>, a quien en adelante se le denominará <span class="bold">LA ARRENDADOR(A)</span>; y, de la otra parte, el Sr.(a) <span class="bold">${nombreCompleto}</span>, identificado(a) con D.N.I. / C.E. / Pasaporte N° <span class="bold">${clienteDocumento || "________________"}</span>, de nacionalidad <span class="bold">${nacimiento}</span>, domiciliado(a) en <span class="bold">${domicilio}</span>, a quien en adelante se denominará <span class="bold">EL ARRENDATARIO(A)</span>, en los términos y bajo las condiciones siguientes:</p>
+    </div>
+
+    <div class="section-block">
+        <h2>ANTECEDENTES</h2>
+        <p><span class="bold">PRIMERO.-</span> Con fecha del <span class="bold">${inicioOriginal} hasta el día ${finOriginal}</span>; las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <span class="bold">${deptoNumero}</span> ubicado en <span class="bold">Av. Alfredo Benavides N° 2195 D, Miraflores, Piso ${piso}, provincia y departamento de Lima</span>; con una merced conductiva de S/ <span class="bold">${montoRentaTxt}.00 (${montoLetras})</span> mensuales, la cual incluye mantenimiento de S/ 50.00 (cincuenta con 00/100 soles) y los servicios de luz y agua, siendo cancelada en la Cta. de ahorros del banco BCP N° <span class="bold">19497202418059 CCI: 00219419720241805997</span>.</p>
+    </div>
+
+    <div class="section-block">
+        <h2>OBJETO</h2>
+        <p><span class="bold">SEGUNDO.-</span> Las partes acuerdan modificar la Cláusula QUINTA del contrato de arrendamiento del Mini departamento N° <span class="bold">${deptoNumero}</span>, bajo los siguientes términos:</p>
+
+        <p><span class="bold">PLAZO DEL CONTRATO:</span></p>
+        <p><span class="bold">QUINTA.-</span> Las partes convienen fijar un plazo de duración determinada para el presente contrato, el cual será del <span class="bold">${inicioAdenda} hasta el ${finAdenda}</span>; fecha en la que EL ARRENDATARIO está obligado a desocupar y devolver el bien arrendado.</p>
+        <p>El presente contrato podrá ser renovado con una anticipación no menor de quince (15) días calendarios a la conclusión del arrendamiento y que exista acuerdo entre ambas partes confirmando via WhatsApp al telf. <span class="bold">937205274</span> o mediante adenda firmada.</p>
+    </div>
+
+    <div class="section-block">
+        <h2>RATIFICACIÓN</h2>
+        <p><span class="bold">TERCERO.</span> Salvo por la modificación señalada en la presente adenda, todas las demás cláusulas y condiciones del contrato de arrendamiento original se mantienen vigentes y sin alteración alguna.</p>
+
+        <p>En señal de conformidad, ambas partes suscriben la presente adenda en dos ejemplares de igual tenor y validez, en esta ciudad.</p>
+
+        <p>Miraflores, <span class="bold">${inicioAdenda}</span>.</p>
+    </div>
+
+    <div class="signature-section">
+        <table class="signature-table">
+            <tr>
+                <td>
+                    <div class="signature-line"></div>
+                    <p><span class="bold">LA ARRENDADOR(A)</span><br>
+                    Emely Alexandra Carpio Pinto<br>
+                    DNI: 76373620</p>
+                </td>
+                <td>
+                    <div class="signature-line"></div>
+                    <p><span class="bold">EL ARRENDATARIO(A)</span><br>
+                    ${nombreCompleto}<br>
+                    DNI/PASAPORTE: ${clienteDocumento || "________________"}</p>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        <span>Adenda al Contrato de Arrendamiento</span>
+        <span>Página 1</span>
+    </div>
+
 </body>
 </html>`;
 }

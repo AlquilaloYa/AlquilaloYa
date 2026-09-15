@@ -150,6 +150,9 @@ export async function POST(request: Request) {
       contenido?: string;
       tipo?: "adenda" | "extension";
       nuevaFechaFin?: string;
+      numeroAdenda?: string;
+      fechaInicioAdenda?: string;
+      fechaFinAdenda?: string;
     };
 
     if (!body.contractId) {
@@ -161,9 +164,9 @@ export async function POST(request: Request) {
     const esExtension = body.tipo === "extension";
     const titulo = (body.titulo ?? "").trim() || (esExtension ? "ADENDA DE EXTENSIÓN" : "ADENDA");
     const contenido = (body.contenido ?? "").trim();
-    if (!esExtension && !contenido) {
+    if (!esExtension && !contenido && !body.fechaInicioAdenda && !body.fechaFinAdenda) {
       return NextResponse.json(
-        { error: "Debe indicar el contenido de la adenda" },
+        { error: "Debe indicar el contenido de la adenda o las fechas del nuevo plazo" },
         { status: 400 }
       );
     }
@@ -264,6 +267,18 @@ export async function POST(request: Request) {
     }
 
     const baseSnapshot = contract.snapshot;
+    const fechaInicioAdenda = esExtension
+      ? undefined
+      : (body.fechaInicioAdenda ?? "").slice(0, 10);
+    const fechaFinAdenda = esExtension
+      ? undefined
+      : (body.fechaFinAdenda ?? "").slice(0, 10);
+    if (!esExtension && fechaInicioAdenda && fechaFinAdenda && !(fechaFinAdenda > fechaInicioAdenda)) {
+      return NextResponse.json(
+        { error: "La fecha fin de la adenda debe ser posterior a la fecha de inicio" },
+        { status: 400 }
+      );
+    }
     const datosContrato = {
       ...(baseSnapshot.datosContrato as Record<string, unknown>),
       codigoContrato: codigoAdenda,
@@ -271,6 +286,9 @@ export async function POST(request: Request) {
       titulo,
       fechaFin: esExtension ? nuevaFechaFin : baseSnapshot.datosContrato?.fechaFin,
       codigoBase: contract.codigoContrato,
+      numeroAdenda: esExtension ? undefined : (body.numeroAdenda ?? "").trim() || String(numero),
+      fechaInicioAdenda,
+      fechaFinAdenda,
       ...camposContrato,
     };
 

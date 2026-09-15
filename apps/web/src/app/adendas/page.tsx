@@ -86,17 +86,17 @@ export default function AdendasPage() {
     return new Date(iso).toLocaleDateString("es-PE", { year: "numeric", month: "short", day: "numeric" });
   }
 
-  function estadoVencimiento(c: ContractPick): { orden: number; etiqueta: string; clase: string } {
-    if (!c.fechaFin) return { orden: 3, etiqueta: "Sin término", clase: "text-on-surface-variant" };
+  function estadoVencimiento(c: ContractPick): { orden: number; etiqueta: string; clase: string; fila: string } {
+    if (!c.fechaFin) return { orden: 3, etiqueta: "Sin término", clase: "text-on-surface-variant", fila: "" };
     const hoy = new Date().toISOString().slice(0, 10);
     const fin = String(c.fechaFin).slice(0, 10);
     if (fin < hoy) {
       const dias = Math.round((Date.now() - new Date(fin).getTime()) / 86400000);
-      return { orden: 0, etiqueta: `Finalizado (venció hace ${dias} d)`, clase: "text-destructive" };
+      return { orden: 0, etiqueta: `Finalizado (venció hace ${dias} d)`, clase: "text-destructive", fila: "border-l-4 border-l-destructive bg-destructive/5" };
     }
     const dias = Math.round((new Date(fin).getTime() - Date.now()) / 86400000);
-    if (dias <= 30) return { orden: 1, etiqueta: `Vence en ${dias} d`, clase: "text-tertiary-container-foreground" };
-    return { orden: 2, etiqueta: `Vence en ${dias} d`, clase: "text-on-surface-variant" };
+    if (dias <= 30) return { orden: 1, etiqueta: `Vence en ${dias} d`, clase: "text-tertiary-container-foreground", fila: "border-l-4 border-l-green-600 bg-green-500/5" };
+    return { orden: 2, etiqueta: `Vence en ${dias} d`, clase: "text-green-600", fila: "border-l-4 border-l-green-600 bg-green-500/5" };
   }
 
   async function abrirPicker(mode: "adenda" | "extension") {
@@ -338,7 +338,7 @@ export default function AdendasPage() {
                     <li key={c.id}>
                       <button
                         onClick={() => elegirContrato(c)}
-                        className="flex w-full flex-col gap-0.5 rounded-lg border border-outline-variant px-3 py-2.5 text-left hover:border-primary hover:bg-surface-container transition-colors dark:border-transparent"
+                        className={`flex w-full flex-col gap-0.5 rounded-lg border border-outline-variant px-3 py-2.5 text-left transition-colors hover:bg-surface-container dark:border-transparent ${v.fila}`}
                       >
                         <span className="font-mono-label font-medium text-on-surface">{c.codigoContrato}</span>
                         <span className="font-body-sm text-on-surface-variant">
