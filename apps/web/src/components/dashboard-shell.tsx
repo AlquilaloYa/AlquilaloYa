@@ -35,6 +35,7 @@ import {
   MessageSquare,
   Zap,
   Megaphone,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -58,6 +59,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/departamentos", label: "Uni/Dep", icon: Building2, section: "Departamentos", permission: "department.read", group: "contratos" },
   { href: "/contratos", label: "Pre contrato", icon: FileText, section: "Contratos", permission: "contract.read", group: "contratos" },
   { href: "/contrato-final", label: "Contrato Final", icon: FileCheck, section: "Contrato Final", permission: "contract.read", group: "contratos" },
+  { href: "/adendas", label: "Adendas", icon: ScrollText, section: "Adendas", permission: "contract.read", group: "contratos" },
   { href: "/plantillas", label: "Plantillas", icon: FilePlus2, section: "Plantillas", permission: "template.read", group: "contratos" },
   { href: "/clientes", label: "Clientes", icon: Star, section: "Clientes", permission: "client.read" },
   { href: "/pagos", label: "Cobranza", icon: Banknote, section: "Cobranza", permission: "contract.read" },

@@ -52,6 +52,82 @@ function periodosExtension(fechaFinActual: string, nuevaFechaFin: string): strin
   return periodos;
 }
 
+/** GET /api/adendas — lista todas las adendas (ADENDA y ADENDA_EXTENSION) con datos del contrato. */
+export async function GET(req: Request) {
+  try {
+    const dbModule = await import("@contract/db");
+    const auth = await requireUser(dbModule, req);
+    if ("error" in auth) return auth.error;
+
+    const denied = requirePermission(auth.user.role, Permission.DOCUMENT_READ);
+    if (denied) return denied;
+
+    const { db, schema } = dbModule as {
+      db: typeof import("@contract/db").db;
+      schema: typeof import("@contract/db").schema;
+    };
+    const { eq, inArray, desc } = await import("drizzle-orm");
+
+    const rows = await db
+      .select({
+        id: schema.documents.id,
+        contractId: schema.documents.contractId,
+        snapshotId: schema.documents.snapshotId,
+        tipo: schema.documents.tipo,
+        version: schema.documents.version,
+        storageKey: schema.documents.storageKey,
+        filename: schema.documents.filename,
+        sizeBytes: schema.documents.sizeBytes,
+        sha256: schema.documents.sha256,
+        estadoGeneracion: schema.documents.estadoGeneracion,
+        error: schema.documents.error,
+        createdAt: schema.documents.createdAt,
+        codigoContrato: schema.contracts.codigoContrato,
+        estadoContrato: schema.contracts.estado,
+        clienteNombre: schema.clients.nombres,
+        clienteApellidos: schema.clients.apellidos,
+        clienteDocumento: schema.clients.documentoIdentidad,
+        departamentoNombre: schema.departments.nombre,
+        departamentoCodigo: schema.departments.codigo,
+      })
+      .from(schema.documents)
+      .innerJoin(schema.contracts, eq(schema.documents.contractId, schema.contracts.id))
+      .innerJoin(schema.clients, eq(schema.contracts.clienteId, schema.clients.id))
+      .innerJoin(schema.departments, eq(schema.contracts.departamentoId, schema.departments.id))
+      .where(inArray(schema.documents.tipo, ["ADENDA", "ADENDA_EXTENSION"]))
+      .orderBy(desc(schema.documents.createdAt));
+
+    return NextResponse.json({
+      items: rows.map((d) => ({
+        id: d.id,
+        contractId: d.contractId,
+        snapshotId: d.snapshotId,
+        tipo: d.tipo,
+        version: d.version,
+        storageKey: d.storageKey,
+        filename: d.filename,
+        sizeBytes: d.sizeBytes,
+        sha256: d.sha256,
+        estadoGeneracion: d.estadoGeneracion,
+        error: d.error,
+        createdAt: d.createdAt?.toISOString?.() ?? null,
+        codigoContrato: d.codigoContrato,
+        estadoContrato: d.estadoContrato,
+        clienteNombre: d.clienteNombre,
+        clienteApellidos: d.clienteApellidos,
+        clienteDocumento: d.clienteDocumento,
+        departamentoNombre: d.departamentoNombre,
+        departamentoCodigo: d.departamentoCodigo,
+      })),
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
 /**
  * POST /api/adendas  body: { contractId, titulo, contenido, tipo?, nuevaFechaFin? }
  * - tipo "adenda" (default): congela un snapshot de adenda, la registra como
