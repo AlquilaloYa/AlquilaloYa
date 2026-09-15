@@ -181,10 +181,10 @@ export async function POST(request: Request) {
         { status: 404 }
       );
     }
-    const ESTADOS_ADENDA = ["EMITIDO", "PENDIENTE_FIRMA", "FIRMADO"] as const;
+    const ESTADOS_ADENDA = ["EMITIDO", "PENDIENTE_FIRMA", "FIRMADO", "NOTARIADO"] as const;
     if (!ESTADOS_ADENDA.includes(contract.estado as (typeof ESTADOS_ADENDA)[number])) {
       return NextResponse.json(
-        { error: "La adenda solo puede crearse sobre contratos emitidos, pendientes de firma o firmados" },
+        { error: "La adenda solo puede crearse sobre contratos emitidos, pendientes de firma, firmados o notariados" },
         { status: 400 }
       );
     }

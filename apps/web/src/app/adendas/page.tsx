@@ -41,7 +41,7 @@ type ContractPick = {
   estado: string;
 };
 
-const TIPOS_ELIGIBLES = ["EMITIDO", "PENDIENTE_FIRMA", "FIRMADO"];
+const TIPOS_ELIGIBLES = ["EMITIDO", "PENDIENTE_FIRMA", "FIRMADO", "NOTARIADO"];
 
 export default function AdendasPage() {
   const [adendas, setAdendas] = useState<AdendaApi[]>([]);
@@ -86,6 +86,19 @@ export default function AdendasPage() {
     return new Date(iso).toLocaleDateString("es-PE", { year: "numeric", month: "short", day: "numeric" });
   }
 
+  function estadoVencimiento(c: ContractPick): { orden: number; etiqueta: string; clase: string } {
+    if (!c.fechaFin) return { orden: 3, etiqueta: "Sin término", clase: "text-on-surface-variant" };
+    const hoy = new Date().toISOString().slice(0, 10);
+    const fin = String(c.fechaFin).slice(0, 10);
+    if (fin < hoy) {
+      const dias = Math.round((Date.now() - new Date(fin).getTime()) / 86400000);
+      return { orden: 0, etiqueta: `Finalizado (venció hace ${dias} d)`, clase: "text-destructive" };
+    }
+    const dias = Math.round((new Date(fin).getTime() - Date.now()) / 86400000);
+    if (dias <= 30) return { orden: 1, etiqueta: `Vence en ${dias} d`, clase: "text-tertiary-container-foreground" };
+    return { orden: 2, etiqueta: `Vence en ${dias} d`, clase: "text-on-surface-variant" };
+  }
+
   async function abrirPicker(mode: "adenda" | "extension") {
     setError(null);
     setPickerMode(mode);
@@ -96,9 +109,17 @@ export default function AdendasPage() {
       const res = await apiFetch("/api/contracts");
       if (!res.ok) throw new Error("No se pudieron cargar los contratos");
       const data = (await res.json()) as ContractPick[];
-      setPickerContracts(
-        data.filter((c) => TIPOS_ELIGIBLES.includes(c.estado))
-      );
+      const elegibles = data
+        .filter((c) => TIPOS_ELIGIBLES.includes(c.estado))
+        .sort((a, b) => {
+          const oa = estadoVencimiento(a).orden;
+          const ob = estadoVencimiento(b).orden;
+          if (oa !== ob) return oa - ob;
+          const fa = String(a.fechaFin ?? "9999");
+          const fb = String(b.fechaFin ?? "9999");
+          return fa.localeCompare(fb);
+        });
+      setPickerContracts(elegibles);
     } catch (e) {
       setError((e as Error).message);
       setPickerOpen(false);
@@ -307,26 +328,31 @@ export default function AdendasPage() {
               <p className="py-8 text-center font-body-sm text-on-surface-variant">Cargando contratos…</p>
             ) : pickerContracts.length === 0 ? (
               <p className="rounded-md bg-surface-container-high p-4 text-center font-body-sm text-on-surface-variant">
-                No hay contratos emitidos, pendientes de firma o firmados para agregarles una adenda.
+                No hay contratos emitidos, firmados o notariados para agregarles una adenda.
               </p>
             ) : (
               <ul className="space-y-2">
-                {pickerContracts.map((c) => (
-                  <li key={c.id}>
-                    <button
-                      onClick={() => elegirContrato(c)}
-                      className="flex w-full flex-col gap-0.5 rounded-lg border border-outline-variant px-3 py-2.5 text-left hover:border-primary hover:bg-surface-container transition-colors dark:border-transparent"
-                    >
-                      <span className="font-mono-label font-medium text-on-surface">{c.codigoContrato}</span>
-                      <span className="font-body-sm text-on-surface-variant">
-                        {[c.clienteNombre, c.apellidoCliente].filter(Boolean).join(" ")} · {c.departamentoNombre}
-                      </span>
-                      <span className="font-body-xs text-on-surface-variant">
-                        {c.estado} {c.fechaFin ? ` · Término: ${c.fechaFin}` : ""}
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                {pickerContracts.map((c) => {
+                  const v = estadoVencimiento(c);
+                  return (
+                    <li key={c.id}>
+                      <button
+                        onClick={() => elegirContrato(c)}
+                        className="flex w-full flex-col gap-0.5 rounded-lg border border-outline-variant px-3 py-2.5 text-left hover:border-primary hover:bg-surface-container transition-colors dark:border-transparent"
+                      >
+                        <span className="font-mono-label font-medium text-on-surface">{c.codigoContrato}</span>
+                        <span className="font-body-sm text-on-surface-variant">
+                          {[c.clienteNombre, c.apellidoCliente].filter(Boolean).join(" ")} · {c.departamentoNombre}
+                        </span>
+                        <span className="flex flex-wrap items-center gap-x-2 font-body-xs text-on-surface-variant">
+                          <span>{c.estado}</span>
+                          {c.fechaFin ? <span>· {c.fechaFin}</span> : null}
+                          <span className={`font-medium ${v.clase}`}>{v.etiqueta}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
