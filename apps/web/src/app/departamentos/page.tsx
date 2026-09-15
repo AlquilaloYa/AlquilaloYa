@@ -194,6 +194,12 @@ export default function DepartamentosPage() {
     return !["PERDER_TODO", "INACTIVO_48H", "INACTIVO_168H"].includes(estado);
   }
 
+  function estadoDepartamento(dept: DepartmentView): "OCUPADO" | "SEPARADO" | "DISPONIBLE" {
+    if (dept.disponibilidad) return "OCUPADO";
+    if (estaSeparado(dept)) return "SEPARADO";
+    return "DISPONIBLE";
+  }
+
   function cambiarOrden(clave: typeof sortKey) {
     if (sortKey === clave) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(clave); setSortDir("asc"); }
@@ -215,7 +221,7 @@ export default function DepartamentosPage() {
             department.precio,
             department.garantia,
             department.mantenimiento,
-            sep ? getEstadoActual(sep) : "Disponible",
+            sep ? getEstadoActual(sep) : estadoDepartamento(department),
             sep ? getTipoSeparacion(sep) : "",
             sep?.montoSeparacion,
             contacto?.nombre,
@@ -232,8 +238,8 @@ export default function DepartamentosPage() {
       const sepB = separaciones.find((s) => s.departamentoId === b.id);
       const contactoA = sepA ? contactos.find((c) => c.id === sepA.contactoId) : null;
       const contactoB = sepB ? contactos.find((c) => c.id === sepB.contactoId) : null;
-      const estadoA = estaSeparado(a) ? "Separado" : "Disponible";
-      const estadoB = estaSeparado(b) ? "Separado" : "Disponible";
+      const estadoA = estadoDepartamento(a);
+      const estadoB = estadoDepartamento(b);
       const tiempoA = sepA ? new Date(getFechaLimiteActiva(sepA)).getTime() : 0;
       const tiempoB = sepB ? new Date(getFechaLimiteActiva(sepB)).getTime() : 0;
       const garantiaA = sepA ? (sepA.garantiaExtendida ? "Activa" : "No activa") : "—";
@@ -459,7 +465,7 @@ export default function DepartamentosPage() {
                 >
                   <option value="" disabled>Selecciona…</option>
                   {departments.filter((d) => d.activo).map((d) => (
-                    <option key={d.id} value={d.id} disabled={estaSeparado(d)}>
+                    <option key={d.id} value={d.id} disabled={estadoDepartamento(d) !== "DISPONIBLE"}>
                       {d.codigo} — {d.nombre} (N°{d.numero})
                     </option>
                   ))}
@@ -682,7 +688,13 @@ export default function DepartamentosPage() {
                             <td className="px-3 py-2">{fmtPrecio(d.mantenimiento)}</td>
                             <td className="px-3 py-2 text-muted-foreground">{d.servicios}</td>
                             <td className="px-3 py-2">
-                              {estaSeparado(d) ? (
+                              {estadoDepartamento(d) === "OCUPADO" ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-black/10 px-2 py-0.5 text-xs font-medium text-black dark:bg-white/20 dark:text-white">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-black dark:bg-white" />
+                                  Ocupado
+                                  <span className="text-black/70 dark:text-white/70">· hasta {new Date(`${d.disponibilidad!.fechaFin}T12:00:00`).toLocaleDateString("es-PE")}</span>
+                                </span>
+                              ) : estaSeparado(d) ? (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
                                   <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
                                   Separado

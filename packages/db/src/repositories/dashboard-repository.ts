@@ -96,20 +96,33 @@ export class DrizzleDashboardRepository {
     const firmas = await db
       .select({
         departamentoId: schema.contracts.departamentoId,
+        fechaInicio: schema.contracts.fechaInicio,
         fechaFin: schema.contracts.fechaFin,
       })
       .from(schema.contracts)
-      .where(eq(schema.contracts.estado, "FIRMADO"));
+      .where(
+        inArray(schema.contracts.estado, [
+          "FIRMADO",
+          "ACTIVO",
+          "VIGENTE",
+          "NOTARIADO",
+        ])
+      );
 
-    const ocupadas = new Set(firmas.map((c) => c.departamentoId)).size;
+    const ocupadas = new Set(
+      firmas
+        .filter((c) => c.fechaInicio <= hoyStr && (c.fechaFin ?? "") >= hoyStr)
+        .map((c) => c.departamentoId)
+    ).size;
 
     let mantenimiento = 0;
     let aPuntoDeFinalizar = 0;
     for (const c of firmas) {
-      if (c.fechaFin && c.fechaFin >= hoyStr && c.fechaFin <= finMantenimientoStr) {
+      if (!(c.fechaInicio <= hoyStr && (c.fechaFin ?? "") >= hoyStr)) continue;
+      if (c.fechaFin && c.fechaFin <= finMantenimientoStr) {
         mantenimiento++;
       }
-      if (c.fechaFin && c.fechaFin >= hoyStr && c.fechaFin <= finProximoStr) {
+      if (c.fechaFin && c.fechaFin <= finProximoStr) {
         aPuntoDeFinalizar++;
       }
     }
