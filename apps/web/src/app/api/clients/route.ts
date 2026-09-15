@@ -17,27 +17,106 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
+    const { eq, and, inArray, desc } = await import("drizzle-orm");
 
     const rows = await db
       .select()
       .from(schema.clients)
       .orderBy(schema.clients.nombres);
 
+    if (rows.length === 0) {
+      return NextResponse.json([]);
+    }
+
+    const clientIds = rows.map((c) => c.id);
+
+    // Último contrato de cada cliente (por fecha de fin y creación).
+    const contractsRows = await db
+      .select()
+      .from(schema.contracts)
+      .where(inArray(schema.contracts.clienteId, clientIds));
+
+    const ultimoPorCliente = new Map<
+      string,
+      (typeof contractsRows)[number]
+    >();
+    for (const contrato of contractsRows) {
+      const previo = ultimoPorCliente.get(contrato.clienteId);
+      const fechaStr = String(contrato.fechaFin ?? "");
+      const previoStr = previo ? String(previo.fechaFin ?? "") : "";
+      const esNuevo =
+        !previo ||
+        fechaStr > previoStr ||
+        (fechaStr === previoStr &&
+          contrato.creadoEn.getTime() > previo.creadoEn.getTime());
+      if (esNuevo) ultimoPorCliente.set(contrato.clienteId, contrato);
+    }
+
+    // Adenda más reciente de cada contrato (lee fechas de su snapshot).
+    const contractIds = [...ultimoPorCliente.values()].map((c) => c.id);
+    const adendasRows =
+      contractIds.length === 0
+        ? []
+        : await db
+            .select({
+              contractId: schema.documents.contractId,
+              createdAt: schema.documents.createdAt,
+              datosContrato: schema.contractSnapshots.datosContrato,
+            })
+            .from(schema.documents)
+            .innerJoin(
+              schema.contractSnapshots,
+              eq(schema.documents.snapshotId, schema.contractSnapshots.id)
+            )
+            .where(
+              and(
+                inArray(schema.documents.contractId, contractIds),
+                inArray(schema.documents.tipo, ["ADENDA", "ADENDA_EXTENSION"])
+              )
+            )
+            .orderBy(desc(schema.documents.createdAt));
+
+    const contratoPorId = new Map(
+      contractsRows.map((c) => [c.id, c] as const)
+    );
+    const adendaPorCliente = new Map<string, (typeof adendasRows)[number]>();
+    for (const adenda of adendasRows) {
+      const contrato = contratoPorId.get(adenda.contractId);
+      if (!contrato) continue;
+      if (!adendaPorCliente.has(contrato.clienteId)) {
+        adendaPorCliente.set(contrato.clienteId, adenda);
+      }
+    }
+
     return NextResponse.json(
-      rows.map((c) => ({
-        id: c.id,
-        nombres: c.nombres,
-        apellidos: c.apellidos,
-        documentoIdentidad: c.documentoIdentidad,
-        ruc: c.ruc,
-        tipoPersona: c.tipoPersona,
-        email: c.email,
-        telefono: c.telefono,
-        codigoDepartamento: c.codigoDepartamento,
-        domicilio: c.domicilio,
-        nacionalidad: c.nacionalidad,
-        activo: c.activo,
-      }))
+      rows.map((c) => {
+        const contrato = ultimoPorCliente.get(c.id);
+        const adenda = adendaPorCliente.get(c.id);
+        const datos = (adenda?.datosContrato ?? {}) as Record<string, unknown>;
+        return {
+          id: c.id,
+          nombres: c.nombres,
+          apellidos: c.apellidos,
+          documentoIdentidad: c.documentoIdentidad,
+          ruc: c.ruc,
+          tipoPersona: c.tipoPersona,
+          email: c.email,
+          telefono: c.telefono,
+          codigoDepartamento: c.codigoDepartamento,
+          domicilio: c.domicilio,
+          nacionalidad: c.nacionalidad,
+          activo: c.activo,
+          fechaFinContrato: contrato?.fechaFin
+            ? String(contrato.fechaFin).slice(0, 10)
+            : null,
+          fechaInicioAdenda: datos.fechaInicioAdenda
+            ? String(datos.fechaInicioAdenda).slice(0, 10)
+            : null,
+          fechaFinAdenda: datos.fechaFinAdenda
+            ? String(datos.fechaFinAdenda).slice(0, 10)
+            : null,
+        };
+      })
     );
   } catch (error) {
     return NextResponse.json(

@@ -20,6 +20,16 @@ interface ClientView {
   domicilio?: string | null;
   codigoDepartamento?: string | null;
   activo: boolean;
+  fechaFinContrato?: string | null;
+  fechaInicioAdenda?: string | null;
+  fechaFinAdenda?: string | null;
+}
+
+function fmtFecha(iso?: string | null): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
 }
 
 export default function ClientesPage() {
@@ -66,12 +76,15 @@ export default function ClientesPage() {
             ) : (
               <TableScroll className="max-h-[32rem] w-full rounded-md border">
                 <div className="max-h-[30rem] overflow-y-auto">
-                  <table className="w-full min-w-[960px] text-sm">
+                  <table className="w-full min-w-[1200px] text-sm">
                     <thead className="sticky top-0 z-10 bg-[#151a24] text-left text-xs text-white/80">
                       <tr>
                         <th className="px-3 py-2 font-medium">ID departamento</th>
                         <th className="px-3 py-2 font-medium">Nombre</th>
                         <th className="px-3 py-2 font-medium">Documento</th>
+                        <th className="px-3 py-2 font-medium">Fin contrato</th>
+                        <th className="px-3 py-2 font-medium">Inicio adenda</th>
+                        <th className="px-3 py-2 font-medium">Fin adenda</th>
                         <th className="px-3 py-2 font-medium">RUC</th>
                         <th className="px-3 py-2 font-medium">Tipo</th>
                         <th className="px-3 py-2 font-medium">Email</th>
@@ -100,6 +113,9 @@ export default function ClientesPage() {
                             </Link>
                           </td>
                           <td className="px-3 py-2">{c.documentoIdentidad}</td>
+                          <td className="px-3 py-2">{fmtFecha(c.fechaFinContrato)}</td>
+                          <td className="px-3 py-2">{fmtFecha(c.fechaInicioAdenda)}</td>
+                          <td className="px-3 py-2">{fmtFecha(c.fechaFinAdenda)}</td>
                           <td className="px-3 py-2">{c.ruc ?? "—"}</td>
                           <td className="px-3 py-2">
                             {c.tipoPersona === PersonType.NATURAL ? "Natural" : "Jurídica"}
