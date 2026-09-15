@@ -211,7 +211,7 @@ async function renderPdf(snapshot: ContractSnapshot) {
   const tipoDocumento = (snapshot.datosContrato as
     | { tipoDocumento?: string }
     | undefined)?.tipoDocumento;
-  if (tipoDocumento === "ADENDA") {
+  if (tipoDocumento === "ADENDA" || tipoDocumento === "ADENDA_EXTENSION") {
     return generateAdendaPdf(snapshot);
   }
 

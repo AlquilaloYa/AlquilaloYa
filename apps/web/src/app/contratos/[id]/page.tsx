@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
-import { AlertTriangle, ArrowLeft, Download, FileText, ShieldCheck, Upload, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarPlus, Download, FileText, ShieldCheck, Upload, X } from "lucide-react";
 
 type SnapshotCliente = {
   id: string;
@@ -125,6 +125,7 @@ export default function ContratoDetailPage() {
   const [descargando, setDescargando] = useState(false);
   const [errorPdf, setErrorPdf] = useState<string | null>(null);
   const [showAdenda, setShowAdenda] = useState(false);
+  const [showExtension, setShowExtension] = useState(false);
   const [verificacion, setVerificacion] = useState<
     Record<string, boolean | undefined>
   >({});
@@ -265,6 +266,13 @@ export default function ContratoDetailPage() {
     load();
   }, [load]);
 
+  const adendas = documents.filter(
+    (d) => d.tipo === "ADENDA" || d.tipo === "ADENDA_EXTENSION"
+  );
+  const documentosGenerados = documents.filter(
+    (d) => d.tipo !== "ADENDA" && d.tipo !== "ADENDA_EXTENSION"
+  );
+
   return (
     <DashboardShell>
       <div className="mx-auto max-w-6xl space-y-6">
@@ -365,19 +373,7 @@ export default function ContratoDetailPage() {
                     <ShieldCheck className="h-5 w-5" />
                     Documentos
                   </h3>
-                  <div className="flex items-center gap-2">
-                    {contract.snapshot &&
-                    ["EMITIDO", "PENDIENTE_FIRMA", "FIRMADO"].includes(
-                      contract.estado
-                    ) ? (
-                      <button
-                        onClick={() => setShowAdenda(true)}
-                        className="inline-flex shrink-0 items-center gap-2 rounded border border-outline-variant px-3 py-2 font-label-md text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary dark:border-transparent"
-                      >
-                        <FileText className="h-4 w-4" />
-                        Nueva adenda
-                      </button>
-                    ) : null}
+<div className="flex items-center gap-2">
                       {contract.snapshot ? (
                         <button
                           onClick={descargarPdf}
@@ -396,13 +392,13 @@ export default function ContratoDetailPage() {
                     {errorPdf}
                   </p>
                 ) : null}
-                {documents.length === 0 ? (
+                {documentosGenerados.length === 0 ? (
                   <p className="font-body-sm text-on-surface-variant">
                     Aún no hay documentos generados para este contrato.
                   </p>
                 ) : (
                   <ul className="space-y-3">
-                    {documents.map((d) => (
+                    {documentosGenerados.map((d) => (
                       <li key={d.id} className="flex items-center gap-3 rounded-md bg-surface-container-high p-3">
                         <FileText className="h-5 w-5 shrink-0 text-primary" />
                         <div className="flex-1">
@@ -601,6 +597,86 @@ export default function ContratoDetailPage() {
                   </dl>
                 </div>
               </div>
+            </div>
+
+            {/* ── Adendas ── */}
+            <div className="rounded-lg bg-surface-container-lowest p-5 shadow-sm">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="flex items-center gap-2 font-headline-md text-primary">
+                  <FileText className="h-5 w-5" />
+                  Adendas
+                </h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setShowAdenda(true)}
+                    className="inline-flex shrink-0 items-center gap-2 rounded border border-outline-variant px-3 py-2 font-label-md text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary dark:border-transparent"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Nueva adenda
+                  </button>
+                  <button
+                    onClick={() => setShowExtension(true)}
+                    className="inline-flex shrink-0 items-center gap-2 rounded border border-outline-variant px-3 py-2 font-label-md text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary dark:border-transparent"
+                  >
+                    <CalendarPlus className="h-4 w-4" />
+                    Adenda de extensión
+                  </button>
+                </div>
+              </div>
+              <p className="mb-4 rounded-md bg-surface-container-high px-3 py-2 font-body-sm text-on-surface-variant">
+                La adenda de extensión se usa cuando al cliente le quedan 2 meses
+                o el contrato está por finalizar: amplía la fecha de término,
+                actualiza el contrato y genera las cuotas de los meses
+                extendidos.
+              </p>
+              {adendas.length === 0 ? (
+                <p className="font-body-sm text-on-surface-variant">
+                  Aún no hay adendas para este contrato.
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {adendas.map((d) => (
+                    <li key={d.id} className="flex items-center gap-3 rounded-md bg-surface-container-high p-3">
+                      <FileText className="h-5 w-5 shrink-0 text-primary" />
+                      <div className="flex-1">
+                        <p className="font-body-sm text-on-surface">{d.filename}</p>
+                        <span className="font-mono-label text-on-surface-variant">
+                          {d.tipo === "ADENDA_EXTENSION" ? "Adenda de extensión" : "Adenda"} · v{d.version} · {d.estadoGeneracion}
+                          {d.sizeBytes ? ` · ${(d.sizeBytes / 1024).toFixed(1)} KB` : ""}
+                          {d.storageKey ? " · en storage" : ""}
+                        </span>
+                      </div>
+                      {d.estadoGeneracion === "GENERADO" && d.sha256 ? (
+                        verificacion[d.id] === undefined ? null : (
+                          <span
+                            className={`inline-flex shrink-0 items-center gap-1 font-mono-label ${
+                              verificacion[d.id] ? "text-primary" : "text-destructive"
+                            }`}
+                          >
+                            {verificacion[d.id] ? "✓ íntegro" : "✗ alterado"}
+                          </span>
+                        )
+                      ) : null}
+                      {d.estadoGeneracion === "GENERADO" && d.sha256 && d.storageKey ? (
+                        <button
+                          onClick={() => verificarDocumento(d)}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded border border-outline-variant px-2.5 py-1.5 font-label-md text-on-surface-variant hover:bg-surface-container dark:border-transparent"
+                        >
+                          <ShieldCheck className="h-4 w-4" />
+                          Verificar
+                        </button>
+                      ) : null}
+                      <button
+                        onClick={() => descargarDocumento(d)}
+                        aria-label={`Descargar ${d.filename}`}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded border border-outline-variant px-2.5 py-1.5 font-label-md text-primary hover:bg-surface-container dark:border-transparent"
+                      >
+                        <Download className="h-4 w-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {contract.snapshot ? (
@@ -853,6 +929,18 @@ export default function ContratoDetailPage() {
             }}
           />
         ) : null}
+        {showExtension && contract ? (
+          <ExtensionModal
+            contractId={contract.id}
+            codigoContrato={contract.codigoContrato}
+            fechaFin={contract.fechaFin}
+            onClose={() => setShowExtension(false)}
+            onCreated={async () => {
+              setShowExtension(false);
+              await load();
+            }}
+          />
+        ) : null}
       </div>
     </DashboardShell>
   );
@@ -947,6 +1035,135 @@ function AdendaModal({
           <button onClick={handleSubmit} disabled={saving || !contenido.trim()}
             className="rounded bg-primary px-4 py-2 font-label-md text-on-primary disabled:cursor-not-allowed disabled:opacity-40">
             {saving ? "Generando…" : "Generar adenda"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExtensionModal({
+  contractId,
+  codigoContrato,
+  fechaFin,
+  onClose,
+  onCreated,
+}: {
+  contractId: string;
+  codigoContrato: string;
+  fechaFin: string;
+  onClose: () => void;
+  onCreated: () => Promise<void>;
+}) {
+  const sugerida = useMemo(() => {
+    const d = new Date(`${fechaFin}T12:00:00`);
+    d.setMonth(d.getMonth() + 12);
+    return d.toISOString().slice(0, 10);
+  }, [fechaFin]);
+  const [nuevaFechaFin, setNuevaFechaFin] = useState(sugerida);
+  const [titulo, setTitulo] = useState("ADENDA DE EXTENSIÓN");
+  const [contenido, setContenido] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/adendas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-user-email": "admin@sistema.com" },
+        body: JSON.stringify({
+          contractId,
+          tipo: "extension",
+          titulo,
+          nuevaFechaFin,
+          contenido,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "No se pudo generar la adenda de extensión");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `adenda-extension-${codigoContrato}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      await onCreated();
+    } catch (e) {
+      setError((e as Error).message);
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-surface-container-lowest p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-headline-md text-on-surface">Adenda de extensión</h3>
+          <button onClick={onClose} className="rounded p-1 text-on-surface-variant hover:bg-surface-container" aria-label="Cerrar">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mb-4 font-body-sm text-on-surface-variant">
+          Extiende el contrato <span className="font-mono-label">{codigoContrato}</span>. Se genera el
+          PDF, se actualiza la fecha de término del contrato y se crean las cuotas de los meses
+          extendidos.
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block font-label-md text-on-surface-variant">Fecha de término actual</label>
+            <p className="rounded border border-outline-variant bg-surface-container-low px-2 py-2 font-body-md text-on-surface dark:border-transparent">
+              {fechaFin}
+            </p>
+          </div>
+          <div>
+            <label className="mb-1 block font-label-md text-on-surface-variant">Nueva fecha de término</label>
+            <input
+              type="date"
+              className="h-10 w-full rounded border border-outline-variant bg-transparent px-2 font-body-md text-on-surface"
+              value={nuevaFechaFin}
+              onChange={(e) => setNuevaFechaFin(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block font-label-md text-on-surface-variant">Título de la adenda</label>
+            <input
+              className="h-10 w-full rounded border border-outline-variant bg-transparent px-2 font-body-md text-on-surface"
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              placeholder="ADENDA DE EXTENSIÓN"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block font-label-md text-on-surface-variant">Texto adicional (opcional)</label>
+            <textarea
+              rows={4}
+              className="w-full rounded border border-outline-variant bg-transparent px-2 py-1.5 font-body-sm text-on-surface"
+              value={contenido}
+              onChange={(e) => setContenido(e.target.value)}
+              placeholder="Ej.: El canon se mantiene sin variación durante el período extendido."
+            />
+          </div>
+        </div>
+        {error ? (
+          <p className="mt-3 font-body-sm text-destructive">{error}</p>
+        ) : null}
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded border border-outline-variant px-4 py-2 font-label-md text-on-surface-variant dark:border-transparent">
+            Cancelar
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving || !nuevaFechaFin || nuevaFechaFin <= fechaFin}
+            className="rounded bg-primary px-4 py-2 font-label-md text-on-primary disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {saving ? "Generando…" : "Generar extensión"}
           </button>
         </div>
       </div>
