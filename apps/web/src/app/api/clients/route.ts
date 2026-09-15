@@ -35,6 +35,7 @@ export async function GET(req: Request) {
         telefono: c.telefono,
         codigoDepartamento: c.codigoDepartamento,
         domicilio: c.domicilio,
+        nacionalidad: c.nacionalidad,
         activo: c.activo,
       }))
     );
@@ -73,6 +74,7 @@ export async function PATCH(req: Request) {
     if ("email" in patch) values.email = patch.email ?? null;
     if ("telefono" in patch) values.telefono = patch.telefono ?? null;
     if ("domicilio" in patch) values.domicilio = patch.domicilio ?? null;
+    if ("nacionalidad" in patch) values.nacionalidad = patch.nacionalidad ?? null;
     if ("activo" in patch) values.activo = patch.activo;
 
     const row = await db
@@ -116,6 +118,7 @@ export async function POST(req: Request) {
         telefono: body.telefono ?? null,
         codigoDepartamento: body.codigoDepartamento ?? null,
         domicilio: body.domicilio ?? null,
+        nacionalidad: body.nacionalidad ?? null,
         activo: body.activo !== false,
       })
       .returning();

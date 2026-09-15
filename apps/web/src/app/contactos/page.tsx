@@ -367,6 +367,7 @@ export default function ContactosPage() {
     dni: "",
     ruc: null,
     domicilio: "",
+    nacionalidad: "",
     email: "",
     telefono: "",
     copiaDni: [],
@@ -575,6 +576,8 @@ export default function ContactosPage() {
       tipoPersona: PersonType.NATURAL,
       dni: "",
       ruc: null,
+      domicilio: "",
+      nacionalidad: "",
       email: "",
       telefono: "",
       copiaDni: [],
@@ -645,6 +648,7 @@ export default function ContactosPage() {
       dni: c.dni,
       ruc: c.ruc ?? null,
       domicilio: c.domicilio ?? "",
+      nacionalidad: c.nacionalidad ?? "",
       email: c.email,
       telefono: c.telefono,
       copiaDni: c.copiaDni ?? [],
@@ -673,6 +677,7 @@ export default function ContactosPage() {
       dni: "",
       ruc: null,
       domicilio: "",
+      nacionalidad: "",
       email: "",
       telefono: "",
       copiaDni: [],
@@ -816,6 +821,14 @@ export default function ContactosPage() {
                   value={form.domicilio ?? ""}
                   onChange={(e) => setForm({ ...form, domicilio: e.target.value })}
                   placeholder="Dirección del cliente"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nacionalidad</Label>
+                <Input
+                  value={form.nacionalidad ?? ""}
+                  onChange={(e) => setForm({ ...form, nacionalidad: e.target.value })}
+                  placeholder="Peruana"
                 />
               </div>
               <div className="space-y-1.5">

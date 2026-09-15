@@ -54,6 +54,7 @@ type ClientApi = {
   email?: string | null;
   telefono?: string | null;
   domicilio?: string | null;
+  nacionalidad?: string | null;
 };
 
 type DepartmentApi = { id: string; nombre: string; codigo?: string | null; numero?: string | null; precio?: string | null; garantia?: string | null; mantenimiento?: string | null };
@@ -360,6 +361,7 @@ res.push({
         email: contacto.email ?? null,
         telefono: contacto.telefono ?? null,
         domicilio: contacto.domicilio ?? null,
+        nacionalidad: contacto.nacionalidad ?? null,
         codigoDepartamento: dept?.codigo ?? null,
         departamentoId: sep.departamentoId,
         mensualidad,
@@ -1085,6 +1087,7 @@ function CreateContractModal({
             email: clienteSel.email,
             telefono: clienteSel.telefono,
             domicilio: clienteSel.domicilio,
+            nacionalidad: clienteSel.nacionalidad,
             codigoDepartamento: clienteSel.codigoDepartamento,
           },
           separacionDetalle: clienteSel.separacion

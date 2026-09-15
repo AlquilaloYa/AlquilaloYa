@@ -94,6 +94,7 @@ export async function POST(request: Request) {
         telefono?: string | null;
         codigoDepartamento?: string | null;
         domicilio?: string | null;
+        nacionalidad?: string | null;
       };
       separacionDetalle?: {
         tipo: "500" | "TOTAL" | "FLUCTUANTE";
@@ -140,6 +141,12 @@ export async function POST(request: Request) {
             .set({ domicilio: body.cliente.domicilio.trim(), updatedAt: new Date() })
             .where(eq(schema.clients.id, existing.id));
         }
+        if (body.cliente.nacionalidad?.trim()) {
+          await db
+            .update(schema.clients)
+            .set({ nacionalidad: body.cliente.nacionalidad.trim(), updatedAt: new Date() })
+            .where(eq(schema.clients.id, existing.id));
+        }
       } else {
         const [createdClient] = await db
           .insert(schema.clients)
@@ -153,6 +160,7 @@ export async function POST(request: Request) {
             telefono: body.cliente.telefono ?? null,
             codigoDepartamento: body.cliente.codigoDepartamento ?? null,
             domicilio: body.cliente.domicilio ?? null,
+            nacionalidad: body.cliente.nacionalidad ?? null,
             activo: true,
           })
           .returning({ id: schema.clients.id });

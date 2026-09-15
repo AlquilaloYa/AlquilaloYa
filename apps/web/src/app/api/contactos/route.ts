@@ -14,7 +14,8 @@ type Body = {
   ruc?: string | null;
   email?: string;
   telefono?: string;
-  domicilio?: string | null;
+domicilio?: string | null;
+  nacionalidad?: string | null;
   contactoEmergencia?: unknown;
   mascotas?: boolean;
   mascotasItems?: string[];
@@ -32,7 +33,8 @@ function toView(r: {
   ruc: string | null;
   email: string;
   telefono: string | null;
-  domicilio: string | null;
+domicilio: string | null;
+  nacionalidad: string | null;
   contactoEmergencia: unknown;
   mascotas: boolean;
   mascotasItems: unknown;
@@ -51,6 +53,7 @@ function toView(r: {
     email: r.email,
     telefono: r.telefono ?? "",
     domicilio: r.domicilio ?? "",
+    nacionalidad: r.nacionalidad ?? "",
     contactoEmergencia: r.contactoEmergencia ?? null,
     mascotas: r.mascotas,
     mascotasItems: Array.isArray(r.mascotasItems) ? r.mascotasItems : [],
@@ -110,10 +113,11 @@ export async function POST(req: Request) {
         apellido: (body.apellido ?? "").trim(),
         tipoPersona: body.tipoPersona ?? "NATURAL",
         dni: (body.dni ?? "").trim(),
-        ruc: body.ruc || null,
+ruc: body.ruc || null,
         email: (body.email ?? "").trim(),
         telefono: body.telefono || null,
         domicilio: body.domicilio || null,
+        nacionalidad: body.nacionalidad || null,
         contactoEmergencia: body.contactoEmergencia ?? null,
         mascotas: Boolean(body.mascotas),
         mascotasItems: body.mascotasItems ?? [],
@@ -155,10 +159,11 @@ export async function PUT(req: Request) {
         apellido: (body.apellido ?? "").trim(),
         tipoPersona: body.tipoPersona ?? "NATURAL",
         dni: (body.dni ?? "").trim(),
-        ruc: body.ruc || null,
+ruc: body.ruc || null,
         email: (body.email ?? "").trim(),
         telefono: body.telefono || null,
         domicilio: body.domicilio || null,
+        nacionalidad: body.nacionalidad || null,
         contactoEmergencia: body.contactoEmergencia ?? null,
         mascotas: Boolean(body.mascotas),
         mascotasItems: body.mascotasItems ?? [],

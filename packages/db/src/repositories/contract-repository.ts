@@ -63,6 +63,7 @@ function clientRowToDomain(
     email: c.email,
     telefono: c.telefono,
     domicilio: c.domicilio,
+    nacionalidad: c.nacionalidad,
     activo: c.activo,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),

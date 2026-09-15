@@ -11,6 +11,7 @@ export interface Client extends AuditableEntity {
   email?: string | null;
   telefono?: string | null;
   domicilio?: string | null;
+  nacionalidad?: string | null;
   activo: boolean;
 }
 

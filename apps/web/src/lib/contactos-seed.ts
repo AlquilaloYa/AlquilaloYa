@@ -16,6 +16,7 @@ export interface ContactSeed {
   dni: string;
   ruc?: string | null;
   domicilio?: string;
+  nacionalidad?: string;
   email: string;
   telefono: string;
   copiaDni?: ArchivoAdjunto[];

@@ -26,6 +26,7 @@ export const contacts = pgTable(
     email: varchar("email", { length: 255 }).notNull().default(""),
     telefono: varchar("telefono", { length: 40 }),
     domicilio: text("domicilio"),
+    nacionalidad: varchar("nacionalidad", { length: 50 }),
     contactoEmergencia: jsonb("contacto_emergencia"),
     mascotas: boolean("mascotas").notNull().default(false),
     mascotasItems: jsonb("mascotas_items").notNull().default([]),
