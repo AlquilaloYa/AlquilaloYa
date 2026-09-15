@@ -26,7 +26,7 @@ INSERT INTO "departments" ("codigo", "nombre", "numero", "tipo", "persona_pago",
 -- BENAVIDES 2195D
 ('BEN2195-1',  'Benavides 2195D', '1',  'Departamento', 'Emely',  2, 1700, 50, 'Agua, luz', true),
 ('BEN2195-2',  'Benavides 2195D', '2',  'Departamento', 'Emely',  2, 1500, 50, 'Agua, luz', true),
-('BEN2195-3',  'Benavides 2195D', '3',  'Departamento', 'Emely',  2, 1600, 50, 'Agua, luz', true),
+('BEN2195-3',  'Benavides 2195D', '3',  'Departamento', 'Emely',  2, 1700, 50, 'Agua, luz', true),
 ('BEN2195-4',  'Benavides 2195D', '4',  'Departamento', 'Emely',  2, 1700, 50, 'Agua, luz', true),
 ('BEN2195-5',  'Benavides 2195D', '5',  'Departamento', 'Emely',  3, 1600, 50, 'Agua, luz', true),
 ('BEN2195-6',  'Benavides 2195D', '6',  'Departamento', 'Emely',  3, 1600, 50, 'Agua, luz', true),
