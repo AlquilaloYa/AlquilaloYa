@@ -181,15 +181,19 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
 
   const nacimiento = field(cliente, ["nacionalidad"]) || "Peruano(a)";
   const montoRentaTxt = Math.round(montoRenta).toString();
-  const montoLetras = `${numeroEnLetras(Math.floor(montoRenta))} con ${String(Math.round((montoRenta % 1) * 100)).padStart(2, "0")}/100 soles`;
+  const montoLetras = `${numeroEnLetras(Math.floor(montoRenta))} y ${String(Math.round((montoRenta % 1) * 100)).padStart(2, "0")}/100 soles`;
 
   const fmt = (obj: { dia: string; mes: string; año: string } | null): string =>
     obj ? `${obj.dia} de ${obj.mes} del ${obj.año}` : "________________";
+
+  const fmtMesFin = (obj: { dia: string; mes: string; año: string } | null): string =>
+    obj ? `${obj.dia}, ${obj.mes} del ${obj.año}` : "________________";
 
   const finOriginal = fmt(fechaFinOriginal);
   const inicioOriginal = fmt(fechaInicioOriginal);
   const inicioAdenda = fmt(fechaInicioAdenda);
   const finAdenda = fmt(fechaFinAdenda);
+  const finAdendaMesFin = fmtMesFin(fechaFinAdenda);
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -273,7 +277,7 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
         <p><span class="bold">SEGUNDO.-</span> Las partes acuerdan modificar la Cláusula QUINTA del contrato de arrendamiento del Mini departamento N° <span class="bold">${deptoNumero}</span>, bajo los siguientes términos:</p>
 
         <p><span class="bold">PLAZO DEL CONTRATO:</span></p>
-        <p><span class="bold">QUINTA.-</span> Las partes convienen fijar un plazo de duración determinada para el presente contrato, el cual será del <span class="bold">${inicioAdenda} hasta el ${finAdenda}</span>; fecha en la que EL ARRENDATARIO está obligado a desocupar y devolver el bien arrendado.</p>
+        <p><span class="bold">QUINTA.-</span> Las partes convienen fijar un plazo de duración determinada para el presente contrato, el cual será del <span class="bold">${inicioAdenda} hasta el ${finAdendaMesFin}</span>; fecha en la que EL ARRENDATARIO está obligado a desocupar y devolver el bien arrendado.</p>
         <p>El presente contrato podrá ser renovado con una anticipación no menor de quince (15) días calendarios a la conclusión del arrendamiento y que exista acuerdo entre ambas partes confirmando via WhatsApp al telf. <span class="bold">937205274</span> o mediante adenda firmada.</p>
     </div>
 
