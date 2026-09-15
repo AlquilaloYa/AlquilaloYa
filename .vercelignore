@@ -9,3 +9,12 @@ scripts
 Dockerfile
 Dockerfile.worker
 supabase
+.next
+**/.next
+.turbo
+**/.turbo
+Nueva carpeta
+assets-nuevos
+*.log
+target
+**/target
