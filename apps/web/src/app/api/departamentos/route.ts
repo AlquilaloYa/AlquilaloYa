@@ -16,7 +16,7 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { inArray } = await import("drizzle-orm");
+    const { inArray, eq } = await import("drizzle-orm");
     const rows = await db
       .select()
       .from(schema.departments)
@@ -30,11 +30,26 @@ export async function GET(req: Request) {
         departamentoId: schema.contracts.departamentoId,
         fechaInicio: schema.contracts.fechaInicio,
         fechaFin: schema.contracts.fechaFin,
+        clienteId: schema.contracts.clienteId,
       })
       .from(schema.contracts)
       .where(
         inArray(schema.contracts.estado, ["FIRMADO", "ACTIVO", "VIGENTE", "NOTARIADO"])
       );
+
+    const clienteIds = [...new Set(ocupantes.map((c) => c.clienteId))];
+    const clientes = clienteIds.length > 0
+      ? await db
+          .select({
+            id: schema.clients.id,
+            nombres: schema.clients.nombres,
+            apellidos: schema.clients.apellidos,
+            telefono: schema.clients.telefono,
+          })
+          .from(schema.clients)
+          .where(inArray(schema.clients.id, clienteIds))
+      : [];
+    const clientePorId = new Map(clientes.map((c) => [c.id, c]));
 
     function diasRestantes(fecha: string): number {
       return Math.max(0, Math.round((new Date(fecha).getTime() - hoy.getTime()) / 86_400_000));
@@ -54,9 +69,20 @@ export async function GET(req: Request) {
         return { ...d, disponibilidad: null };
       }
       const fin = ocupando[ocupando.length - 1] as string;
+      const ocupanteIds = new Set(
+        ocupantes.filter((c) => c.departamentoId === d.id).map((c) => c.clienteId)
+      );
+      const cliente = [...ocupanteIds].map((id) => clientePorId.get(id)).find(Boolean);
       return {
         ...d,
         disponibilidad: { disponible: false, fechaFin: fin, dias: diasRestantes(fin) },
+        ocupante: cliente
+          ? {
+              nombres: cliente.nombres,
+              apellidos: cliente.apellidos ?? null,
+              telefono: cliente.telefono ?? null,
+            }
+          : null,
       };
     });
 
