@@ -19,7 +19,7 @@ type TemplateVersionApi = {
 const TEMPLATE_LABEL: Record<string, string> = {
   PN_LARGO: "Emely_ Benavides",
   ANG_LARGO: "Miguel_ extensión_ madre_ Angamos",
-  ANG_EMELY: "EMELY_EXTENCION_MADRE_ANGAMOS",
+  ANG_EMELY: "Emely_ Angamos_madre",
 };
 
 export default function PlantillasPage() {
