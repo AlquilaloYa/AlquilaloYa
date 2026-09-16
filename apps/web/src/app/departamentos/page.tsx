@@ -81,6 +81,7 @@ export default function DepartamentosPage() {
   const [inventarioItems, setInventarioItems] = useState<string[]>([]);
   const [nuevoItemInventario, setNuevoItemInventario] = useState("");
   const [nuevoItemCategoria, setNuevoItemCategoria] = useState<string>(CUSTOM_ITEM_CATEGORIAS[0]);
+  const [editandoPrecio, setEditandoPrecio] = useState<{ id: string; campo: "precio" | "garantia"; valor: string } | null>(null);
 
   function abrirInventario(departamentoId: string) {
     setInventarioDeptId(departamentoId);
@@ -282,6 +283,40 @@ export default function DepartamentosPage() {
 
   function fmtPrecio(val: string): string {
     return `S/ ${Number(val).toLocaleString("es-PE", { minimumFractionDigits: 0 })}`;
+  }
+
+  async function guardarEdicionPrecio(edit: { id: string; campo: "precio" | "garantia"; valor: string }) {
+    setEditandoPrecio(null);
+    if (!edit.valor || !(Number(edit.valor) >= 0)) return;
+    try {
+      const res = await apiFetch(`/api/departamentos/${edit.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [edit.campo]: edit.valor }),
+      });
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error ?? `Error ${res.status}`);
+      }
+      const upd = (await res.json()) as { precio?: string; garantia?: string };
+      setDepartments((prev) =>
+        prev.map((d) =>
+          d.id === edit.id
+            ? {
+                ...d,
+                precio: upd.precio ?? d.precio,
+                garantia: upd.garantia ?? d.garantia,
+              }
+            : d
+        )
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  function inicioEdicionPrecio(id: string, campo: "precio" | "garantia", valorActual: string) {
+    setEditandoPrecio({ id, campo, valor: valorActual });
   }
 
   function manejarBaucher(file: File | null) {
@@ -688,8 +723,62 @@ export default function DepartamentosPage() {
                             <td className="px-3 py-2">{d.nombre}</td>
                             <td className="px-3 py-2 text-center">{d.piso}</td>
                             <td className="px-3 py-2">{d.personaPago}</td>
-                            <td className="px-3 py-2 font-semibold text-primary">{fmtPrecio(d.precio)}</td>
-                            <td className="px-3 py-2">{fmtPrecio(d.garantia)}</td>
+                            <td className="px-3 py-2">
+                              {editandoPrecio?.id === d.id && editandoPrecio.campo === "precio" ? (
+                                <input
+                                  autoFocus
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  className="h-7 w-24 rounded border border-primary bg-background px-1 text-right text-sm text-primary"
+                                  value={editandoPrecio.valor}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => setEditandoPrecio({ id: d.id, campo: "precio", valor: e.target.value })}
+                                  onBlur={() => void guardarEdicionPrecio(editandoPrecio)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") void guardarEdicionPrecio(editandoPrecio);
+                                    if (e.key === "Escape") setEditandoPrecio(null);
+                                  }}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); inicioEdicionPrecio(d.id, "precio", d.precio); }}
+                                  className="font-semibold text-primary hover:underline"
+                                  title="Editar mensualidad"
+                                >
+                                  {fmtPrecio(d.precio)}
+                                </button>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {editandoPrecio?.id === d.id && editandoPrecio.campo === "garantia" ? (
+                                <input
+                                  autoFocus
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  className="h-7 w-24 rounded border border-primary bg-background px-1 text-right text-sm"
+                                  value={editandoPrecio.valor}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => setEditandoPrecio({ id: d.id, campo: "garantia", valor: e.target.value })}
+                                  onBlur={() => void guardarEdicionPrecio(editandoPrecio)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") void guardarEdicionPrecio(editandoPrecio);
+                                    if (e.key === "Escape") setEditandoPrecio(null);
+                                  }}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); inicioEdicionPrecio(d.id, "garantia", d.precio); }}
+                                  className="hover:underline"
+                                  title="Editar garantía"
+                                >
+                                  {fmtPrecio(d.garantia)}
+                                </button>
+                              )}
+                            </td>
                             <td className="px-3 py-2">{fmtPrecio(d.mantenimiento)}</td>
                             <td className="px-3 py-2 text-muted-foreground">{d.servicios}</td>
                             <td className="px-3 py-2">
