@@ -86,9 +86,9 @@ function PopupDepartamento({
 
 function TarjetaDisponible({ dept }: { dept: DisponibilidadDepartment }) {
   return (
-    <div className="flex min-w-[170px] flex-1 items-center justify-between gap-2 rounded-xl border-2 border-green-600 bg-green-500/10 p-4">
-      <span className="font-mono-label text-base font-bold text-foreground">{dept.codigo}</span>
-      <span className="text-sm font-semibold text-green-700 dark:text-green-500">Disponible</span>
+    <div className="flex items-center justify-between gap-2 rounded-xl bg-green-600 p-4 text-white">
+      <span className="font-mono-label text-base font-bold">{dept.codigo}</span>
+      <span className="text-sm font-semibold">Disponible</span>
     </div>
   );
 }
@@ -105,10 +105,11 @@ function TarjetaOcupada({
       type="button"
       onClick={onOpen}
       title="Ver información"
-      className="flex min-w-[170px] flex-1 items-center justify-center rounded-xl border-2 border-red-500 bg-red-500/10 p-4 transition-colors hover:bg-red-500/20"
+      className="flex items-center justify-between gap-2 rounded-xl bg-red-600 p-4 text-white transition-colors hover:bg-red-700"
     >
-      <span className="font-mono-label text-base font-bold text-red-600 dark:text-red-400">
-        {dept.codigo}
+      <span className="font-mono-label text-base font-bold">{dept.codigo}</span>
+      <span className="text-sm font-semibold underline decoration-white/60 underline-offset-4">
+        Ocupado
       </span>
     </button>
   );
@@ -125,6 +126,7 @@ function GrupoDepartamentos({
 }) {
   const disponibles = departamentos.filter((d) => !d.disponibilidad);
   const ocupados = departamentos.filter((d) => d.disponibilidad);
+  const columnas = Math.max(1, Math.ceil(departamentos.length / 3));
 
   if (departamentos.length === 0) return null;
   return (
@@ -135,23 +137,13 @@ function GrupoDepartamentos({
           {disponibles.length} libres · {ocupados.length} ocupados
         </span>
       </h2>
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap gap-3">
-          {disponibles.length > 0 ? (
-            disponibles.map((dept) => <TarjetaDisponible key={dept.id} dept={dept} />)
-          ) : (
-            <p className="text-sm text-muted-foreground">Sin departamentos disponibles.</p>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-3">
-          {ocupados.length > 0 ? (
-            ocupados.map((dept) => (
-              <TarjetaOcupada key={dept.id} dept={dept} onOpen={() => onAbrirPopup(dept)} />
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">Sin departamentos ocupados.</p>
-          )}
-        </div>
+      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columnas}, minmax(0, 1fr))` }}>
+        {disponibles.map((dept) => (
+          <TarjetaDisponible key={dept.id} dept={dept} />
+        ))}
+        {ocupados.map((dept) => (
+          <TarjetaOcupada key={dept.id} dept={dept} onOpen={() => onAbrirPopup(dept)} />
+        ))}
       </div>
     </section>
   );
