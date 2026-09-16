@@ -17,6 +17,7 @@ export const clients = pgTable("clients", {
   tipoPersona: varchar("tipo_persona", { length: 20 }).notNull(),
   email: varchar("email", { length: 255 }),
   telefono: varchar("telefono", { length: 30 }),
+  codigoPais: varchar("codigo_pais", { length: 10 }).notNull().default("51"),
   codigoDepartamento: varchar("codigo_departamento", { length: 50 }),
   domicilio: varchar("domicilio", { length: 500 }),
   nacionalidad: varchar("nacionalidad", { length: 50 }),

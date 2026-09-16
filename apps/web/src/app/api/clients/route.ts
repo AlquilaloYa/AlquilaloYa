@@ -103,6 +103,7 @@ export async function GET(req: Request) {
           tipoPersona: c.tipoPersona,
           email: c.email,
           telefono: c.telefono,
+          codigoPais: c.codigoPais,
           codigoDepartamento: c.codigoDepartamento,
           domicilio: c.domicilio,
           nacionalidad: c.nacionalidad,
@@ -153,6 +154,7 @@ export async function PATCH(req: Request) {
     if ("apellidos" in patch) values.apellidos = patch.apellidos ?? null;
     if ("email" in patch) values.email = patch.email ?? null;
     if ("telefono" in patch) values.telefono = patch.telefono ?? null;
+    if ("codigoPais" in patch) values.codigoPais = patch.codigoPais ?? "51";
     if ("domicilio" in patch) values.domicilio = patch.domicilio ?? null;
     if ("nacionalidad" in patch) values.nacionalidad = patch.nacionalidad ?? null;
     if ("activo" in patch) values.activo = patch.activo;
@@ -232,6 +234,7 @@ export async function POST(req: Request) {
         tipoPersona: body.tipoPersona,
         email: body.email ?? null,
         telefono: body.telefono ?? null,
+        codigoPais: body.codigoPais ?? "51",
         codigoDepartamento: body.codigoDepartamento ?? null,
         domicilio: body.domicilio ?? null,
         nacionalidad: body.nacionalidad ?? null,

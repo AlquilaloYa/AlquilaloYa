@@ -17,6 +17,7 @@ interface ClientView {
   tipoPersona: PersonType;
   email?: string | null;
   telefono?: string | null;
+  codigoPais?: string | null;
   domicilio?: string | null;
   codigoDepartamento?: string | null;
   activo: boolean;
@@ -32,14 +33,42 @@ function fmtFecha(iso?: string | null): string {
   return `${d}/${m}/${y}`;
 }
 
-function numeroWhatsApp(telefono?: string | null): string | null {
+const PAISES_CODIGO = [
+  { codigo: "51", pais: "Perú (+51)" },
+  { codigo: "56", pais: "Chile (+56)" },
+  { codigo: "57", pais: "Colombia (+57)" },
+  { codigo: "52", pais: "México (+52)" },
+  { codigo: "58", pais: "Venezuela (+58)" },
+  { codigo: "593", pais: "Ecuador (+593)" },
+  { codigo: "591", pais: "Bolivia (+591)" },
+  { codigo: "595", pais: "Paraguay (+595)" },
+  { codigo: "598", pais: "Uruguay (+598)" },
+  { codigo: "54", pais: "Argentina (+54)" },
+  { codigo: "34", pais: "España (+34)" },
+  { codigo: "1", pais: "EE. UU. (+1)" },
+];
+
+function numeroWhatsApp(
+  telefono?: string | null,
+  codigoPais: string | null | undefined = "51"
+): string | null {
   if (!telefono) return null;
-  const digitos = telefono.replace(/\D/g, "");
-  return digitos.length > 0 ? digitos : null;
+  let local = telefono.replace(/[\s\-().]/g, "");
+  if (local.startsWith("+")) local = local.slice(1);
+  const codigo = (codigoPais ?? "51").replace(/\D/g, "");
+  if (!codigo) return null;
+  if (local.startsWith(codigo)) return local;
+  return codigo + local.replace(/^0+/, "");
 }
 
-function WhatsAppButton({ telefono }: { telefono?: string | null }) {
-  const numero = numeroWhatsApp(telefono);
+function WhatsAppButton({
+  telefono,
+  codigoPais,
+}: {
+  telefono?: string | null;
+  codigoPais?: string | null;
+}) {
+  const numero = numeroWhatsApp(telefono, codigoPais);
   if (!numero) return <span className="text-muted-foreground">—</span>;
   return (
     <a
@@ -79,6 +108,26 @@ export default function ClientesPage() {
     }
     cargar();
   }, []);
+
+  async function cambiarCodigoPais(cliente: ClientView, codigoPais: string) {
+    if (codigoPais === (cliente.codigoPais ?? "51")) return;
+    try {
+      const res = await apiFetch("/api/clients", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: cliente.id, codigoPais }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "No se pudo actualizar el código de país");
+      }
+      setClients((lista) =>
+        lista.map((c) => (c.id === cliente.id ? { ...c, codigoPais } : c))
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   async function eliminarCliente(cliente: ClientView) {
     const nombre = [cliente.nombres, cliente.apellidos].filter(Boolean).join(" ");
@@ -139,6 +188,7 @@ export default function ClientesPage() {
                         <th className="px-3 py-2 font-medium">Tipo</th>
                         <th className="px-3 py-2 font-medium">Email</th>
                         <th className="px-3 py-2 font-medium">Teléfono</th>
+                        <th className="px-3 py-2 font-medium">País</th>
                         <th className="px-3 py-2 font-medium">WhatsApp</th>
                         <th className="px-3 py-2 font-medium">Acciones</th>
                       </tr>
@@ -174,7 +224,21 @@ export default function ClientesPage() {
                           <td className="px-3 py-2 text-muted-foreground">{c.email ?? "—"}</td>
                           <td className="px-3 py-2 text-muted-foreground">{c.telefono ?? "—"}</td>
                           <td className="px-3 py-2">
-                            <WhatsAppButton telefono={c.telefono ?? null} />
+                            <select
+                              value={c.codigoPais ?? "51"}
+                              onChange={(e) => void cambiarCodigoPais(c, e.target.value)}
+                              className="h-8 rounded-md border border-input bg-background px-1 text-xs text-foreground"
+                              title="Código de país del teléfono (usado por WhatsApp)"
+                            >
+                              {PAISES_CODIGO.map(({ codigo, pais }) => (
+                                <option key={codigo} value={codigo}>
+                                  {pais}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <WhatsAppButton telefono={c.telefono ?? null} codigoPais={c.codigoPais ?? null} />
                           </td>
                           <td className="px-3 py-2">
                             <button
