@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 
 interface DisponibilidadDepartment {
   id: string;
@@ -15,8 +15,13 @@ interface DisponibilidadDepartment {
   ocupante: { nombres: string; apellidos: string | null; telefono: string | null } | null;
 }
 
-function DepartamentoCard({ dept }: { dept: DisponibilidadDepartment }) {
-  const ocupado = Boolean(dept.disponibilidad);
+function PopupDepartamento({
+  dept,
+  onClose,
+}: {
+  dept: DisponibilidadDepartment;
+  onClose: () => void;
+}) {
   const plazo = dept.disponibilidad?.fechaFin;
   const fechaCorta = plazo
     ? new Date(`${plazo}T12:00:00`).toLocaleDateString("es-PE", {
@@ -28,63 +33,98 @@ function DepartamentoCard({ dept }: { dept: DisponibilidadDepartment }) {
 
   return (
     <div
-      className={`flex min-w-[190px] flex-1 flex-col gap-2 rounded-xl border-2 p-4 ${
-        ocupado
-          ? "border-red-500 bg-red-500/10"
-          : "border-green-600 bg-green-500/10"
-      }`}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-mono-label text-base font-bold text-foreground">
-          {dept.codigo}
-        </span>
-        <span
-          className={`h-3 w-3 shrink-0 rounded-full ${
-            ocupado ? "bg-red-500" : "bg-green-600"
-          }`}
-          title={ocupado ? "Ocupado" : "Disponible"}
-        />
-      </div>
-      {ocupado ? (
-        <>
-          <p className="text-sm font-medium text-foreground">
-            {dept.ocupante?.nombres} {dept.ocupante?.apellidos ?? ""}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {dept.ocupante?.telefono || "—"}
-          </p>
-          <p className="text-xs font-semibold text-red-600 dark:text-red-400">
+      <div
+        className="w-full max-w-sm rounded-xl border bg-background p-5 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-mono-label text-lg font-bold text-foreground">{dept.codigo}</h3>
+            <p className="text-sm text-muted-foreground">{dept.nombre}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="rounded p-1 text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-4 space-y-3">
+          <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-600 dark:text-red-400">
+            Ocupado
             {dept.disponibilidad!.dias === 0
-              ? "Se libera hoy"
-              : `Libre en ~${dept.disponibilidad!.dias} d · hasta ${fechaCorta}`}
-          </p>
-        </>
-      ) : (
-        <p className="text-sm font-semibold text-green-700 dark:text-green-500">
-          Disponible
-        </p>
-      )}
+              ? " · se libera hoy"
+              : ` · libre en ~${dept.disponibilidad!.dias} d`}
+          </div>
+          <div className="grid grid-cols-[80px_1fr] gap-y-2 text-sm">
+            <span className="text-muted-foreground">Ocupante</span>
+            <span className="font-medium text-foreground">
+              {dept.ocupante?.nombres} {dept.ocupante?.apellidos ?? ""}
+            </span>
+            <span className="text-muted-foreground">Teléfono</span>
+            <span className="font-medium text-foreground">{dept.ocupante?.telefono || "—"}</span>
+            <span className="text-muted-foreground">Hasta</span>
+            <span className="font-medium text-foreground">{fechaCorta}</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-5 h-9 w-full rounded-lg bg-foreground font-medium text-background hover:opacity-90"
+        >
+          Cerrar
+        </button>
+      </div>
     </div>
+  );
+}
+
+function TarjetaDisponible({ dept }: { dept: DisponibilidadDepartment }) {
+  return (
+    <div className="flex min-w-[170px] flex-1 items-center justify-between gap-2 rounded-xl border-2 border-green-600 bg-green-500/10 p-4">
+      <span className="font-mono-label text-base font-bold text-foreground">{dept.codigo}</span>
+      <span className="text-sm font-semibold text-green-700 dark:text-green-500">Disponible</span>
+    </div>
+  );
+}
+
+function TarjetaOcupada({
+  dept,
+  onOpen,
+}: {
+  dept: DisponibilidadDepartment;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title="Ver información"
+      className="flex min-w-[170px] flex-1 items-center justify-center rounded-xl border-2 border-red-500 bg-red-500/10 p-4 transition-colors hover:bg-red-500/20"
+    >
+      <span className="font-mono-label text-base font-bold text-red-600 dark:text-red-400">
+        {dept.codigo}
+      </span>
+    </button>
   );
 }
 
 function GrupoDepartamentos({
   titulo,
   departamentos,
-  filas = 3,
+  onAbrirPopup,
 }: {
   titulo: string;
   departamentos: DisponibilidadDepartment[];
-  filas?: number;
+  onAbrirPopup: (dept: DisponibilidadDepartment) => void;
 }) {
-  const porFila = Math.max(1, Math.ceil(departamentos.length / filas));
-  const filasRender = useMemo(() => {
-    const resultado: DisponibilidadDepartment[][] = [];
-    for (let i = 0; i < departamentos.length; i += porFila) {
-      resultado.push(departamentos.slice(i, i + porFila));
-    }
-    return resultado;
-  }, [departamentos, porFila]);
+  const disponibles = departamentos.filter((d) => !d.disponibilidad);
+  const ocupados = departamentos.filter((d) => d.disponibilidad);
 
   if (departamentos.length === 0) return null;
   return (
@@ -92,17 +132,26 @@ function GrupoDepartamentos({
       <h2 className="mb-3 flex items-center gap-2 font-headline-md text-lg font-bold text-foreground">
         {titulo}
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-          {departamentos.length}
+          {disponibles.length} libres · {ocupados.length} ocupados
         </span>
       </h2>
       <div className="flex flex-col gap-3">
-        {filasRender.map((fila, i) => (
-          <div key={i} className="flex flex-wrap gap-3">
-            {fila.map((dept) => (
-              <DepartamentoCard key={dept.id} dept={dept} />
-            ))}
-          </div>
-        ))}
+        <div className="flex flex-wrap gap-3">
+          {disponibles.length > 0 ? (
+            disponibles.map((dept) => <TarjetaDisponible key={dept.id} dept={dept} />)
+          ) : (
+            <p className="text-sm text-muted-foreground">Sin departamentos disponibles.</p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {ocupados.length > 0 ? (
+            ocupados.map((dept) => (
+              <TarjetaOcupada key={dept.id} dept={dept} onOpen={() => onAbrirPopup(dept)} />
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">Sin departamentos ocupados.</p>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -112,6 +161,7 @@ export default function DisponibilidadPage() {
   const [departamentos, setDepartamentos] = useState<DisponibilidadDepartment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [popup, setPopup] = useState<DisponibilidadDepartment | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -191,11 +241,13 @@ export default function DisponibilidadPage() {
           </div>
         ) : (
           <div className="space-y-8">
-            <GrupoDepartamentos titulo="Benavides 2195" departamentos={benavides} filas={3} />
-            <GrupoDepartamentos titulo="Angamos 170" departamentos={angamos} filas={3} />
+            <GrupoDepartamentos titulo="Benavides 2195" departamentos={benavides} onAbrirPopup={setPopup} />
+            <GrupoDepartamentos titulo="Angamos 170" departamentos={angamos} onAbrirPopup={setPopup} />
           </div>
         )}
       </div>
+
+      {popup ? <PopupDepartamento dept={popup} onClose={() => setPopup(null)} /> : null}
     </DashboardShell>
   );
 }
