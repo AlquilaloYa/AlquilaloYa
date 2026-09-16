@@ -89,7 +89,7 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     expect(html).not.toContain("fluctuante");
   });
 
-  it("separación total: entrega íntegra a la firma, sin abono previo", () => {
+  it("separación total: muestra el abono íntegro con su fecha de pago", () => {
     const snp = snapshot();
     (snp.datosContrato as Record<string, unknown>).separacionDetalle = {
       tipo: "TOTAL",
@@ -97,8 +97,9 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
       fecha: "2026-09-07T00:00:00.000Z",
     };
     const html = renderContractHtml(snp, "<p>[DETALLE GARANTIA]</p>");
-    expect(html).toContain("que entregará íntegramente a la firma de este documento");
-    expect(html).not.toContain("ya abonó");
+    expect(html).toContain(
+      "ya abonó S/ 1550.00 (mil quinientos cincuenta con 00/100 soles) el día 07 de setiembre del 2026, en calidad de depósito, en garantía del absoluto cumplimiento de todas las obligaciones asumidas en virtud de este contrato."
+    );
   });
 
   it("no deja placeholders sin reemplazar", () => {

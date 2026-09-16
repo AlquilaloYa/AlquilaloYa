@@ -5,8 +5,9 @@ import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { apiFetch } from "@/lib/api";
-import { CalendarPlus, Download, FileCheck, Plus, ShieldCheck, X } from "lucide-react";
+import { CalendarPlus, Download, FileCheck, Plus, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { AdendaModal, ExtensionModal } from "@/components/adenda-modals";
+import { useAuth } from "@/lib/auth-context";
 
 type AdendaApi = {
   id: string;
@@ -23,6 +24,7 @@ type AdendaApi = {
   createdAt: string | null;
   codigoContrato: string;
   estadoContrato: string;
+  clienteId: string;
   clienteNombre: string | null;
   clienteApellidos: string | null;
   clienteDocumento: string | null;
@@ -44,11 +46,14 @@ type ContractPick = {
 const TIPOS_ELIGIBLES = ["EMITIDO", "PENDIENTE_FIRMA", "FIRMADO", "NOTARIADO"];
 
 export default function AdendasPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [adendas, setAdendas] = useState<AdendaApi[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [verificacion, setVerificacion] = useState<Record<string, boolean | undefined>>({});
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [regenerandoId, setRegenerandoId] = useState<string | null>(null);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerMode, setPickerMode] = useState<"adenda" | "extension">("adenda");
@@ -176,6 +181,33 @@ export default function AdendasPage() {
     }
   }
 
+  async function regenerarAdenda(d: AdendaApi) {
+    if (!confirm(`¿Regenerar "${d.filename}" con el formato actual? Se re-renderiza desde el snapshot inmutable y se reemplaza el PDF almacenado.`)) return;
+    setRegenerandoId(d.id);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/documents/pdf?documentId=${encodeURIComponent(d.id)}&regenerate=1`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "No se pudo regenerar la adenda");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = d.filename || `adenda-${d.codigoContrato}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRegenerandoId(null);
+      void load();
+    }
+  }
+
   const puedeDescargar = (d: AdendaApi) =>
     d.estadoGeneracion === "GENERADO" && (d.sha256 || d.storageKey);
 
@@ -249,7 +281,12 @@ export default function AdendasPage() {
                         </Link>
                       </td>
                       <td className="px-3 py-2">
-                        {[d.clienteNombre, d.clienteApellidos].filter(Boolean).join(" ") || "—"}
+                        <Link
+                          href={`/contratos/clientes/${d.clienteId}`}
+                          className="hover:underline"
+                        >
+                          {[d.clienteNombre, d.clienteApellidos].filter(Boolean).join(" ") || "—"}
+                        </Link>
                       </td>
                       <td className="px-3 py-2">
                         {[d.departamentoCodigo, d.departamentoNombre].filter(Boolean).join(" · ") || "—"}
@@ -301,6 +338,18 @@ export default function AdendasPage() {
                                 {verificacion[d.id] ? "✓ íntegro" : "✗ alterado"}
                               </span>
                             )
+                          ) : null}
+                          {isAdmin && d.estadoGeneracion === "GENERADO" ? (
+                            <button
+                              type="button"
+                              onClick={() => void regenerarAdenda(d)}
+                              disabled={regenerandoId === d.id}
+                              className="inline-flex items-center gap-1 text-on-surface-variant hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Re-renderizar el PDF con el template actual"
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 ${regenerandoId === d.id ? "animate-spin" : ""}`} />
+                              {regenerandoId === d.id ? "…" : "Regenerar"}
+                            </button>
                           ) : null}
                         </div>
                       </td>

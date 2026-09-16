@@ -54,6 +54,45 @@ export async function GET(req: Request) {
           { status: 404 }
         );
       }
+      // Regeneración explícita (ADMIN): re-renderiza el PDF desde el snapshot
+      // inmutable con el template actual y sobrescribe el archivo almacenado.
+      // Útil cuando un documento se generó con una versión anterior de la
+      // plantilla (p. ej. adendas con fechas mal formateadas).
+      if (url.searchParams.get("regenerate") === "1") {
+        if (auth.user.role !== "ADMIN") {
+          return NextResponse.json(
+            { error: "Solo un administrador puede regenerar documentos" },
+            { status: 403 }
+          );
+        }
+        if (!row.snapshotId) {
+          return NextResponse.json(
+            { error: "El documento no tiene snapshot para regenerarlo" },
+            { status: 400 }
+          );
+        }
+        const { snapshotRepository } = await buildContractServices();
+        const snapshot = await snapshotRepository.findById(row.snapshotId);
+        if (!snapshot || !snapshot.inmutable) {
+          return NextResponse.json(
+            { error: "No hay snapshot inmutable para regenerar el documento." },
+            { status: 400 }
+          );
+        }
+        const pdf = await renderPdf(snapshot);
+        const fixed = await registerGeneratedDocument(db, schema, {
+          contractId: row.contractId,
+          snapshotId: row.snapshotId,
+          tipo: row.tipo,
+          version: row.version,
+          filename: pdf.filename,
+          bytes: pdf.bytes,
+          idempotencyKey: row.idempotencyKey,
+          force: true,
+        });
+        const bytes = await getStoredDocumentBytes(fixed);
+        return pdfResponse(bytes, fixed.filename);
+      }
       if (row.storageKey) {
         try {
           const bytes = await getStoredDocumentBytes(row);
