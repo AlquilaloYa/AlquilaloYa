@@ -80,6 +80,32 @@ export default function ClientesPage() {
     cargar();
   }, []);
 
+  async function eliminarCliente(cliente: ClientView) {
+    const nombre = [cliente.nombres, cliente.apellidos].filter(Boolean).join(" ");
+    if (
+      !window.confirm(
+        `¿Eliminar como cliente a ${nombre} (${cliente.codigoDepartamento ?? cliente.documentoIdentidad})?\n` +
+          "El cliente dejará de aparecer en esta lista."
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await apiFetch("/api/clients", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: cliente.id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "No se pudo eliminar al cliente");
+      }
+      setClients((lista) => lista.filter((c) => c.id !== cliente.id));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   return (
     <DashboardShell>
       <div className="space-y-6">
@@ -114,6 +140,7 @@ export default function ClientesPage() {
                         <th className="px-3 py-2 font-medium">Email</th>
                         <th className="px-3 py-2 font-medium">Teléfono</th>
                         <th className="px-3 py-2 font-medium">WhatsApp</th>
+                        <th className="px-3 py-2 font-medium">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -148,6 +175,15 @@ export default function ClientesPage() {
                           <td className="px-3 py-2 text-muted-foreground">{c.telefono ?? "—"}</td>
                           <td className="px-3 py-2">
                             <WhatsAppButton telefono={c.telefono ?? null} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => void eliminarCliente(c)}
+                              className="inline-flex h-8 items-center rounded-md border border-red-600 px-2 text-xs font-medium text-red-600 transition-colors hover:bg-red-600 hover:text-white"
+                            >
+                              Eliminar
+                            </button>
                           </td>
                         </tr>
                       ))}

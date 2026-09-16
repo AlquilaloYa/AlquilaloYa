@@ -22,6 +22,7 @@ export async function GET(req: Request) {
     const rows = await db
       .select()
       .from(schema.clients)
+      .where(eq(schema.clients.activo, true))
       .orderBy(schema.clients.nombres);
 
     if (rows.length === 0) {
@@ -163,6 +164,42 @@ export async function PATCH(req: Request) {
       .returning();
 
     return NextResponse.json(row[0]);
+  } catch (error) {
+    return NextResponse.json(
+      { error: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const dbModule = await import("@contract/db");
+    const auth = await requireUser(dbModule, req);
+    if ("error" in auth) return auth.error;
+    const denied = requirePermission(auth.user.role, Permission.CLIENT_UPDATE);
+    if (denied) return denied;
+
+    const { id } = await req.json();
+    if (!id) {
+      return NextResponse.json({ error: "Falta el id" }, { status: 400 });
+    }
+
+    const { db, schema } = dbModule as {
+      db: typeof import("@contract/db").db;
+      schema: typeof import("@contract/db").schema;
+    };
+
+    const row = await db
+      .update(schema.clients)
+      .set({ activo: false, updatedAt: new Date() })
+      .where(sql`id = ${id}`)
+      .returning();
+
+    if (row.length === 0) {
+      return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, activo: false });
   } catch (error) {
     return NextResponse.json(
       { error: (error as Error).message },
