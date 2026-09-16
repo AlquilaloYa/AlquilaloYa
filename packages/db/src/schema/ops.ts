@@ -89,9 +89,23 @@ export const departmentInventories = pgTable(
   (table) => [unique("department_inventories_departamento_unique").on(table.departamentoId)]
 );
 
+/** Elementos extra del catálogo de inventario (añadidos por el usuario). */
+export const inventarioCatalogo = pgTable(
+  "inventario_catalogo",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    categoria: varchar("categoria", { length: 50 }).notNull(),
+    etiqueta: varchar("etiqueta", { length: 255 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique("inventario_catalogo_categoria_etiqueta_unique").on(table.categoria, table.etiqueta)]
+);
+
 export type ContactRow = typeof contacts.$inferSelect;
 export type SeparationRow = typeof separations.$inferSelect;
 export type DepartmentInventoryRow = typeof departmentInventories.$inferSelect;
+export type InventarioCatalogoRow = typeof inventarioCatalogo.$inferSelect;
 
 /** Preguntas del banco usado por las inspecciones (checklist). */
 export const inspectionQuestions = pgTable(

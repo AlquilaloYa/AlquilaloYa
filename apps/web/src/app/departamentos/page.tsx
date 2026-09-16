@@ -10,11 +10,12 @@ import { apiFetch } from "@/lib/api";
 import { RefreshCw, Upload } from "lucide-react";
 import { obtenerContactos, type ContactSeed as ContactoAsig } from "@/lib/contactos-seed";
 import {
-  inventarioDepartamento,
-  CUSTOM_ITEM_PREFIX,
   CUSTOM_ITEM_CATEGORIAS,
   guardarInventarioDepartamento,
   cargarInventarios,
+  inventariosCache,
+  gruposModal,
+  agregarElementoCatalogo,
 } from "@/lib/inventarios-departamento";
 import {
   type SeparacionRecord,
@@ -83,17 +84,21 @@ export default function DepartamentosPage() {
 
   function abrirInventario(departamentoId: string) {
     setInventarioDeptId(departamentoId);
-    setInventarioItems(inventarioDepartamento(departamentoId).flatMap((grupo) => grupo.items.map(([id]) => id)));
+    setInventarioItems(inventariosCache()[departamentoId] ?? []);
     setNuevoItemInventario("");
     setNuevoItemCategoria(CUSTOM_ITEM_CATEGORIAS[0]);
   }
 
-  function anadirItemInventario() {
+  async function anadirItemInventario() {
     const texto = nuevoItemInventario.trim();
     if (!texto) return;
-    const id = `${CUSTOM_ITEM_PREFIX}${nuevoItemCategoria}:${texto}`;
-    setInventarioItems((items) => (items.includes(id) ? items : [...items, id]));
-    setNuevoItemInventario("");
+    try {
+      const { id } = await agregarElementoCatalogo(nuevoItemCategoria, texto);
+      setInventarioItems((items) => (items.includes(id) ? items : [...items, id]));
+      setNuevoItemInventario("");
+    } catch (err) {
+      setError((err as Error).message ?? "No se pudo añadir el elemento al catálogo");
+    }
   }
 
   function alternarInventarioItem(itemId: string) {
@@ -793,7 +798,7 @@ export default function DepartamentosPage() {
 
         {inventarioDeptId && (() => {
           const inventarioDept = departments.find((department) => department.id === inventarioDeptId);
-          const grupos = inventarioDepartamento(inventarioDeptId);
+          const grupos = gruposModal(inventarioItems);
           if (!inventarioDept) return null;
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setInventarioDeptId(null)}>
