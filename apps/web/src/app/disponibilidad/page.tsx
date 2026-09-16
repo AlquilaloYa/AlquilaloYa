@@ -136,11 +136,15 @@ export default function DisponibilidadPage() {
   }, [load]);
 
   const { benavides, angamos } = useMemo(() => {
-    const orden = [...departamentos].sort(
-      (a, b) =>
-        Number(a.numero.split("-")[0] || 0) - Number(b.numero.split("-")[0] || 0) ||
-        a.codigo.localeCompare(b.codigo)
-    );
+    const clave = (codigo: string): [number, string] => {
+      const match = /(\d+)([A-Z]*)$/.exec(codigo);
+      return match ? [Number(match[1]), match[2] ?? ""] : [0, codigo];
+    };
+    const orden = [...departamentos].sort((a, b) => {
+      const [na, sa] = clave(a.codigo);
+      const [nb, sb] = clave(b.codigo);
+      return na - nb || sa.localeCompare(sb);
+    });
     return {
       benavides: orden.filter((d) => d.codigo.startsWith("BEN")),
       angamos: orden.filter((d) => d.codigo.startsWith("ANG")),
@@ -188,7 +192,7 @@ export default function DisponibilidadPage() {
         ) : (
           <div className="space-y-8">
             <GrupoDepartamentos titulo="Benavides 2195" departamentos={benavides} filas={3} />
-            <GrupoDepartamentos titulo="Angamos 170" departamentos={angamos} filas={1} />
+            <GrupoDepartamentos titulo="Angamos 170" departamentos={angamos} filas={3} />
           </div>
         )}
       </div>
