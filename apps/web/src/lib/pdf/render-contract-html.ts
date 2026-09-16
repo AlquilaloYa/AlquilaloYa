@@ -179,6 +179,7 @@ export function renderContractHtml(
   const clienteApellidos = field(cliente, ["apellidos"]);
   const clienteDocumento = field(cliente, ["documentoIdentidad", "documento", "ruc"]);
   const clienteNombreCompleto = [clienteNombre, clienteApellidos].filter(Boolean).join(" ");
+  const nacionalidadCliente = field(cliente, ["nacionalidad"]) || "Peruano(a)";
 
   const monto = field(contrato, ["montoCanonMensual"]);
   const garantia = field(contrato, ["depositoGarantia"]);
@@ -209,7 +210,7 @@ export function renderContractHtml(
       "[NOMBRE COMPLETO]": clienteNombreCompleto || "________________",
       "[NÚMERO DNI]": clienteDocumento || "________________",
       "[NÚMERO]": clienteDocumento || "________________",
-      "[NACIONALIDAD]": "Peruano(a)",
+      "[NACIONALIDAD]": nacionalidadCliente,
       "[DOMICILIO]": field(cliente, ["domicilio"]) || "________________",
       "[NÚMERO DE DEPTO]": codigoDepto || "________________",
       "[PISO]": piso,
@@ -281,7 +282,7 @@ export function renderContractHtml(
 <body>
   <h1>Contrato de Arrendamiento de Bien Inmueble a Plazo Determinado</h1>
 
-  <p>Conste el contrato de arrendamiento que celebran de una parte el Sr.(a) <span class="bold">EL ARRENDADOR(A)</span>, y de otra parte el Sr.(a) <span class="bold">${escapeHtml(clienteNombreCompleto || "________________")}</span>, identificado(a) con D.N.I. N° <span class="bold">${escapeHtml(clienteDocumento || "________________")}</span>, de nacionalidad <span class="bold">Peruano(a)</span>, domiciliado(a) en <span class="bold">${escapeHtml(field(cliente, ["domicilio"]) || "________________")}</span> y a quien en lo sucesivo se denominará <span class="bold">EL ARRENDATARIO (A)</span>; en los términos contenidos en las cláusulas siguientes:</p>
+  <p>Conste el contrato de arrendamiento que celebran de una parte el Sr.(a) <span class="bold">EL ARRENDADOR(A)</span>, y de otra parte el Sr.(a) <span class="bold">${escapeHtml(clienteNombreCompleto || "________________")}</span>, identificado(a) con D.N.I. N° <span class="bold">${escapeHtml(clienteDocumento || "________________")}</span>, de nacionalidad <span class="bold">${escapeHtml(nacionalidadCliente)}</span>, domiciliado(a) en <span class="bold">${escapeHtml(field(cliente, ["domicilio"]) || "________________")}</span> y a quien en lo sucesivo se denominará <span class="bold">EL ARRENDATARIO (A)</span>; en los términos contenidos en las cláusulas siguientes:</p>
 
   <h2>Antecedentes</h2>
   <p><span class="bold">PRIMERA.-</span> EL ARRENDADOR(A) es propietario(a) y alquila el departamento N° <span class="bold">${escapeHtml(codigoDepto || "________________")}</span>${piso ? `, Piso ${escapeHtml(piso)}` : ""} ubicado en ${escapeHtml(field(departamento, ["personaPago"]) || "________________")}, al cual en adelante se le denominará EL INMUEBLE.</p>
