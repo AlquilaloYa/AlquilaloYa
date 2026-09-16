@@ -154,7 +154,7 @@ function detalleGarantia(
     return `${apertura}, ya abonó S/ ${formatCurrency(monto)} (${montoEnLetras(monto)}) el día ${fechaTexto}; ${cierre}`;
   }
   if (tipo === "TOTAL") {
-    return `${apertura}, que entregará íntegramente a la firma de este documento, en calidad de depósito, en garantía del absoluto cumplimiento de todas las obligaciones asumidas en virtud de este contrato.`;
+    return `${apertura}, ya abonó S/ ${formatCurrency(monto)} (${montoEnLetras(monto)}) el día ${fechaTexto}, en calidad de depósito, en garantía del absoluto cumplimiento de todas las obligaciones asumidas en virtud de este contrato.`;
   }
   return `${apertura}, ya abonó S/ 500.00 (${montoEnLetras("500.00")}) el día ${fechaTexto}; ${cierre}`;
 }
