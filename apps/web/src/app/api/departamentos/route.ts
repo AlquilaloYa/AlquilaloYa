@@ -16,7 +16,7 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { inArray, eq } = await import("drizzle-orm");
+    const { inArray } = await import("drizzle-orm");
     const rows = await db
       .select()
       .from(schema.departments)

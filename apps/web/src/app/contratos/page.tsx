@@ -16,7 +16,8 @@ import { obtenerContactos, type ContactSeed, type ArchivoAdjunto } from "@/lib/c
 import { MASCOTAS, etiquetasDeIds } from "@/lib/catalogos";
 import { inventarioDepartamento, cargarInventarios } from "@/lib/inventarios-departamento";
 import { migrarDatosLocales } from "@/lib/migracion-local";
-import { Download, Plus, X } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import { Download, Plus, RefreshCw, X } from "lucide-react";
 
 type ContractApi = {
   id: string;
@@ -171,6 +172,7 @@ export default function ContratosPage() {
   const [renewing, setRenewing] = useState<ContractApi | null>(null);
   const [busy, setBusy] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [regenerandoId, setRegenerandoId] = useState<string | null>(null);
   const [separaciones, setSeparaciones] = useState<SeparacionRecord[]>([]);
   const [contactos, setContactos] = useState<ContactSeed[]>([]);
   const [, setTick] = useState(0);
@@ -182,6 +184,9 @@ export default function ContratosPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const router = useRouter();
+
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
 
   const load = useCallback(async () => {
     setError(null);
@@ -290,6 +295,33 @@ export default function ContratosPage() {
       setError((e as Error).message);
     } finally {
       setDownloadingId(null);
+    }
+  }
+
+  async function regenerarContrato(contract: ContractApi) {
+    if (!confirm(`¿Regenerar el contrato "${contract.codigoContrato}" con el formato actual? Se re-renderiza desde el snapshot inmutable y se reemplaza el PDF almacenado.`)) return;
+    setRegenerandoId(contract.id);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/documents/pdf?contractId=${encodeURIComponent(contract.id)}&regenerate=1`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "No se pudo regenerar el contrato");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `contrato-${contract.codigoContrato}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRegenerandoId(null);
+      await load();
     }
   }
 
@@ -578,6 +610,18 @@ res.push({
                             >
                               <Download className="h-3.5 w-3.5" />
                               {downloadingId === r.id ? "Descargando…" : "Descargar PDF"}
+                            </button>
+                          ) : null}
+                          {isAdmin && r.snapshotId && ["EMITIDO", "PENDIENTE_FIRMA", "FIRMADO", "NOTARIADO"].includes(r.estado) ? (
+                            <button
+                              type="button"
+                              disabled={busy || regenerandoId === r.id}
+                              onClick={() => void regenerarContrato(r)}
+                              className="flex items-center gap-1 rounded border border-outline-variant px-2 py-1 font-label-md text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 dark:border-transparent"
+                              title="Re-renderizar el PDF con el template actual"
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 ${regenerandoId === r.id ? "animate-spin" : ""}`} />
+                              {regenerandoId === r.id ? "…" : "Regenerar"}
                             </button>
                           ) : null}
                           {transitions.map((t) => (

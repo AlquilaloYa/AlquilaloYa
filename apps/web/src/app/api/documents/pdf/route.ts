@@ -7,6 +7,7 @@ import { generateAdendaPdf, generateContractPdf } from "@/lib/pdf/generate-pdf";
 import {
   DocumentIntegrityError,
   ensureContractPdfDocument,
+  findContractPdfDocument,
   findDocumentById,
   findDocumentBySnapshot,
   getStoredDocumentBytes,
@@ -155,6 +156,45 @@ export async function GET(req: Request) {
     if (contractId) {
       const { contractRepository, snapshotRepository } =
         await buildContractServices();
+
+      // Regeneración explícita (ADMIN): re-renderiza el PDF del contrato desde
+      // el snapshot inmutable con el template actual y sobrescribe el archivo.
+      if (url.searchParams.get("regenerate") === "1") {
+        if (auth.user.role !== "ADMIN") {
+          return NextResponse.json(
+            { error: "Solo un administrador puede regenerar documentos" },
+            { status: 403 }
+          );
+        }
+        const existing = await findContractPdfDocument(db, schema, contractId);
+        if (!existing?.snapshotId) {
+          return NextResponse.json(
+            { error: "El documento no tiene snapshot para regenerarlo" },
+            { status: 400 }
+          );
+        }
+        const snapshot = await snapshotRepository.findById(existing.snapshotId);
+        if (!snapshot || !snapshot.inmutable) {
+          return NextResponse.json(
+            { error: "No hay snapshot inmutable para regenerar el documento." },
+            { status: 400 }
+          );
+        }
+        const pdf = await renderPdf(snapshot);
+        const fixed = await registerGeneratedDocument(db, schema, {
+          contractId,
+          snapshotId: existing.snapshotId,
+          tipo: existing.tipo,
+          version: existing.version,
+          filename: pdf.filename,
+          bytes: pdf.bytes,
+          idempotencyKey: existing.idempotencyKey,
+          force: true,
+        });
+        const bytes = await getStoredDocumentBytes(fixed);
+        return pdfResponse(bytes, fixed.filename);
+      }
+
       const row = await ensureContractPdfDocument(
         db,
         schema,

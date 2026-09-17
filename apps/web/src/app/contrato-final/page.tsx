@@ -6,7 +6,8 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
-import { FileCheck, Download } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import { FileCheck, Download, RefreshCw } from "lucide-react";
 
 type FinalContractApi = {
   id: string;
@@ -35,10 +36,13 @@ const ESTADO_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export default function ContratoFinalPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [contracts, setContracts] = useState<FinalContractApi[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [regenerandoId, setRegenerandoId] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [sortKey, setSortKey] = useState<"codigo" | "cliente" | "departamento" | "canon" | "garantia" | "inicio" | "fin" | "estado" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -140,6 +144,33 @@ export default function ContratoFinalPage() {
     }
   }
 
+  async function regenerarContrato(contract: FinalContractApi) {
+    if (!confirm(`¿Regenerar el contrato "${contract.codigoContrato}" con el formato actual? Se re-renderiza desde el snapshot inmutable y se reemplaza el PDF almacenado.`)) return;
+    setRegenerandoId(contract.id);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/documents/pdf?contractId=${encodeURIComponent(contract.id)}&regenerate=1`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "No se pudo regenerar el contrato");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `contrato-${contract.codigoContrato}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRegenerandoId(null);
+      await load();
+    }
+  }
+
   return (
     <DashboardShell>
       <div className="flex flex-col gap-6">
@@ -234,6 +265,18 @@ export default function ContratoFinalPage() {
                             <Download className="h-3.5 w-3.5" />
                             {downloadingId === c.id ? "Descargando…" : "Descargar contrato notariado"}
                           </button>
+                          {isAdmin && c.snapshotId ? (
+                            <button
+                              type="button"
+                              onClick={() => void regenerarContrato(c)}
+                              disabled={regenerandoId === c.id}
+                              className="mt-2 inline-flex items-center gap-1 text-on-surface-variant hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Re-renderizar el contrato con el template actual"
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 ${regenerandoId === c.id ? "animate-spin" : ""}`} />
+                              {regenerandoId === c.id ? "Regenerando…" : "Regenerar"}
+                            </button>
+                          ) : null}
                         </td>
                         <td className="px-3 py-2">
                           <Link

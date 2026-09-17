@@ -192,7 +192,6 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
   const finOriginal = fmt(fechaFinOriginal);
   const inicioOriginal = fmt(fechaInicioOriginal);
   const inicioAdenda = fmt(fechaInicioAdenda);
-  const finAdenda = fmt(fechaFinAdenda);
   const finAdendaMesFin = fmtMesFin(fechaFinAdenda);
 
   return `<!DOCTYPE html>

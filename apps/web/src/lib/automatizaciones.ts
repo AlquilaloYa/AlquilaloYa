@@ -1,5 +1,4 @@
 import { and, eq, inArray, like, lt, sql } from "drizzle-orm";
-import { EVENTOS, type EventoRegla } from "./automatizaciones-shared";
 
 export { EVENTOS, type EventoRegla } from "./automatizaciones-shared";
 
