@@ -333,12 +333,15 @@ export default function PagosPage() {
                       <td className="px-3 py-2">
                         <Link
                           href={`/contratos/clientes/${f.contrato.clienteId}`}
-                          className="font-semibold text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary"
+                          className="block font-semibold text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary"
                         >
-                          {[f.contrato.clienteNombre, f.contrato.apellidoCliente]
-                            .filter(Boolean)
-                            .join(" ")}
+                          {f.contrato.clienteNombre}
                         </Link>
+                        {f.contrato.apellidoCliente ? (
+                          <span className="block text-xs text-on-surface-variant">
+                            {f.contrato.apellidoCliente}
+                          </span>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2 text-on-surface-variant">
                         {f.contrato.departamentoNombre}
