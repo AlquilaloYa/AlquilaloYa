@@ -86,8 +86,8 @@ function PopupDepartamento({
 
 function TarjetaDisponible({ dept }: { dept: DisponibilidadDepartment }) {
   return (
-    <div className="flex items-center justify-center rounded-xl bg-[#8DB600] p-4 text-white">
-      <span className="font-mono-label text-base font-bold">{dept.codigo}</span>
+    <div className="flex items-center justify-center rounded-xl border border-green-600/20 bg-green-500/10 border-l-4 border-l-green-600 p-4">
+      <span className="font-mono-label text-base font-bold text-green-700 dark:text-green-500">{dept.codigo}</span>
     </div>
   );
 }
@@ -104,9 +104,9 @@ function TarjetaOcupada({
       type="button"
       onClick={onOpen}
       title="Ver información"
-      className="flex items-center justify-center rounded-xl bg-[#DC143C] p-4 text-white transition-colors hover:bg-[#B01030]"
+      className="flex items-center justify-center rounded-xl border border-red-600/20 bg-red-500/10 border-l-4 border-l-red-600 p-4 transition-colors hover:bg-red-500/15"
     >
-      <span className="font-mono-label text-base font-bold">{dept.codigo}</span>
+      <span className="font-mono-label text-base font-bold text-red-700 dark:text-red-500">{dept.codigo}</span>
     </button>
   );
 }

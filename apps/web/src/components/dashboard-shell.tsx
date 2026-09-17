@@ -194,23 +194,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [configurationOpen, setConfigurationOpen] = useState(false);
-  const [contractsOpen, setContractsOpen] = useState(true);
-  const [marketingOpen, setMarketingOpen] = useState(true);
+  const [contractsOpen, setContractsOpen] = useState(false);
+  const [marketingOpen, setMarketingOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/login");
     }
   }, [loading, user, router]);
-
-  useEffect(() => {
-    if (NAV_ITEMS.some((n) => n.group === "contratos" && n.href === pathname)) {
-      setContractsOpen(true);
-    }
-    if (NAV_ITEMS.some((n) => n.group === "marketing" && n.href === pathname)) {
-      setMarketingOpen(true);
-    }
-  }, [pathname]);
 
   if (loading) {
     return (
