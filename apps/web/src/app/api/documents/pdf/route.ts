@@ -80,7 +80,7 @@ export async function GET(req: Request) {
             { status: 400 }
           );
         }
-        const pdf = await renderPdf(snapshot);
+        const pdf = await renderPdf(snapshot, { latest: true });
         const fixed = await registerGeneratedDocument(db, schema, {
           contractId: row.contractId,
           snapshotId: row.snapshotId,
@@ -180,7 +180,7 @@ export async function GET(req: Request) {
             { status: 400 }
           );
         }
-        const pdf = await renderPdf(snapshot);
+        const pdf = await renderPdf(snapshot, { latest: true });
         const fixed = await registerGeneratedDocument(db, schema, {
           contractId,
           snapshotId: existing.snapshotId,
@@ -285,8 +285,16 @@ export async function GET(req: Request) {
   }
 }
 
-/** Elige el renderer según el tipo de documento congelado en el snapshot. */
-async function renderPdf(snapshot: ContractSnapshot) {
+/**
+ * Elige el renderer según el tipo de documento congelado en el snapshot.
+ * Con `opts.latest`, resuelve la ÚLTIMA versión publicada de la plantilla
+ * (en vez de la versión congelada en el snapshot), para que la regeneración
+ * refleje los cambios de formato vigentes.
+ */
+async function renderPdf(
+  snapshot: ContractSnapshot,
+  opts: { latest?: boolean } = {}
+) {
   const tipoDocumento = (snapshot.datosContrato as
     | { tipoDocumento?: string }
     | undefined)?.tipoDocumento;
@@ -299,13 +307,39 @@ async function renderPdf(snapshot: ContractSnapshot) {
   if (snapshot.plantillaVersionId) {
     try {
       const dbModule = await import("@contract/db");
-      const { eq } = await import("drizzle-orm");
-      const [tv] = await dbModule.db
-        .select({ contenido: dbModule.schema.templateVersions.contenido })
-        .from(dbModule.schema.templateVersions)
-        .where(eq(dbModule.schema.templateVersions.id, snapshot.plantillaVersionId))
-        .limit(1);
-      templateHtml = tv?.contenido ?? null;
+      const { db, schema } = dbModule as {
+        db: typeof import("@contract/db").db;
+        schema: typeof import("@contract/db").schema;
+      };
+      const { eq, and, desc } = await import("drizzle-orm");
+      if (opts.latest) {
+        const [orig] = await db
+          .select({ templateId: schema.templateVersions.templateId })
+          .from(schema.templateVersions)
+          .where(eq(schema.templateVersions.id, snapshot.plantillaVersionId))
+          .limit(1);
+        if (orig) {
+          const [tv] = await db
+            .select({ contenido: schema.templateVersions.contenido })
+            .from(schema.templateVersions)
+            .where(
+              and(
+                eq(schema.templateVersions.templateId, orig.templateId),
+                eq(schema.templateVersions.publicada, true)
+              )
+            )
+            .orderBy(desc(schema.templateVersions.version))
+            .limit(1);
+          templateHtml = tv?.contenido ?? null;
+        }
+      } else {
+        const [tv] = await db
+          .select({ contenido: schema.templateVersions.contenido })
+          .from(schema.templateVersions)
+          .where(eq(schema.templateVersions.id, snapshot.plantillaVersionId))
+          .limit(1);
+        templateHtml = tv?.contenido ?? null;
+      }
     } catch {
       // fallback a formato genérico
     }
