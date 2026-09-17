@@ -51,6 +51,7 @@ export function getEstadoSeparacion(sep: SeparacionRecord): string {
 export function obtenerTiempoRestante(sep: SeparacionRecord): { texto: string; color: string } {
   if (sep.estado === "PERDER_TODO") return { texto: "DINERO PERDIDO", color: "text-red-600" };
   if (sep.estado === "CONTRATO_REAL") return { texto: "CONTRATO ACTIVO", color: "text-green-600" };
+  if (sep.estado === "CONTRATO_PREVIO") return { texto: "—", color: "text-muted-foreground" };
 
   const fechaLimite = getFechaLimiteActiva(sep);
   const diff = new Date(fechaLimite).getTime() - Date.now();
