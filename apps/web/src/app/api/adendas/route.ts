@@ -39,6 +39,17 @@ function fmtFechaEs(iso: string): string {
   return `${d} de ${MESES[(m as number) - 1]} de ${y}`;
 }
 
+/** Fecha de término de la adenda según su snapshot (fin del plazo extendido). */
+function finAdenda(tipo: string, datos: unknown): string | null {
+  const d = (datos ?? {}) as Record<string, unknown>;
+  if (tipo === "ADENDA_EXTENSION") {
+    const f = d.fechaFin;
+    return String(f ?? "").slice(0, 10) || null;
+  }
+  const f = d.fechaFinAdenda;
+  return String(f ?? "").slice(0, 10) || null;
+}
+
 /** Períodos mensuales nuevos del canon entre cursor (< nuevaFechaFin). */
 function periodosExtension(fechaFinActual: string, nuevaFechaFin: string): string[] {
   const periodos: string[] = [];
@@ -82,6 +93,7 @@ export async function GET(req: Request) {
         estadoGeneracion: schema.documents.estadoGeneracion,
         error: schema.documents.error,
         createdAt: schema.documents.createdAt,
+        datosContrato: schema.contractSnapshots.datosContrato,
         codigoContrato: schema.contracts.codigoContrato,
         estadoContrato: schema.contracts.estado,
         clienteId: schema.clients.id,
@@ -95,6 +107,10 @@ export async function GET(req: Request) {
       .innerJoin(schema.contracts, eq(schema.documents.contractId, schema.contracts.id))
       .innerJoin(schema.clients, eq(schema.contracts.clienteId, schema.clients.id))
       .innerJoin(schema.departments, eq(schema.contracts.departamentoId, schema.departments.id))
+      .leftJoin(
+        schema.contractSnapshots,
+        eq(schema.documents.snapshotId, schema.contractSnapshots.id)
+      )
       .where(inArray(schema.documents.tipo, ["ADENDA", "ADENDA_EXTENSION"]))
       .orderBy(desc(schema.documents.createdAt));
 
@@ -112,6 +128,7 @@ export async function GET(req: Request) {
         estadoGeneracion: d.estadoGeneracion,
         error: d.error,
         createdAt: d.createdAt?.toISOString?.() ?? null,
+        fechaFinAdenda: finAdenda(d.tipo, d.datosContrato),
         codigoContrato: d.codigoContrato,
         estadoContrato: d.estadoContrato,
         clienteId: d.clienteId,

@@ -24,11 +24,12 @@ type AdendaApi = {
   error: string | null;
   createdAt: string | null;
   codigoContrato: string;
-  estadoContrato: string;
+estadoContrato: string;
   clienteId: string;
   clienteNombre: string | null;
   clienteApellidos: string | null;
   clienteDocumento: string | null;
+  fechaFinAdenda: string | null;
   departamentoNombre: string | null;
   departamentoCodigo: string | null;
 };
@@ -56,7 +57,7 @@ export default function AdendasPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [regenerandoId, setRegenerandoId] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
-  const [sortKey, setSortKey] = useState<"codigo" | "tipo" | "contrato" | "cliente" | "departamento" | "fecha" | "estado" | null>(null);
+  const [sortKey, setSortKey] = useState<"codigo" | "tipo" | "contrato" | "cliente" | "departamento" | "fecha" | "finAdenda" | "estado" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const adendasTabla = useMemo(() => {
@@ -67,6 +68,7 @@ export default function AdendasPage() {
       d.clienteApellidos,
       d.departamentoCodigo,
       d.departamentoNombre,
+      d.fechaFinAdenda,
       d.tipo === "ADENDA_EXTENSION" ? "Adenda de extensión" : "Adenda",
       d.estadoGeneracion === "GENERADO" ? "Generado" : d.estadoGeneracion === "ERROR" ? "Error" : d.estadoGeneracion,
     ]);
@@ -77,6 +79,7 @@ export default function AdendasPage() {
       cliente: (d) => [d.clienteNombre, d.clienteApellidos].filter(Boolean).join(" "),
       departamento: (d) => [d.departamentoCodigo, d.departamentoNombre].filter(Boolean).join(" "),
       fecha: (d) => d.createdAt,
+      finAdenda: (d) => d.fechaFinAdenda,
       estado: (d) => d.estadoGeneracion,
     };
     if (sortKey) {
@@ -318,6 +321,9 @@ export default function AdendasPage() {
                     <th onClick={() => cambiarOrden("fecha")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "fecha" ? "text-white" : "")}>
                       Fecha{sortKey === "fecha" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                     </th>
+                    <th onClick={() => cambiarOrden("finAdenda")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "finAdenda" ? "text-white" : "")}>
+                      Fin adenda{sortKey === "finAdenda" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
                     <th onClick={() => cambiarOrden("estado")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "estado" ? "text-white" : "")}>
                       Estado{sortKey === "estado" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                     </th>
@@ -353,6 +359,7 @@ export default function AdendasPage() {
                         {[d.departamentoCodigo, d.departamentoNombre].filter(Boolean).join(" · ") || "—"}
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">{fmtFecha(d.createdAt)}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{fmtFecha(d.fechaFinAdenda)}</td>
                       <td className="px-3 py-2">
                         {d.estadoGeneracion === "GENERADO" ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
