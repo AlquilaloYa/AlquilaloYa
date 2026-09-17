@@ -28,20 +28,59 @@ function normalizarTelefono(valor: string, codigoPais: string = "51"): string {
   let d = valor.replace(/[^0-9]/g, "");
   const codigo = (codigoPais ?? "51").replace(/[^0-9]/g, "");
   if (d.length >= codigo.length + 1 && d.startsWith(codigo)) d = d.slice(codigo.length);
-  if (d.length > 9) d = d.slice(0, 9);
+  if (d.length > 15) d = d.slice(0, 15);
   return d;
+}
+
+function formatearNumero(digitos: string): string {
+  const d = (digitos ?? "").replace(/[^0-9]/g, "");
+  return d.replace(/\B(?=(\d{3})+(?!\d))/g, " ").trim();
 }
 
 function formatearTelefono(t: string | null | undefined, codigoPais: string = "51"): string {
   if (!t) return "—";
   const prefijo = `+${(codigoPais ?? "51").replace(/[^0-9]/g, "")}`;
-  return t.startsWith(prefijo) ? t : `${prefijo} ${t}`;
+  const local = normalizarTelefono(t.replace(/^\+/, ""), codigoPais);
+  return `${prefijo} ${formatearNumero(local)}`.trim();
 }
 
 function esFormatoAdmitido(f: File): boolean {
   return (
     ["application/pdf", "image/jpeg", "image/png"].includes(f.type) ||
     /\.(pdf|jpe?g|png)$/i.test(f.name)
+  );
+}
+
+function PaisCodigoInput(props: {
+  value: string;
+  onChange: (codigo: string) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <>
+      <input
+        type="tel"
+        inputMode="numeric"
+        list="paises-codigo-list"
+        disabled={props.disabled}
+        value={props.value}
+        onChange={(e) => props.onChange(e.target.value.replace(/[^0-9]/g, ""))}
+        placeholder="51"
+        title="Código de país del teléfono (editable)"
+        className={
+          props.className ??
+          "h-10 min-w-0 basis-[6rem] border-r border-input bg-muted px-2 text-sm font-semibold text-on-surface-variant outline-none disabled:cursor-not-allowed"
+        }
+      />
+      <datalist id="paises-codigo-list">
+        {PAISES_CODIGO.map(({ codigo, pais }) => (
+          <option key={codigo} value={codigo}>
+            {pais}
+          </option>
+        ))}
+      </datalist>
+    </>
   );
 }
 
@@ -54,27 +93,61 @@ function TelefonoInput(props: {
 }) {
   return (
     <div className="flex h-10 items-stretch overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
-      <select
+      <PaisCodigoInput
         value={props.codigoPais}
-        disabled={props.disabled}
-        onChange={(e) => props.onCodigoPaisChange(e.target.value)}
-        title="Código de país del teléfono"
-        className="h-10 min-w-0 basis-[7rem] border-r border-input bg-muted px-1.5 text-sm font-semibold text-on-surface-variant outline-none disabled:cursor-not-allowed"
-      >
-        {PAISES_CODIGO.map(({ codigo }) => (
-          <option key={codigo} value={codigo}>+{codigo}</option>
-        ))}
-      </select>
+        {...(props.disabled ? { disabled: true } : {})}
+        onChange={props.onCodigoPaisChange}
+      />
       <input
         type="tel"
         inputMode="numeric"
         disabled={props.disabled}
         className="w-full min-w-0 bg-transparent px-3 py-2 text-sm outline-none disabled:cursor-not-allowed"
-        value={props.value}
+        value={formatearNumero(props.value)}
         onChange={(e) => props.onChange(normalizarTelefono(e.target.value, props.codigoPais))}
-        placeholder="9XXXXXXXX"
+        placeholder="9XX XXX XXX"
       />
     </div>
+  );
+}
+
+function PaisCodigoCelda({
+  value,
+  onGuardar,
+}: {
+  value: string;
+  onGuardar: (codigo: string) => void;
+}) {
+  const [texto, setTexto] = useState(value ?? "51");
+  useEffect(() => {
+    setTexto(value ?? "51");
+  }, [value]);
+  return (
+    <>
+      <input
+        type="tel"
+        inputMode="numeric"
+        list="paises-codigo-list"
+        value={texto}
+        onChange={(e) => setTexto(e.target.value.replace(/[^0-9]/g, ""))}
+        onBlur={() => {
+          const codigo = texto.replace(/[^0-9]/g, "");
+          if (codigo && codigo !== (value ?? "51")) onGuardar(codigo);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className="h-8 w-full rounded-md border border-input bg-background px-1 text-xs text-foreground"
+        title="Código de país del teléfono (editable)"
+      />
+      <datalist id="paises-codigo-list">
+        {PAISES_CODIGO.map(({ codigo, pais }) => (
+          <option key={codigo} value={codigo}>
+            {pais}
+          </option>
+        ))}
+      </datalist>
+    </>
   );
 }
 
@@ -713,13 +786,14 @@ export default function ContactosPage() {
   }
 
   async function cambiarCodigoPais(c: ContactView, codigoPais: string) {
-    if (codigoPais === (c.codigoPais ?? "51")) return;
+    const codigo = (codigoPais ?? "").replace(/[^0-9]/g, "");
+    if (!codigo || codigo === (c.codigoPais ?? "51")) return;
     try {
-      const nuevaTelefono = formatearTelefono(c.telefono, codigoPais);
+      const local = normalizarTelefono(c.telefono ?? "", c.codigoPais ?? "51");
       const actualizado = await actualizarContacto({
         ...c,
-        codigoPais,
-        telefono: nuevaTelefono === "—" ? "" : nuevaTelefono,
+        codigoPais: codigo,
+        telefono: `+${codigo} ${local}`.trim(),
       });
       setContactos((prev) =>
         prev.map((x) => (x.id === c.id ? actualizado : x))
@@ -1201,18 +1275,10 @@ export default function ContactosPage() {
                           {formatearTelefono(c.telefono, c.codigoPais ?? "51")}
                         </td>
                         <td className="w-[110px] px-3 py-2">
-                          <select
+                          <PaisCodigoCelda
                             value={c.codigoPais ?? "51"}
-                            onChange={(e) => void cambiarCodigoPais(c, e.target.value)}
-                            className="h-8 w-full rounded-md border border-input bg-background px-1 text-xs text-foreground"
-                            title="Código de país del teléfono"
-                          >
-                            {PAISES_CODIGO.map(({ codigo }) => (
-                              <option key={codigo} value={codigo}>
-                                +{codigo}
-                              </option>
-                            ))}
-                          </select>
+                            onGuardar={(codigo) => void cambiarCodigoPais(c, codigo)}
+                          />
                         </td>
                         <td className="px-3 py-2">
                           {(() => {
