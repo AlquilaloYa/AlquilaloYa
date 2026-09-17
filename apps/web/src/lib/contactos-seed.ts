@@ -19,10 +19,11 @@ export interface ContactSeed {
   nacionalidad?: string;
   email: string;
   telefono: string;
+  codigoPais?: string;
   copiaDni?: ArchivoAdjunto[];
   copiaBoletas?: ArchivoAdjunto[];
   copiaAntecedentes?: ArchivoAdjunto[];
-  contactoEmergencia?: {
+contactoEmergencia?: {
     nombre: string;
     parentesco: string;
     telefono: string;

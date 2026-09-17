@@ -19,20 +19,22 @@ import { migrarDatosLocales } from "@/lib/migracion-local";
 import type { DatosExtraidos } from "@/lib/pdf/extraer-datos-form";
 import type { ArchivoAdjunto } from "@/lib/contactos-seed";
 import { MASCOTAS, MASCOTAS_TOTAL, type GrupoChecklist } from "@/lib/catalogos";
+import { PAISES_CODIGO } from "@/lib/paises-codigo";
 
 const EMERGENCIA_VACIO = { nombre: "", parentesco: "", telefono: "" };
-const PREFIJO_PAIS = "+51";
 
-function normalizarTelefono(valor: string): string {
+function normalizarTelefono(valor: string, codigoPais: string = "51"): string {
   let d = valor.replace(/[^0-9]/g, "");
-  if (d.length >= 11 && d.startsWith("51")) d = d.slice(2);
+  const codigo = (codigoPais ?? "51").replace(/[^0-9]/g, "");
+  if (d.length >= codigo.length + 1 && d.startsWith(codigo)) d = d.slice(codigo.length);
   if (d.length > 9) d = d.slice(0, 9);
   return d;
 }
 
-function formatearTelefono(t: string | null | undefined): string {
+function formatearTelefono(t: string | null | undefined, codigoPais: string = "51"): string {
   if (!t) return "—";
-  return t.startsWith(PREFIJO_PAIS) ? t : `${PREFIJO_PAIS} ${t}`;
+  const prefijo = `+${(codigoPais ?? "51").replace(/[^0-9]/g, "")}`;
+  return t.startsWith(prefijo) ? t : `${prefijo} ${t}`;
 }
 
 function esFormatoAdmitido(f: File): boolean {
@@ -44,21 +46,31 @@ function esFormatoAdmitido(f: File): boolean {
 
 function TelefonoInput(props: {
   value: string;
+  codigoPais: string;
+  onCodigoPaisChange: (codigo: string) => void;
   onChange: (v: string) => void;
   disabled?: boolean;
 }) {
   return (
     <div className="flex h-10 items-stretch overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
-      <span className="flex items-center border-r border-input bg-muted px-2 text-sm font-semibold text-on-surface-variant">
-        {PREFIJO_PAIS}
-      </span>
+      <select
+        value={props.codigoPais}
+        disabled={props.disabled}
+        onChange={(e) => props.onCodigoPaisChange(e.target.value)}
+        title="Código de país del teléfono"
+        className="h-10 min-w-0 basis-[7rem] border-r border-input bg-muted px-1.5 text-sm font-semibold text-on-surface-variant outline-none disabled:cursor-not-allowed"
+      >
+        {PAISES_CODIGO.map(({ codigo }) => (
+          <option key={codigo} value={codigo}>+{codigo}</option>
+        ))}
+      </select>
       <input
         type="tel"
         inputMode="numeric"
         disabled={props.disabled}
         className="w-full min-w-0 bg-transparent px-3 py-2 text-sm outline-none disabled:cursor-not-allowed"
         value={props.value}
-        onChange={(e) => props.onChange(normalizarTelefono(e.target.value))}
+        onChange={(e) => props.onChange(normalizarTelefono(e.target.value, props.codigoPais))}
         placeholder="9XXXXXXXX"
       />
     </div>
@@ -370,6 +382,7 @@ export default function ContactosPage() {
     nacionalidad: "",
     email: "",
     telefono: "",
+    codigoPais: "51",
     copiaDni: [],
     copiaBoletas: [],
     copiaAntecedentes: [],
@@ -505,7 +518,7 @@ export default function ContactosPage() {
     ) {
       return "El email no es válido.";
     }
-    if (form.telefono.trim() && normalizarTelefono(form.telefono).length < 7) {
+    if (form.telefono.trim() && normalizarTelefono(form.telefono, form.codigoPais).length < 7) {
       return "El teléfono no es válido.";
     }
     if ((form.copiaDni ?? []).length === 0) {
@@ -514,7 +527,7 @@ export default function ContactosPage() {
     if ((form.copiaBoletas ?? []).length === 0) {
       return "Debes adjuntar la copia de boletas.";
     }
-    const telEmergencia = normalizarTelefono(form.contactoEmergencia?.telefono ?? "");
+    const telEmergencia = normalizarTelefono(form.contactoEmergencia?.telefono ?? "", form.codigoPais);
     if (telEmergencia && telEmergencia.length < 7) {
       return "El teléfono del contacto de emergencia no es válido.";
     }
@@ -530,7 +543,7 @@ export default function ContactosPage() {
       return;
     }
     const conPrefijo = (t: string) =>
-      `${PREFIJO_PAIS} ${normalizarTelefono(t)}`.trim();
+      `+${(form.codigoPais ?? "51").replace(/[^0-9]/g, "")} ${normalizarTelefono(t, form.codigoPais)}`.trim();
     const emergenciaForm = form.contactoEmergencia;
     const emergenciaLlena = Boolean(
       emergenciaForm &&
@@ -542,6 +555,7 @@ export default function ContactosPage() {
       ...form,
       id: form.id || `c-${Date.now()}`,
       telefono: form.telefono.trim() ? conPrefijo(form.telefono) : "",
+      codigoPais: (form.codigoPais ?? "51").replace(/[^0-9]/g, ""),
       contactoEmergencia: emergenciaLlena && emergenciaForm
         ? {
             ...emergenciaForm,
@@ -580,6 +594,7 @@ export default function ContactosPage() {
       nacionalidad: "",
       email: "",
       telefono: "",
+      codigoPais: "51",
       copiaDni: [],
       copiaBoletas: [],
       copiaAntecedentes: [],
@@ -640,6 +655,8 @@ export default function ContactosPage() {
 
   function iniciarEdicion(c: ContactView) {
     setEditandoId(c.id);
+    const prefijoGuardado = /^\+([0-9]+)/.exec(c.telefono ?? "")?.[1];
+    const codigoPais = c.codigoPais ?? prefijoGuardado ?? "51";
     setForm({
       id: c.id,
       nombre: c.nombre,
@@ -650,7 +667,8 @@ export default function ContactosPage() {
       domicilio: c.domicilio ?? "",
       nacionalidad: c.nacionalidad ?? "",
       email: c.email,
-      telefono: c.telefono,
+      telefono: normalizarTelefono(c.telefono ?? "", codigoPais),
+      codigoPais,
       copiaDni: c.copiaDni ?? [],
       copiaBoletas: c.copiaBoletas ?? [],
       copiaAntecedentes: c.copiaAntecedentes ?? [],
@@ -680,6 +698,7 @@ export default function ContactosPage() {
       nacionalidad: "",
       email: "",
       telefono: "",
+      codigoPais: "51",
       copiaDni: [],
       copiaBoletas: [],
       copiaAntecedentes: [],
@@ -687,6 +706,23 @@ export default function ContactosPage() {
       mascotas: false,
       mascotasItems: [],
     });
+  }
+
+  async function cambiarCodigoPais(c: ContactView, codigoPais: string) {
+    if (codigoPais === (c.codigoPais ?? "51")) return;
+    try {
+      const nuevaTelefono = formatearTelefono(c.telefono, codigoPais);
+      const actualizado = await actualizarContacto({
+        ...c,
+        codigoPais,
+        telefono: nuevaTelefono === "—" ? "" : nuevaTelefono,
+      });
+      setContactos((prev) =>
+        prev.map((x) => (x.id === c.id ? actualizado : x))
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo actualizar el país.");
+    }
   }
 
   function alternarMascota(id: string) {
@@ -855,7 +891,9 @@ export default function ContactosPage() {
               <div className="space-y-1.5">
                 <Label>Teléfono (opcional)</Label>
                 <TelefonoInput
-                  value={normalizarTelefono(form.telefono)}
+                  value={normalizarTelefono(form.telefono, form.codigoPais)}
+                  codigoPais={form.codigoPais ?? "51"}
+                  onCodigoPaisChange={(codigoPais) => setForm({ ...form, codigoPais })}
                   onChange={(telefono) => setForm({ ...form, telefono })}
                 />
               </div>
@@ -1006,8 +1044,11 @@ export default function ContactosPage() {
                   <Label>Teléfono</Label>
                   <TelefonoInput
                     value={normalizarTelefono(
-                      form.contactoEmergencia?.telefono ?? ""
+                      form.contactoEmergencia?.telefono ?? "",
+                      form.codigoPais
                     )}
+                    codigoPais={form.codigoPais ?? "51"}
+                    onCodigoPaisChange={(codigoPais) => setForm({ ...form, codigoPais })}
                     onChange={(telefono) =>
                       setForm({
                         ...form,
@@ -1046,7 +1087,7 @@ export default function ContactosPage() {
               </p>
             ) : (
               <TableScroll className="w-full rounded-md border" contentClassName="max-h-[30rem]">
-                <table className="w-full min-w-[1950px] table-fixed text-sm">
+                <table className="w-full min-w-[2060px] table-fixed text-sm">
                   <colgroup>
                     <col style={{ width: "220px" }} />
                     <col style={{ width: "100px" }} />
@@ -1054,6 +1095,7 @@ export default function ContactosPage() {
                     <col style={{ width: "130px" }} />
                     <col style={{ width: "280px" }} />
                     <col style={{ width: "150px" }} />
+                    <col style={{ width: "110px" }} />
                     <col style={{ width: "120px" }} />
                     <col style={{ width: "120px" }} />
                     <col style={{ width: "120px" }} />
@@ -1088,6 +1130,7 @@ export default function ContactosPage() {
                       </th>
                       <th className="w-[280px] px-3 py-2 font-medium">Email</th>
                       <th className="w-[150px] px-3 py-2 font-medium">Teléfono</th>
+                      <th className="w-[110px] px-3 py-2 font-medium">País</th>
                       <th className="px-3 py-2 font-medium">C. DNI</th>
                       <th className="px-3 py-2 font-medium">C. Boletas</th>
                       <th className="px-3 py-2 font-medium">C. Antec. Penales</th>
@@ -1130,7 +1173,21 @@ export default function ContactosPage() {
                           {c.email}
                         </td>
                         <td className="w-[150px] max-w-[150px] overflow-hidden px-3 py-2 text-ellipsis whitespace-nowrap text-muted-foreground">
-                          {formatearTelefono(c.telefono)}
+                          {formatearTelefono(c.telefono, c.codigoPais ?? "51")}
+                        </td>
+                        <td className="w-[110px] px-3 py-2">
+                          <select
+                            value={c.codigoPais ?? "51"}
+                            onChange={(e) => void cambiarCodigoPais(c, e.target.value)}
+                            className="h-8 w-full rounded-md border border-input bg-background px-1 text-xs text-foreground"
+                            title="Código de país del teléfono"
+                          >
+                            {PAISES_CODIGO.map(({ codigo }) => (
+                              <option key={codigo} value={codigo}>
+                                +{codigo}
+                              </option>
+                            ))}
+                          </select>
                         </td>
                         <td className="px-3 py-2">
                           {(() => {
@@ -1230,7 +1287,7 @@ export default function ContactosPage() {
                           )}
                         </td>
                         <td className="w-[150px] max-w-[150px] overflow-hidden px-3 py-2 text-ellipsis whitespace-nowrap text-muted-foreground">
-                          {formatearTelefono(c.contactoEmergencia?.telefono)}
+                          {formatearTelefono(c.contactoEmergencia?.telefono, c.codigoPais ?? "51")}
                         </td>
                         <td className="px-3 py-2">
                           {(c.mascotasItems ?? []).length > 0 ? (

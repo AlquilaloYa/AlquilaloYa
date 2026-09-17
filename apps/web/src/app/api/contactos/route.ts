@@ -13,8 +13,9 @@ type Body = {
   dni?: string;
   ruc?: string | null;
   email?: string;
-  telefono?: string;
-domicilio?: string | null;
+telefono?: string;
+  codigoPais?: string | null;
+ domicilio?: string | null;
   nacionalidad?: string | null;
   contactoEmergencia?: unknown;
   mascotas?: boolean;
@@ -31,9 +32,10 @@ function toView(r: {
   tipoPersona: string;
   dni: string;
   ruc: string | null;
-  email: string;
+email: string;
   telefono: string | null;
-domicilio: string | null;
+  codigoPais: string | null;
+ domicilio: string | null;
   nacionalidad: string | null;
   contactoEmergencia: unknown;
   mascotas: boolean;
@@ -51,7 +53,8 @@ domicilio: string | null;
     dni: r.dni,
     ruc: r.ruc,
     email: r.email,
-    telefono: r.telefono ?? "",
+telefono: r.telefono ?? "",
+    codigoPais: r.codigoPais ?? "51",
     domicilio: r.domicilio ?? "",
     nacionalidad: r.nacionalidad ?? "",
     contactoEmergencia: r.contactoEmergencia ?? null,
@@ -116,6 +119,7 @@ export async function POST(req: Request) {
 ruc: body.ruc || null,
         email: (body.email ?? "").trim(),
         telefono: body.telefono || null,
+        codigoPais: body.codigoPais || "51",
         domicilio: body.domicilio || null,
         nacionalidad: body.nacionalidad || null,
         contactoEmergencia: body.contactoEmergencia ?? null,
@@ -162,6 +166,7 @@ export async function PUT(req: Request) {
 ruc: body.ruc || null,
         email: (body.email ?? "").trim(),
         telefono: body.telefono || null,
+        codigoPais: body.codigoPais || "51",
         domicilio: body.domicilio || null,
         nacionalidad: body.nacionalidad || null,
         contactoEmergencia: body.contactoEmergencia ?? null,
