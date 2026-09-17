@@ -18,7 +18,7 @@ function shiftDias(iso: string, dias: number): string {
  * Crea/actualiza en Work 123 las tareas automaticas derivadas de un contrato:
  * - Revisión previa: 2 dias antes del inicio
  * - Limpieza: 1 dia antes del inicio
- * - Check off: el dia del fin de contrato
+ * - Revisión (check out): el dia del fin de contrato
  * Idempotente: si las fechas del contrato cambian, las tareas se mueven; si el
  * usuario ya las resolvio, no se tocan su estado ni su asignado.
  */
@@ -72,8 +72,8 @@ export async function sincronizarTareasContrato(
     {
       kind: "CHECKOFF",
       fecha: fin,
-      titulo: `Check off ${depto} · ${c.codigoContrato}`,
-      detalle: `Revisión de check off el día del fin de contrato (${fin})`,
+      titulo: `Revisión (Check out) ${depto} · ${c.codigoContrato}`,
+      detalle: `Check out del departamento el día del fin de contrato (${fin})`,
     },
   ];
 

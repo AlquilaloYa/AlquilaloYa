@@ -51,6 +51,16 @@ export async function GET(req: Request) {
       : [];
     const clientePorId = new Map(clientes.map((c) => [c.id, c]));
 
+    // Última fecha de término de cada departamento para detectar mantenimiento
+    // (contrato terminado sin renovación por adenda → el depto pasa a mantenimiento).
+    const ultimoFinPorDepartamento = new Map<string, string>();
+    for (const c of ocupantes) {
+      const prev = ultimoFinPorDepartamento.get(c.departamentoId);
+      if (!prev || c.fechaFin > prev) {
+        ultimoFinPorDepartamento.set(c.departamentoId, c.fechaFin);
+      }
+    }
+
     function diasRestantes(fecha: string): number {
       return Math.max(0, Math.round((new Date(fecha).getTime() - hoy.getTime()) / 86_400_000));
     }
@@ -66,7 +76,9 @@ export async function GET(req: Request) {
         .map((c) => c.fechaFin)
         .sort();
       if (ocupando.length === 0) {
-        return { ...d, disponibilidad: null };
+        const ultimoFin = ultimoFinPorDepartamento.get(d.id);
+        const mantenimiento = Boolean(ultimoFin && ultimoFin < hoyISO);
+        return { ...d, disponibilidad: null, mantenimiento };
       }
       const fin = ocupando[ocupando.length - 1] as string;
       const ocupanteIds = new Set(
@@ -76,6 +88,7 @@ export async function GET(req: Request) {
       return {
         ...d,
         disponibilidad: { disponible: false, fechaFin: fin, dias: diasRestantes(fin) },
+        mantenimiento: false,
         ocupante: cliente
           ? {
               nombres: cliente.nombres,

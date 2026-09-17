@@ -44,14 +44,14 @@ const EVENTO_LABEL: Record<ContractEvent["kind"], string> = {
   REVISION: "Revisión previa",
   LIMPIEZA: "Limpieza",
   INICIO: "Inicio",
-  FIN: "Check off",
+  FIN: "Revisión (Check out)",
 };
 
 const EVENTO_DETALLE: Record<ContractEvent["kind"], string> = {
   REVISION: "Revisión previa (2 días antes del inicio)",
   LIMPIEZA: "Limpieza (1 día antes del inicio)",
   INICIO: "Inicio de contrato",
-  FIN: "Check off · revisión de fin de contrato",
+  FIN: "Revisión (Check out) · día de fin de contrato",
 };
 
 const CHIP_URGENTE =

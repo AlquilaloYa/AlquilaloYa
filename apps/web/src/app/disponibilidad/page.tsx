@@ -12,6 +12,7 @@ interface DisponibilidadDepartment {
   numero: string;
   piso: number;
   disponibilidad: { disponible: false; fechaFin: string; dias: number } | null;
+  mantenimiento?: boolean;
   ocupante: { nombres: string; apellidos: string | null; telefono: string | null } | null;
 }
 
@@ -111,6 +112,17 @@ function TarjetaOcupada({
   );
 }
 
+function TarjetaMantenimiento({ dept }: { dept: DisponibilidadDepartment }) {
+  return (
+    <div
+      title="En mantenimiento"
+      className="flex items-center justify-center rounded-xl border border-blue-600/20 bg-blue-500/10 border-l-4 border-l-blue-600 p-4"
+    >
+      <span className="font-mono-label text-base font-bold text-blue-700 dark:text-blue-500">{dept.codigo}</span>
+    </div>
+  );
+}
+
 function GrupoDepartamentos({
   titulo,
   departamentos,
@@ -120,9 +132,11 @@ function GrupoDepartamentos({
   departamentos: DisponibilidadDepartment[];
   onAbrirPopup: (dept: DisponibilidadDepartment) => void;
 }) {
-  const disponibles = departamentos.filter((d) => !d.disponibilidad);
+  const disponibles = departamentos.filter((d) => !d.disponibilidad && !d.mantenimiento);
+  const mantenimiento = departamentos.filter((d) => !d.disponibilidad && d.mantenimiento);
   const ocupados = departamentos.filter((d) => d.disponibilidad);
-  const columnas = Math.max(1, Math.ceil(departamentos.length / 3));
+  const total = mantenimiento.length + disponibles.length + ocupados.length;
+  const columnas = Math.max(1, Math.ceil(total / 3));
 
   if (departamentos.length === 0) return null;
   return (
@@ -131,11 +145,15 @@ function GrupoDepartamentos({
         {titulo}
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
           {disponibles.length} libres · {ocupados.length} ocupados
+          {mantenimiento.length > 0 && ` · ${mantenimiento.length} en mant.`}
         </span>
       </h2>
       <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columnas}, minmax(0, 1fr))` }}>
         {disponibles.map((dept) => (
           <TarjetaDisponible key={dept.id} dept={dept} />
+        ))}
+        {mantenimiento.map((dept) => (
+          <TarjetaMantenimiento key={dept.id} dept={dept} />
         ))}
         {ocupados.map((dept) => (
           <TarjetaOcupada key={dept.id} dept={dept} onOpen={() => onAbrirPopup(dept)} />
@@ -190,6 +208,7 @@ export default function DisponibilidadPage() {
   }, [departamentos]);
 
   const ocupados = departamentos.filter((d) => d.disponibilidad).length;
+  const mantenimiento = departamentos.filter((d) => !d.disponibilidad && d.mantenimiento).length;
 
   return (
     <DashboardShell>
@@ -208,6 +227,15 @@ export default function DisponibilidadPage() {
               <span className="font-semibold text-[#C41230] dark:text-[#FF5C77]">
                 {ocupados} ocupados
               </span>
+              {mantenimiento > 0 && (
+                <>
+                  {" "}
+                  ·{" "}
+                  <span className="font-semibold text-blue-700 dark:text-blue-500">
+                    {mantenimiento} en mantenimiento
+                  </span>
+                </>
+              )}
             </p>
           </div>
           <button
