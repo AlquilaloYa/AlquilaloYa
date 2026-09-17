@@ -55,7 +55,7 @@ function PopupDepartamento({
           </button>
         </div>
         <div className="mt-4 space-y-3">
-          <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-600 dark:text-red-400">
+          <div className="rounded-lg bg-[#DC143C]/10 px-3 py-2 text-sm font-semibold text-[#C41230] dark:text-[#FF5C77]">
             Ocupado
             {dept.disponibilidad!.dias === 0
               ? " · se libera hoy"
@@ -86,9 +86,8 @@ function PopupDepartamento({
 
 function TarjetaDisponible({ dept }: { dept: DisponibilidadDepartment }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-xl bg-green-600 p-4 text-white">
+    <div className="flex items-center justify-center rounded-xl bg-[#8DB600] p-4 text-white">
       <span className="font-mono-label text-base font-bold">{dept.codigo}</span>
-      <span className="text-sm font-semibold">Disponible</span>
     </div>
   );
 }
@@ -105,12 +104,9 @@ function TarjetaOcupada({
       type="button"
       onClick={onOpen}
       title="Ver información"
-      className="flex items-center justify-between gap-2 rounded-xl bg-red-600 p-4 text-white transition-colors hover:bg-red-700"
+      className="flex items-center justify-center rounded-xl bg-[#DC143C] p-4 text-white transition-colors hover:bg-[#B01030]"
     >
       <span className="font-mono-label text-base font-bold">{dept.codigo}</span>
-      <span className="text-sm font-semibold underline decoration-white/60 underline-offset-4">
-        Ocupado
-      </span>
     </button>
   );
 }
@@ -205,11 +201,11 @@ export default function DisponibilidadPage() {
             </h1>
             <p className="text-sm text-muted-foreground">
               {departamentos.length} departamentos ·{" "}
-              <span className="font-semibold text-green-700 dark:text-green-500">
+              <span className="font-semibold text-[#5A7D00] dark:text-[#A8CC4C]">
                 {departamentos.length - ocupados} disponibles
               </span>{" "}
               ·{" "}
-              <span className="font-semibold text-red-600 dark:text-red-400">
+              <span className="font-semibold text-[#C41230] dark:text-[#FF5C77]">
                 {ocupados} ocupados
               </span>
             </p>
