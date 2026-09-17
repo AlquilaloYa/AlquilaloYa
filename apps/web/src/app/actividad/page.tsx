@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { BusquedaInput } from "@/components/tabla-busqueda";
 import {
   ActivityModule,
   activityActionCatalog,
@@ -42,14 +43,17 @@ export default function ActividadPage() {
   const [filter, setFilter] = useState<string>("");
   const [moduleFilter, setModuleFilter] = useState("");
   const [resultFilter, setResultFilter] = useState("");
+  const [q, setQ] = useState("");
+  const [sortBy, setSortBy] = useState<string>("fecha");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const queryKey = useMemo(
-    () => [filter, moduleFilter, resultFilter, from, to].join("|"),
-    [filter, moduleFilter, resultFilter, from, to]
+    () => [filter, moduleFilter, resultFilter, q, sortBy, sortDir, from, to].join("|"),
+    [filter, moduleFilter, resultFilter, q, sortBy, sortDir, from, to]
   );
 
   const load = useCallback(
@@ -64,6 +68,9 @@ export default function ActividadPage() {
         if (filter) params.set("action", filter);
         if (moduleFilter) params.set("module", moduleFilter);
         if (resultFilter) params.set("result", resultFilter);
+        if (q) params.set("q", q);
+        if (sortBy) params.set("sortBy", sortBy);
+        if (sortDir) params.set("sortDir", sortDir);
         if (from) params.set("from", new Date(`${from}T00:00:00`).toISOString());
         if (to) params.set("to", new Date(`${to}T23:59:59`).toISOString());
         const res = await apiFetch(`/api/activity?${params.toString()}`);
@@ -81,12 +88,24 @@ export default function ActividadPage() {
         setLoading(false);
       }
     },
-    [filter, moduleFilter, resultFilter, from, to]
+    [filter, moduleFilter, resultFilter, q, sortBy, sortDir, from, to]
   );
 
   useEffect(() => {
     load(0);
   }, [load, queryKey]);
+
+  function cambiarOrden(clave: string) {
+    if (sortBy === clave) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(clave);
+      setSortDir(clave === "fecha" ? "desc" : "asc");
+    }
+    setOffset(0);
+  }
+  const indSort = (clave: string) =>
+    sortBy === clave ? (sortDir === "asc" ? " ↑" : " ↓") : "";
 
   return (
     <DashboardShell>
@@ -99,6 +118,15 @@ export default function ActividadPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <BusquedaInput
+              value={q}
+              onChange={(v) => {
+                setOffset(0);
+                setQ(v);
+              }}
+              placeholder="Buscar usuario, acción, entidad…"
+              className="w-64"
+            />
             <select
               value={filter}
               onChange={(e) => {
@@ -192,12 +220,22 @@ export default function ActividadPage() {
               <table className="w-full text-left">
                 <thead className="bg-surface-container-high">
                   <tr className="font-label-md text-on-surface-variant">
-                    <th className="px-4 py-3">Fecha</th>
-                    <th className="px-4 py-3">Usuario</th>
-                    <th className="px-4 py-3">Acción</th>
-                    <th className="px-4 py-3">Módulo</th>
-                    <th className="px-4 py-3">Entidad</th>
-                    <th className="px-4 py-3">Resultado</th>
+                    {([
+                      ["fecha", "Fecha"],
+                      ["usuario", "Usuario"],
+                      ["accion", "Acción"],
+                      ["modulo", "Módulo"],
+                      ["entidad", "Entidad"],
+                      ["resultado", "Resultado"],
+                    ] as const).map(([clave, label]) => (
+                      <th
+                        key={clave}
+                        onClick={() => cambiarOrden(clave)}
+                        className="cursor-pointer select-none px-4 py-3 hover:bg-surface-container-high/50"
+                      >
+                        {label}{indSort(clave)}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/50">

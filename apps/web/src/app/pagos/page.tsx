@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
+import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
 import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
 
@@ -58,6 +59,9 @@ export default function PagosPage() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
+  const [busqueda, setBusqueda] = useState("");
+  const [sortKey, setSortKey] = useState<"cuota" | "contrato" | "cliente" | "departamento" | "total" | "estado" | "morosidad" | "penalidad" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,7 +148,47 @@ export default function PagosPage() {
     return out.sort((a, b) => b.diasMora - a.diasMora || a.periodo.localeCompare(b.periodo));
   }, [contracts, payments]);
 
-  const visibles = filter === "all" ? filas : filas.filter((f) => f.estadoPago === filter);
+  const ESTADO_META_LOCAL: Record<string, string> = {
+    PAGADO: "Pagado",
+    PENDIENTE: "Pendiente",
+    VENCIDO: "Vencido",
+    FINALIZADO: "Finalizado",
+  };
+
+  const visibles = useMemo(() => {
+    let filas2 = filter === "all" ? filas : filas.filter((f) => f.estadoPago === filter);
+    filas2 = filtrarFilas(filas2, busqueda, (f) => [
+      f.periodo,
+      f.contrato.codigoContrato,
+      f.contrato.clienteNombre,
+      f.contrato.apellidoCliente,
+      f.contrato.departamentoNombre,
+      ESTADO_META_LOCAL[f.estadoPago],
+    ]);
+    const valoradores: Record<string, (f: CuotaFila) => string | number | null | undefined> = {
+      cuota: (f) => f.periodo,
+      contrato: (f) => f.contrato.codigoContrato,
+      cliente: (f) => [f.contrato.clienteNombre, f.contrato.apellidoCliente].filter(Boolean).join(" "),
+      departamento: (f) => f.contrato.departamentoNombre,
+      total: (f) => f.total,
+      estado: (f) => f.estadoPago,
+      morosidad: (f) => f.diasMora,
+      penalidad: (f) => f.penalidad,
+    };
+    if (sortKey) {
+      filas2 = ordenarColumna(filas2, sortKey, sortDir, valoradores[sortKey]!);
+    }
+    return filas2;
+  }, [filas, filter, busqueda, sortKey, sortDir]);
+
+  function cambiarOrden(clave: typeof sortKey) {
+    if (sortKey === clave) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(clave);
+      setSortDir("asc");
+    }
+  }
 
   const resumen = useMemo(() => {
     const mesActual = new Date();
@@ -210,21 +254,24 @@ export default function PagosPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={
-                "rounded-full border px-3 py-1 font-label-md transition-colors " +
-                (filter === f.key
-                  ? "border-primary bg-primary text-on-primary"
-                  : "border-outline-variant text-on-surface-variant hover:bg-surface-container")
-              }
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={
+                  "rounded-full border px-3 py-1 font-label-md transition-colors " +
+                  (filter === f.key
+                    ? "border-primary bg-primary text-on-primary"
+                    : "border-outline-variant text-on-surface-variant hover:bg-surface-container")
+                }
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <BusquedaInput value={busqueda} onChange={setBusqueda} placeholder="Buscar cuota…" className="w-72" />
         </div>
 
         {loading ? (
@@ -237,14 +284,30 @@ export default function PagosPage() {
             <table className="w-full min-w-[1000px] text-left text-sm">
               <thead className="sticky top-0 z-10 bg-surface-container-low text-xs text-on-surface-variant">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Cuota</th>
-                  <th className="px-3 py-2 font-medium">Contrato</th>
-                  <th className="px-3 py-2 font-medium">Cliente</th>
-                  <th className="px-3 py-2 font-medium">Departamento</th>
-                  <th className="px-3 py-2 font-medium">Total mes</th>
-                  <th className="px-3 py-2 font-medium">Estado</th>
-                  <th className="px-3 py-2 font-medium">Morosidad</th>
-                  <th className="px-3 py-2 font-medium">Penalidad</th>
+                  <th onClick={() => cambiarOrden("cuota")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "cuota" ? "font-semibold text-on-surface" : "")}>
+                    Cuota{sortKey === "cuota" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("contrato")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "contrato" ? "font-semibold text-on-surface" : "")}>
+                    Contrato{sortKey === "contrato" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("cliente")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "cliente" ? "font-semibold text-on-surface" : "")}>
+                    Cliente{sortKey === "cliente" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("departamento")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "departamento" ? "font-semibold text-on-surface" : "")}>
+                    Departamento{sortKey === "departamento" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("total")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "total" ? "font-semibold text-on-surface" : "")}>
+                    Total mes{sortKey === "total" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("estado")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "estado" ? "font-semibold text-on-surface" : "")}>
+                    Estado{sortKey === "estado" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("morosidad")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "morosidad" ? "font-semibold text-on-surface" : "")}>
+                    Morosidad{sortKey === "morosidad" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("penalidad")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "penalidad" ? "font-semibold text-on-surface" : "")}>
+                    Penalidad{sortKey === "penalidad" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
                   <th className="px-3 py-2 font-medium">Acción</th>
                 </tr>
               </thead>

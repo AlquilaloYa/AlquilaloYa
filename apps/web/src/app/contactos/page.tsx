@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
+import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { Button } from "@contract/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@contract/ui/components/card";
 import { Input } from "@contract/ui/components/input";
@@ -400,9 +401,10 @@ export default function ContactosPage() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const formCardRef = useRef<HTMLDivElement | null>(null);
   const [sortKey, setSortKey] = useState<
-    "nombre" | "tipo" | "ruc" | "mascotas" | null
+    "nombre" | "tipo" | "dni" | "ruc" | "email" | "telefono" | "mascotas" | null
   >(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [busqueda, setBusqueda] = useState("");
   const [pdfEstado, setPdfEstado] = useState<
     "inactivo" | "leyendo" | "listo" | "error"
   >("inactivo");
@@ -463,30 +465,32 @@ export default function ContactosPage() {
   }
 
   const contactoOrdenados = (() => {
-    if (!sortKey) return contactos;
-    const copia = [...contactos];
-    if (sortKey === "tipo") {
-      copia.sort((a, b) => a.tipoPersona.localeCompare(b.tipoPersona));
-    } else if (sortKey === "ruc") {
-      copia.sort((a, b) => (a.ruc ?? "").localeCompare(b.ruc ?? ""));
-    } else if (sortKey === "mascotas") {
-      copia.sort(
-        (a, b) =>
-          Number(!!(a.mascotas ?? false)) - Number(!!(b.mascotas ?? false))
-      );
-    } else if (sortKey === "nombre") {
-      copia.sort((a, b) =>
-        [a.nombre, a.apellido]
-          .filter(Boolean)
-          .join(" ")
-          .localeCompare([b.nombre, b.apellido].filter(Boolean).join(" "), "es")
-      );
+    let filas = filtrarFilas(contactos, busqueda, (c) => [
+      c.nombre,
+      c.apellido,
+      c.dni,
+      c.ruc,
+      c.email,
+      c.telefono,
+      c.contactoEmergencia?.nombre,
+      c.contactoEmergencia?.telefono,
+    ]);
+    const valoradores: Record<string, (c: ContactView) => string | number | null | undefined> = {
+      nombre: (c) => [c.nombre, c.apellido].filter(Boolean).join(" "),
+      tipo: (c) => c.tipoPersona,
+      dni: (c) => c.dni,
+      ruc: (c) => c.ruc,
+      email: (c) => c.email,
+      telefono: (c) => c.telefono,
+      mascotas: (c) => (c.mascotas ?? false ? 1 : 0),
+    };
+    if (sortKey) {
+      filas = ordenarColumna(filas, sortKey, sortDir, valoradores[sortKey]!);
     }
-    if (sortDir === "desc") copia.reverse();
-    return copia;
+    return filas;
   })();
 
-  function cambiarOrden(clave: "nombre" | "tipo" | "ruc" | "mascotas") {
+  function cambiarOrden(clave: "nombre" | "tipo" | "dni" | "ruc" | "email" | "telefono" | "mascotas") {
     if (sortKey === clave) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
@@ -1078,7 +1082,10 @@ export default function ContactosPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Contactos ({contactos.length})</CardTitle>
+            <div className="flex items-center justify-between gap-4">
+              <CardTitle>Contactos ({contactoOrdenados.length}/{contactos.length})</CardTitle>
+              <BusquedaInput value={busqueda} onChange={setBusqueda} placeholder="Buscar contacto…" className="w-72" />
+            </div>
           </CardHeader>
           <CardContent>
             {contactos.length === 0 ? (
@@ -1120,7 +1127,13 @@ export default function ContactosPage() {
                       >
                         Tipo{sortKey === "tipo" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                       </th>
-                      <th className="w-[110px] px-3 py-2 font-medium">DNI/CE</th>
+                      <th
+                        onClick={() => cambiarOrden("dni")}
+                        className={"w-[110px] cursor-pointer select-none px-3 py-2 font-medium transition-colors hover:bg-muted-foreground/10 " + (sortKey === "dni" ? "font-semibold" : "")}
+                        title="Ordenar por DNI/CE"
+                      >
+                        DNI/CE{sortKey === "dni" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                      </th>
                       <th
                         onClick={() => cambiarOrden("ruc")}
                         className={"w-[130px] cursor-pointer select-none px-3 py-2 font-medium transition-colors hover:bg-muted-foreground/10 " + (sortKey === "ruc" ? "font-semibold" : "")}
@@ -1128,8 +1141,20 @@ export default function ContactosPage() {
                       >
                         RUC{sortKey === "ruc" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                       </th>
-                      <th className="w-[280px] px-3 py-2 font-medium">Email</th>
-                      <th className="w-[150px] px-3 py-2 font-medium">Teléfono</th>
+                      <th
+                        onClick={() => cambiarOrden("email")}
+                        className={"w-[280px] cursor-pointer select-none px-3 py-2 font-medium transition-colors hover:bg-muted-foreground/10 " + (sortKey === "email" ? "font-semibold" : "")}
+                        title="Ordenar por email"
+                      >
+                        Email{sortKey === "email" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                      </th>
+                      <th
+                        onClick={() => cambiarOrden("telefono")}
+                        className={"w-[150px] cursor-pointer select-none px-3 py-2 font-medium transition-colors hover:bg-muted-foreground/10 " + (sortKey === "telefono" ? "font-semibold" : "")}
+                        title="Ordenar por teléfono"
+                      >
+                        Teléfono{sortKey === "telefono" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                      </th>
                       <th className="w-[110px] px-3 py-2 font-medium">País</th>
                       <th className="px-3 py-2 font-medium">C. DNI</th>
                       <th className="px-3 py-2 font-medium">C. Boletas</th>

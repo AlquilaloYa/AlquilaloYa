@@ -11,6 +11,11 @@ export interface ActivityFilter {
   /** ISO desde / hasta (filtro de fecha). */
   from?: string;
   to?: string;
+  /** Búsqueda de texto libre (usuario, acción, módulo, entidad, id de entidad). */
+  q?: string;
+  /** Orden por columna y dirección. */
+  sortBy?: string;
+  sortDir?: "asc" | "desc";
   limit?: number;
   offset?: number;
 }

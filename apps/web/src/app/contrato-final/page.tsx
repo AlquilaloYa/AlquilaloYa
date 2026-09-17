@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
+import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
 import { FileCheck, Download } from "lucide-react";
 
@@ -38,6 +39,42 @@ export default function ContratoFinalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [busqueda, setBusqueda] = useState("");
+  const [sortKey, setSortKey] = useState<"codigo" | "cliente" | "departamento" | "canon" | "garantia" | "inicio" | "fin" | "estado" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const filasTabla = useMemo(() => {
+    let filas = filtrarFilas(contracts, busqueda, (c) => [
+      c.codigoContrato,
+      c.clienteNombre,
+      c.apellidoCliente,
+      c.departamentoNombre,
+      ESTADO_LABELS[c.estado]?.label ?? c.estado,
+    ]);
+    const valoradores: Record<string, (c: FinalContractApi) => string | number | null | undefined> = {
+      codigo: (c) => c.codigoContrato,
+      cliente: (c) => [c.clienteNombre, c.apellidoCliente].filter(Boolean).join(" "),
+      departamento: (c) => c.departamentoNombre,
+      canon: (c) => Number(c.montoCanonMensual),
+      garantia: (c) => Number(c.depositoGarantia ?? 0),
+      inicio: (c) => c.fechaInicio,
+      fin: (c) => c.fechaFin,
+      estado: (c) => ESTADO_LABELS[c.estado]?.label ?? c.estado,
+    };
+    if (sortKey) {
+      filas = ordenarColumna(filas, sortKey, sortDir, valoradores[sortKey]!);
+    }
+    return filas;
+  }, [contracts, busqueda, sortKey, sortDir]);
+
+  function cambiarOrden(clave: typeof sortKey) {
+    if (sortKey === clave) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(clave);
+      setSortDir("asc");
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -120,25 +157,57 @@ export default function ContratoFinalPage() {
         ) : contracts.length === 0 ? (
           <p className="text-sm text-muted-foreground">No hay contratos finalizados aún.</p>
         ) : (
+          <div className="flex items-center justify-end gap-3 rounded-md border border-outline-variant/50 p-3">
+            <span className="mr-auto text-sm text-muted-foreground">
+              {filasTabla.length} de {contracts.length} contratos
+            </span>
+            <BusquedaInput value={busqueda} onChange={setBusqueda} placeholder="Buscar contrato…" className="w-72" />
+          </div>
+        )}
+        {error ? (
+          <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
+            Error: {error}
+          </div>
+        ) : loading ? (
+          <p className="text-sm text-muted-foreground">Cargando contratos finales…</p>
+        ) : contracts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No hay contratos finalizados aún.</p>
+        ) : (
           <TableScroll className="w-full rounded-md border">
             <div className="max-h-[40rem] overflow-y-auto">
               <table className="w-full min-w-[900px] text-sm">
                 <thead className="sticky top-0 z-10 bg-[#151a24] text-left text-xs text-white/80">
                   <tr>
-                    <th className="px-3 py-2 font-medium">Código</th>
-                    <th className="px-3 py-2 font-medium">Cliente</th>
-                    <th className="px-3 py-2 font-medium">Departamento</th>
-                    <th className="px-3 py-2 font-medium">Canon</th>
-                    <th className="px-3 py-2 font-medium">Garantía</th>
-                    <th className="px-3 py-2 font-medium">Inicio</th>
-                    <th className="px-3 py-2 font-medium">Fin</th>
-                    <th className="px-3 py-2 font-medium">Estado</th>
+                    <th onClick={() => cambiarOrden("codigo")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "codigo" ? "text-white" : "")}>
+                      Código{sortKey === "codigo" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("cliente")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "cliente" ? "text-white" : "")}>
+                      Cliente{sortKey === "cliente" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("departamento")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "departamento" ? "text-white" : "")}>
+                      Departamento{sortKey === "departamento" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("canon")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "canon" ? "text-white" : "")}>
+                      Canon{sortKey === "canon" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("garantia")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "garantia" ? "text-white" : "")}>
+                      Garantía{sortKey === "garantia" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("inicio")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "inicio" ? "text-white" : "")}>
+                      Inicio{sortKey === "inicio" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("fin")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "fin" ? "text-white" : "")}>
+                      Fin{sortKey === "fin" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("estado")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "estado" ? "text-white" : "")}>
+                      Estado{sortKey === "estado" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
                     <th className="px-3 py-2 font-medium">Documento</th>
                     <th className="px-3 py-2 font-medium">Gestión</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {contracts.map((c) => {
+                  {filasTabla.map((c) => {
                     const meta = ESTADO_LABELS[c.estado] ?? { label: c.estado, color: "bg-muted" };
                     return (
                       <tr key={c.id} className="border-t hover:bg-muted/50">

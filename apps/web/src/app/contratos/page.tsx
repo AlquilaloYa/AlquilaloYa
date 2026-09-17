@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
+import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
 import {
   leerSeparaciones,
@@ -176,6 +177,9 @@ export default function ContratosPage() {
 
   const [status, setStatus] = useState("all");
   const [department, setDepartment] = useState("all");
+  const [busqueda, setBusqueda] = useState("");
+  const [sortKey, setSortKey] = useState<"codigo" | "cliente" | "departamento" | "mensualidad" | "mantenimiento" | "estado" | "creado" | "inicio" | "fin" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const router = useRouter();
 
@@ -331,11 +335,44 @@ export default function ContratosPage() {
     }
   }
 
-  const filtered = contracts.filter((c) => {
-    const matchesStatus = status === "all" || c.estado === status;
-    const matchesDept = department === "all" || c.departamentoNombre === department;
-    return matchesStatus && matchesDept;
-  });
+  const filtered = useMemo(() => {
+    let filas = contracts.filter((c) => {
+      const matchesStatus = status === "all" || c.estado === status;
+      const matchesDept = department === "all" || c.departamentoNombre === department;
+      return matchesStatus && matchesDept;
+    });
+    filas = filtrarFilas(filas, busqueda, (c) => [
+      c.codigoContrato,
+      c.clienteNombre,
+      c.apellidoCliente,
+      c.departamentoNombre,
+      STATUS_META[c.estado]?.label ?? c.estado,
+    ]);
+    const valoradores: Record<string, (c: ContractApi) => string | number | null | undefined> = {
+      codigo: (c) => c.codigoContrato,
+      cliente: (c) => [c.clienteNombre, c.apellidoCliente].filter(Boolean).join(" "),
+      departamento: (c) => c.departamentoNombre,
+      mensualidad: (c) => Number(c.montoCanonMensual),
+      mantenimiento: (c) => Number(c.mantenimiento ?? "0"),
+      estado: (c) => STATUS_META[c.estado]?.label ?? c.estado,
+      creado: (c) => c.createdAt,
+      inicio: (c) => c.fechaInicio,
+      fin: (c) => c.fechaFin,
+    };
+    if (sortKey) {
+      filas = ordenarColumna(filas, sortKey, sortDir, valoradores[sortKey]!);
+    }
+    return filas;
+  }, [contracts, status, department, busqueda, sortKey, sortDir]);
+
+  function cambiarOrden(clave: typeof sortKey) {
+    if (sortKey === clave) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(clave);
+      setSortDir("asc");
+    }
+  }
 
   const separacionesActivas = separaciones.filter((s) => {
     return ["SEPARADO", "GARANTIA_COMPLETADA", "CONTRATO_PREVIO"].includes(s.estado);
@@ -432,31 +469,52 @@ res.push({
         </div>
 
         <div className="overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
-          <div className="flex items-center justify-between bg-surface p-4">
+          <div className="flex items-center justify-between gap-4 bg-surface p-4">
             <span className="font-body-md text-on-surface-variant">
               {loading
                 ? "Cargando contratos…"
                 : `Mostrando ${filtered.length} de ${contracts.length} contratos`}
             </span>
-            <button className="flex h-8 items-center gap-1 rounded border border-outline-variant px-3 text-on-surface hover:bg-surface-container-low dark:border-transparent">
-              <Download className="h-4 w-4" />
-              Exportar
-            </button>
+            <div className="flex items-center gap-3">
+              <BusquedaInput value={busqueda} onChange={setBusqueda} placeholder="Buscar contrato…" className="w-72" />
+              <button className="flex h-8 items-center gap-1 rounded border border-outline-variant px-3 text-on-surface hover:bg-surface-container-low dark:border-transparent">
+                <Download className="h-4 w-4" />
+                Exportar
+              </button>
+            </div>
           </div>
 
           <TableScroll className="w-full rounded-lg border border-outline-variant dark:border-transparent">
             <table className="w-full min-w-[1150px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-outline-variant bg-surface-container-low/50 dark:border-transparent">
-                  <th className="whitespace-nowrap p-4 font-label-md text-on-surface-variant">ID Contrato</th>
-                  <th className="p-4 font-label-md text-on-surface-variant">Cliente / Contraparte</th>
-                  <th className="p-4 font-label-md text-on-surface-variant">Departamento</th>
-                  <th className="p-4 font-label-md text-on-surface-variant">Mensualidad</th>
-                  <th className="whitespace-nowrap p-4 font-label-md text-on-surface-variant">Mantenimiento</th>
-                  <th className="p-4 font-label-md text-on-surface-variant">Estado</th>
-                  <th className="whitespace-nowrap p-4 font-label-md text-on-surface-variant">Creado</th>
-                  <th className="whitespace-nowrap p-4 font-label-md text-on-surface-variant">Fecha inicio</th>
-                  <th className="whitespace-nowrap p-4 font-label-md text-on-surface-variant">Fecha fin</th>
+                  <th onClick={() => cambiarOrden("codigo")} className={"whitespace-nowrap p-4 font-label-md " + (sortKey === "codigo" ? "text-primary" : "text-on-surface-variant cursor-pointer select-none hover:text-on-surface")}>
+                    ID Contrato{sortKey === "codigo" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("cliente")} className={"p-4 font-label-md " + (sortKey === "cliente" ? "text-primary" : "text-on-surface-variant cursor-pointer select-none hover:text-on-surface")}>
+                    Cliente / Contraparte{sortKey === "cliente" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("departamento")} className={"p-4 font-label-md " + (sortKey === "departamento" ? "text-primary" : "text-on-surface-variant cursor-pointer select-none hover:text-on-surface")}>
+                    Departamento{sortKey === "departamento" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("mensualidad")} className={"p-4 font-label-md " + (sortKey === "mensualidad" ? "text-primary" : "text-on-surface-variant cursor-pointer select-none hover:text-on-surface")}>
+                    Mensualidad{sortKey === "mensualidad" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("mantenimiento")} className={"whitespace-nowrap p-4 font-label-md " + (sortKey === "mantenimiento" ? "text-primary" : "text-on-surface-variant cursor-pointer select-none hover:text-on-surface")}>
+                    Mantenimiento{sortKey === "mantenimiento" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("estado")} className={"p-4 font-label-md " + (sortKey === "estado" ? "text-primary" : "text-on-surface-variant cursor-pointer select-none hover:text-on-surface")}>
+                    Estado{sortKey === "estado" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("creado")} className={"whitespace-nowrap p-4 font-label-md " + (sortKey === "creado" ? "text-primary" : "text-on-surface-variant cursor-pointer select-none hover:text-on-surface")}>
+                    Creado{sortKey === "creado" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("inicio")} className={"whitespace-nowrap p-4 font-label-md " + (sortKey === "inicio" ? "text-primary" : "text-on-surface-variant cursor-pointer select-none hover:text-on-surface")}>
+                    Fecha inicio{sortKey === "inicio" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("fin")} className={"whitespace-nowrap p-4 font-label-md " + (sortKey === "fin" ? "text-primary" : "text-on-surface-variant cursor-pointer select-none hover:text-on-surface")}>
+                    Fecha fin{sortKey === "fin" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
                   <th className="p-4 text-right font-label-md text-on-surface-variant">Acciones</th>
                 </tr>
               </thead>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, FileText } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
+import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
 
 type ClientFichaApi = {
@@ -197,6 +198,44 @@ export default function ClienteContratoPage() {
     hoy.getMonth(),
     hoy.getDate()
   ).getTime();
+
+  const [busquedaCrono, setBusquedaCrono] = useState("");
+  const [cronSortKey, setCronSortKey] = useState<"fecha" | "estado" | null>(null);
+  const [cronSortDir, setCronSortDir] = useState<"asc" | "desc">("asc");
+
+  const filasCuotas = useMemo(() => {
+    type FilaCron = { fecha: Date; pStr: string; estado: string };
+    const filas: FilaCron[] = cuotas.map((d) => {
+      const pStr = localDateStr(d);
+      const pago = pagos.find((p) => p.periodo === pStr) ?? null;
+      const pagado = pago?.estado === "PAGADO";
+      const vencido = !pagado && d.getTime() < inicioDia;
+      return {
+        fecha: d,
+        pStr,
+        estado: pagado ? "Pagado" : vencido ? "Vencido" : "Pendiente",
+      };
+    });
+    let salida = filtrarFilas(filas, busquedaCrono, (f) => [
+      f.estado,
+      f.fecha.toLocaleDateString("es-PE"),
+    ]);
+    if (cronSortKey) {
+      const valor: (f: FilaCron) => string | number | null | undefined =
+        cronSortKey === "fecha" ? (f) => f.fecha.getTime() : (f) => f.estado;
+      salida = ordenarColumna(salida, cronSortKey, cronSortDir, valor);
+    }
+    return salida;
+  }, [cuotas, pagos, inicioDia, busquedaCrono, cronSortKey, cronSortDir]);
+
+  function cambiarOrdenCron(clave: typeof cronSortKey) {
+    if (cronSortKey === clave) {
+      setCronSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setCronSortKey(clave);
+      setCronSortDir("asc");
+    }
+  }
   const meses =
     fechaFin && fechaFin.getTime() > hoy.getTime()
       ? Math.max(0, Math.round((fechaFin.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24 * 30)))
@@ -410,6 +449,12 @@ export default function ClienteContratoPage() {
           <h4 className="mb-2 font-label-md uppercase tracking-wider text-on-surface-variant">
             Cronograma ({cuotas.length} meses)
           </h4>
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <span className="text-sm text-on-surface-variant">
+              {filasCuotas.length} de {cuotas.length} meses
+            </span>
+            <BusquedaInput value={busquedaCrono} onChange={setBusquedaCrono} placeholder="Buscar mes o estado…" className="w-72" />
+          </div>
           {cuotas.length === 0 ? (
             <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-outline-variant text-sm text-on-surface-variant">
               Sin periodo de alquiler
@@ -422,7 +467,9 @@ export default function ClienteContratoPage() {
               <table className="w-full min-w-[1400px] text-left text-sm">
                 <thead className="sticky top-0 z-10 bg-surface-container-low text-xs text-on-surface-variant">
                   <tr>
-                    <th className="px-3 py-2 font-medium">Mes</th>
+                    <th onClick={() => cambiarOrdenCron("fecha")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-surface-container " + (cronSortKey === "fecha" ? "text-primary" : "")}>
+                      Mes{cronSortKey === "fecha" ? (cronSortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
                     <th className="px-3 py-2 font-medium">Cliente</th>
                     <th className="px-3 py-2 font-medium">Código</th>
                     <th className="px-3 py-2 font-medium">Mensualidad</th>
@@ -431,7 +478,9 @@ export default function ClienteContratoPage() {
                     <th className="px-3 py-2 font-medium">Depósito</th>
                     <th className="px-3 py-2 font-medium">Esquema de pagos</th>
                     <th className="px-3 py-2 font-medium">Contacto emergencia</th>
-                    <th className="px-3 py-2 font-medium">Estado de pago</th>
+                    <th onClick={() => cambiarOrdenCron("estado")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-surface-container " + (cronSortKey === "estado" ? "text-primary" : "")}>
+                      Estado de pago{cronSortKey === "estado" ? (cronSortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
                     <th className="px-3 py-2 font-medium">Morosidad</th>
                     <th className="px-3 py-2 font-medium">Penalidad</th>
                     <th className="px-3 py-2 font-medium">A quién pagar</th>
@@ -440,11 +489,12 @@ export default function ClienteContratoPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {cuotas.map((d, i) => {
-                    const pStr = localDateStr(d);
+                  {filasCuotas.map((fila) => {
+                    const d = fila.fecha;
+                    const pStr = fila.pStr;
                     const pago = pagos.find((p) => p.periodo === pStr) ?? null;
-                    const pagado = pago?.estado === "PAGADO";
-                    const vencido = !pagado && d.getTime() < inicioDia;
+                    const pagado = fila.estado === "Pagado";
+                    const vencido = fila.estado === "Vencido";
                     const diasMora = pagado
                       ? pago?.fechaPago
                         ? Math.max(
@@ -493,7 +543,7 @@ export default function ClienteContratoPage() {
                           )}
                         </td>
                         <td className="whitespace-nowrap px-3 py-2">
-                          {i === 0 ? moneda(contrato?.depositoGarantia) : "—"}
+                          {d.getTime() === cuotas[0]?.getTime() ? moneda(contrato?.depositoGarantia) : "—"}
                         </td>
                         <td className="px-3 py-2">Mensual</td>
                         <td className="px-3 py-2">{cliente.telefono ?? "—"}</td>

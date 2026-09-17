@@ -1,4 +1,5 @@
-import { and, count, desc, eq, gte, lte } from "drizzle-orm";
+import { and, count, asc, desc, eq, gte, ilike, lte, or } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 import { db, schema } from "../index";
 import type {
   ActivityFilter,
@@ -22,7 +23,35 @@ function buildWhere(filter: ActivityFilter) {
     conditions.push(gte(schema.activity_events.timestamp, new Date(filter.from)));
   if (filter.to)
     conditions.push(lte(schema.activity_events.timestamp, new Date(filter.to)));
+  if (filter.q) {
+    const p = `%${filter.q}%`;
+    conditions.push(
+      or(
+        ilike(schema.users.name, p),
+        ilike(schema.activity_events.action, p),
+        ilike(schema.activity_events.module, p),
+        ilike(schema.activity_events.entityType, p),
+        ilike(schema.activity_events.entityId, p)
+      )
+    );
+  }
   return conditions.length ? and(...conditions) : undefined;
+}
+
+const SORT_COLS: Record<string, { col: PgColumn; asc: boolean } | null> = {
+  fecha: { col: schema.activity_events.timestamp, asc: false },
+  usuario: { col: schema.users.name, asc: true },
+  accion: { col: schema.activity_events.action, asc: true },
+  modulo: { col: schema.activity_events.module, asc: true },
+  entidad: { col: schema.activity_events.entityId, asc: true },
+  resultado: { col: schema.activity_events.result, asc: true },
+};
+
+function buildOrder(filter: ActivityFilter) {
+  const key = filter.sortBy && SORT_COLS[filter.sortBy] ? filter.sortBy : "fecha";
+  const meta = SORT_COLS[key]!;
+  const dir = filter.sortDir ?? (meta.asc ? "asc" : "desc");
+  return dir === "asc" ? asc(meta.col) : desc(meta.col);
 }
 
 export class DrizzleActivityRepository implements ActivityRepository {
@@ -51,7 +80,7 @@ export class DrizzleActivityRepository implements ActivityRepository {
         eq(schema.activity_events.userId, schema.users.id)
       )
       .where(where)
-      .orderBy(desc(schema.activity_events.timestamp))
+      .orderBy(buildOrder(filter))
       .limit(limit)
       .offset(offset);
 

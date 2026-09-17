@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
+import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
 import { CalendarPlus, Download, FileCheck, Plus, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { AdendaModal, ExtensionModal } from "@/components/adenda-modals";
@@ -54,6 +55,44 @@ export default function AdendasPage() {
   const [verificacion, setVerificacion] = useState<Record<string, boolean | undefined>>({});
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [regenerandoId, setRegenerandoId] = useState<string | null>(null);
+  const [busqueda, setBusqueda] = useState("");
+  const [sortKey, setSortKey] = useState<"codigo" | "tipo" | "contrato" | "cliente" | "departamento" | "fecha" | "estado" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const adendasTabla = useMemo(() => {
+    let filas = filtrarFilas(adendas, busqueda, (d) => [
+      d.filename,
+      d.codigoContrato,
+      d.clienteNombre,
+      d.clienteApellidos,
+      d.departamentoCodigo,
+      d.departamentoNombre,
+      d.tipo === "ADENDA_EXTENSION" ? "Adenda de extensión" : "Adenda",
+      d.estadoGeneracion === "GENERADO" ? "Generado" : d.estadoGeneracion === "ERROR" ? "Error" : d.estadoGeneracion,
+    ]);
+    const valoradores: Record<string, (d: AdendaApi) => string | number | null | undefined> = {
+      codigo: (d) => d.filename,
+      tipo: (d) => d.tipo,
+      contrato: (d) => d.codigoContrato,
+      cliente: (d) => [d.clienteNombre, d.clienteApellidos].filter(Boolean).join(" "),
+      departamento: (d) => [d.departamentoCodigo, d.departamentoNombre].filter(Boolean).join(" "),
+      fecha: (d) => d.createdAt,
+      estado: (d) => d.estadoGeneracion,
+    };
+    if (sortKey) {
+      filas = ordenarColumna(filas, sortKey, sortDir, valoradores[sortKey]!);
+    }
+    return filas;
+  }, [adendas, busqueda, sortKey, sortDir]);
+
+  function cambiarOrden(clave: typeof sortKey) {
+    if (sortKey === clave) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(clave);
+      setSortDir("asc");
+    }
+  }
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerMode, setPickerMode] = useState<"adenda" | "extension">("adenda");
@@ -248,23 +287,45 @@ export default function AdendasPage() {
             Aún no hay adendas generadas. Crea una desde el detalle de un contrato emitido o firmado.
           </p>
         ) : (
+          <div className="flex items-center justify-end gap-3 rounded-md border border-outline-variant/50 p-3">
+            <span className="mr-auto text-sm text-muted-foreground">
+              {adendasTabla.length} de {adendas.length} adendas
+            </span>
+            <BusquedaInput value={busqueda} onChange={setBusqueda} placeholder="Buscar adenda…" className="w-72" />
+          </div>
+        )}
+        {!loading && adendas.length > 0 && (
           <TableScroll className="w-full rounded-md border">
             <div className="max-h-[40rem] overflow-y-auto">
               <table className="w-full min-w-[900px] text-sm">
                 <thead className="sticky top-0 z-10 bg-[#151a24] text-left text-xs text-white/80">
                   <tr>
-                    <th className="px-3 py-2 font-medium">Código adenda</th>
-                    <th className="px-3 py-2 font-medium">Tipo</th>
-                    <th className="px-3 py-2 font-medium">Contrato</th>
-                    <th className="px-3 py-2 font-medium">Cliente</th>
-                    <th className="px-3 py-2 font-medium">Departamento</th>
-                    <th className="px-3 py-2 font-medium">Fecha</th>
-                    <th className="px-3 py-2 font-medium">Estado</th>
+                    <th onClick={() => cambiarOrden("codigo")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "codigo" ? "text-white" : "")}>
+                      Código adenda{sortKey === "codigo" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("tipo")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "tipo" ? "text-white" : "")}>
+                      Tipo{sortKey === "tipo" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("contrato")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "contrato" ? "text-white" : "")}>
+                      Contrato{sortKey === "contrato" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("cliente")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "cliente" ? "text-white" : "")}>
+                      Cliente{sortKey === "cliente" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("departamento")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "departamento" ? "text-white" : "")}>
+                      Departamento{sortKey === "departamento" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("fecha")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "fecha" ? "text-white" : "")}>
+                      Fecha{sortKey === "fecha" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                    <th onClick={() => cambiarOrden("estado")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "estado" ? "text-white" : "")}>
+                      Estado{sortKey === "estado" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
                     <th className="px-3 py-2 font-medium">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {adendas.map((d) => (
+                  {adendasTabla.map((d) => (
                     <tr key={d.id} className="border-t hover:bg-muted/50">
                       <td className="px-3 py-2 font-mono-label font-medium">
                         {d.filename.replace(/\.pdf$/i, "")}

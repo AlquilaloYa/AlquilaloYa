@@ -15,6 +15,9 @@ function parseFilters(searchParams: URLSearchParams) {
     entityType: "entityType",
     entityId: "entityId",
     result: "result",
+    q: "q",
+    sortBy: "sortBy",
+    sortDir: "sortDir",
     from: "from",
     to: "to",
   };

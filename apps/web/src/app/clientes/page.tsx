@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
+import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { Card, CardContent, CardHeader, CardTitle } from "@contract/ui/components/card";
 import { PersonType } from "@contract/domain/client";
 import { apiFetch } from "@/lib/api";
@@ -89,6 +90,52 @@ export default function ClientesPage() {
   const [clients, setClients] = useState<ClientView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [busqueda, setBusqueda] = useState("");
+  const [sortKey, setSortKey] = useState<"departamento" | "nombre" | "documento" | "finContrato" | "inicioAdenda" | "finAdenda" | "ruc" | "tipo" | "email" | "telefono" | "pais" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const clientesTabla = useMemo(() => {
+    let filas = filtrarFilas(
+      clients,
+      busqueda,
+      (c) => [
+        c.codigoDepartamento,
+        c.nombres,
+        c.apellidos,
+        c.documentoIdentidad,
+        c.ruc,
+        c.email,
+        c.telefono,
+        c.tipoPersona === PersonType.NATURAL ? "Natural" : "Jurídica",
+      ]
+    );
+    const valoradores: Record<string, (c: ClientView) => string | number | null | undefined> = {
+      departamento: (c) => c.codigoDepartamento,
+      nombre: (c) => [c.nombres, c.apellidos].filter(Boolean).join(" "),
+      documento: (c) => c.documentoIdentidad,
+      finContrato: (c) => c.fechaFinContrato,
+      inicioAdenda: (c) => c.fechaInicioAdenda,
+      finAdenda: (c) => c.fechaFinAdenda,
+      ruc: (c) => c.ruc,
+      tipo: (c) => (c.tipoPersona === PersonType.NATURAL ? "Natural" : "Jurídica"),
+      email: (c) => c.email,
+      telefono: (c) => c.telefono,
+      pais: (c) => c.codigoPais,
+    };
+    if (sortKey) {
+      filas = ordenarColumna(filas, sortKey, sortDir, valoradores[sortKey]!);
+    }
+    return filas;
+  }, [clients, busqueda, sortKey, sortDir]);
+
+  function cambiarOrden(clave: typeof sortKey) {
+    if (sortKey === clave) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(clave);
+      setSortDir("asc");
+    }
+  }
 
   useEffect(() => {
     async function cargar() {
@@ -160,9 +207,12 @@ export default function ClientesPage() {
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
               <CardTitle>Clientes que firman el contrato final</CardTitle>
-              {loading && <span className="text-sm text-muted-foreground">Cargando…</span>}
+              <div className="flex items-center gap-3">
+                <BusquedaInput value={busqueda} onChange={setBusqueda} placeholder="Buscar cliente…" className="w-64" />
+                {loading && <span className="text-sm text-muted-foreground">Cargando…</span>}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -178,23 +228,45 @@ export default function ClientesPage() {
                   <table className="w-full min-w-[1080px] text-sm">
                     <thead className="sticky top-0 z-10 bg-[#151a24] text-left text-xs text-white/80">
                       <tr>
-                        <th className="px-3 py-2 font-medium">ID departamento</th>
-                        <th className="px-3 py-2 font-medium">Nombre</th>
-                        <th className="px-3 py-2 font-medium">Documento</th>
-                        <th className="px-3 py-2 font-medium">Fin contrato</th>
-                        <th className="px-3 py-2 font-medium">Inicio adenda</th>
-                        <th className="px-3 py-2 font-medium">Fin adenda</th>
-                        <th className="px-3 py-2 font-medium">RUC</th>
-                        <th className="px-3 py-2 font-medium">Tipo</th>
-                        <th className="px-3 py-2 font-medium">Email</th>
-                        <th className="px-3 py-2 font-medium">Teléfono</th>
-                        <th className="px-3 py-2 font-medium">País</th>
+                        <th onClick={() => cambiarOrden("departamento")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "departamento" ? "text-white" : "")}>
+                          ID departamento{sortKey === "departamento" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th onClick={() => cambiarOrden("nombre")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "nombre" ? "text-white" : "")}>
+                          Nombre{sortKey === "nombre" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th onClick={() => cambiarOrden("documento")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "documento" ? "text-white" : "")}>
+                          Documento{sortKey === "documento" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th onClick={() => cambiarOrden("finContrato")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "finContrato" ? "text-white" : "")}>
+                          Fin contrato{sortKey === "finContrato" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th onClick={() => cambiarOrden("inicioAdenda")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "inicioAdenda" ? "text-white" : "")}>
+                          Inicio adenda{sortKey === "inicioAdenda" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th onClick={() => cambiarOrden("finAdenda")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "finAdenda" ? "text-white" : "")}>
+                          Fin adenda{sortKey === "finAdenda" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th onClick={() => cambiarOrden("ruc")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "ruc" ? "text-white" : "")}>
+                          RUC{sortKey === "ruc" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th onClick={() => cambiarOrden("tipo")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "tipo" ? "text-white" : "")}>
+                          Tipo{sortKey === "tipo" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th onClick={() => cambiarOrden("email")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "email" ? "text-white" : "")}>
+                          Email{sortKey === "email" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th onClick={() => cambiarOrden("telefono")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "telefono" ? "text-white" : "")}>
+                          Teléfono{sortKey === "telefono" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th onClick={() => cambiarOrden("pais")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "pais" ? "text-white" : "")}>
+                          País{sortKey === "pais" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
                         <th className="px-3 py-2 font-medium">WhatsApp</th>
                         <th className="px-3 py-2 font-medium">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {clients.map((c) => (
+                      {clientesTabla.map((c) => (
                         <tr key={c.id} className="border-t">
                           <td className="px-3 py-2 font-mono font-medium">
                             <Link

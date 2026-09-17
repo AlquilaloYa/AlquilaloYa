@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
 import { Download, FileText, Plus, X } from "lucide-react";
 
@@ -28,6 +29,35 @@ export default function PlantillasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState<{ template: TemplateApi } | null>(null);
+  const [busqueda, setBusqueda] = useState("");
+  const [sortKey, setSortKey] = useState<"clave" | "tipo" | "nombre" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const filasTabla = useMemo(() => {
+    let filas = filtrarFilas(templates, busqueda, (t) => [
+      t.id,
+      TEMPLATE_LABEL[t.clave] ?? t.clave,
+      t.nombre,
+    ]);
+    const valoradores: Record<string, (t: TemplateApi) => string | number | null | undefined> = {
+      clave: (t) => t.id,
+      tipo: (t) => TEMPLATE_LABEL[t.clave] ?? t.clave,
+      nombre: (t) => t.nombre,
+    };
+    if (sortKey) {
+      filas = ordenarColumna(filas, sortKey, sortDir, valoradores[sortKey]!);
+    }
+    return filas;
+  }, [templates, busqueda, sortKey, sortDir]);
+
+  function cambiarOrden(clave: typeof sortKey) {
+    if (sortKey === clave) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(clave);
+      setSortDir("asc");
+    }
+  }
 
   async function load() {
     setError(null);
@@ -106,24 +136,31 @@ export default function PlantillasPage() {
         ) : null}
 
         <div className="overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
-          <div className="flex items-center justify-between bg-surface p-4">
+          <div className="flex items-center justify-between gap-4 bg-surface p-4">
             <span className="font-body-md text-on-surface-variant">
-              {loading ? "Cargando plantillas…" : `${templates.length} plantillas`}
+              {loading ? "Cargando plantillas…" : `${filasTabla.length} de ${templates.length} plantillas`}
             </span>
+            <BusquedaInput value={busqueda} onChange={setBusqueda} placeholder="Buscar plantilla…" className="w-72" />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="border-b border-outline-variant bg-surface-container-low/50 dark:border-transparent">
-                  <th className="whitespace-nowrap p-4 font-label-md text-on-surface-variant">Clave</th>
-                  <th className="p-4 font-label-md text-on-surface-variant">Tipo</th>
-                  <th className="p-4 font-label-md text-on-surface-variant">Nombre</th>
+                  <th onClick={() => cambiarOrden("clave")} className={"whitespace-nowrap p-4 font-label-md " + (sortKey === "clave" ? "text-primary" : "text-on-surface-variant cursor-pointer select-none hover:text-on-surface")}>
+                    Clave{sortKey === "clave" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("tipo")} className={"p-4 font-label-md " + (sortKey === "tipo" ? "text-primary" : "text-on-surface-variant cursor-pointer select-none hover:text-on-surface")}>
+                    Tipo{sortKey === "tipo" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("nombre")} className={"p-4 font-label-md " + (sortKey === "nombre" ? "text-primary" : "text-on-surface-variant cursor-pointer select-none hover:text-on-surface")}>
+                    Nombre{sortKey === "nombre" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
                   <th className="p-4 font-label-md text-on-surface-variant">Versión publicada</th>
                   <th className="p-4 text-right font-label-md text-on-surface-variant">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/50">
-                {templates.map((t) => {
+                {filasTabla.map((t) => {
                   const versionList = versions[t.id] ?? [];
                   const v = versionList.find((version) => version.publicada) ?? null;
                   return (
