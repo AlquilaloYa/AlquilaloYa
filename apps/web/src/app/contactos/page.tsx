@@ -111,46 +111,6 @@ function TelefonoInput(props: {
   );
 }
 
-function PaisCodigoCelda({
-  value,
-  onGuardar,
-}: {
-  value: string;
-  onGuardar: (codigo: string) => void;
-}) {
-  const [texto, setTexto] = useState(value ?? "51");
-  useEffect(() => {
-    setTexto(value ?? "51");
-  }, [value]);
-  return (
-    <>
-      <input
-        type="tel"
-        inputMode="numeric"
-        list="paises-codigo-list"
-        value={texto}
-        onChange={(e) => setTexto(e.target.value.replace(/[^0-9]/g, ""))}
-        onBlur={() => {
-          const codigo = texto.replace(/[^0-9]/g, "");
-          if (codigo && codigo !== (value ?? "51")) onGuardar(codigo);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-        }}
-        className="h-8 w-full rounded-md border border-input bg-background px-1 text-xs text-foreground"
-        title="Código de país del teléfono (editable)"
-      />
-      <datalist id="paises-codigo-list">
-        {PAISES_CODIGO.map(({ codigo, pais }) => (
-          <option key={codigo} value={codigo}>
-            {pais}
-          </option>
-        ))}
-      </datalist>
-    </>
-  );
-}
-
 function ChecklistModal(props: {
   titulo: string;
   descripcion: string;
@@ -785,24 +745,6 @@ export default function ContactosPage() {
     });
   }
 
-  async function cambiarCodigoPais(c: ContactView, codigoPais: string) {
-    const codigo = (codigoPais ?? "").replace(/[^0-9]/g, "");
-    if (!codigo || codigo === (c.codigoPais ?? "51")) return;
-    try {
-      const local = normalizarTelefono(c.telefono ?? "", c.codigoPais ?? "51");
-      const actualizado = await actualizarContacto({
-        ...c,
-        codigoPais: codigo,
-        telefono: `+${codigo} ${local}`.trim(),
-      });
-      setContactos((prev) =>
-        prev.map((x) => (x.id === c.id ? actualizado : x))
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo actualizar el país.");
-    }
-  }
-
   function alternarMascota(id: string) {
     const actuales = form.mascotasItems ?? [];
     const mascotasItems = actuales.includes(id)
@@ -1229,7 +1171,7 @@ export default function ContactosPage() {
                       >
                         Teléfono{sortKey === "telefono" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                       </th>
-                      <th className="w-[110px] px-3 py-2 font-medium">País</th>
+                      <th className="w-[110px] px-3 py-2 font-medium">Nacionalidad</th>
                       <th className="px-3 py-2 font-medium">C. DNI</th>
                       <th className="px-3 py-2 font-medium">C. Boletas</th>
                       <th className="px-3 py-2 font-medium">C. Antec. Penales</th>
@@ -1274,11 +1216,8 @@ export default function ContactosPage() {
                         <td className="w-[150px] max-w-[150px] overflow-hidden px-3 py-2 text-ellipsis whitespace-nowrap text-muted-foreground">
                           {formatearTelefono(c.telefono, c.codigoPais ?? "51")}
                         </td>
-                        <td className="w-[110px] px-3 py-2">
-                          <PaisCodigoCelda
-                            value={c.codigoPais ?? "51"}
-                            onGuardar={(codigo) => void cambiarCodigoPais(c, codigo)}
-                          />
+                        <td className="w-[110px] max-w-[110px] overflow-hidden px-3 py-2 text-ellipsis whitespace-nowrap" title={c.nacionalidad ?? undefined}>
+                          {c.nacionalidad ?? "—"}
                         </td>
                         <td className="px-3 py-2">
                           {(() => {
