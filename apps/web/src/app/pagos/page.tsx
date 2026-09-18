@@ -15,6 +15,7 @@ type PaymentRow = {
   monto: string;
   mantenimiento: string;
   penalidad?: string;
+  diasIndulgencia?: number;
   estado: string;
   fechaPago: string | null;
   voucherNombre: string | null;
@@ -42,6 +43,7 @@ type CuotaFila = {
   estadoPago: "PAGADO" | "PENDIENTE" | "VENCIDO" | "FINALIZADO";
   diasMora: number;
   penalidad: number;
+  indulgencia: number;
   pago: PaymentRow | null;
 };
 
@@ -53,6 +55,43 @@ const FILTERS = [
   { key: "VENCIDO", label: "Vencidos" },
   { key: "PAGADO", label: "Pagados" },
 ] as const;
+
+function InputIndulgencia({
+  value,
+  onCommit,
+}: {
+  value: number;
+  onCommit: (dias: number) => void;
+}) {
+  const [texto, setTexto] = useState(String(value));
+
+  useEffect(() => {
+    setTexto(String(value));
+  }, [value]);
+
+  function commit() {
+    const n = Math.max(0, Math.floor(Number(texto) || 0));
+    setTexto(String(n));
+    if (n !== value) onCommit(n);
+  }
+
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={0}
+      value={texto}
+      onChange={(e) => setTexto(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+      placeholder="0"
+      title="Período de indulgencia (días de prórroga)"
+      className="w-20 rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-center text-sm text-on-surface focus:border-primary focus:outline-none"
+    />
+  );
+}
 
 export default function PagosPage() {
   const [contracts, setContracts] = useState<ContractRow[]>([]);
@@ -81,6 +120,48 @@ export default function PagosPage() {
     void load();
   }, [load]);
 
+  const guardarIndulgencia = useCallback(
+    async (f: CuotaFila, dias: number) => {
+      try {
+        if (f.pago) {
+          const r = await apiFetch("/api/payments", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: f.pago.id, diasIndulgencia: dias }),
+          });
+          if (r.ok) {
+            setPayments((prev) =>
+              prev.map((p) =>
+                p.id === f.pago!.id ? { ...p, diasIndulgencia: dias } : p
+              )
+            );
+          } else {
+            void load();
+          }
+        } else {
+          const r = await apiFetch("/api/payments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contractId: f.contrato.id,
+              periodo: f.periodo,
+              diasIndulgencia: dias,
+            }),
+          });
+          if (r.ok) {
+            const nuevo = await r.json();
+            setPayments((prev) => [...prev, nuevo]);
+          } else {
+            void load();
+          }
+        }
+      } catch {
+        void load();
+      }
+    },
+    [load]
+  );
+
   const filas = useMemo<CuotaFila[]>(() => {
     const hoy = new Date();
     const inicioDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime();
@@ -102,6 +183,7 @@ export default function PagosPage() {
           estadoPago: "FINALIZADO",
           diasMora: 0,
           penalidad: 0,
+          indulgencia: 0,
           pago: null,
         });
         continue;
@@ -111,22 +193,24 @@ export default function PagosPage() {
         payments.find(
           (p) => p.contractId === c.id && p.periodo === pStr
         ) ?? null;
+      const indulgencia = Math.max(0, Math.floor(Number(pago?.diasIndulgencia ?? 0) || 0));
+      const vencimiento = new Date(cuota.getTime() + indulgencia * 86_400_000);
       const pagado = pago?.estado === "PAGADO";
       const total =
         Number(c.montoCanonMensual ?? 0) + Number(c.mantenimiento ?? 50);
       const diasMora = pagado
-        ? pago?.fechaPago && pago.fechaPago > pStr
+        ? pago?.fechaPago && pago.fechaPago > localDateStr(vencimiento)
           ? Math.floor(
-              (parseLocalDate(pago.fechaPago).getTime() - cuota.getTime()) /
+              (parseLocalDate(pago.fechaPago).getTime() - vencimiento.getTime()) /
                 86_400_000
             )
           : 0
-        : cuota.getTime() < inicioDia
-          ? Math.floor((inicioDia - cuota.getTime()) / 86_400_000)
+        : vencimiento.getTime() < inicioDia
+          ? Math.floor((inicioDia - vencimiento.getTime()) / 86_400_000)
           : 0;
       const estadoPago = pagado
         ? "PAGADO"
-        : cuota.getTime() < inicioDia
+        : vencimiento.getTime() < inicioDia
           ? "VENCIDO"
           : "PENDIENTE";
       out.push({
@@ -142,6 +226,7 @@ export default function PagosPage() {
               ? MOROSIDAD
               : Number(pago.penalidad)
             : 0,
+        indulgencia,
         pago,
       });
     }
@@ -302,6 +387,9 @@ export default function PagosPage() {
                   <th onClick={() => cambiarOrden("estado")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "estado" ? "font-semibold text-on-surface" : "")}>
                     Estado{sortKey === "estado" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                   </th>
+                  <th className="px-3 py-2 font-medium" title="Período de indulgencia">
+                    Indulgencia
+                  </th>
                   <th onClick={() => cambiarOrden("morosidad")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "morosidad" ? "font-semibold text-on-surface" : "")}>
                     Morosidad{sortKey === "morosidad" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                   </th>
@@ -355,6 +443,18 @@ export default function PagosPage() {
                           {meta.label}
                         </span>
                       </td>
+                      <td className="px-3 py-2">
+                        {f.estadoPago === "PAGADO" || f.estadoPago === "FINALIZADO" ? (
+                          <span className="text-sm text-on-surface-variant">
+                            {f.indulgencia > 0 ? `${f.indulgencia} d` : "—"}
+                          </span>
+                        ) : (
+                          <InputIndulgencia
+                            value={f.indulgencia}
+                            onCommit={(dias) => void guardarIndulgencia(f, dias)}
+                          />
+                        )}
+                      </td>
                       <td className="whitespace-nowrap px-3 py-2">
                         {f.diasMora > 0 ? `${f.diasMora} d` : "—"}
                       </td>
@@ -380,7 +480,7 @@ export default function PagosPage() {
                 })}
                 {!loading && visibles.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-8 text-center text-on-surface-variant">
+                    <td colSpan={10} className="p-8 text-center text-on-surface-variant">
                       No hay cuotas con este filtro.
                     </td>
                   </tr>

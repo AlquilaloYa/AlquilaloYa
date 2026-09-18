@@ -9,6 +9,14 @@ function toDateStr(v: unknown): string {
   return String(v ?? "").slice(0, 10);
 }
 
+/** suma `dias` a una fecha ISO local (YYYY-MM-DD) en la misma zona local. */
+function sumarDias(iso: string, dias: number): string {
+  const p = iso.slice(0, 10).split("-");
+  const d = new Date(Number(p[0]), Number(p[1] ?? 1) - 1, Number(p[2] ?? 1));
+  d.setDate(d.getDate() + dias);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export async function GET(req: Request) {
   try {
     const dbModule = await import("@contract/db");
@@ -81,12 +89,29 @@ export async function POST(req: Request) {
       schema: typeof import("@contract/db").schema;
     };
 
-    // Morosidad: si el pago se registró después del día de vencimiento
-    // (ventana de 24 h de ese día), se aplica la penalidad fija de S/ 70.
+    // Morosidad: se aplica la penalidad fija de S/ 70 recién cuando el pago
+    // se registra después del vencimiento más el período de indulgencia
+    // (días de prórroga fijados manualmente en Cobranza).
+    const { and, eq } = await import("drizzle-orm");
+
+    const per = String(body.periodo).slice(0, 10);
+    const [existente] = await db
+      .select({ diasIndulgencia: schema.payments.diasIndulgencia })
+      .from(schema.payments)
+      .where(
+        and(
+          eq(schema.payments.contractId, body.contractId),
+          eq(schema.payments.periodo, per)
+        )
+      )
+      .limit(1);
+    const indulgencia = Number(
+      body.diasIndulgencia ?? existente?.diasIndulgencia ?? 0
+    );
     const penalidadEfectiva =
       estadoIn === "PAGADO" &&
       typeof body.fechaPago === "string" &&
-      body.fechaPago > String(body.periodo).slice(0, 10)
+      body.fechaPago > sumarDias(per, indulgencia)
         ? "70.00"
         : "0";
 
@@ -94,10 +119,11 @@ export async function POST(req: Request) {
       .insert(schema.payments)
       .values({
         contractId: body.contractId,
-        periodo: body.periodo,
+        periodo: per,
         monto: body.monto ?? "0",
         mantenimiento: body.mantenimiento ?? "50",
         penalidad: penalidadEfectiva,
+        diasIndulgencia: indulgencia,
         estado: body.estado ?? "PENDIENTE",
         fechaPago: body.fechaPago ?? null,
         voucherNombre: body.voucherNombre ?? null,
@@ -109,6 +135,7 @@ export async function POST(req: Request) {
           monto: body.monto ?? "0",
           mantenimiento: body.mantenimiento ?? "50",
           penalidad: penalidadEfectiva,
+          diasIndulgencia: indulgencia,
           estado: body.estado ?? "PENDIENTE",
           fechaPago: body.fechaPago ?? null,
           voucherNombre: body.voucherNombre ?? null,
@@ -161,6 +188,8 @@ export async function PATCH(req: Request) {
     if ("monto" in patch) values.monto = patch.monto;
     if ("mantenimiento" in patch) values.mantenimiento = patch.mantenimiento;
     if ("penalidad" in patch) values.penalidad = patch.penalidad;
+    if ("diasIndulgencia" in patch)
+      values.diasIndulgencia = Math.max(0, Math.floor(Number(patch.diasIndulgencia) || 0));
 
     if (values.estado === "PAGADO") {
       const [existente] = await db
@@ -169,6 +198,7 @@ export async function PATCH(req: Request) {
           voucherNombre: schema.payments.voucherNombre,
           periodo: schema.payments.periodo,
           fechaPago: schema.payments.fechaPago,
+          diasIndulgencia: schema.payments.diasIndulgencia,
         })
         .from(schema.payments)
         .where(sql`id = ${id}`)
@@ -197,7 +227,11 @@ export async function PATCH(req: Request) {
             ? toDateStr(existente.fechaPago)
             : "";
       const per = existente ? toDateStr(existente.periodo) : "";
-      values.penalidad = fp && per && fp > per ? "70.00" : "0";
+      const ind =
+        "diasIndulgencia" in patch
+          ? Math.max(0, Math.floor(Number(patch.diasIndulgencia) || 0))
+          : Number(existente?.diasIndulgencia ?? 0);
+      values.penalidad = fp && per && fp > sumarDias(per, ind) ? "70.00" : "0";
     }
 
     const [row] = await db
