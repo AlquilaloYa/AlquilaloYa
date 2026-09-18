@@ -47,7 +47,13 @@ type CuotaFila = {
   pago: PaymentRow | null;
 };
 
-const MOROSIDAD = 70;
+const MOROSIDAD_DIARIA = 70; // S/ 70 por cada día de atraso (cláusula contrato)
+const penalidadPorDias = (diasMora: number, penalidadGuardada?: string | null) => {
+  if (diasMora <= 0) return 0;
+  return penalidadGuardada == null
+    ? MOROSIDAD_DIARIA * diasMora
+    : Math.max(Number(penalidadGuardada), MOROSIDAD_DIARIA * diasMora);
+};
 
 const FILTERS = [
   { key: "all", label: "Todos" },
@@ -220,12 +226,7 @@ export default function PagosPage() {
         total,
         estadoPago,
         diasMora,
-        penalidad:
-          diasMora > 0
-            ? pago?.penalidad == null
-              ? MOROSIDAD
-              : Number(pago.penalidad)
-            : 0,
+        penalidad: penalidadPorDias(diasMora, pago?.penalidad),
         indulgencia,
         pago,
       });
