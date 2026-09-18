@@ -19,6 +19,7 @@ interface ClientView {
   email?: string | null;
   telefono?: string | null;
   codigoPais?: string | null;
+  nacionalidad?: string | null;
   domicilio?: string | null;
   codigoDepartamento?: string | null;
   activo: boolean;
@@ -91,7 +92,7 @@ export default function ClientesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
-  const [sortKey, setSortKey] = useState<"departamento" | "nombre" | "documento" | "finContrato" | "inicioAdenda" | "finAdenda" | "ruc" | "tipo" | "email" | "telefono" | "pais" | null>(null);
+  const [sortKey, setSortKey] = useState<"departamento" | "nombre" | "documento" | "finContrato" | "inicioAdenda" | "finAdenda" | "ruc" | "tipo" | "email" | "telefono" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const clientesTabla = useMemo(() => {
@@ -106,6 +107,7 @@ export default function ClientesPage() {
         c.ruc,
         c.email,
         c.telefono,
+        c.nacionalidad,
         c.tipoPersona === PersonType.NATURAL ? "Natural" : "Jurídica",
       ]
     );
@@ -120,7 +122,6 @@ export default function ClientesPage() {
       tipo: (c) => (c.tipoPersona === PersonType.NATURAL ? "Natural" : "Jurídica"),
       email: (c) => c.email,
       telefono: (c) => c.telefono,
-      pais: (c) => c.codigoPais,
     };
     if (sortKey) {
       filas = ordenarColumna(filas, sortKey, sortDir, valoradores[sortKey]!);
@@ -258,9 +259,7 @@ export default function ClientesPage() {
                         <th onClick={() => cambiarOrden("telefono")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "telefono" ? "text-white" : "")}>
                           Teléfono{sortKey === "telefono" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                         </th>
-                        <th onClick={() => cambiarOrden("pais")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "pais" ? "text-white" : "")}>
-                          País{sortKey === "pais" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-                        </th>
+                        <th className="px-3 py-2 font-medium">Nacionalidad</th>
                         <th className="px-3 py-2 font-medium">WhatsApp</th>
                         <th className="px-3 py-2 font-medium">Acciones</th>
                       </tr>
@@ -294,20 +293,25 @@ export default function ClientesPage() {
                             {c.tipoPersona === PersonType.NATURAL ? "Natural" : "Jurídica"}
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">{c.email ?? "—"}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{c.telefono ?? "—"}</td>
-                          <td className="px-3 py-2">
-                            <select
-                              value={c.codigoPais ?? "51"}
-                              onChange={(e) => void cambiarCodigoPais(c, e.target.value)}
-                              className="h-8 rounded-md border border-input bg-background px-1 text-xs text-foreground"
-                              title="Código de país del teléfono (usado por WhatsApp)"
-                            >
-                              {PAISES_CODIGO.map(({ codigo, pais }) => (
-                                <option key={codigo} value={codigo}>
-                                  {pais}
-                                </option>
-                              ))}
-                            </select>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={c.codigoPais ?? "51"}
+                                onChange={(e) => void cambiarCodigoPais(c, e.target.value)}
+                                className="h-8 rounded-md border border-input bg-background px-1 text-xs text-foreground"
+                                title="Código de país del teléfono (usado por WhatsApp)"
+                              >
+                                {PAISES_CODIGO.map(({ codigo }) => (
+                                  <option key={codigo} value={codigo}>
+                                    +{codigo}
+                                  </option>
+                                ))}
+                              </select>
+                              <span className="whitespace-nowrap">{c.telefono ?? "—"}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground" title={c.nacionalidad ?? undefined}>
+                            {c.nacionalidad ?? "—"}
                           </td>
                           <td className="px-3 py-2">
                             <WhatsAppButton telefono={c.telefono ?? null} codigoPais={c.codigoPais ?? null} />
