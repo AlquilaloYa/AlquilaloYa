@@ -9,12 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@contract/ui/component
 import { Input } from "@contract/ui/components/input";
 import { Label } from "@contract/ui/components/label";
 import { PersonType } from "@contract/domain/client";
-import { Plus, FileText, X, Check, Upload } from "lucide-react";
+import { Plus, FileText, X, Check, Upload, Trash2 } from "lucide-react";
 import {
   type ContactSeed as ContactView,
   obtenerContactos,
   crearContacto,
   actualizarContacto,
+  eliminarContacto,
 } from "@/lib/contactos-seed";
 import { migrarDatosLocales } from "@/lib/migracion-local";
 import type { DatosExtraidos } from "@/lib/pdf/extraer-datos-form";
@@ -443,6 +444,22 @@ export default function ContactosPage() {
   >("inactivo");
   const [pdfMensaje, setPdfMensaje] = useState<string | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
+
+  async function eliminarContactoRow(c: ContactView) {
+    if (!window.confirm(`¿Eliminar a ${[c.nombre, c.apellido].filter(Boolean).join(" ") || "este contacto"}? Esta acción no se puede deshacer.`)) return;
+    setEliminandoId(c.id);
+    setError(null);
+    try {
+      await eliminarContacto(c.id);
+      setContactos((prev) => prev.filter((x) => x.id !== c.id));
+      if (editandoId === c.id) cancelarEdicion();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo eliminar el contacto.");
+    } finally {
+      setEliminandoId(null);
+    }
+  }
 
   async function autorellenarDesdePdf(archivo: File) {
     setPdfEstado("leyendo");
@@ -1339,14 +1356,27 @@ export default function ContactosPage() {
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => iniciarEdicion(c)}
-                          >
-                            Editar
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => iniciarEdicion(c)}
+                            >
+                              Editar
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={eliminandoId === c.id}
+                              onClick={() => void eliminarContactoRow(c)}
+                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              title="Eliminar contacto"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
