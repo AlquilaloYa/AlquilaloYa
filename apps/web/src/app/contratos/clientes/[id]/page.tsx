@@ -59,6 +59,7 @@ type PaymentApi = {
   fechaPago: string | null;
   voucherNombre: string | null;
   voucherUrl: string | null;
+  vouchers?: Array<{ nombre: string; url: string }>;
 };
 
 const PENALIDAD_MORA = 70;
@@ -73,6 +74,16 @@ function esJpeg(v: { nombre: string; dataUrl: string; tipo: string }): boolean {
     return true;
   }
   return /\.(jpe?g)$/i.test(v.nombre);
+}
+
+function vouchersDePago(
+  pago: PaymentApi | null | undefined
+): Array<{ nombre: string; url: string }> {
+  if (!pago) return [];
+  if (pago.vouchers && pago.vouchers.length > 0) return pago.vouchers;
+  if (pago.voucherUrl)
+    return [{ nombre: pago.voucherNombre ?? `Baucher ${pago.periodo}`, url: pago.voucherUrl }];
+  return [];
 }
 
 function parseLocalDate(iso: string): Date {
@@ -109,7 +120,7 @@ export default function ClienteContratoPage() {
   const [loading, setLoading] = useState(true);
   const [pagos, setPagos] = useState<PaymentApi[]>([]);
   const [vouchers, setVouchers] = useState<
-    Record<string, { nombre: string; dataUrl: string; tipo: string }>
+    Record<string, Array<{ nombre: string; dataUrl: string; tipo: string }>>
   >({});
   const [registrando, setRegistrando] = useState<string | null>(null);
   const [errorPago, setErrorPago] = useState<string | null>(null);
@@ -243,14 +254,14 @@ export default function ClienteContratoPage() {
   const boletas = contacto?.copiaBoletas ?? [];
   const bauchers = [
     ...boletas,
-    ...pagos
-      .filter((p) => p.voucherUrl)
-      .map((p) => ({
-        id: `pago-${p.id}`,
-        nombre: p.voucherNombre ?? `Baucher ${p.periodo}`,
+    ...pagos.flatMap((p) =>
+      vouchersDePago(p).map((v, i) => ({
+        id: `pago-${p.id}-${i}`,
+        nombre: v.nombre || `Baucher ${p.periodo}`,
         tipo: "image/jpeg",
-        dataUrl: p.voucherUrl ?? undefined,
-      })),
+        dataUrl: v.url,
+      }))
+    ),
   ];
   const nombreCliente = cliente
     ? [cliente.nombres, cliente.apellidos].filter(Boolean).join(" ")
@@ -263,16 +274,17 @@ export default function ClienteContratoPage() {
 
   async function registrarPago(periodoStr: string) {
     if (!contrato) return;
-    const v = vouchers[periodoStr];
-    if (!v || !esJpeg(v)) {
+    const lista = vouchers[periodoStr] ?? [];
+    if (lista.length === 0 || lista.some((v) => !esJpeg(v))) {
       setErrorPago(
-        "Para confirmar el pago debes adjuntar el baucher en imagen JPEG."
+        "Para confirmar el pago debes adjuntar al menos un baucher en imagen JPEG."
       );
       return;
     }
     setRegistrando(periodoStr);
     setErrorPago(null);
     try {
+      const v0 = lista[0];
       const res = await apiFetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -283,8 +295,9 @@ export default function ClienteContratoPage() {
           mantenimiento: contrato.mantenimiento ?? "50",
           estado: "PAGADO",
           fechaPago: localDateStr(new Date()),
-          voucherNombre: v.nombre,
-          voucherUrl: v.dataUrl,
+          vouchers: lista.map((v) => ({ nombre: v.nombre, url: v.dataUrl })),
+          voucherNombre: v0?.nombre,
+          voucherUrl: v0?.dataUrl,
         }),
       });
       if (!res.ok) {
@@ -299,29 +312,43 @@ export default function ClienteContratoPage() {
     }
   }
 
-  function leerVoucher(periodoStr: string, file: File | undefined) {
-    if (!file) return;
-    const esJpgFile =
-      file.type === "image/jpeg" ||
-      file.type === "image/jpg" ||
-      /\.(jpe?g)$/i.test(file.name);
-    if (!esJpgFile) {
-      setErrorPago("El baucher debe ser una imagen JPEG (.jpg).");
+  function leerVouchers(periodoStr: string, files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const elegidos = Array.from(files);
+    const invalido = elegidos.find(
+      (f) =>
+        f.type !== "image/jpeg" &&
+        f.type !== "image/jpg" &&
+        !/\.(jpe?g)$/i.test(f.name)
+    );
+    if (invalido) {
+      setErrorPago("Todos los bauchers deben ser imágenes JPEG (.jpg).");
       return;
     }
     setErrorPago(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setVouchers((prev) => ({
-        ...prev,
-        [periodoStr]: {
-          nombre: file.name,
-          dataUrl: String(reader.result),
-          tipo: "image/jpeg",
-        },
-      }));
-    };
-    reader.readAsDataURL(file);
+    for (const file of elegidos) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setVouchers((prev) => ({
+          ...prev,
+          [periodoStr]: [
+            ...(prev[periodoStr] ?? []),
+            { nombre: file.name, dataUrl: String(reader.result), tipo: "image/jpeg" },
+          ],
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function quitarVoucher(periodoStr: string, index: number) {
+    setVouchers((prev) => {
+      const lista = (prev[periodoStr] ?? []).filter((_, i) => i !== index);
+      const next = { ...prev };
+      if (lista.length > 0) next[periodoStr] = lista;
+      else delete next[periodoStr];
+      return next;
+    });
   }
 
   if (loading) {
@@ -520,7 +547,8 @@ export default function ClienteContratoPage() {
                           ? PENALIDAD_MORA
                           : Number(pago.penalidad)
                         : 0;
-                    const voucherSel = vouchers[pStr];
+                    const selVouchers = vouchers[pStr] ?? [];
+                    const vouchersPago = vouchersDePago(pago);
                     return (
                       <tr key={d.toISOString()} className="border-t border-outline-variant/50">
                         <td className="whitespace-nowrap px-3 py-2 font-medium">
@@ -567,24 +595,34 @@ export default function ClienteContratoPage() {
                           {penalidad > 0 ? moneda(penalidad) : "—"}
                         </td>
                         <td className="px-3 py-2">{contrato?.personaPago || "Administración"}</td>
-                        <td className="max-w-[160px] px-3 py-2 text-xs">
-                          {pago?.voucherUrl ? (
-                            <button
-                              type="button"
-                              onClick={() => setPreviewVoucher(pago.voucherUrl)}
-                              className="inline-flex text-primary hover:underline"
-                              title="Ver baucher"
-                            >
-                              <img
-                                src={pago.voucherUrl}
-                                alt="Vista previa del baucher"
-                                className="h-10 w-14 rounded border border-outline-variant object-cover"
-                              />
-                            </button>
+                        <td className="max-w-[200px] px-3 py-2 text-xs">
+                          {vouchersPago.length > 0 ? (
+                            <div className="flex flex-col gap-1">
+                              <div className="flex flex-wrap gap-1.5">
+                                {vouchersPago.map((v, i) => (
+                                  <button
+                                    key={`${v.url.slice(0, 24)}-${i}`}
+                                    type="button"
+                                    onClick={() => setPreviewVoucher(v.url)}
+                                    className="block"
+                                    title={v.nombre}
+                                  >
+                                    <img
+                                      src={v.url}
+                                      alt={v.nombre}
+                                      className="h-10 w-14 rounded border border-outline-variant object-cover"
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                              <span className="text-on-surface-variant">
+                                {vouchersPago.length} baucher{vouchersPago.length > 1 ? "s" : ""}
+                              </span>
+                            </div>
                           ) : (
-                            pago?.voucherNombre ||
-                            voucherSel?.nombre ||
-                            "—"
+                            selVouchers.length > 0
+                              ? selVouchers.map((v) => v.nombre).join(", ")
+                              : "—"
                           )}
                         </td>
                         <td className="whitespace-nowrap px-3 py-2">
@@ -597,15 +635,16 @@ export default function ClienteContratoPage() {
                               <div className="flex items-center gap-2">
                                 <label
                                   className="cursor-pointer rounded border border-outline-variant px-2 py-1 text-xs text-on-surface-variant hover:bg-surface-container"
-                                  title="Adjuntar baucher (solo imagen JPEG)"
+                                  title="Adjuntar uno o varios bauchers (imágenes JPEG)"
                                 >
-                                  {voucherSel && esJpeg(voucherSel) ? "✓ JPEG" : "Voucher"}
+                                  {selVouchers.length > 0 ? `✓ ${selVouchers.length}` : "Voucher"}
                                   <input
                                     type="file"
                                     className="hidden"
                                     accept="image/jpeg"
+                                    multiple
                                     onChange={(e) => {
-                                      leerVoucher(pStr, e.target.files?.[0]);
+                                      leerVouchers(pStr, e.target.files);
                                       e.target.value = "";
                                     }}
                                   />
@@ -614,12 +653,14 @@ export default function ClienteContratoPage() {
                                   type="button"
                                   disabled={
                                     registrando === pStr ||
-                                    !(voucherSel && esJpeg(voucherSel))
+                                    selVouchers.length === 0 ||
+                                    selVouchers.some((v) => !esJpeg(v))
                                   }
                                   title={
-                                    voucherSel && esJpeg(voucherSel)
+                                    selVouchers.length > 0 &&
+                                    selVouchers.every((v) => esJpeg(v))
                                       ? "Confirmar pago"
-                                      : "Requiere baucher JPEG"
+                                      : "Requiere al menos un baucher JPEG"
                                   }
                                   onClick={() => void registrarPago(pStr)}
                                   className="rounded bg-primary px-2 py-1 text-xs text-on-primary disabled:opacity-40"
@@ -627,19 +668,34 @@ export default function ClienteContratoPage() {
                                   {registrando === pStr ? "…" : "Registrar"}
                                 </button>
                               </div>
-                              {voucherSel && esJpeg(voucherSel) ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setPreviewVoucher(voucherSel.dataUrl)}
-                                  title="Ver baucher adjuntado"
-                                  className="block"
-                                >
-                                  <img
-                                    src={voucherSel.dataUrl}
-                                    alt="Baucher adjuntado"
-                                    className="h-14 w-20 rounded border border-outline-variant object-cover"
-                                  />
-                                </button>
+                              {selVouchers.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {selVouchers.map((v, i) => (
+                                    <div key={v.nombre + i} className="relative">
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreviewVoucher(v.dataUrl)}
+                                        title={v.nombre}
+                                        className="block"
+                                      >
+                                        <img
+                                          src={v.dataUrl}
+                                          alt="Baucher adjuntado"
+                                          className="h-11 w-16 rounded border border-outline-variant object-cover"
+                                        />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => quitarVoucher(pStr, i)}
+                                        title="Quitar baucher"
+                                        aria-label="Quitar baucher"
+                                        className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] leading-none text-white"
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
                               ) : null}
                             </div>
                           )}

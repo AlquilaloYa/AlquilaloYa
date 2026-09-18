@@ -2,6 +2,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   text,
@@ -12,10 +13,13 @@ import {
 } from "drizzle-orm/pg-core";
 import { contracts } from "./contracts";
 
+export type PaymentVoucher = { nombre: string; url: string };
+
 /**
  * Registro de pagos mensuales de un contrato (Fase 3 - pagos).
  * - Un registro por contract_id + periodo (fecha de vencimiento de la cuota).
  * - voucher_url guarda el baucher (dataURL base64) subido por el operador.
+ * - vouchers permite adjuntar uno o varios bauchers por pago.
  */
 export const payments = pgTable(
   "payments",
@@ -37,6 +41,10 @@ export const payments = pgTable(
     fechaPago: date("fecha_pago"),
     voucherNombre: varchar("voucher_nombre", { length: 255 }),
     voucherUrl: text("voucher_url"),
+    vouchers: jsonb("vouchers")
+      .notNull()
+      .default([])
+      .$type<PaymentVoucher[]>(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

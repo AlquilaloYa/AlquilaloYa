@@ -107,6 +107,7 @@ export async function GET(
         fechaPago: p.fechaPago ? toDateStr(p.fechaPago) : null,
         voucherNombre: p.voucherNombre,
         voucherUrl: p.voucherUrl,
+        vouchers: p.vouchers,
       })),
     });
   } catch (error) {

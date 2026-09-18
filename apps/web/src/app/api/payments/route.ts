@@ -17,6 +17,29 @@ function sumarDias(iso: string, dias: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Filtra y normaliza la lista de vouchers adjuntos (solo JPEG dataURL). */
+function normalizarVouchers(input: unknown): {
+  nombre: string;
+  url: string;
+}[] {
+  if (!Array.isArray(input)) return [];
+  const out: { nombre: string; url: string }[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== "object") continue;
+    const nombre = (item as Record<string, unknown>).nombre;
+    const url = (item as Record<string, unknown>).url;
+    if (
+      typeof nombre === "string" &&
+      /\.(jpe?g)$/i.test(nombre) &&
+      typeof url === "string" &&
+      url.startsWith("data:image/jpeg")
+    ) {
+      out.push({ nombre, url });
+    }
+  }
+  return out;
+}
+
 export async function GET(req: Request) {
   try {
     const dbModule = await import("@contract/db");
@@ -71,18 +94,26 @@ export async function POST(req: Request) {
       );
     }
     const estadoIn = (body.estado ?? "PENDIENTE") as string;
+    const vouchers = normalizarVouchers(body.vouchers);
     if (
       estadoIn === "PAGADO" &&
+      vouchers.length === 0 &&
       (typeof body.voucherUrl !== "string" ||
         !body.voucherUrl.startsWith("data:image/jpeg") ||
         !(typeof body.voucherNombre === "string" &&
           /\.(jpe?g)$/i.test(body.voucherNombre)))
     ) {
       return NextResponse.json(
-        { error: "El pago solo se confirma con un baucher en imagen JPEG" },
+        { error: "El pago solo se confirma con al menos un baucher en imagen JPEG" },
         { status: 400 }
       );
     }
+    const vouchersFinal =
+      vouchers.length > 0
+        ? vouchers
+        : typeof body.voucherUrl === "string" && typeof body.voucherNombre === "string"
+          ? [{ nombre: body.voucherNombre, url: body.voucherUrl }]
+          : [];
 
     const { db, schema } = dbModule as {
       db: typeof import("@contract/db").db;
@@ -126,8 +157,9 @@ export async function POST(req: Request) {
         diasIndulgencia: indulgencia,
         estado: body.estado ?? "PENDIENTE",
         fechaPago: body.fechaPago ?? null,
-        voucherNombre: body.voucherNombre ?? null,
-        voucherUrl: body.voucherUrl ?? null,
+        vouchers: vouchersFinal,
+        voucherNombre: vouchersFinal[0]?.nombre ?? body.voucherNombre ?? null,
+        voucherUrl: vouchersFinal[0]?.url ?? body.voucherUrl ?? null,
       })
       .onConflictDoUpdate({
         target: [schema.payments.contractId, schema.payments.periodo],
@@ -138,8 +170,9 @@ export async function POST(req: Request) {
           diasIndulgencia: indulgencia,
           estado: body.estado ?? "PENDIENTE",
           fechaPago: body.fechaPago ?? null,
-          voucherNombre: body.voucherNombre ?? null,
-          voucherUrl: body.voucherUrl ?? null,
+          vouchers: vouchersFinal,
+          voucherNombre: vouchersFinal[0]?.nombre ?? body.voucherNombre ?? null,
+          voucherUrl: vouchersFinal[0]?.url ?? body.voucherUrl ?? null,
           updatedAt: new Date(),
         },
       })
@@ -185,6 +218,7 @@ export async function PATCH(req: Request) {
     if ("fechaPago" in patch) values.fechaPago = patch.fechaPago ?? null;
     if ("voucherNombre" in patch) values.voucherNombre = patch.voucherNombre ?? null;
     if ("voucherUrl" in patch) values.voucherUrl = patch.voucherUrl ?? null;
+    if ("vouchers" in patch) values.vouchers = normalizarVouchers(patch.vouchers);
     if ("monto" in patch) values.monto = patch.monto;
     if ("mantenimiento" in patch) values.mantenimiento = patch.mantenimiento;
     if ("penalidad" in patch) values.penalidad = patch.penalidad;
@@ -196,6 +230,7 @@ export async function PATCH(req: Request) {
         .select({
           voucherUrl: schema.payments.voucherUrl,
           voucherNombre: schema.payments.voucherNombre,
+          vouchers: schema.payments.vouchers,
           periodo: schema.payments.periodo,
           fechaPago: schema.payments.fechaPago,
           diasIndulgencia: schema.payments.diasIndulgencia,
@@ -203,23 +238,31 @@ export async function PATCH(req: Request) {
         .from(schema.payments)
         .where(sql`id = ${id}`)
         .limit(1);
-      const url =
-        typeof patch.voucherUrl === "string"
-          ? patch.voucherUrl
-          : existente?.voucherUrl ?? "";
-      const nombre =
-        typeof patch.voucherNombre === "string"
-          ? patch.voucherNombre
-          : existente?.voucherNombre ?? "";
-      if (
-        !url.startsWith("data:image/jpeg") ||
-        !/\.(jpe?g)$/i.test(nombre)
-      ) {
+      const vouchers =
+        Array.isArray(values.vouchers) && values.vouchers.length > 0
+          ? (values.vouchers as { nombre: string; url: string }[])
+          : typeof patch.voucherUrl === "string" &&
+              typeof patch.voucherNombre === "string"
+            ? normalizarVouchers([
+                { nombre: patch.voucherNombre, url: patch.voucherUrl },
+              ])
+            : Array.isArray(existente?.vouchers) &&
+                existente.vouchers.length > 0
+              ? existente.vouchers
+              : existente?.voucherUrl
+                ? normalizarVouchers([
+                    { nombre: existente.voucherNombre ?? "", url: existente.voucherUrl },
+                  ])
+                : [];
+      if (vouchers.length === 0) {
         return NextResponse.json(
-          { error: "El pago solo se confirma con un baucher en imagen JPEG" },
+          { error: "El pago solo se confirma con al menos un baucher en imagen JPEG" },
           { status: 400 }
         );
       }
+      values.vouchers = vouchers;
+      values.voucherUrl = vouchers[0]?.url ?? null;
+      values.voucherNombre = vouchers[0]?.nombre ?? null;
       const fp =
         typeof patch.fechaPago === "string"
           ? patch.fechaPago
