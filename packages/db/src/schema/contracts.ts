@@ -52,6 +52,7 @@ export const contracts = pgTable(
     copiaDni: jsonb("copia_dni").notNull().default([]),
     muebleriaItems: jsonb("muebleria_items").notNull().default([]),
     mascotasItems: jsonb("mascotas_items").notNull().default([]),
+    datosArrendatario: jsonb("datos_arrendatario"),
     motivoResolucion: varchar("motivo_resolucion", { length: 500 }),
     resueltoEn: timestamp("resuelto_en", { withTimezone: true }),
     creadoPor: uuid("creado_por"),

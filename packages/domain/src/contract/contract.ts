@@ -21,6 +21,33 @@ export interface ContractDniAttachment {
   dataUrl: string;
 }
 
+export interface ContactoEmergenciaDatos {
+  nombre?: string | null;
+  parentesco?: string | null;
+  telefono?: string | null;
+}
+
+/**
+ * Ficha de datos del arrendatario capturada del contacto al crear el contrato.
+ * Es la "hoja de datos" del PDF: datos de contacto SIN archivos adjuntos
+ * (no copia de DNI, no boletas, no antecedentes penales).
+ */
+export interface DatosArrendatario {
+  nombre?: string | null;
+  apellido?: string | null;
+  tipoPersona?: string | null;
+  documentoIdentidad?: string | null;
+  ruc?: string | null;
+  email?: string | null;
+  telefono?: string | null;
+  codigoPais?: string | null;
+  domicilio?: string | null;
+  nacionalidad?: string | null;
+  contactoEmergencia?: ContactoEmergenciaDatos | null;
+  mascotas?: boolean;
+  mascotasItems?: string[];
+}
+
 /**
  * Contrato contractual (Fase 3).
  * - Dinero: NUMERIC(15,2).
@@ -51,6 +78,8 @@ export interface Contract extends AuditableEntity {
   muebleriaItems: string[];
   /** Mascotas declaradas por el arrendatario (etiquetas de la ficha del contacto). */
   mascotasItems: string[];
+  /** Ficha de datos del arrendatario (hoja de datos del PDF sin adjuntos). */
+  datosArrendatario: DatosArrendatario | null;
   /** Motivo registrado al resolver el contrato. */
   motivoResolucion: string | null;
   /** Fecha en la que se resolvió el contrato. */
@@ -66,9 +95,10 @@ export type CreateContractInput = Omit<
   | "snapshotId"
   | "creadoPor"
   | "renovadoDe"
+  | "datosArrendatario"
   | "motivoResolucion"
   | "resueltoEn"
-> & { renovadoDe?: UUID | null };
+> & { renovadoDe?: UUID | null; datosArrendatario?: DatosArrendatario | null };
 
 export type UpdateDraftInput = Partial<
   Pick<
@@ -86,6 +116,7 @@ export type UpdateDraftInput = Partial<
     | "copiaDni"
     | "muebleriaItems"
     | "mascotasItems"
+    | "datosArrendatario"
   >
 >;
 
