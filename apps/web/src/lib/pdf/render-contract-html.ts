@@ -117,6 +117,14 @@ function buildDniAnnex(dni: string): string {
   );
 }
 
+function inventarioMarkup(items: unknown): string {
+  const lista = (Array.isArray(items) ? items : []).map(String).filter(Boolean);
+  if (lista.length === 0) return "________________";
+  return lista
+    .map((item) => `<div style="margin:3px 0;">☐ ${escapeHtml(item)}</div>`)
+    .join("\n");
+}
+
 function tieneCopiaDni(attachments: unknown): boolean {
   return Array.isArray(attachments) && attachments.length > 0;
 }
@@ -225,9 +233,7 @@ export function renderContractHtml(
       "[FECHA DE ABONO]": fechaSeparacion?.split("T")[0] ?? "________",
       "[TIPO SEPARACION]": tipoSeparacion || "________",
       "[DETALLE GARANTIA]": detalleGarantia(garantia, separacionDetalle),
-      "[INVENTARIO]": (Array.isArray(contrato.muebleriaItems) ? contrato.muebleriaItems : [])
-        .map(String)
-        .join("; ") || "________________",
+      
       "[ESPECIE]": (Array.isArray(contrato.mascotasItems) ? contrato.mascotasItems : [])
         .map(String)
         .join(", ") || "________________",
@@ -256,6 +262,9 @@ export function renderContractHtml(
     }
     if (html.includes("[BAUCHER]")) {
       html = html.split("[BAUCHER]").join(baucher);
+    }
+    if (html.includes("[INVENTARIO]")) {
+      html = html.split("[INVENTARIO]").join(inventarioMarkup(contrato.muebleriaItems));
     }
     return html;
   }

@@ -126,7 +126,8 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
       "01 isla",
     ];
     const html = renderContractHtml(snp, "<h1>Contrato</h1><p>[INVENTARIO]</p>");
-    expect(html).toContain("01 puerta; 01 isla");
+    expect(html).toContain("☐ 01 puerta");
+    expect(html).toContain("☐ 01 isla");
     expect(html).not.toContain("[INVENTARIO]");
   });
   it("rellena [ESPECIE] con las mascotas del snapshot", () => {
