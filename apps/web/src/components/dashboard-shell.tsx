@@ -190,7 +190,6 @@ function NavGroup({
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [configurationOpen, setConfigurationOpen] = useState(false);

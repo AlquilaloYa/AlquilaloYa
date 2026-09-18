@@ -42,6 +42,7 @@ function toDomain(row: ContractRow): Contract {
     mascotasItems: Array.isArray(row.mascotasItems)
       ? (row.mascotasItems as string[]).map(String)
       : [],
+    datosArrendatario: row.datosArrendatario as Contract["datosArrendatario"],
     motivoResolucion: row.motivoResolucion,
     resueltoEn: row.resueltoEn ? row.resueltoEn.toISOString() : null,
     creadoPor: row.creadoPor,
@@ -207,6 +208,7 @@ export class DrizzleContractRepository implements ContractRepository {
         copiaDni: input.copiaDni,
         muebleriaItems: input.muebleriaItems,
         mascotasItems: input.mascotasItems,
+        datosArrendatario: input.datosArrendatario ?? null,
       })
       .returning();
     if (!row) {
@@ -238,6 +240,8 @@ export class DrizzleContractRepository implements ContractRepository {
       values.muebleriaItems = changes.muebleriaItems;
     if (changes.mascotasItems !== undefined)
       values.mascotasItems = changes.mascotasItems;
+    if (changes.datosArrendatario !== undefined)
+      values.datosArrendatario = changes.datosArrendatario;
 
     const [row] = await db
       .update(schema.contracts)
