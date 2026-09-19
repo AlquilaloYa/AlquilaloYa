@@ -237,7 +237,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <aside
         className={`fixed left-0 top-0 flex h-full flex-col border-r border-outline-variant py-6 transition-transform duration-200 dark:border-white/10 ${
           mobileOpen
-            ? "z-40 bg-surface/40 backdrop-blur-md supports-[backdrop-filter]:bg-surface/25 dark:bg-[#151a24]/60"
+            ? "z-40 bg-surface dark:bg-[#151a24]"
             : "z-20 dark:bg-[#151a24]"
         } ${
           collapsed ? "w-[68px]" : "w-64"
