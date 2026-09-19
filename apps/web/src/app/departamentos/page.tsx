@@ -39,6 +39,8 @@ interface DepartmentView {
   servicios: string;
   activo: boolean;
   disponibilidad: { disponible: false; fechaFin: string; dias: number } | null;
+  enMantenimiento?: boolean;
+  bloqueado?: boolean;
 }
 
 export default function DepartamentosPage() {
@@ -201,7 +203,9 @@ export default function DepartamentosPage() {
     return !["PERDER_TODO", "INACTIVO_48H", "INACTIVO_168H"].includes(estado);
   }
 
-  function estadoDepartamento(dept: DepartmentView): "OCUPADO" | "SEPARADO" | "DISPONIBLE" {
+  function estadoDepartamento(dept: DepartmentView): "OCUPADO" | "SEPARADO" | "DISPONIBLE" | "MANTENIMIENTO" | "BLOQUEADO" {
+    if (dept.bloqueado) return "BLOQUEADO";
+    if (dept.enMantenimiento) return "MANTENIMIENTO";
     if (dept.disponibilidad) return "OCUPADO";
     if (estaSeparado(dept)) return "SEPARADO";
     return "DISPONIBLE";
@@ -783,7 +787,17 @@ export default function DepartamentosPage() {
                             <td className="px-3 py-2">{fmtPrecio(d.mantenimiento)}</td>
                             <td className="px-3 py-2 text-muted-foreground">{d.servicios}</td>
                             <td className="px-3 py-2">
-                              {estadoDepartamento(d) === "OCUPADO" ? (
+                              {estadoDepartamento(d) === "BLOQUEADO" ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-black px-2 py-0.5 text-xs font-medium text-white">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                                  Bloqueado
+                                </span>
+                              ) : estadoDepartamento(d) === "MANTENIMIENTO" ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-500">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                  Mantenimiento
+                                </span>
+                              ) : estadoDepartamento(d) === "OCUPADO" ? (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-black/10 px-2 py-0.5 text-xs font-medium text-black dark:bg-white/20 dark:text-white">
                                   <span className="h-1.5 w-1.5 rounded-full bg-black dark:bg-white" />
                                   Ocupado

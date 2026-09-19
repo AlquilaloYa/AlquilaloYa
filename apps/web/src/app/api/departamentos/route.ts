@@ -76,9 +76,15 @@ export async function GET(req: Request) {
         .map((c) => c.fechaFin)
         .sort();
       if (ocupando.length === 0) {
+        if (d.estadoManual === "BLOQUEADO") {
+          return { ...d, disponibilidad: null, enMantenimiento: false, bloqueado: true };
+        }
+        if (d.estadoManual === "MANTENIMIENTO") {
+          return { ...d, disponibilidad: null, enMantenimiento: true, bloqueado: false };
+        }
         const ultimoFin = ultimoFinPorDepartamento.get(d.id);
-        const mantenimiento = Boolean(ultimoFin && ultimoFin < hoyISO);
-        return { ...d, disponibilidad: null, mantenimiento };
+        const enMantenimiento = Boolean(ultimoFin && ultimoFin < hoyISO);
+        return { ...d, disponibilidad: null, enMantenimiento, bloqueado: false };
       }
       const fin = ocupando[ocupando.length - 1] as string;
       const ocupanteIds = new Set(
@@ -88,7 +94,8 @@ export async function GET(req: Request) {
       return {
         ...d,
         disponibilidad: { disponible: false, fechaFin: fin, dias: diasRestantes(fin) },
-        mantenimiento: false,
+        enMantenimiento: false,
+        bloqueado: false,
         ocupante: cliente
           ? {
               nombres: cliente.nombres,
