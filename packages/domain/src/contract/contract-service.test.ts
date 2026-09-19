@@ -227,6 +227,63 @@ describe("ContractService", () => {
     expect(events).toContain("CONTRACT_EMITTED");
   });
 
+  it("emitContract: congela datosArrendatario en el snapshot", async () => {
+    const datosArrendatario = {
+      nombre: "Juan",
+      apellido: "Pérez",
+      tipoPersona: "NATURAL",
+      documentoIdentidad: "70000000",
+      email: "juan@correo.com",
+      telefono: "999888777",
+      contactoEmergencia: { nombre: "Maria", parentesco: "Esposa", telefono: "988777666" },
+      mascotas: true,
+      mascotasItems: ["Perro"],
+    };
+    const created = await new ContractService(
+      makeRepo().repo,
+      makeSnapshotPort()
+    ).createContract(makeInput({ datosArrendatario }));
+    const { repo } = makeRepo(created);
+    const captured: ContractSnapshotData[] = [];
+    const snapPort: SnapshotPort = {
+      async create(data) {
+        captured.push(data);
+        return { id: "snap-datos", codigoContrato: data.codigoContrato };
+      },
+      async assertInmutable() {},
+    };
+    const service = new ContractService(repo, snapPort);
+
+    await service.emitContract(
+      { ...created, estado: ContractStatus.PENDIENTE_EMISION } as ContractWithRelations
+    );
+
+    const datos = captured[0]!.datosContrato as Record<string, unknown>;
+    expect(datos.datosArrendatario).toEqual(datosArrendatario);
+  });
+
+  it("renewContract: copia datosArrendatario del contrato original", async () => {
+    const datosArrendatario = {
+      nombre: "Juan",
+      apellido: "Pérez",
+      documentoIdentidad: "70000000",
+    };
+    const created = await new ContractService(
+      makeRepo().repo,
+      makeSnapshotPort()
+    ).createContract(makeInput({ datosArrendatario }));
+    const { repo } = makeRepo({ ...created, estado: ContractStatus.FIRMADO, snapshotId: "snap-1" });
+    const service = new ContractService(repo, makeSnapshotPort());
+
+    const renewed = await service.renewContract("contract-1", {
+      nuevaFechaInicio: "2025-01-01",
+      nuevaFechaFin: "2026-01-01",
+    });
+
+    expect(renewed.datosArrendatario).toEqual(datosArrendatario);
+    expect(renewed.renovadoDe).toBe("contract-1");
+  });
+
   it("buildClausulas: genera cláusulas de mueblería y mascotas desde el contrato", async () => {
     const created = await new ContractService(
       makeRepo().repo,
@@ -261,6 +318,7 @@ describe("ContractService", () => {
     const datos = captured[0]!.datosContrato as Record<string, unknown>;
     expect(datos.muebleriaItems).toEqual(["01 puerta", "01 isla"]);
     expect(datos.mascotasItems).toEqual(["Perro"]);
+    expect(datos.datosArrendatario).toBeNull();
   });
 
   it("buildClausulas: incluye cláusulas en blanco (—) cuando no hay datos", async () => {

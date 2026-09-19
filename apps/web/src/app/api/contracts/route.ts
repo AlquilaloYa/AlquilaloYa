@@ -216,6 +216,7 @@ export async function POST(request: Request) {
         : [],
       muebleriaItems: body.muebleriaItems ?? [],
       mascotasItems: body.mascotasItems ?? [],
+      datosArrendatario: body.datosArrendatario ?? null,
     });
     try {
       await sincronizarTareasContrato(created.id);

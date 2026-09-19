@@ -117,6 +117,108 @@ function buildDniAnnex(dni: string): string {
   );
 }
 
+/** Extrae nombre y DNI del arrendador desde la plantilla (bloque de firma). */
+function arrendadorDesdeTemplate(templateHtml: string): { nombre: string; dni: string } | null {
+  const m = /EL ARRENDADOR\(A\)<\/span><br>\s*([^<\n]+?)\s*<br>\s*DNI:\s*([0-9]{5,})/i.exec(
+    templateHtml
+  );
+  if (!m) return null;
+  return { nombre: m[1]!.trim(), dni: m[2]!.trim() };
+}
+
+function datosArrendatarioFicha(
+  snapshot: ContractSnapshot
+): Record<string, unknown> {
+  const contrato = snapshot.datosContrato as Record<string, unknown>;
+  const ficha = contrato.datosArrendatario;
+  return ficha && typeof ficha === "object" ? (ficha as Record<string, unknown>) : {};
+}
+
+/** Fila de la tabla de hoja de datos. */
+function fichaRow(label: string, value: string): string {
+  return `<tr><td style="width:38%;padding:4pt 8pt;font-weight:bold;border:1px solid #000;">${escapeHtml(label)}</td><td style="padding:4pt 8pt;border:1px solid #000;">${escapeHtml(value || "———")}</td></tr>`;
+}
+
+/**
+ * Hoja de datos del arrendatario: datos del contacto (sin copias ni adjuntos:
+ * sin copia de DNI, sin boletas, sin antecedentes penales) en formato tabla, y
+ * al final las firmas de arrendador y arrendatario con Nombre y DNI.
+ */
+function buildDatosArrendatarioSheet(
+  snapshot: ContractSnapshot,
+  templateHtml?: string | null
+): string {
+  const cliente = snapshot.datosCliente as Record<string, unknown>;
+  const contrato = snapshot.datosContrato as Record<string, unknown>;
+  const ficha = datosArrendatarioFicha(snapshot);
+
+  const nombres = field(ficha, ["nombre"]) || field(cliente, ["nombres", "nombreCompleto", "razonSocial", "nomCliente"]);
+  const apellidos = field(ficha, ["apellido"]) || field(cliente, ["apellidos"]);
+  const documento = field(ficha, ["documentoIdentidad"]) || field(cliente, ["documentoIdentidad", "documento", "ruc"]);
+  const ruc = field(ficha, ["ruc"]) || field(cliente, ["ruc"]);
+  const domicilio = field(ficha, ["domicilio"]) || field(cliente, ["domicilio"]);
+  const nacionalidad = field(ficha, ["nacionalidad"]) || field(cliente, ["nacionalidad"]) || "Peruano(a)";
+  const email = field(ficha, ["email"]) || field(cliente, ["email"]);
+  const telefono = field(ficha, ["telefono"]) || field(cliente, ["telefono"]);
+  const codigoPais = field(ficha, ["codigoPais"]) || field(cliente, ["codigoPais"]);
+  const telefonoCompleto = telefono ? `${codigoPais ? `+${codigoPais} ` : ""}${telefono}` : "";
+  const tipoPersona = field(ficha, ["tipoPersona"]) || "NATURAL";
+
+  const emergencia = ficha.contactoEmergencia as Record<string, unknown> | null | undefined;
+  const emergenciaTexto = emergencia
+    ? [field(emergencia, ["nombre"]), field(emergencia, ["parentesco"]), field(emergencia, ["telefono"])]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
+
+  const mascotasItems = Array.isArray(ficha.mascotasItems)
+    ? ficha.mascotasItems.map(String).filter(Boolean)
+    : Array.isArray(contrato.mascotasItems)
+    ? (contrato.mascotasItems as unknown[]).map(String).filter(Boolean)
+    : [];
+  const tieneMascotas = Boolean(ficha.mascotas) || mascotasItems.length > 0;
+
+  const arrendador = templateHtml ? arrendadorDesdeTemplate(templateHtml) : null;
+  const nombreCompleto = [nombres, apellidos].filter(Boolean).join(" ") || "________________";
+
+  return (
+    '<div style="page-break-before:always;">' +
+    '<h2 style="text-align:center;text-transform:uppercase;border-bottom:2px solid #000;padding-bottom:6px;">Hoja de datos del arrendatario</h2>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:10pt;">' +
+    fichaRow("Nombres", nombres) +
+    fichaRow("Apellidos", apellidos) +
+    fichaRow("Tipo de persona", tipoPersona === "NATURAL" ? "Persona Natural" : tipoPersona === "JURIDICA" ? "Persona Jurídica" : tipoPersona) +
+    fichaRow("Documento de identidad", documento) +
+    fichaRow("RUC", ruc) +
+    fichaRow("Domicilio", domicilio) +
+    fichaRow("Nacionalidad", nacionalidad) +
+    fichaRow("Correo electrónico", email) +
+    fichaRow("Teléfono", telefonoCompleto) +
+    fichaRow("Contacto de emergencia", emergenciaTexto) +
+    fichaRow("Mascotas", tieneMascotas ? (mascotasItems.length > 0 ? mascotasItems.join(", ") : "Sí") : "No") +
+    "</table>" +
+    '<div class="signature-section">' +
+    '<table class="signature-table">' +
+    "<tr>" +
+    "<td>" +
+    '<div class="signature-line"></div>' +
+    '<p><span class="bold">EL ARRENDADOR(A)</span></p>' +
+    `<p>${escapeHtml(arrendador?.nombre ?? "________________")}</p>` +
+    `<p>DNI: ${escapeHtml(arrendador?.dni ?? "________________")}</p>` +
+    "</td>" +
+    "<td>" +
+    '<div class="signature-line"></div>' +
+    '<p><span class="bold">EL ARRENDATARIO(A)</span></p>' +
+    `<p>${escapeHtml(nombreCompleto)}</p>` +
+    `<p>DNI: ${escapeHtml(documento || "________________")}</p>` +
+    "</td>" +
+    "</tr>" +
+    "</table>" +
+    "</div>" +
+    "</div>"
+  );
+}
+
 function inventarioMarkup(items: unknown): string {
   const lista = (Array.isArray(items) ? items : []).map(String).filter(Boolean);
   if (lista.length === 0) return "________________";
@@ -252,6 +354,10 @@ export function renderContractHtml(
     for (const [key, value] of Object.entries(replacements)) {
       html = html.split(key).join(escapeHtml(value));
     }
+    const datosSheet = buildDatosArrendatarioSheet(snapshot, templateHtml);
+    if (html.includes("[HOJA DE DATOS]")) {
+      html = html.split("[HOJA DE DATOS]").join(datosSheet);
+    }
     if (html.includes("[DNI]")) {
       html = html.split("[DNI]").join(dni);
     } else if (hayDni) {
@@ -265,6 +371,11 @@ export function renderContractHtml(
     }
     if (html.includes("[INVENTARIO]")) {
       html = html.split("[INVENTARIO]").join(inventarioMarkup(contrato.muebleriaItems));
+    }
+    if (!html.includes("[HOJA DE DATOS]")) {
+      html = /<\/body>/i.test(html)
+        ? html.replace(/<\/body>/i, datosSheet + "</body>")
+        : html + datosSheet;
     }
     return html;
   }
@@ -321,6 +432,7 @@ export function renderContractHtml(
       </tr>
     </table>
   </div>
+  ${buildDatosArrendatarioSheet(snapshot)}
   ${hayDni ? dniAnnex : ""}
 </body>
 </html>`;

@@ -29,6 +29,70 @@ function escapeHtml(value: string): string {
  * Renderiza el HTML del contrato a partir del snapshot congelado.
  * ÚNICAMENTE usa datos del snapshot: garantiza reproducción histórica e inmutabilidad.
  */
+/** Anexo con salto de página para la copia de DNI (funciona con o sin plantilla). */
+function buildDatosArrendatarioSheet(snapshot: ContractSnapshot): string {
+  const cliente = snapshot.datosCliente as Record<string, unknown>;
+  const contrato = snapshot.datosContrato as Record<string, unknown>;
+  const ficha =
+    contrato.datosArrendatario && typeof contrato.datosArrendatario === "object"
+      ? (contrato.datosArrendatario as Record<string, unknown>)
+      : {};
+
+  const nombre = field(ficha, ["nombre"]) || field(cliente, ["nombres", "nombreCompleto", "razonSocial", "nomCliente"]);
+  const apellido = field(ficha, ["apellido"]) || field(cliente, ["apellidos"]);
+  const documentoIdentidad = field(ficha, ["documentoIdentidad"]) || field(cliente, ["documentoIdentidad", "documento", "ruc"]);
+  const ruc = field(ficha, ["ruc"]) || field(cliente, ["ruc"]);
+  const email = field(ficha, ["email"]) || field(cliente, ["email"]);
+  const telefono = field(ficha, ["telefono"]) || field(cliente, ["telefono"]);
+  const codigoPais = field(ficha, ["codigoPais"]) || field(cliente, ["codigoPais"]);
+  const domicilio = field(ficha, ["domicilio"]) || field(cliente, ["domicilio"]);
+  const nacionalidad = field(ficha, ["nacionalidad"]) || field(cliente, ["nacionalidad"]);
+  const tipoPersona = field(ficha, ["tipoPersona"]) || "NATURAL";
+
+  const emergencia = ficha.contactoEmergencia as Record<string, unknown> | null | undefined;
+  const emergenciaTexto = emergencia
+    ? [field(emergencia, ["nombre"]), field(emergencia, ["parentesco"]), field(emergencia, ["telefono"])]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
+  const mascotasItems = Array.isArray(ficha.mascotasItems)
+    ? ficha.mascotasItems.map(String).filter(Boolean)
+    : Array.isArray(contrato.mascotasItems)
+    ? (contrato.mascotasItems as unknown[]).map(String).filter(Boolean)
+    : [];
+  const tieneMascotas = Boolean(ficha.mascotas) || mascotasItems.length > 0;
+
+  const nombreCompleto = [nombre, apellido].filter(Boolean).join(" ") || "________________";
+
+  return `
+  ${sectionTitle("Hoja de datos del arrendatario")}
+  <table>
+    ${richRow("Nombres", nombre)}
+    ${richRow("Apellidos", apellido)}
+    ${richRow("Tipo de persona", tipoPersona === "NATURAL" ? "Persona Natural" : tipoPersona === "JURIDICA" ? "Persona Jurídica" : tipoPersona)}
+    ${richRow("Documento de identidad", documentoIdentidad)}
+    ${richRow("RUC", ruc)}
+    ${richRow("Domicilio", domicilio)}
+    ${richRow("Nacionalidad", nacionalidad)}
+    ${richRow("Correo electrónico", email)}
+    ${richRow("Teléfono", telefono ? `${codigoPais ? `+${codigoPais} ` : ""}${telefono}` : "")}
+    ${richRow("Contacto de emergencia", emergenciaTexto)}
+    ${richRow("Mascotas", tieneMascotas ? (mascotasItems.length > 0 ? mascotasItems.join(", ") : "Sí") : "No")}
+  </table>
+  <div class="signature">
+    <div>
+      <span class="line">Firma del arrendador(a)</span><br />
+      <span style="font-size:11px;">${escapeHtml(nombreCompleto)}</span><br />
+      <span style="font-size:11px;">Documento: ${escapeHtml(documentoIdentidad || "—")}</span>
+    </div>
+    <div>
+      <span class="line">Firma del arrendatario(a)</span><br />
+      <span style="font-size:11px;">${escapeHtml(nombreCompleto)}</span><br />
+      <span style="font-size:11px;">Documento: ${escapeHtml(documentoIdentidad || "—")}</span>
+    </div>
+  </div>`;
+}
+
 export function renderContractHtml(snapshot: ContractSnapshot): string {
   const cliente = snapshot.datosCliente as Record<string, unknown>;
   const departamento = snapshot.datosDepartamento as Record<string, unknown>;
@@ -124,6 +188,8 @@ export function renderContractHtml(snapshot: ContractSnapshot): string {
 
   ${sectionTitle("Anexos")}
   ${anexos || "<p class='sub'>Sin anexos registrados.</p>"}
+
+  ${buildDatosArrendatarioSheet(snapshot)}
 
   <div class="signature">
     <div><span class="line">Firma del arrendador</span></div>

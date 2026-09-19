@@ -67,6 +67,8 @@ type Depositante = ClientApi & {
   mensualidad?: string;
   garantia?: string;
   separacion?: SeparacionRecord;
+  codigoPais?: string;
+  contactoEmergencia?: ContactSeed["contactoEmergencia"];
   /** Mascotas del contacto (etiquetas del catálogo). */
   mascotas?: boolean;
   mascotasItems?: string[];
@@ -436,6 +438,8 @@ res.push({
         mensualidad,
         garantia,
         separacion: sep,
+        codigoPais: contacto.codigoPais ?? "51",
+        contactoEmergencia: contacto.contactoEmergencia ?? null,
         mascotas: contacto.mascotas ?? false,
         mascotasItems: etiquetasDeIds(MASCOTAS, contacto.mascotasItems),
         copiaDni: contacto.copiaDni ?? [],
@@ -1206,6 +1210,21 @@ function CreateContractModal({
             tipo: archivo.tipo,
             dataUrl: archivo.dataUrl,
           })),
+          datosArrendatario: {
+            nombre: clienteSel.nombres,
+            apellido: clienteSel.apellidos,
+            tipoPersona: clienteSel.tipoPersona,
+            documentoIdentidad: clienteSel.documentoIdentidad,
+            ruc: clienteSel.ruc ?? null,
+            email: clienteSel.email ?? null,
+            telefono: clienteSel.telefono ?? null,
+            codigoPais: clienteSel.codigoPais ?? "51",
+            domicilio: clienteSel.domicilio ?? null,
+            nacionalidad: clienteSel.nacionalidad ?? null,
+            contactoEmergencia: clienteSel.contactoEmergencia ?? null,
+            mascotas: clienteSel.mascotas ?? false,
+            mascotasItems: clienteSel.mascotasItems ?? [],
+          },
         }),
       });
       if (!res.ok) {

@@ -200,6 +200,7 @@ export class ContractService {
         copiaDni: contract.copiaDni,
         muebleriaItems: contract.muebleriaItems ?? [],
         mascotasItems: contract.mascotasItems ?? [],
+        datosArrendatario: contract.datosArrendatario,
       },
       clausulas,
       anexos,
@@ -346,6 +347,7 @@ export class ContractService {
       copiaDni: current.copiaDni,
       muebleriaItems: current.muebleriaItems,
       mascotasItems: current.mascotasItems ?? [],
+      datosArrendatario: current.datosArrendatario,
     });
 
     await this.emit(

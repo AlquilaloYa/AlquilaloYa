@@ -29,6 +29,21 @@ function snapshot(overrides?: Partial<ContractSnapshot>): ContractSnapshot {
         fecha: "2025-03-05T00:00:00.000Z",
       },
       copiaDni: [{ nombre: "dni.png", tipo: "image/png", dataUrl: "data:image/png;base64,abc" }],
+      datosArrendatario: {
+        nombre: "Juan",
+        apellido: "Pérez",
+        tipoPersona: "NATURAL",
+        documentoIdentidad: "70000000",
+        ruc: "20500000000",
+        email: "juan@correo.com",
+        telefono: "999888777",
+        codigoPais: "51",
+        domicilio: "Av. Alfredo Benavides 2195, Miraflores, Lima",
+        nacionalidad: "Peruano(a)",
+        contactoEmergencia: { nombre: "Maria Pérez", parentesco: "Esposa", telefono: "988777666" },
+        mascotas: true,
+        mascotasItems: ["Perro", "Gato"],
+      },
     },
     clausulas: [
       { versionId: "c1", contenido: "CLÁUSULA DE INVENTARIO DE MUEBLES — 01 puerta." },
@@ -167,6 +182,61 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     const html = renderContractHtml(snp, "<h1>Contrato</h1><div>[DNI]</div>");
     expect(html).not.toContain("<embed");
     expect(html).toContain("versión para notaría");
+  });
+});
+
+describe("renderContractHtml: hoja de datos del arrendatario", () => {
+  it("incluye la hoja de datos en formato tabla (template)", () => {
+    const html = renderContractHtml(snapshot(), "<h1>Contrato</h1><p>[NOMBRE DEL ARRENDATARIO]</p></body>");
+    expect(html).toContain("Hoja de datos del arrendatario");
+    expect(html).toContain("Contacto de emergencia");
+    expect(html).toContain('"width:38%;padding:4pt 8pt');
+    expect(html).toContain("juan@correo.com");
+    expect(html).toContain("+51 999888777");
+    expect(html).toContain("Maria Pérez · Esposa · 988777666");
+    expect(html).toContain("Perro, Gato");
+  });
+
+  it("no incluye copias ni antecedentes en la hoja de datos", () => {
+    const html = renderContractHtml(snapshot(), "<h1>Contrato</h1><p>[NOMBRE DEL ARRENDATARIO]</p></body>");
+    expect(html).toContain("Hoja de datos del arrendatario");
+    expect(html).not.toContain("copia de boletas");
+    expect(html).not.toContain("antecedentes penales");
+  });
+
+  it("extrae Nombre y DNI del arrendador desde la plantilla para las firmas", () => {
+    const template = `<div class="signature-section"><table><tr><td><span class="bold">EL ARRENDADOR(A)</span><br>EMELY ALEXANDRA CARPIO PINTO<br>DNI: 76373620</td></tr></table></div>`;
+    const html = renderContractHtml(snapshot(), `<h1>Contrato</h1>${template}</body>`);
+    expect(html).toContain("EMELY ALEXANDRA CARPIO PINTO");
+    expect(html).toContain("DNI: 76373620");
+  });
+
+  it("incluye la hoja de datos en el fallback genérico", () => {
+    const html = renderContractHtml(snapshot());
+    expect(html).toContain("Hoja de datos del arrendatario");
+    expect(html).toContain("Contacto de emergencia");
+    expect(html).toContain("juan@correo.com");
+  });
+
+  it("respeta el placeholder [HOJA DE DATOS] en la plantilla", () => {
+    const html = renderContractHtml(
+      snapshot(),
+      "<h1>Contrato</h1><div>[HOJA DE DATOS]</div></body>"
+    );
+    expect(html).toContain("Hoja de datos del arrendatario");
+    const posHoja = html.indexOf("Hoja de datos del arrendatario");
+    const posCierre = html.indexOf("</body>");
+    expect(posHoja).toBeGreaterThan(0);
+    expect(posHoja).toBeLessThan(posCierre);
+  });
+
+  it("no requiere datosArrendatario en el snapshot (usa datos del cliente)", () => {
+    const snp = snapshot();
+    delete (snp.datosContrato as Record<string, unknown>).datosArrendatario;
+    const html = renderContractHtml(snp, "<h1>Contrato</h1><p>[NOMBRE DEL ARRENDATARIO]</p></body>");
+    expect(html).toContain("Hoja de datos del arrendatario");
+    expect(html).toContain("Juan Pérez");
+    expect(html).toContain("70000000");
   });
 });
 
