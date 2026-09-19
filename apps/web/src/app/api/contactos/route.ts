@@ -1,5 +1,5 @@
 ﻿import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 
@@ -84,7 +84,7 @@ export async function GET(req: Request) {
     const rows = await db
       .select()
       .from(schema.contacts)
-      .orderBy(schema.contacts.nombre, schema.contacts.apellido);
+      .orderBy(desc(schema.contacts.createdAt));
     const filtered = dni ? rows.filter((r) => r.dni === dni) : rows;
     return NextResponse.json(filtered.map(toView));
   } catch (error) {

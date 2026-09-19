@@ -21,7 +21,7 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq } = await import("drizzle-orm");
+    const { desc, eq } = await import("drizzle-orm");
     const rows = await db
       .select({
         id: schema.contracts.id,
@@ -54,7 +54,7 @@ export async function GET(req: Request) {
         schema.departments,
         eq(schema.departments.id, schema.contracts.departamentoId)
       )
-      .orderBy(schema.contracts.creadoEn);
+      .orderBy(desc(schema.contracts.creadoEn));
 
     return NextResponse.json(
       rows.map((r) => ({

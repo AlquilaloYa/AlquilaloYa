@@ -23,7 +23,7 @@ export async function GET(req: Request) {
       .select()
       .from(schema.clients)
       .where(eq(schema.clients.activo, true))
-      .orderBy(schema.clients.nombres);
+      .orderBy(desc(schema.clients.createdAt));
 
     if (rows.length === 0) {
       return NextResponse.json([]);
