@@ -6,8 +6,8 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
-import { CalendarPlus, Download, FileCheck, Plus, RefreshCw, ShieldCheck, X } from "lucide-react";
-import { AdendaModal, ExtensionModal } from "@/components/adenda-modals";
+import { CalendarPlus, Download, Edit, FileCheck, Plus, RefreshCw, ShieldCheck, X } from "lucide-react";
+import { AdendaModal, EditAdendaModal, ExtensionModal } from "@/components/adenda-modals";
 import { useAuth } from "@/lib/auth-context";
 
 type AdendaApi = {
@@ -24,12 +24,14 @@ type AdendaApi = {
   error: string | null;
   createdAt: string | null;
   codigoContrato: string;
-estadoContrato: string;
+  estadoContrato: string;
   clienteId: string;
   clienteNombre: string | null;
   clienteApellidos: string | null;
   clienteDocumento: string | null;
   fechaFinAdenda: string | null;
+  datosContrato: Record<string, unknown> | null;
+  anexoContenido: string | null;
   departamentoNombre: string | null;
   departamentoCodigo: string | null;
 };
@@ -103,6 +105,7 @@ export default function AdendasPage() {
   const [pickerLoading, setPickerLoading] = useState(false);
 
   const [selected, setSelected] = useState<ContractPick | null>(null);
+  const [editarAdenda, setEditarAdenda] = useState<AdendaApi | null>(null);
   const [showAdenda, setShowAdenda] = useState(false);
   const [showExtension, setShowExtension] = useState(false);
 
@@ -407,6 +410,17 @@ export default function AdendasPage() {
                               </span>
                             )
                           ) : null}
+                          {isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => setEditarAdenda(d)}
+                              className="inline-flex items-center gap-1 text-on-surface-variant hover:text-primary"
+                              title="Editar título, contenido, numeración o plazo de la adenda"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                              Editar
+                            </button>
+                          ) : null}
                           {isAdmin && d.estadoGeneracion === "GENERADO" ? (
                             <button
                               type="button"
@@ -487,6 +501,17 @@ export default function AdendasPage() {
           onCreated={async () => {
             setShowAdenda(false);
             setSelected(null);
+            await load();
+          }}
+        />
+      ) : null}
+
+      {editarAdenda ? (
+        <EditAdendaModal
+          adenda={editarAdenda}
+          onClose={() => setEditarAdenda(null)}
+          onSaved={async () => {
+            setEditarAdenda(null);
             await load();
           }}
         />

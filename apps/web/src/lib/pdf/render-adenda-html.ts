@@ -231,6 +231,16 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
   const inicioAdenda = fmt(fechaInicioAdenda);
   const finAdendaMesFin = fmtMesFin(fechaFinAdenda);
 
+  const tituloAdenda = String(contrato.titulo ?? "ADENDA").trim() || "ADENDA";
+  const anexoTexto = (snapshot.anexos ?? [])
+    .map((a) => a.contenido)
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+  const contenidoAdenda = anexoTexto.replace(/^[^\n]*\n?\n?/, "").trim();
+  const titularDistinto = tituloAdenda !== "ADENDA";
+  const conContenido = Boolean(contenidoAdenda && contenidoAdenda !== tituloAdenda);
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -241,49 +251,50 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
         body {
             font-family: Arial, sans-serif;
             font-size: 10pt;
-            line-height: 1.4;
+            line-height: 1.3;
             color: #000000;
             background-color: #ffffff;
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            min-height: 297mm;
             height: auto;
         }
         h1 {
             text-align: center;
-            font-size: 13pt;
+            font-size: 12.5pt;
             font-weight: bold;
             text-transform: uppercase;
             margin-top: 0;
-            margin-bottom: 25px;
+            margin-bottom: 12px;
             line-height: 1.3;
         }
         h2 {
-            font-size: 11pt;
+            font-size: 10.5pt;
             font-weight: bold;
             text-transform: uppercase;
-            margin-top: 18px;
-            margin-bottom: 8px;
+            margin-top: 8px;
+            margin-bottom: 4px;
         }
         p {
             font-size: 10pt;
             text-align: justify;
-            margin-bottom: 12px;
+            margin-bottom: 6px;
         }
         .bold { font-weight: bold; }
-        .section-block { page-break-inside: avoid; break-inside: avoid; margin-bottom: 12px; }
+        .section-block { page-break-inside: avoid; break-inside: avoid; margin-bottom: 6px; }
+        .titulo-adenda { text-align: center; font-size: 11pt; font-weight: bold; margin: 2px 0 10px; text-transform: uppercase; }
+        .contenido-adenda { white-space: pre-wrap; margin-top: 4px; }
         .signature-section {
-            margin-top: 50px;
+            margin-top: 18px;
             width: 100%;
             page-break-inside: avoid;
             break-inside: avoid;
         }
         .signature-table { width: 100%; border-collapse: collapse; }
         .signature-table td { width: 50%; vertical-align: top; padding: 0 15px; text-align: center; }
-        .signature-line { border-top: 1px solid #000000; margin-top: 60px; margin-bottom: 8px; }
+        .signature-line { border-top: 1px solid #000000; margin-top: 28px; margin-bottom: 4px; }
         .footer {
-            margin-top: 40px;
+            margin-top: 14px;
             display: flex;
             justify-content: space-between;
             font-size: 9pt;
@@ -298,6 +309,7 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
 <body>
 
     <h1>ADENDA N° ${numeroAdenda} AL CONTRATO DE<br>ARRENDAMIENTO</h1>
+    ${titularDistinto ? `<p class="titulo-adenda">${escapeHtml(tituloAdenda)}</p>` : ""}
 
     <div class="section-block">
         <p>Conste por el presente documento la <span class="bold">ADENDA AL CONTRATO DE ARRENDAMIENTO</span> de fecha <span class="bold">${inicioOriginal}</span> que celebran de una parte ${arrendador.trat} <span class="bold">${arrendador.nombres} ${arrendador.apellidos.toUpperCase()}</span>, identificado(a) con D.N.I. N° <span class="bold">${arrendador.dni}</span>, domiciliado(a) en <span class="bold">Av. Alfredo Benavides 2195, distrito de Miraflores, Departamento y Provincia de Lima</span>, a quien en adelante se le denominará <span class="bold">LA ARRENDADOR(A)</span>; y, de la otra parte, el Sr.(a) <span class="bold">${nombreCompleto}</span>, identificado(a) con D.N.I. / C.E. / Pasaporte N° <span class="bold">${clienteDocumento || "________________"}</span>, de nacionalidad <span class="bold">${nacimiento}</span>, domiciliado(a) en <span class="bold">${domicilio}</span>, a quien en adelante se denominará <span class="bold">EL ARRENDATARIO(A)</span>, en los términos y bajo las condiciones siguientes:</p>
@@ -322,6 +334,7 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
         <p><span class="bold">TERCERO.</span> Salvo por la modificación señalada en la presente adenda, todas las demás cláusulas y condiciones del contrato de arrendamiento original se mantienen vigentes y sin alteración alguna.</p>
 
         <p>En señal de conformidad, ambas partes suscriben la presente adenda en dos ejemplares de igual tenor y validez, en esta ciudad.</p>
+        ${conContenido ? `<div class="section-block"><p>Otras precisiones convenidas: <span class="bold">${escapeHtml(contenidoAdenda).replace(/\n/g, "<br>")}</span></p></div>` : ""}
 
         <p>Miraflores, <span class="bold">${inicioAdenda}</span>.</p>
     </div>

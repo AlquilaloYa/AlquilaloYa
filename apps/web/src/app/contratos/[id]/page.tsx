@@ -5,8 +5,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
-import { AlertTriangle, ArrowLeft, CalendarPlus, Download, File, FileText, ShieldCheck, Upload } from "lucide-react";
-import { AdendaModal, ExtensionModal } from "@/components/adenda-modals";
+import { AlertTriangle, ArrowLeft, CalendarPlus, Download, File, FileText, Pencil, ShieldCheck, Upload } from "lucide-react";
+import { AdendaModal, EditAdendaModal, ExtensionModal, type EditableAdenda } from "@/components/adenda-modals";
 
 type SnapshotCliente = {
   id: string;
@@ -127,6 +127,8 @@ export default function ContratoDetailPage() {
   const [errorPdf, setErrorPdf] = useState<string | null>(null);
   const [showAdenda, setShowAdenda] = useState(false);
   const [showExtension, setShowExtension] = useState(false);
+  const [editarAdenda, setEditarAdenda] = useState<EditableAdenda | null>(null);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [verificacion, setVerificacion] = useState<
     Record<string, boolean | undefined>
   >({});
@@ -203,6 +205,23 @@ export default function ContratoDetailPage() {
       setVerificacion((v) => ({ ...v, [d.id]: Boolean(body.ok) }));
     } catch {
       setVerificacion((v) => ({ ...v, [d.id]: false }));
+    }
+  }
+
+  async function abrirEdicionAdenda(d: Document) {
+    setEditandoId(d.id);
+    setErrorPdf(null);
+    try {
+      const res = await fetch(`/api/adendas/${encodeURIComponent(d.id)}`, {
+        headers: { "x-user-email": "admin@sistema.com" },
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`);
+      setEditarAdenda(body);
+    } catch (e) {
+      setErrorPdf((e as Error).message);
+    } finally {
+      setEditandoId(null);
     }
   }
 
@@ -691,6 +710,15 @@ export default function ContratoDetailPage() {
                         </button>
                       ) : null}
                       <button
+                        onClick={() => void abrirEdicionAdenda(d)}
+                        disabled={editandoId === d.id}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded border border-outline-variant px-2.5 py-1.5 font-label-md text-primary hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-50 dark:border-transparent"
+                        title="Editar título, contenido, numeración o plazo de la adenda"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        {editandoId === d.id ? "…" : "Editar"}
+                      </button>
+                      <button
                         onClick={() => descargarDocumento(d)}
                         aria-label={`Descargar ${d.filename}`}
                         className="inline-flex shrink-0 items-center gap-1.5 rounded border border-outline-variant px-2.5 py-1.5 font-label-md text-primary hover:bg-surface-container dark:border-transparent"
@@ -962,6 +990,16 @@ export default function ContratoDetailPage() {
             onClose={() => setShowExtension(false)}
             onCreated={async () => {
               setShowExtension(false);
+              await load();
+            }}
+          />
+        ) : null}
+        {editarAdenda ? (
+          <EditAdendaModal
+            adenda={editarAdenda}
+            onClose={() => setEditarAdenda(null)}
+            onSaved={async () => {
+              setEditarAdenda(null);
               await load();
             }}
           />
