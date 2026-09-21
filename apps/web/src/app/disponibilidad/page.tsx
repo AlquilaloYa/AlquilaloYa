@@ -11,10 +11,18 @@ interface DisponibilidadDepartment {
   nombre: string;
   numero: string;
   piso: number;
+  precio: string;
   disponibilidad: { disponible: false; fechaFin: string; dias: number } | null;
   enMantenimiento?: boolean;
   bloqueado?: boolean;
+  estadoManual?: string | null;
   ocupante: { nombres: string; apellidos: string | null; telefono: string | null } | null;
+}
+
+function fmtPrecio(val: string | undefined): string {
+  const numero = Number(val ?? 0);
+  if (!numero) return "";
+  return `S/ ${numero.toLocaleString("es-PE", { minimumFractionDigits: 0 })}/mes`;
 }
 
 function PopupDepartamento({
@@ -64,6 +72,8 @@ function PopupDepartamento({
               : ` · libre en ~${dept.disponibilidad!.dias} d`}
           </div>
           <div className="grid grid-cols-[80px_1fr] gap-y-2 text-sm">
+            <span className="text-muted-foreground">Precio</span>
+            <span className="font-semibold text-foreground">{fmtPrecio(dept.precio) || "—"}</span>
             <span className="text-muted-foreground">Ocupante</span>
             <span className="font-medium text-foreground">
               {dept.ocupante?.nombres} {dept.ocupante?.apellidos ?? ""}
@@ -86,11 +96,16 @@ function PopupDepartamento({
   );
 }
 
-function TarjetaDisponible({ dept }: { dept: DisponibilidadDepartment }) {
+function TarjetaDisponible({ dept, onOpen }: { dept: DisponibilidadDepartment; onOpen: () => void }) {
   return (
-    <div className="flex items-center justify-center rounded-xl border border-green-600/20 bg-green-500/10 border-l-4 border-l-green-600 p-4">
+    <button
+      type="button"
+      onClick={onOpen}
+      title="Ver precio"
+      className="flex items-center justify-center rounded-xl border border-green-600/20 bg-green-500/10 border-l-4 border-l-green-600 p-4 transition-colors hover:bg-green-500/15"
+    >
       <span className="font-mono-label text-base font-bold text-green-700 dark:text-green-500">{dept.codigo}</span>
-    </div>
+    </button>
   );
 }
 
@@ -113,24 +128,201 @@ function TarjetaOcupada({
   );
 }
 
-function TarjetaMantenimiento({ dept }: { dept: DisponibilidadDepartment }) {
+function TarjetaMantenimiento({
+  dept,
+  onOpen,
+}: {
+  dept: DisponibilidadDepartment;
+  onOpen: () => void;
+}) {
   return (
-    <div
-      title="En mantenimiento"
-      className="flex items-center justify-center rounded-xl border border-blue-600/20 bg-blue-500/10 border-l-4 border-l-blue-600 p-4"
+    <button
+      type="button"
+      onClick={onOpen}
+      title="Cambiar estado"
+      className="flex items-center justify-center rounded-xl border border-blue-600/20 bg-blue-500/10 border-l-4 border-l-blue-600 p-4 transition-colors hover:bg-blue-500/15"
     >
       <span className="font-mono-label text-base font-bold text-blue-700 dark:text-blue-500">{dept.codigo}</span>
+    </button>
+  );
+}
+
+function TarjetaBloqueada({
+  dept,
+  onOpen,
+}: {
+  dept: DisponibilidadDepartment;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title="Cambiar estado"
+      className="flex items-center justify-center rounded-xl border border-black bg-black border-l-4 p-4 transition-colors hover:opacity-90"
+    >
+      <span className="font-mono-label text-base font-bold text-white">{dept.codigo}</span>
+    </button>
+  );
+}
+
+function PopupCambiarEstado({
+  dept,
+  onClose,
+  onChanged,
+}: {
+  dept: DisponibilidadDepartment;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [guardando, setGuardando] = useState(false);
+  const [errorCambio, setErrorCambio] = useState<string | null>(null);
+  const manual = dept.estadoManual;
+
+  async function cambiarEstado(estado: "MANTENIMIENTO" | "BLOQUEADO" | "AUTO") {
+    if (guardando) return;
+    if (estado === "AUTO" && (manual === null || manual === undefined)) return;
+    if (estado !== "AUTO" && estado === manual) return;
+    setGuardando(true);
+    setErrorCambio(null);
+    try {
+      const res = await apiFetch(`/api/departamentos/${dept.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          estadoManual: estado === "AUTO" ? "LIBRE" : estado,
+        }),
+      });
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error ?? `Error ${res.status}`);
+      }
+      onChanged();
+      onClose();
+    } catch (e) {
+      setErrorCambio((e as Error).message ?? "No se pudo cambiar el estado");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-xl border bg-background p-5 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-mono-label text-lg font-bold text-foreground">{dept.codigo}</h3>
+            <p className="text-sm text-muted-foreground">{dept.nombre} · Cambiar modo</p>
+            {fmtPrecio(dept.precio) ? (
+              <p className="mt-1 text-sm font-semibold text-primary">{fmtPrecio(dept.precio)}</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="rounded p-1 text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-4 space-y-2">
+          <button
+            type="button"
+            disabled={guardando}
+            onClick={() => void cambiarEstado("MANTENIMIENTO")}
+            className={`flex w-full items-center gap-3 rounded-lg border-l-4 border-blue-600 bg-blue-500/10 px-3 py-2 text-sm font-semibold text-blue-700 transition-colors dark:text-blue-500 ${
+              manual === "MANTENIMIENTO" ? "ring-2 ring-inset ring-blue-600 opacity-80" : "hover:bg-blue-500/15"
+            }`}
+          >
+            Mantenimiento{manual === "MANTENIMIENTO" ? " · actual" : ""}
+          </button>
+          <button
+            type="button"
+            disabled={guardando}
+            onClick={() => void cambiarEstado("BLOQUEADO")}
+            className={`flex w-full items-center gap-3 rounded-lg border-l-4 border-black bg-black px-3 py-2 text-sm font-semibold text-white transition-colors ${
+              manual === "BLOQUEADO" ? "ring-2 ring-inset ring-neutral-400 opacity-90" : "hover:opacity-90"
+            }`}
+          >
+            Bloqueado{manual === "BLOQUEADO" ? " · actual" : ""}
+          </button>
+          <button
+            type="button"
+            disabled={guardando}
+            onClick={() => void cambiarEstado("AUTO")}
+            className={`flex w-full items-center gap-3 rounded-lg border border-dashed border-outline px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted ${
+              manual === null || manual === undefined
+                ? "ring-2 ring-inset ring-primary/60 text-foreground font-semibold"
+                : ""
+            }`}
+          >
+            Automático (según contratos)
+            {manual === null || manual === undefined ? " · actual" : ""}
+          </button>
+        </div>
+        {errorCambio ? <p className="mt-3 text-sm text-red-600">{errorCambio}</p> : null}
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-5 h-9 w-full rounded-lg bg-foreground font-medium text-background hover:opacity-90"
+        >
+          Cerrar
+        </button>
+      </div>
     </div>
   );
 }
 
-function TarjetaBloqueada({ dept }: { dept: DisponibilidadDepartment }) {
+function PopupDetalle({ dept, onClose }: { dept: DisponibilidadDepartment; onClose: () => void }) {
   return (
     <div
-      title="Bloqueado"
-      className="flex items-center justify-center rounded-xl border border-black bg-black border-l-4 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
     >
-      <span className="font-mono-label text-base font-bold text-white">{dept.codigo}</span>
+      <div
+        className="w-full max-w-sm rounded-xl border bg-background p-5 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-mono-label text-lg font-bold text-foreground">{dept.codigo}</h3>
+            <p className="text-sm text-muted-foreground">{dept.nombre}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="rounded p-1 text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-4 space-y-3">
+          <div className="rounded-lg bg-green-500/10 px-3 py-2 text-sm font-semibold text-green-700 dark:text-green-500">
+            Disponible
+          </div>
+          <div className="grid grid-cols-[80px_1fr] gap-y-2 text-sm">
+            <span className="text-muted-foreground">Precio</span>
+            <span className="font-semibold text-foreground">{fmtPrecio(dept.precio) || "—"}</span>
+            <span className="text-muted-foreground">Piso</span>
+            <span className="font-medium text-foreground">{dept.piso}</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-5 h-9 w-full rounded-lg bg-foreground font-medium text-background hover:opacity-90"
+        >
+          Cerrar
+        </button>
+      </div>
     </div>
   );
 }
@@ -139,10 +331,14 @@ function GrupoDepartamentos({
   titulo,
   departamentos,
   onAbrirPopup,
+  onAbrirCambio,
+  onAbrirPrecio,
 }: {
   titulo: string;
   departamentos: DisponibilidadDepartment[];
   onAbrirPopup: (dept: DisponibilidadDepartment) => void;
+  onAbrirCambio: (dept: DisponibilidadDepartment) => void;
+  onAbrirPrecio: (dept: DisponibilidadDepartment) => void;
 }) {
   const disponibles = departamentos.filter((d) => !d.disponibilidad && !d.enMantenimiento && !d.bloqueado);
   const mantenimiento = departamentos.filter((d) => !d.disponibilidad && d.enMantenimiento && !d.bloqueado);
@@ -164,13 +360,13 @@ function GrupoDepartamentos({
       </h2>
       <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columnas}, minmax(0, 1fr))` }}>
         {disponibles.map((dept) => (
-          <TarjetaDisponible key={dept.id} dept={dept} />
+          <TarjetaDisponible key={dept.id} dept={dept} onOpen={() => onAbrirPrecio(dept)} />
         ))}
         {mantenimiento.map((dept) => (
-          <TarjetaMantenimiento key={dept.id} dept={dept} />
+          <TarjetaMantenimiento key={dept.id} dept={dept} onOpen={() => onAbrirCambio(dept)} />
         ))}
         {bloqueados.map((dept) => (
-          <TarjetaBloqueada key={dept.id} dept={dept} />
+          <TarjetaBloqueada key={dept.id} dept={dept} onOpen={() => onAbrirCambio(dept)} />
         ))}
         {ocupados.map((dept) => (
           <TarjetaOcupada key={dept.id} dept={dept} onOpen={() => onAbrirPopup(dept)} />
@@ -185,6 +381,8 @@ export default function DisponibilidadPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [popup, setPopup] = useState<DisponibilidadDepartment | null>(null);
+  const [popupCambio, setPopupCambio] = useState<DisponibilidadDepartment | null>(null);
+  const [popupPrecio, setPopupPrecio] = useState<DisponibilidadDepartment | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -284,13 +482,33 @@ export default function DisponibilidadPage() {
           </div>
         ) : (
           <div className="space-y-8">
-            <GrupoDepartamentos titulo="Benavides 2195" departamentos={benavides} onAbrirPopup={setPopup} />
-            <GrupoDepartamentos titulo="Angamos 170" departamentos={angamos} onAbrirPopup={setPopup} />
+            <GrupoDepartamentos
+            titulo="Benavides 2195"
+            departamentos={benavides}
+            onAbrirPopup={setPopup}
+            onAbrirCambio={setPopupCambio}
+            onAbrirPrecio={setPopupPrecio}
+          />
+          <GrupoDepartamentos
+            titulo="Angamos 170"
+            departamentos={angamos}
+            onAbrirPopup={setPopup}
+            onAbrirCambio={setPopupCambio}
+            onAbrirPrecio={setPopupPrecio}
+          />
           </div>
         )}
       </div>
 
       {popup ? <PopupDepartamento dept={popup} onClose={() => setPopup(null)} /> : null}
+      {popupPrecio ? <PopupDetalle dept={popupPrecio} onClose={() => setPopupPrecio(null)} /> : null}
+      {popupCambio ? (
+        <PopupCambiarEstado
+          dept={popupCambio}
+          onClose={() => setPopupCambio(null)}
+          onChanged={() => void load()}
+        />
+      ) : null}
     </DashboardShell>
   );
 }

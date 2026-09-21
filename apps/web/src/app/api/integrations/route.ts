@@ -94,9 +94,22 @@ export async function POST(req: Request) {
     if (denied) return denied;
 
     const body = await req.json();
+    const type = String(body.type ?? "REST").toUpperCase();
+    const validTypes = ["REST", "WHATSAPP", "GMAIL", "GOOGLE_FORMS", "STORAGE"];
+    if (!validTypes.includes(type)) {
+      return NextResponse.json({ error: `Tipo de conector inválido: ${type}` }, { status: 400 });
+    }
+    if (type === "WHATSAPP") {
+      if (!String(body.provider ?? "whatsapp-cloud")) {
+        return NextResponse.json({ error: "Indica el proveedor del conector" }, { status: 400 });
+      }
+      if (!String((body.config as Record<string, unknown>)?.phoneNumberId ?? "").trim()) {
+        return NextResponse.json({ error: "Falta el phoneNumberId de WhatsApp Business" }, { status: 400 });
+      }
+    }
     const service = await getIntegrationService();
     const created = await service.create({
-      type: body.type ?? "REST",
+      type: type as import("@contract/domain/integration").ConnectorType,
       provider: body.provider,
       name: body.name,
       description: body.description,

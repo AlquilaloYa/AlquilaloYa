@@ -116,9 +116,11 @@ async function buildTransportForInstance(
     case "WHATSAPP": {
       const phoneNumberId = instance.config?.phoneNumberId as string | undefined;
       const apiVersion = instance.config?.apiVersion as string | undefined;
+      const accessToken = creds?.accessToken ?? creds?.token;
       return new WhatsAppAdapter({
         ...(phoneNumberId ? { phoneNumberId } : {}),
         ...(apiVersion ? { apiVersion } : {}),
+        ...(accessToken ? { accessToken } : {}),
       });
     }
 

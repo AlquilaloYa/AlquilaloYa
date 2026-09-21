@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { AlertTriangle, Plus, RefreshCw, Send, Plug, Power, ShieldCheck, Trash2, X } from "lucide-react";
+import { AlertTriangle, Plus, RefreshCw, Send, Plug, Power, Settings2, ShieldCheck, Trash2, X } from "lucide-react";
 
 interface Connector {
   id: string;
@@ -35,6 +35,11 @@ const AUTH_TYPES = [
 
 const METHODS = ["GET", "POST", "PUT", "PATCH"];
 
+const CONNECTOR_TYPES = [
+  { value: "REST", label: "REST genérico" },
+  { value: "WHATSAPP", label: "WhatsApp Business" },
+];
+
 export default function IntegracionesPage() {
   const { user } = useAuth();
   const canManage = !!user && ["ADMIN", "SUPERVISOR"].includes(user.role);
@@ -45,18 +50,22 @@ export default function IntegracionesPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [dispatchResult, setDispatchResult] = useState<Record<string, string> | null>(null);
 
   const [form, setForm] = useState({
     name: "",
     provider: "",
     description: "",
+    type: "REST" as "REST" | "WHATSAPP",
     baseUrl: "",
     method: "POST",
     path: "/webhook",
     authType: "NONE",
     apiKeyHeader: "X-API-Key",
     token: "",
+    phoneNumberId: "",
+    apiVersion: "v20.0",
     idempotencyKey: "",
     payloadJson: "{}",
   });
@@ -117,34 +126,75 @@ export default function IntegracionesPage() {
   const create = async () => {
     setError(null);
     try {
-      const res = await apiFetch("/api/integrations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "REST",
-          provider: form.provider || "rest",
-          name: form.name,
-          description: form.description || null,
-          config: {
-            baseUrl: form.baseUrl,
-            method: form.method,
-            path: form.path,
-            authType: form.authType,
-            apiKeyHeader: form.apiKeyHeader,
-          },
-          credentials:
-            form.authType === "NONE"
-              ? null
-              : { authType: form.authType, token: form.token || undefined },
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`);
+      const isWhatsApp = form.type === "WHATSAPP";
+      if (editId) {
+        const res = await apiFetch(`/api/integrations/${editId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            config: isWhatsApp
+              ? { phoneNumberId: form.phoneNumberId, apiVersion: form.apiVersion || "v20.0" }
+              : {
+                  baseUrl: form.baseUrl,
+                  method: form.method,
+                  path: form.path,
+                  authType: form.authType,
+                  apiKeyHeader: form.apiKeyHeader,
+                },
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`);
+        if (form.token) {
+          const resC = await apiFetch(`/api/integrations/${editId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "credentials",
+              credentials: { authType: isWhatsApp ? "BEARER" : form.authType, token: form.token },
+            }),
+          });
+          const dataC = await resC.json().catch(() => ({}));
+          if (!resC.ok) throw new Error(dataC.error ?? `Error ${resC.status}`);
+        }
+      } else {
+        const res = await apiFetch("/api/integrations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: form.type,
+            provider: isWhatsApp ? form.provider || "whatsapp-cloud" : form.provider || "rest",
+            name: form.name,
+            description: form.description || null,
+            config: isWhatsApp
+              ? { phoneNumberId: form.phoneNumberId, apiVersion: form.apiVersion || "v20.0" }
+              : {
+                  baseUrl: form.baseUrl,
+                  method: form.method,
+                  path: form.path,
+                  authType: form.authType,
+                  apiKeyHeader: form.apiKeyHeader,
+                },
+            credentials:
+              form.authType === "NONE" && !isWhatsApp
+                ? null
+                : {
+                    authType: isWhatsApp ? "BEARER" : form.authType,
+                    token: form.token || undefined,
+                  },
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`);
+      }
       setShowForm(false);
-      setForm({
+      setEditId(null);
+      setForm((f) => ({
+        ...f,
         name: "", provider: "", description: "", baseUrl: "", method: "POST",
-        path: "/webhook", authType: "NONE", apiKeyHeader: "X-API-Key", token: "", idempotencyKey: "", payloadJson: "{}",
-      });
+        path: "/webhook", authType: "NONE", apiKeyHeader: "X-API-Key", token: "",
+        phoneNumberId: "", apiVersion: "v20.0", idempotencyKey: "", payloadJson: "{}",
+      }));
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -203,7 +253,10 @@ export default function IntegracionesPage() {
             </button>
             {canManage && (
               <button
-                onClick={() => setShowForm((v) => !v)}
+                onClick={() => {
+                  setEditId(null);
+                  setShowForm((v) => !v);
+                }}
                 className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground transition-opacity hover:opacity-90"
               >
                 <Plus className="h-4 w-4" />
@@ -235,52 +288,78 @@ export default function IntegracionesPage() {
         {showForm && canManage && (
           <div className="rounded-lg border border-outline-variant/50 bg-surface-container-lowest p-5">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-headline-md text-on-surface">Nuevo conector REST</h3>
-              <button onClick={() => setShowForm(false)} aria-label="Cerrar">
+              <h3 className="font-headline-md text-on-surface">
+                {editId ? "Configurar conector" : "Nuevo conector"}
+              </h3>
+              <button onClick={() => { setShowForm(false); setEditId(null); }} aria-label="Cerrar">
                 <X className="h-5 w-5 text-on-surface-variant" />
               </button>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Nombre">
-                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Sistema de Asistencia" className={inputCls} />
+              <Field label="Tipo">
+                <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as "REST" | "WHATSAPP" })} className={inputCls}>
+                  {CONNECTOR_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
               </Field>
               <Field label="Proveedor">
-                <input value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} placeholder="sistema-asistencia" className={inputCls} />
+                <input value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} placeholder={form.type === "WHATSAPP" ? "whatsapp-cloud" : "sistema-asistencia"} className={inputCls} />
+              </Field>
+              <Field label="Nombre">
+                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Sistema de Asistencia" className={inputCls} />
               </Field>
               <Field label="Descripción" full>
                 <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Descripción opcional" className={inputCls} />
               </Field>
-              <Field label="Base URL">
-                <input value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder="https://api.ejemplo.com" className={inputCls} />
-              </Field>
-              <Field label="Método">
-                <select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} className={inputCls}>
-                  {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </Field>
-              <Field label="Ruta">
-                <input value={form.path} onChange={(e) => setForm({ ...form, path: e.target.value })} placeholder="/webhook" className={inputCls} />
-              </Field>
-              <Field label="Autenticación">
-                <select value={form.authType} onChange={(e) => setForm({ ...form, authType: e.target.value })} className={inputCls}>
-                  {AUTH_TYPES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
-                </select>
-              </Field>
-              {form.authType === "API_KEY" && (
-                <Field label="Header de API Key">
-                  <input value={form.apiKeyHeader} onChange={(e) => setForm({ ...form, apiKeyHeader: e.target.value })} placeholder="X-API-Key" className={inputCls} />
-                </Field>
-              )}
-              {form.authType !== "NONE" && (
-                <Field label={form.authType === "BASIC" ? "Usuario/Tenant" : "Token"} full>
-                  <input value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} placeholder="Secreto" type="password" className={inputCls} />
-                </Field>
+
+              {form.type === "WHATSAPP" ? (
+                <>
+                  <Field label="Phone Number ID (WhatsApp Business)">
+                    <input value={form.phoneNumberId} onChange={(e) => setForm({ ...form, phoneNumberId: e.target.value })} placeholder="11383872334..." className={inputCls} />
+                  </Field>
+                  <Field label="Versión API">
+                    <select value={form.apiVersion} onChange={(e) => setForm({ ...form, apiVersion: e.target.value })} className={inputCls}>
+                      {["v20.0", "v21.0", "v22.0"].map((v) => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Token de acceso (Bearer)" full>
+                    <input value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} placeholder="EAAG..." type="password" className={inputCls} />
+                  </Field>
+                </>
+              ) : (
+                <>
+                  <Field label="Base URL">
+                    <input value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder="https://api.ejemplo.com" className={inputCls} />
+                  </Field>
+                  <Field label="Método">
+                    <select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} className={inputCls}>
+                      {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Ruta">
+                    <input value={form.path} onChange={(e) => setForm({ ...form, path: e.target.value })} placeholder="/webhook" className={inputCls} />
+                  </Field>
+                  <Field label="Autenticación">
+                    <select value={form.authType} onChange={(e) => setForm({ ...form, authType: e.target.value })} className={inputCls}>
+                      {AUTH_TYPES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+                    </select>
+                  </Field>
+                  {form.authType === "API_KEY" && (
+                    <Field label="Header de API Key">
+                      <input value={form.apiKeyHeader} onChange={(e) => setForm({ ...form, apiKeyHeader: e.target.value })} placeholder="X-API-Key" className={inputCls} />
+                    </Field>
+                  )}
+                  {form.authType !== "NONE" && (
+                    <Field label={form.authType === "BASIC" ? "Usuario/Tenant" : "Token"} full>
+                      <input value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} placeholder="Secreto" type="password" className={inputCls} />
+                    </Field>
+                  )}
+                </>
               )}
             </div>
             <div className="mt-4 flex justify-end">
               <button onClick={create} className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground hover:opacity-90">
                 <Plus className="h-4 w-4" />
-                Crear
+                {editId ? "Guardar" : "Crear"}
               </button>
             </div>
           </div>
@@ -346,11 +425,42 @@ export default function IntegracionesPage() {
                   <Chip label="Método" value={String((c.config as { method?: string }).method ?? "POST")} />
                   <Chip label="Base URL" value={String((c.config as { baseUrl?: string }).baseUrl ?? "-")} />
                   <Chip label="Auth" value={String((c.config as { authType?: string }).authType ?? "NONE")} />
+                  {c.type === "WHATSAPP" ? (
+                    <Chip label="Phone" value={String((c.config as { phoneNumberId?: string }).phoneNumberId ?? "-")} />
+                  ) : null}
                   {c.credentialId ? <Chip label="Credencial" value="cifrada ✓" /> : null}
                 </div>
 
                 {canManage && (
                   <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-outline-variant/30 pt-3">
+                    <button
+                      onClick={() => {
+                        const cfg = (c.config ?? {}) as Record<string, unknown>;
+                        setForm((f) => ({
+                          ...f,
+                          name: c.name,
+                          provider: c.provider,
+                          description: (c.description as string) ?? "",
+                          type: c.type === "WHATSAPP" ? "WHATSAPP" : "REST",
+                          baseUrl: String(cfg.baseUrl ?? f.baseUrl),
+                          method: String(cfg.method ?? "POST"),
+                          path: String(cfg.path ?? "/webhook"),
+                          authType: String(cfg.authType ?? "NONE"),
+                          apiKeyHeader: String(cfg.apiKeyHeader ?? "X-API-Key"),
+                          phoneNumberId: String(cfg.phoneNumberId ?? ""),
+                          apiVersion: String(cfg.apiVersion ?? "v20.0"),
+                          token: "",
+                          payloadJson: f.payloadJson,
+                        }));
+                        setEditId(c.id);
+                        setShowForm(true);
+                      }}
+                      disabled={busyId === c.id}
+                      className={btnCls}
+                      title="Configurar"
+                    >
+                      <Settings2 className="h-4 w-4" /> Configurar
+                    </button>
                     <button onClick={() => action(c.id, "test")} disabled={busyId === c.id} className={btnCls}>
                       <ShieldCheck className="h-4 w-4" /> Probar
                     </button>

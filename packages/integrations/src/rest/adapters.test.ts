@@ -54,10 +54,18 @@ describe("GmailAdapter", () => {
 });
 
 describe("WhatsAppAdapter", () => {
-  it("test_connection retorna ok", async () => {
+  it("test_connection sin credenciales avisa de los campos faltantes", async () => {
     const adapter = new WhatsAppAdapter();
     const result = await adapter.dispatch({ kind: "TEST_CONNECTION" });
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("accessToken");
+  });
+
+  it("test_connection con token pero sin phoneNumberId avisa", async () => {
+    const adapter = new WhatsAppAdapter({ accessToken: "EAAG..." });
+    const result = await adapter.dispatch({ kind: "TEST_CONNECTION", payload: {} });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("phoneNumberId");
   });
 
   it("dispatch sin to falla", async () => {

@@ -70,6 +70,43 @@ function codigoCorto(codigo: string): string {
 }
 
 /**
+ * Resuelve la dirección del inmueble según el edificio, deducido del código
+ * del departamento ("BEN2195-*" -> Benavides, "ANG170-*" -> Angamos).
+ * Si el código no permite determinarlo, cae al modelo Benavides.
+ */
+function direccionInmueble(departamento: Record<string, unknown>): string {
+  const codigo = (field(departamento, ["codigo"]) || "").toUpperCase();
+  const piso = field(departamento, ["piso"]);
+  if (codigo.startsWith("ANG")) {
+    return `Av. Angamos Este 170, Miraflores, Piso ${piso}, Lima Metropolitana, Lima`;
+  }
+  return `Av. Alfredo Benavides N° 2195 D, Miraflores, Piso ${piso}, provincia y departamento de Lima`;
+}
+
+interface DatosArrendador {
+  trat: string;
+  nombres: string;
+  apellidos: string;
+  dni: string;
+}
+
+/**
+ * Resuelve el/la arrendador(a) según el campo personaPago del departamento.
+ * En el edificio Angamos hay 3 dueños distintos (Emely, Linda Evelyn y
+ * Miguel); en Benavides siempre es Emely. Cae a Emely si no hay dato.
+ */
+function datosArrendador(departamento: Record<string, unknown>): DatosArrendador {
+  const persona = (field(departamento, ["personaPago"]) ?? "").trim().toLowerCase();
+  if (persona.startsWith("miguel")) {
+    return { trat: "el Sr.", nombres: "Miguel Anthony", apellidos: "Carpio Pinto", dni: "76373624" };
+  }
+  if (persona.startsWith("evel") || persona.startsWith("linda")) {
+    return { trat: "la Sra.", nombres: "Linda Evelyn", apellidos: "Carpio Pinto", dni: "74768652" };
+  }
+  return { trat: "la Srta.", nombres: "Emely Alexandra", apellidos: "Carpio Pinto", dni: "76373620" };
+}
+
+/**
  * Renderiza el HTML de la ADENDA a partir de un snapshot de adenda,
  * donde el texto del anexo "ADENDA" vive en snapshot.anexos[0].contenido
  * y los comparecientes/inmueble se copian del snapshot contractual.
@@ -176,6 +213,7 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
 
   const deptoNumero = field(departamento, ["numero"]) || codigoCorto(field(departamento, ["codigo"]));
   const piso = field(departamento, ["piso"]);
+  const arrendador = datosArrendador(departamento);
   const nombreCompleto = [clienteNombre, clienteApellidos].filter(Boolean).join(" ") || "________________";
   const domicilio = field(cliente, ["domicilio"]) || "________________";
 
@@ -263,12 +301,12 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
     <h1>ADENDA N° ${numeroAdenda} AL CONTRATO DE<br>ARRENDAMIENTO</h1>
 
     <div class="section-block">
-        <p>Conste por el presente documento la <span class="bold">ADENDA AL CONTRATO DE ARRENDAMIENTO</span> de fecha <span class="bold">${inicioOriginal}</span> que celebran de una parte la Srta. <span class="bold">Emely Alexandra CARPIO PINTO</span>, identificada con D.N.I. N° <span class="bold">76373620</span>, domiciliada en <span class="bold">Av. Alfredo Benavides 2195, distrito de Miraflores, Departamento y Provincia de Lima</span>, a quien en adelante se le denominará <span class="bold">LA ARRENDADOR(A)</span>; y, de la otra parte, el Sr.(a) <span class="bold">${nombreCompleto}</span>, identificado(a) con D.N.I. / C.E. / Pasaporte N° <span class="bold">${clienteDocumento || "________________"}</span>, de nacionalidad <span class="bold">${nacimiento}</span>, domiciliado(a) en <span class="bold">${domicilio}</span>, a quien en adelante se denominará <span class="bold">EL ARRENDATARIO(A)</span>, en los términos y bajo las condiciones siguientes:</p>
+        <p>Conste por el presente documento la <span class="bold">ADENDA AL CONTRATO DE ARRENDAMIENTO</span> de fecha <span class="bold">${inicioOriginal}</span> que celebran de una parte ${arrendador.trat} <span class="bold">${arrendador.nombres} ${arrendador.apellidos.toUpperCase()}</span>, identificado(a) con D.N.I. N° <span class="bold">${arrendador.dni}</span>, domiciliado(a) en <span class="bold">Av. Alfredo Benavides 2195, distrito de Miraflores, Departamento y Provincia de Lima</span>, a quien en adelante se le denominará <span class="bold">LA ARRENDADOR(A)</span>; y, de la otra parte, el Sr.(a) <span class="bold">${nombreCompleto}</span>, identificado(a) con D.N.I. / C.E. / Pasaporte N° <span class="bold">${clienteDocumento || "________________"}</span>, de nacionalidad <span class="bold">${nacimiento}</span>, domiciliado(a) en <span class="bold">${domicilio}</span>, a quien en adelante se denominará <span class="bold">EL ARRENDATARIO(A)</span>, en los términos y bajo las condiciones siguientes:</p>
     </div>
 
     <div class="section-block">
         <h2>ANTECEDENTES</h2>
-        <p><span class="bold">PRIMERO.-</span> Con fecha del <span class="bold">${inicioOriginal} hasta el día ${finOriginal}</span>; las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <span class="bold">${deptoNumero}</span> ubicado en <span class="bold">Av. Alfredo Benavides N° 2195 D, Miraflores, Piso ${piso}, provincia y departamento de Lima</span>; con una merced conductiva de S/ <span class="bold">${montoRentaTxt}.00 (${montoLetras})</span> mensuales, la cual incluye mantenimiento de S/ 50.00 (cincuenta con 00/100 soles) y los servicios de luz y agua, siendo cancelada en la Cta. de ahorros del banco BCP N° <span class="bold">19497202418059 CCI: 00219419720241805997</span>.</p>
+        <p><span class="bold">PRIMERO.-</span> Con fecha del <span class="bold">${inicioOriginal} hasta el día ${finOriginal}</span>; las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <span class="bold">${deptoNumero}</span> ubicado en <span class="bold">${direccionInmueble(departamento)}</span>; con una merced conductiva de S/ <span class="bold">${montoRentaTxt}.00 (${montoLetras})</span> mensuales, la cual incluye mantenimiento de S/ 50.00 (cincuenta con 00/100 soles) y los servicios de luz y agua, siendo cancelada en la Cta. de ahorros del banco BCP N° <span class="bold">19497202418059 CCI: 00219419720241805997</span>.</p>
     </div>
 
     <div class="section-block">
@@ -295,8 +333,8 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
                 <td>
                     <div class="signature-line"></div>
                     <p><span class="bold">LA ARRENDADOR(A)</span><br>
-                    Emely Alexandra Carpio Pinto<br>
-                    DNI: 76373620</p>
+                    ${arrendador.nombres} ${arrendador.apellidos}<br>
+                    DNI: ${arrendador.dni}</p>
                 </td>
                 <td>
                     <div class="signature-line"></div>

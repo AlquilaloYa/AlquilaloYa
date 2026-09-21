@@ -15,15 +15,13 @@ const DEFAULT_CONNECTORS: NewConnectorInstanceInput[] = [
     },
   },
   {
-    type: "REST",
+    type: "WHATSAPP",
     provider: "whatsapp-cloud",
     name: "WhatsApp Business",
     description: "Mensajería mediante WhatsApp Cloud API",
     config: {
-      baseUrl: "https://graph.facebook.com",
-      method: "POST",
-      path: "/v20.0/{phoneNumberId}/messages",
-      authType: "BEARER",
+      phoneNumberId: "",
+      apiVersion: "v20.0",
     },
   },
   {

@@ -3,7 +3,9 @@ import type { ConnectorTransport, DispatchResult } from "../core/connector";
 /**
  * Adaptador para WhatsApp Business API.
  * Envía mensajes de texto o plantillas vía la API de Meta/WhatsApp.
- * Config de la instancia: { phoneNumberId?, apiVersion?: "v18.0" }
+ * Config de la instancia: { phoneNumberId?, apiVersion?, accessToken? }
+ * El token debe venir resuelto desde las credenciales descifradas (config.accessToken),
+ * con fallback a payload.accessToken para compatibilidad con despachos manuales.
  * Payload esperado: { to (número E.164), template?, text?, type? }
  */
 export class WhatsAppAdapter implements ConnectorTransport {
@@ -11,6 +13,7 @@ export class WhatsAppAdapter implements ConnectorTransport {
     private readonly config: {
       phoneNumberId?: string;
       apiVersion?: string;
+      accessToken?: string;
       timeoutMs?: number;
     } = {}
   ) {}
@@ -20,11 +23,61 @@ export class WhatsAppAdapter implements ConnectorTransport {
     const payload = (input.payload ?? input) as Record<string, unknown>;
 
     if (kind === "TEST_CONNECTION") {
-      return {
-        ok: true,
-        statusCode: 200,
-        providerMessage: "WhatsApp Business adapter listo",
-      };
+      const accessToken = this.config.accessToken ?? (payload.accessToken as string);
+      const phoneNumberId = this.config.phoneNumberId ?? (payload.phoneNumberId as string);
+      const apiVersion = this.config.apiVersion ?? "v20.0";
+
+      if (!accessToken) {
+        return {
+          ok: false,
+          statusCode: null,
+          providerMessage: null,
+          error: "WhatsApp: falta accessToken (token de WhatsApp Business)",
+        };
+      }
+      if (!phoneNumberId) {
+        return {
+          ok: false,
+          statusCode: null,
+          providerMessage: null,
+          error: "WhatsApp: falta phoneNumberId en la configuración del conector",
+        };
+      }
+
+      const url = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}?fields=display_phone_number,verified_name`;
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(this.config.timeoutMs ?? 15000),
+        });
+        if (response.ok) {
+          const data = (await response.json().catch(() => null)) as
+            | { display_phone_number?: string; verified_name?: string }
+            | null;
+          return {
+            ok: true,
+            statusCode: response.status,
+            providerMessage: data
+              ? `Conectado: ${data.display_phone_number ?? "número"} (${data.verified_name ?? "empresa"})`
+              : "Conexión exitosa con WhatsApp Business",
+          };
+        }
+        const text = await response.text().catch(() => null);
+        return {
+          ok: false,
+          statusCode: response.status,
+          providerMessage: null,
+          error: `WhatsApp: HTTP ${response.status} - ${text?.slice(0, 300)}`,
+        };
+      } catch (e) {
+        return {
+          ok: false,
+          statusCode: null,
+          providerMessage: null,
+          error: `WhatsApp: ${(e as Error).message}`,
+        };
+      }
     }
 
     const to = payload.to as string;
@@ -63,7 +116,7 @@ export class WhatsAppAdapter implements ConnectorTransport {
       };
     }
 
-    const accessToken = payload.accessToken as string;
+    const accessToken = this.config.accessToken ?? (payload.accessToken as string);
     if (!accessToken) {
       return {
         ok: false,

@@ -63,7 +63,11 @@ export async function POST(req: Request, { params }: Ctx) {
     if (!contenido) return NextResponse.json({ error: "El mensaje está vacío" }, { status: 400 });
     const direccion = body.direccion === "INBOUND" ? "INBOUND" : "OUTBOUND";
     const [conv] = await c.db
-      .select({ id: c.schema.conversations.id })
+      .select({
+        id: c.schema.conversations.id,
+        canal: c.schema.conversations.canal,
+        contactoTelefono: c.schema.conversations.contactoTelefono,
+      })
       .from(c.schema.conversations)
       .where(eq(c.schema.conversations.id, params.id))
       .limit(1);
@@ -77,6 +81,7 @@ export async function POST(req: Request, { params }: Ctx) {
         direccion,
         autor: (body.autor ?? "").trim() || (direccion === "OUTBOUND" ? c.user.name || c.user.email : ""),
         contenido,
+        estado: direccion === "INBOUND" ? "ENVIADO" : "PENDIENTE",
       })
       .returning();
     if (!msg) return NextResponse.json({ error: "No se pudo enviar el mensaje" }, { status: 500 });
@@ -89,10 +94,41 @@ export async function POST(req: Request, { params }: Ctx) {
         noLeidos: sql`${c.schema.conversations.noLeidos} + ${direccion === "INBOUND" ? 1 : 0}`,
       })
       .where(eq(c.schema.conversations.id, params.id));
-    return NextResponse.json(
-      { id: msg.id, conversationId: msg.conversationId, direccion: msg.direccion, autor: msg.autor, contenido: msg.contenido, estado: msg.estado, createdAt: msg.createdAt?.toISOString?.() ?? null },
-      { status: 201 }
-    );
+
+    const messageView = {
+      id: msg.id,
+      conversationId: msg.conversationId,
+      direccion: msg.direccion,
+      autor: msg.autor,
+      contenido: msg.contenido,
+      estado: msg.estado,
+      createdAt: msg.createdAt?.toISOString?.() ?? null,
+    };
+
+    // Despacho saliente real (WhatsApp) fuera de la transacción.
+    if (direccion === "OUTBOUND") {
+      const { despacharMensajeSaliente } = await import("@/lib/messaging-dispatcher");
+      const r = await despacharMensajeSaliente({
+        db: c.db,
+        messageId: msg.id,
+        canal: conv.canal,
+        to: conv.contactoTelefono,
+        text: contenido,
+      });
+      // Sin conector externo para el canal (p.ej. MANUAL) => el mensaje solo
+      // queda registrado en la bandeja, no cuenta como fallo.
+      const estadoFinal = r.delivered || r.provider === null ? "ENVIADO" : "FALLO";
+      if (estadoFinal !== msg.estado) {
+        await c.db
+          .update(c.schema.messages)
+          .set({ estado: estadoFinal })
+          .where(eq(c.schema.messages.id, msg.id));
+        messageView.estado = estadoFinal;
+      }
+      return NextResponse.json({ ...messageView, despacho: r }, { status: 201 });
+    }
+
+    return NextResponse.json(messageView, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }

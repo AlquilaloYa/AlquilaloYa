@@ -114,6 +114,12 @@ export async function evaluarBots(
     );
   if (rules.length === 0) return 0;
 
+  const [conv] = await db
+    .select({ telefono: schema.conversations.contactoTelefono })
+    .from(schema.conversations)
+    .where(eq(schema.conversations.id, conversationId))
+    .limit(1);
+
   const texto = contenidoInbound.toLowerCase();
   let enviadas = 0;
 
@@ -150,17 +156,36 @@ export async function evaluarBots(
     }
 
     const now = new Date();
-    await db.insert(schema.messages).values({
-      conversationId,
-      direccion: "OUTBOUND",
-      autor,
-      contenido: cuerpo,
-      estado: "ENVIADO",
-    });
+    const [botMsg] = await db
+      .insert(schema.messages)
+      .values({
+        conversationId,
+        direccion: "OUTBOUND",
+        autor,
+        contenido: cuerpo,
+        estado: "PENDIENTE",
+      })
+      .returning();
     await db
       .update(schema.conversations)
       .set({ ultimoMensaje: cuerpo.slice(0, 300), ultimoMensajeEn: now, updatedAt: now })
       .where(eq(schema.conversations.id, conversationId));
+
+    if (botMsg) {
+      const { despacharMensajeSaliente } = await import("@/lib/messaging-dispatcher");
+      const r = await despacharMensajeSaliente({
+        db,
+        messageId: botMsg.id,
+        canal,
+        to: conv?.telefono ?? "",
+        text: cuerpo,
+      });
+      const estadoFinal = r.delivered || r.provider === null ? "ENVIADO" : "FALLO";
+      await db
+        .update(schema.messages)
+        .set({ estado: estadoFinal })
+        .where(eq(schema.messages.id, botMsg.id));
+    }
     enviadas += 1;
   }
   return enviadas;

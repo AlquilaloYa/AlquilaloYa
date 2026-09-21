@@ -84,6 +84,7 @@ export default function DepartamentosPage() {
   const [nuevoItemInventario, setNuevoItemInventario] = useState("");
   const [nuevoItemCategoria, setNuevoItemCategoria] = useState<string>(CUSTOM_ITEM_CATEGORIAS[0]);
   const [editandoPrecio, setEditandoPrecio] = useState<{ id: string; campo: "precio" | "garantia"; valor: string } | null>(null);
+  const [editandoPersona, setEditandoPersona] = useState<{ id: string; valor: string } | null>(null);
 
   function abrirInventario(departamentoId: string) {
     setInventarioDeptId(departamentoId);
@@ -322,6 +323,34 @@ export default function DepartamentosPage() {
 
   function inicioEdicionPrecio(id: string, campo: "precio" | "garantia", valorActual: string) {
     setEditandoPrecio({ id, campo, valor: valorActual });
+  }
+
+  async function guardarEdicionPersona(persona: { id: string; valor: string }) {
+    setEditandoPersona(null);
+    if (!persona.valor.trim()) return;
+    try {
+      const res = await apiFetch(`/api/departamentos/${persona.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personaPago: persona.valor.trim() }),
+      });
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error ?? `Error ${res.status}`);
+      }
+      const upd = (await res.json()) as { personaPago?: string };
+      setDepartments((prev) =>
+        prev.map((d) =>
+          d.id === persona.id ? { ...d, personaPago: upd.personaPago ?? d.personaPago } : d
+        )
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  function inicioEdicionPersona(id: string, valorActual: string) {
+    setEditandoPersona({ id, valor: valorActual });
   }
 
   function manejarBaucher(file: File | null) {
@@ -727,7 +756,38 @@ export default function DepartamentosPage() {
                             <td className="px-3 py-2">{d.numero}</td>
                             <td className="px-3 py-2">{d.nombre}</td>
                             <td className="px-3 py-2 text-center">{d.piso}</td>
-                            <td className="px-3 py-2">{d.personaPago}</td>
+                            <td className="px-3 py-2">
+                              {editandoPersona?.id === d.id ? (
+                                <select
+                                  autoFocus
+                                  className="h-7 w-32 rounded border border-primary bg-background px-1 text-sm text-primary"
+                                  value={editandoPersona.valor}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => setEditandoPersona({ id: d.id, valor: e.target.value })}
+                                  onBlur={() => void guardarEdicionPersona(editandoPersona)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") void guardarEdicionPersona(editandoPersona);
+                                    if (e.key === "Escape") setEditandoPersona(null);
+                                  }}
+                                >
+                                  <option value="Emely">Emely</option>
+                                  <option value="Evelyn">Evelyn</option>
+                                  <option value="Miguel">Miguel</option>
+                                  {!["Emely", "Evelyn", "Miguel"].includes(editandoPersona.valor) && (
+                                    <option value={editandoPersona.valor}>{editandoPersona.valor}</option>
+                                  )}
+                                </select>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); inicioEdicionPersona(d.id, d.personaPago); }}
+                                  className="font-medium hover:underline"
+                                  title="Editar persona de pago"
+                                >
+                                  {d.personaPago}
+                                </button>
+                              )}
+                            </td>
                             <td className="px-3 py-2">
                               {editandoPrecio?.id === d.id && editandoPrecio.campo === "precio" ? (
                                 <input

@@ -5,10 +5,14 @@ import { requireUser, requirePermission } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 /**
- * PATCH /api/departamentos/:id  body: { precio?, garantia? }
+ * PATCH /api/departamentos/:id  body: { precio?, garantia?, estadoManual?, personaPago? }
  * - precio  → mensualidad del departamento. Si no se envía garantía, esta se
  *   iguala automáticamente al precio (la garantía depende de la mensualidad).
  * - garantia→ valor independiente de la garantía (puede sobreescribirse aparte).
+ * - estadoManual → modo manual del departamento: 'MANTENIMIENTO' | 'BLOQUEADO'.
+ *   'LIBRE' (o null) limpia el modo manual y vuelve al estado automático.
+ * - personaPago → persona que cobra la renta de este departamento (Emely,
+ *   Evelyn, Miguel u otro). Debe ser un texto no vacío.
  */
 export async function PATCH(
   req: Request,
@@ -27,17 +31,25 @@ export async function PATCH(
     };
     const { eq } = await import("drizzle-orm");
 
-    const body = (await req.json()) as { precio?: string | number; garantia?: string | number };
+    const body = (await req.json()) as {
+      precio?: string | number;
+      garantia?: string | number;
+      estadoManual?: string | null;
+      personaPago?: string;
+    };
 
     const values: Record<string, unknown> = {};
     const tienePrecio =
       "precio" in body && body.precio !== undefined && body.precio !== null && body.precio !== "";
     const tieneGarantia =
       "garantia" in body && body.garantia !== undefined && body.garantia !== null && body.garantia !== "";
+    const tieneEstadoManual = "estadoManual" in body;
+    const tienePersonaPago =
+      "personaPago" in body && body.personaPago !== undefined && body.personaPago !== null && String(body.personaPago).trim() !== "";
 
-    if (!tienePrecio && !tieneGarantia) {
+    if (!tienePrecio && !tieneGarantia && !tieneEstadoManual && !tienePersonaPago) {
       return NextResponse.json(
-        { error: "Indica el precio (mensualidad) y/o la garantía" },
+        { error: "Indica el precio (mensualidad), la garantía, el estado manual y/o la persona de pago" },
         { status: 400 }
       );
     }
@@ -58,7 +70,25 @@ export async function PATCH(
       }
       values.garantia = String(garantia.toFixed(2));
     }
-    values.updatedAt = new Date();
+    if (tieneEstadoManual) {
+      const estado = body.estadoManual;
+      const valido =
+        estado === "MANTENIMIENTO" ||
+        estado === "BLOQUEADO" ||
+        estado === "LIBRE" ||
+        estado === null ||
+        estado === undefined ||
+        estado === "";
+      if (!valido) {
+        return NextResponse.json({ error: "Estado manual inválido" }, { status: 400 });
+      }
+      values.estadoManual = estado === "MANTENIMIENTO" || estado === "BLOQUEADO" ? estado : null;
+      values.estadoManualUpdatedAt = new Date();
+    }
+    if (tienePersonaPago) {
+      values.personaPago = String(body.personaPago).trim();
+    }
+    if (tienePrecio || tieneGarantia || tienePersonaPago) values.updatedAt = new Date();
 
     const row = await db
       .update(schema.departments)
