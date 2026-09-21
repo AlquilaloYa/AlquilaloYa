@@ -212,7 +212,6 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
   const montoRenta = parseFloat(field(contrato, ["montoCanonMensual"])) || 0;
 
   const deptoNumero = field(departamento, ["numero"]) || codigoCorto(field(departamento, ["codigo"]));
-  const piso = field(departamento, ["piso"]);
   const arrendador = datosArrendador(departamento);
   const nombreCompleto = [clienteNombre, clienteApellidos].filter(Boolean).join(" ") || "________________";
   const domicilio = field(cliente, ["domicilio"]) || "________________";
