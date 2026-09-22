@@ -313,6 +313,16 @@ export async function POST(request: Request) {
     }
 
     const baseSnapshot = contract.snapshot;
+    const datosDepartamento = {
+      ...((baseSnapshot.datosDepartamento ??
+        contract.departamento) as Record<string, unknown>),
+      // Usa la persona de pago VIGENTE del departamento (no la congelada en el
+      // snapshot del contrato), para que la adenda salga a nombre del dueño actual.
+      personaPago:
+        contract.departamento?.personaPago ??
+        (baseSnapshot.datosDepartamento as Record<string, unknown> | undefined)
+          ?.personaPago,
+    };
     const datosContrato = {
       ...(baseSnapshot.datosContrato as Record<string, unknown>),
       codigoContrato: codigoAdenda,
@@ -356,8 +366,7 @@ export async function POST(request: Request) {
       plantillaVersionId: contract.plantillaVersionId,
       datosCliente: (baseSnapshot.datosCliente ??
         contract.cliente) as unknown as Record<string, unknown>,
-      datosDepartamento: (baseSnapshot.datosDepartamento ??
-        contract.departamento) as unknown as Record<string, unknown>,
+      datosDepartamento,
       datosContrato,
       clausulas: [],
       anexos: [
