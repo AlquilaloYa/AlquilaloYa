@@ -6,7 +6,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
-import { CalendarPlus, Download, Edit, FileCheck, Plus, RefreshCw, ShieldCheck, X } from "lucide-react";
+import { CalendarPlus, Download, Edit, FileCheck, Plus, RefreshCw, ShieldCheck, Trash2, X } from "lucide-react";
 import { AdendaModal, EditAdendaModal, ExtensionModal } from "@/components/adenda-modals";
 import { useAuth } from "@/lib/auth-context";
 
@@ -58,6 +58,7 @@ export default function AdendasPage() {
   const [verificacion, setVerificacion] = useState<Record<string, boolean | undefined>>({});
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [regenerandoId, setRegenerandoId] = useState<string | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [sortKey, setSortKey] = useState<"codigo" | "tipo" | "contrato" | "cliente" | "departamento" | "fecha" | "finAdenda" | "estado" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -253,6 +254,22 @@ export default function AdendasPage() {
     }
   }
 
+  async function eliminarAdenda(d: AdendaApi) {
+    if (!confirm(`¿Eliminar la adenda "${d.filename}"? Se borrará el PDF y el registro. Esta acción no se puede deshacer.`)) return;
+    setEliminandoId(d.id);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/documents/${encodeURIComponent(d.id)}`, { method: "DELETE" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "No se pudo eliminar la adenda");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setEliminandoId(null);
+      void load();
+    }
+  }
+
   const puedeDescargar = (d: AdendaApi) =>
     d.estadoGeneracion === "GENERADO" && (d.sha256 || d.storageKey);
 
@@ -431,6 +448,18 @@ export default function AdendasPage() {
                             >
                               <RefreshCw className={`h-3.5 w-3.5 ${regenerandoId === d.id ? "animate-spin" : ""}`} />
                               {regenerandoId === d.id ? "…" : "Regenerar"}
+                            </button>
+                          ) : null}
+                          {isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => void eliminarAdenda(d)}
+                              disabled={eliminandoId === d.id}
+                              className="inline-flex items-center gap-1 text-destructive hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Eliminar la adenda y su PDF"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              {eliminandoId === d.id ? "…" : "Eliminar"}
                             </button>
                           ) : null}
                         </div>

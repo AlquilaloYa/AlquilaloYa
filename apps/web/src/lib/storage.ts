@@ -83,6 +83,19 @@ export async function uploadObject(
   return { key, sizeBytes: bytes.byteLength, sha256: sha256FromFile(bytes) };
 }
 
+/** Elimina un objeto del bucket privado. No lanza si el objeto no existe. */
+export async function deleteObject(key: string): Promise<void> {
+  const res = await storageFetch(`/object/${BUCKET}/${key}`, {
+    method: "DELETE",
+  });
+  if (res.ok || res.status === 404) return;
+  const detail = await res.text().catch(() => "");
+  throw new StorageError(
+    `Storage delete falló (${res.status}): ${detail.slice(0, 300)}`,
+    res.status
+  );
+}
+
 /** Descarga un objeto del bucket privado. Lanza StorageError si no existe. */
 export async function downloadObject(key: string): Promise<Uint8Array> {
   const res = await storageFetch(`/object/${BUCKET}/${key}`, {
