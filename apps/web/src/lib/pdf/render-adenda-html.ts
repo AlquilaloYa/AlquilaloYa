@@ -107,6 +107,24 @@ function datosArrendador(departamento: Record<string, unknown>): DatosArrendador
 }
 
 /**
+ * Resuelve la cuenta bancaria donde se paga la renta según la persona de pago
+ * del departamento (personaPago), igual que en las plantillas de contrato:
+ * - Emely → BCP 194-97202418-0-59 / BBVA 0011-0138-0200468970 (Benavides)
+ * - Miguel → BCP Soles 19495269435050 / CCI 00219419526943505096 (Angamos)
+ * - Linda Evelyn → BCP 194-00894222053 (Angamos)
+ */
+function datosCuenta(departamento: Record<string, unknown>): string {
+  const persona = (field(departamento, ["personaPago"]) ?? "").trim().toLowerCase();
+  if (persona.startsWith("miguel")) {
+    return "Cta. de ahorros del banco BCP Soles N° 19495269435050 / CCI: 00219419526943505096";
+  }
+  if (persona.startsWith("evel") || persona.startsWith("linda")) {
+    return "Cta. de ahorros del banco BCP N° 194-00894222053";
+  }
+  return "Cta. de ahorros del banco BCP N° 194-97202418-0-59 / BBVA N° 0011-0138-0200468970";
+}
+
+/**
  * Renderiza el HTML de la ADENDA a partir de un snapshot de adenda,
  * donde el texto del anexo "ADENDA" vive en snapshot.anexos[0].contenido
  * y los comparecientes/inmueble se copian del snapshot contractual.
@@ -317,7 +335,7 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
 
     <div class="section-block">
         <h2>ANTECEDENTES</h2>
-        <p><span class="bold">PRIMERO.-</span> Con fecha del <span class="bold">${inicioOriginal} hasta el día ${finOriginal}</span>; las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <span class="bold">${deptoNumero}</span> ubicado en <span class="bold">${direccionInmueble(departamento)}</span>; con una merced conductiva de S/ <span class="bold">${montoRentaTxt}.00 (${montoLetras})</span> mensuales, la cual incluye mantenimiento de S/ 50.00 (cincuenta con 00/100 soles) y los servicios de luz y agua, siendo cancelada en la Cta. de ahorros del banco BCP N° <span class="bold">19497202418059 CCI: 00219419720241805997</span>.</p>
+        <p><span class="bold">PRIMERO.-</span> Con fecha del <span class="bold">${inicioOriginal} hasta el día ${finOriginal}</span>; las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <span class="bold">${deptoNumero}</span> ubicado en <span class="bold">${direccionInmueble(departamento)}</span>; con una merced conductiva de S/ <span class="bold">${montoRentaTxt}.00 (${montoLetras})</span> mensuales, la cual incluye mantenimiento de S/ 50.00 (cincuenta con 00/100 soles) y los servicios de luz y agua, siendo cancelada en la <span class="bold">${datosCuenta(departamento)}</span>.</p>
     </div>
 
     <div class="section-block">
