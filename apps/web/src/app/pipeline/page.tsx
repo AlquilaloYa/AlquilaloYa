@@ -68,6 +68,8 @@ const CANALES: Array<{ value: Canal; label: string; Icon: typeof Mail; badge: st
 
 const ETAPAS_CERRADAS: Etapa[] = ["GANADO", "PERDIDO"];
 
+const TODAS_ETAPAS: Etapa[] = ["ENTRANTE", "DECISION", "NEGOCIACION", "FINAL", "GANADO", "PERDIDO"];
+
 function canalConf(canal: Canal) {
   return CANALES.find((c) => c.value === canal) ?? CANALES[CANALES.length - 1]!;
 }
@@ -122,6 +124,7 @@ export default function PipelinePage() {
   const [saving, setSaving] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [colHover, setColHover] = useState<Etapa | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -164,6 +167,42 @@ export default function PipelinePage() {
   }, [visibles, q]);
 
   const totalMonto = useMemo(() => filtrados.reduce((s, l) => s + (l.monto || 0), 0), [filtrados]);
+
+  const metricas = useMemo(() => {
+    const porEtapa: Record<string, number> = {};
+    const montoPorEtapa: Record<string, number> = {};
+    const porCanal: Record<string, number> = {};
+    let total = 0;
+    for (const l of leads) {
+      total += 1;
+      porEtapa[l.etapa] = (porEtapa[l.etapa] ?? 0) + 1;
+      montoPorEtapa[l.etapa] = (montoPorEtapa[l.etapa] ?? 0) + (l.monto || 0);
+      porCanal[l.canal] = (porCanal[l.canal] ?? 0) + 1;
+    }
+    const abiertas = ["ENTRANTE", "DECISION", "NEGOCIACION", "FINAL"] as Etapa[];
+    const pipelineValue = abiertas.reduce((s, e) => s + (montoPorEtapa[e] ?? 0), 0);
+    const ganados = porEtapa["GANADO"] ?? 0;
+    const perdidos = porEtapa["PERDIDO"] ?? 0;
+    const cerrados = ganados + perdidos;
+    const tasas = abiertas.slice(0, -1).map((e, i) => {
+      const de = porEtapa[e] ?? 0;
+      const a = porEtapa[abiertas[i + 1]!] ?? 0;
+      return { etapa: abiertas[i + 1]!, conversion: de > 0 ? (a / de) * 100 : 0 };
+    });
+    return {
+      total,
+      porEtapa,
+      montoPorEtapa,
+      porCanal,
+      pipelineValue,
+      ganados,
+      perdidos,
+      cerrados,
+      tasaGanados: total > 0 ? (ganados / total) * 100 : 0,
+      tasas,
+      mayorCanal: (Object.entries(porCanal).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—") as Canal,
+    };
+  }, [leads]);
 
   function openCrear() {
     setForm(FORM_VACIO);
@@ -280,6 +319,69 @@ export default function PipelinePage() {
     setToast("Tarea creada en Work 123");
   }
 
+  const seleccionados = useMemo(() => leads.filter((l) => selected.has(l.id)), [leads, selected]);
+
+  function toggleSeleccion(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function moverMasivamente(etapa: Etapa) {
+    if (seleccionados.length === 0) return;
+    let ok = 0;
+    for (const l of seleccionados) {
+      const res = await apiFetch("/api/leads", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: l.id, etapa }),
+      });
+      if (res.ok) ok += 1;
+    }
+    await load();
+    setSelected(new Set());
+    setToast(`${ok} lead(s) movidos a ${etapa}`);
+  }
+
+  async function crearTareasMasivas() {
+    if (seleccionados.length === 0) return;
+    const fecha = new Date(Date.now() + 2 * 86_400_000).toISOString();
+    let ok = 0;
+    for (const l of seleccionados) {
+      const res = await apiFetch("/api/tareas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          titulo: `[Lead] ${l.nombre} ${l.apellido} · ${l.servicio || "seguimiento"}`.trim(),
+          descripcion: `Desde Pipeline (acción masiva). Canal: ${canalConf(l.canal).label}. Monto: ${fmtMoneda(l.monto)}. Asignado: ${l.asignadoA || "—"}.`,
+          asignadoA: l.asignadoA,
+          fechaLimite: fecha,
+          estado: "PENDIENTE",
+        }),
+      });
+      if (res.ok) ok += 1;
+    }
+    await load();
+    setSelected(new Set());
+    setToast(`${ok} tarea(s) creadas en Work 123`);
+  }
+
+  async function eliminarMasivamente() {
+    if (seleccionados.length === 0) return;
+    if (!window.confirm(`¿Eliminar ${seleccionados.length} lead(s)? Esta acción no se puede deshacer.`)) return;
+    let ok = 0;
+    for (const l of seleccionados) {
+      const res = await apiFetch(`/api/leads?id=${encodeURIComponent(l.id)}`, { method: "DELETE" });
+      if (res.ok) ok += 1;
+    }
+    await load();
+    setSelected(new Set());
+    setToast(`${ok} lead(s) eliminados`);
+  }
+
   return (
     <DashboardShell>
       <div className="mx-auto max-w-[1400px] space-y-4">
@@ -337,6 +439,117 @@ export default function PipelinePage() {
         {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
         {toast && <p className="rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-300">{toast}</p>}
 
+        {/* Acciones masivas */}
+        {seleccionados.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
+            <span className="text-sm font-semibold text-on-surface">{seleccionados.length} seleccionado(s)</span>
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (!e.target.value) return;
+                void moverMasivamente(e.target.value as Etapa);
+                e.target.value = "";
+              }}
+              className="h-8 rounded-lg border border-input bg-background px-2 text-sm"
+              aria-label="Mover seleccionados a etapa"
+            >
+              <option value="">Mover a etapa…</option>
+              {TODAS_ETAPAS.map((e) => (
+                <option key={e} value={e}>{e}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => void crearTareasMasivas()}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-input bg-background px-3 text-xs font-medium text-on-surface transition-colors hover:bg-accent"
+            >
+              <CheckSquare className="h-3.5 w-3.5" />
+              Crear tareas
+            </button>
+            <button
+              type="button"
+              onClick={() => void eliminarMasivamente()}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-destructive/40 bg-background px-3 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Eliminar
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="ml-auto text-xs text-muted-foreground hover:underline"
+            >
+              Limpiar selección
+            </button>
+          </div>
+        )}
+
+        {/* Métricas del funnel */}
+        {!loading && (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <div className="rounded-xl bg-surface-container-lowest p-3 shadow-sm">
+              <p className="text-xs text-muted-foreground">Total leads</p>
+              <p className="text-2xl font-bold text-on-surface">{metricas.total}</p>
+              <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                <span className="text-emerald-600 dark:text-emerald-400">{metricas.ganados} ganados</span>
+                <span className="text-rose-500">{metricas.perdidos} perdidos</span>
+              </div>
+            </div>
+            <div className="rounded-xl bg-surface-container-lowest p-3 shadow-sm">
+              <p className="text-xs text-muted-foreground">Pipeline value</p>
+              <p className="truncate text-2xl font-bold text-on-surface">{fmtMoneda(metricas.pipelineValue)}</p>
+              <p className="mt-1 truncate text-[11px] text-muted-foreground">Suma abiertas (no cerrados)</p>
+            </div>
+            <div className="rounded-xl bg-surface-container-lowest p-3 shadow-sm">
+              <p className="text-xs text-muted-foreground">Por etapa</p>
+              <div className="mt-1 space-y-1">
+                {COLUMNAS.map((c) => {
+                  const n = metricas.porEtapa[c.value] ?? 0;
+                  const max = Math.max(...COLUMNAS.map((x) => metricas.porEtapa[x.value] ?? 0), 1);
+                  return (
+                    <div key={c.value} className="flex items-center gap-2 text-[11px]">
+                      <span className="w-20 truncate text-muted-foreground">{c.title}</span>
+                      <div className="h-1.5 flex-1 overflow-hidden rounded bg-accent">
+                        <div className={`h-full ${c.bar}`} style={{ width: `${(n / max) * 100}%` }} />
+                      </div>
+                      <span className="w-5 text-right font-semibold text-on-surface">{n}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="rounded-xl bg-surface-container-lowest p-3 shadow-sm">
+              <p className="text-xs text-muted-foreground">Tasa ganados</p>
+              <p className="text-2xl font-bold text-on-surface">{metricas.tasaGanados.toFixed(0)}%</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">{metricas.total > 0 ? `${metricas.ganados} de ${metricas.total} leads` : "Sin leads aún"}</p>
+            </div>
+            <div className="rounded-xl bg-surface-container-lowest p-3 shadow-sm">
+              <p className="text-xs text-muted-foreground">Conversión entre etapas</p>
+              <div className="mt-1 space-y-1">
+                {metricas.tasas.map((t) => (
+                  <div key={t.etapa} className="flex items-center gap-2 text-[11px]">
+                    <span className="w-24 truncate text-muted-foreground">{t.etapa}</span>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded bg-accent">
+                      <div className="h-full bg-primary" style={{ width: `${Math.min(t.conversion, 100)}%` }} />
+                    </div>
+                    <span className="w-10 text-right font-semibold text-on-surface">{t.conversion.toFixed(0)}%</span>
+                  </div>
+                ))}
+                {metricas.total === 0 ? <p className="text-[11px] text-muted-foreground">Sin datos</p> : null}
+              </div>
+            </div>
+            <div className="rounded-xl bg-surface-container-lowest p-3 shadow-sm">
+              <p className="text-xs text-muted-foreground">Canal con más leads</p>
+              <p className="truncate text-2xl font-bold text-on-surface">
+                {canalConf(metricas.mayorCanal).label}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {metricas.porCanal[metricas.mayorCanal] ?? 0} de {metricas.total} leads
+              </p>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center gap-3 py-16 text-sm text-muted-foreground">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted border-t-primary" />
@@ -383,9 +596,17 @@ export default function PipelinePage() {
                           onDragStart={() => {
                             setDragId(lead.id);
                           }}
-                          className="group cursor-grab rounded-xl bg-surface-container-lowest p-3 shadow-sm ring-1 ring-black/5 active:cursor-grabbing dark:ring-white/10"
+                          className={`group cursor-grab rounded-xl p-3 shadow-sm ring-1 active:cursor-grabbing dark:ring-white/10 ${selected.has(lead.id) ? "bg-primary/10 ring-primary/40" : "bg-surface-container-lowest ring-black/5"}`}
                         >
                           <div className="flex items-start gap-2.5">
+                            <input
+                              type="checkbox"
+                              checked={selected.has(lead.id)}
+                              onChange={() => toggleSeleccion(lead.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Seleccionar ${lead.nombre}`}
+                              className="mt-1.5 h-4 w-4 shrink-0 rounded border-input accent-primary"
+                            />
                             <div className="relative">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-xs font-bold text-on-surface-variant">
                                 {iniciales(lead.nombre, lead.apellido)}

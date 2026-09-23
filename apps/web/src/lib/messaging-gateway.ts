@@ -21,7 +21,7 @@ export async function ingresarMensaje(
   db: Db,
   schema: Schema,
   msg: MensajeCanonico
-): Promise<{ conversationId: string; duplicado: boolean; respuestasBot: number }> {
+): Promise<{ conversationId: string; duplicado: boolean; respuestasBot: number; leadId: string | null }> {
   const externoId = msg.conversacionExternaId.trim();
   const contenido = msg.contenido.trim();
   const direccion = msg.direccion === "OUTBOUND" ? "OUTBOUND" : "INBOUND";
@@ -54,6 +54,12 @@ export async function ingresarMensaje(
   }
   if (!conv) throw new Error("No se pudo crear/obtener la conversación");
 
+  // Auto-creación de lead para primeros contactos entrantes sin CRM vinculado.
+  const leadId =
+    direccion === "INBOUND" && !conv.leadId
+      ? await asegurarLeadParaConversacion(db, schema, conv, contenido)
+      : conv.leadId;
+
   const extMsg = (msg.msgExternoId ?? "").trim() || null;
   if (extMsg) {
     const dup = await db
@@ -67,7 +73,7 @@ export async function ingresarMensaje(
       )
       .limit(1);
     if (dup.length > 0) {
-      return { conversationId: conv.id, duplicado: true, respuestasBot: 0 };
+      return { conversationId: conv.id, duplicado: true, respuestasBot: 0, leadId: (conv.leadId ?? leadId) ?? null };
     }
   }
 
@@ -82,6 +88,7 @@ export async function ingresarMensaje(
   await db
     .update(schema.conversations)
     .set({
+      ...(leadId ? { leadId } : {}),
       ultimoMensaje: contenido.slice(0, 300),
       ultimoMensajeEn: now,
       updatedAt: now,
@@ -92,7 +99,61 @@ export async function ingresarMensaje(
   const respuestasBot =
     direccion === "INBOUND" ? await evaluarBots(db, schema, conv.id, msg.canal, contenido) : 0;
 
-  return { conversationId: conv.id, duplicado: false, respuestasBot };
+  return { conversationId: conv.id, duplicado: false, respuestasBot, leadId: leadId ?? null };
+}
+
+/**
+ * Crea (o reutiliza por canal+origenExternoId) el lead de una conversación
+ * entrante sin CRM vinculado, idempotente por (canal, origen_externo_id).
+ */
+async function asegurarLeadParaConversacion(
+  db: Db,
+  schema: Schema,
+  conv: { id: string; canal: string; externoId: string | null; contactoNombre: string; contactoTelefono: string },
+  contenido: string
+): Promise<string | null> {
+  const origen = (conv.externoId ?? "").trim() || null;
+
+  const [existente] = await db
+    .select({ id: schema.leads.id })
+    .from(schema.leads)
+    .where(
+      and(
+        eq(schema.leads.canal, conv.canal),
+        ...(origen ? [eq(schema.leads.origenExternoId, origen)] : [sql`${schema.leads.origenExternoId} is null`])
+      )
+    )
+    .limit(1);
+
+  if (existente) {
+    await db
+      .update(schema.conversations)
+      .set({ leadId: existente.id, updatedAt: new Date() })
+      .where(eq(schema.conversations.id, conv.id));
+    return existente.id;
+  }
+
+  const nombre = (conv.contactoNombre ?? "").trim();
+  const [lead] = await db
+    .insert(schema.leads)
+    .values({
+      nombre: nombre || (conv.contactoTelefono ? `Contacto ${conv.contactoTelefono}` : "Contacto entrante"),
+      canal: conv.canal,
+      etapa: "ENTRANTE",
+      origenExternoId: origen,
+      notas: `Primer contacto entrante: ${contenido.slice(0, 2000)}`,
+    })
+    .onConflictDoNothing()
+    .returning({ id: schema.leads.id });
+
+  const id = lead?.id ?? null;
+  if (id) {
+    await db
+      .update(schema.conversations)
+      .set({ leadId: id, updatedAt: new Date() })
+      .where(eq(schema.conversations.id, conv.id));
+  }
+  return id;
 }
 
 /** Ejecuta las reglas de bot activas del canal. Devuelve cuántas respuestas envió. */
@@ -180,7 +241,7 @@ export async function evaluarBots(
         to: conv?.telefono ?? "",
         text: cuerpo,
       });
-      const estadoFinal = r.delivered || r.provider === null ? "ENVIADO" : "FALLO";
+      const estadoFinal = r.estado;
       await db
         .update(schema.messages)
         .set({ estado: estadoFinal })

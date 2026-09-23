@@ -37,6 +37,7 @@ import {
   Megaphone,
   ScrollText,
   LayoutGrid,
+  UserCog,
   type LucideIcon,
 } from "lucide-react";
 
@@ -70,8 +71,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/work-123", label: "Work 123", icon: Kanban, section: "Work 123", permission: "contract.read" },
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "contract.read" },
-  { href: "/actividad", label: "Actividad", icon: Activity, section: "Actividad", permission: "activity.read" },
-  { href: "/integraciones", label: "Integraciones", icon: Plug, section: "Integraciones", permission: "integration.read" },
 ];
 
 const FOOTER_ITEMS: { label: string; icon: LucideIcon }[] = [
@@ -81,6 +80,9 @@ const FOOTER_ITEMS: { label: string; icon: LucideIcon }[] = [
 
 const CONFIGURATION_ITEMS: NavItem[] = [
   { href: "/auditoria", label: "Auditoría", icon: ShieldCheck, section: "Auditoría", permission: "audit.read" },
+  { href: "/actividad", label: "Actividad", icon: Activity, section: "Actividad", permission: "activity.read" },
+  { href: "/integraciones", label: "Integraciones", icon: Plug, section: "Integraciones", permission: "integration.read" },
+  { href: "/configuraciones/usuarios", label: "Usuarios", icon: UserCog, section: "Usuarios", permission: "user.read" },
 ];
 
 function visibleNav(role: import("@contract/domain/rbac").UserRole): NavItem[] {
@@ -335,8 +337,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <ul className="flex flex-col gap-1">
             {FOOTER_ITEMS.map((item) => {
               const Icon = item.icon;
-              const configurationItems = visibleNav(user.role).filter((navItem) =>
-                CONFIGURATION_ITEMS.some((configurationItem) => configurationItem.href === navItem.href)
+              const configurationAc = AccessControl.forRole(user.role);
+              const configurationItems = CONFIGURATION_ITEMS.filter(
+                (n) => !n.permission || configurationAc.can(n.permission)
               );
               const isConfiguration = item.label === "Configuración";
               return (

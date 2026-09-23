@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import {
+  Check,
+  Clock,
   FileText,
   Mail,
   MessageCircle,
@@ -16,6 +18,7 @@ import {
   Pencil,
   Trash2,
   X,
+  XCircle,
 } from "lucide-react";
 
 type Canal = "MANUAL" | "WHATSAPP" | "MESSENGER" | "TIKTOK" | "WEB" | "LLAMADA" | "EMAIL";
@@ -40,6 +43,7 @@ interface Mensaje {
   direccion: "INBOUND" | "OUTBOUND";
   autor: string;
   contenido: string;
+  estado?: string | null;
   createdAt: string | null;
 }
 
@@ -368,6 +372,8 @@ export default function MensajesPage() {
                         ) : null}
                         <span className="whitespace-pre-wrap break-words">{m.contenido}</span>
                         <span className={`mt-0.5 block text-right text-[10px] ${m.direccion === "OUTBOUND" ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                          {m.estado ? <EstadoEnvio estado={m.estado} /> : null}
+                          {m.direccion === "OUTBOUND" && m.estado ? " · " : ""}
                           {m.createdAt ? new Date(m.createdAt).toLocaleString("es-PE", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : ""}
                         </span>
                       </div>
@@ -454,6 +460,23 @@ export default function MensajesPage() {
         />
       )}
     </DashboardShell>
+  );
+}
+
+const ESTADO_ENVIO: Record<string, { label: string; cls: string; Icon: typeof Check }> = {
+  PENDIENTE: { label: "Enviando", cls: "text-amber-400", Icon: Clock },
+  ENVIADO: { label: "Enviado", cls: "text-emerald-400", Icon: Check },
+  FALLO: { label: "Fallo", cls: "text-red-400", Icon: XCircle },
+};
+
+function EstadoEnvio({ estado }: { estado: string }) {
+  const cfg = ESTADO_ENVIO[estado] ?? { label: estado, cls: "text-muted-foreground", Icon: Clock };
+  const Icon = cfg.Icon;
+  return (
+    <span className={`inline-flex items-center gap-0.5 font-medium ${cfg.cls}`} title={`Estado: ${cfg.label}`}>
+      <Icon className="h-3 w-3" />
+      {cfg.label}
+    </span>
   );
 }
 

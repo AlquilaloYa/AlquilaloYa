@@ -105,20 +105,20 @@ export async function POST(req: Request, { params }: Ctx) {
       createdAt: msg.createdAt?.toISOString?.() ?? null,
     };
 
-    // Despacho saliente real (WhatsApp) fuera de la transacción.
-    if (direccion === "OUTBOUND") {
-      const { despacharMensajeSaliente } = await import("@/lib/messaging-dispatcher");
-      const r = await despacharMensajeSaliente({
-        db: c.db,
-        messageId: msg.id,
-        canal: conv.canal,
-        to: conv.contactoTelefono,
-        text: contenido,
-      });
-      // Sin conector externo para el canal (p.ej. MANUAL) => el mensaje solo
-      // queda registrado en la bandeja, no cuenta como fallo.
-      const estadoFinal = r.delivered || r.provider === null ? "ENVIADO" : "FALLO";
-      if (estadoFinal !== msg.estado) {
+// Despacho saliente real (WhatsApp/Gmail) fuera de la transacción.
+      if (direccion === "OUTBOUND") {
+        const { despacharMensajeSaliente } = await import("@/lib/messaging-dispatcher");
+        const r = await despacharMensajeSaliente({
+          db: c.db,
+          messageId: msg.id,
+          canal: conv.canal,
+          to: conv.contactoTelefono,
+          text: contenido,
+        });
+        // El estado lo decide el dispatcher: ENVIADO solo cuando hubo entrega
+        // real o registro local (MANUAL). Sin conector => FALLO, no se finge.
+        const estadoFinal = r.estado;
+        if (estadoFinal !== msg.estado) {
         await c.db
           .update(c.schema.messages)
           .set({ estado: estadoFinal })
