@@ -78,11 +78,11 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/work-123", label: "Work 123", icon: Kanban, section: "Work 123", permission: "contract.read" },
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "contract.read" },
-  { href: "https://mail.google.com", label: "Gmail", icon: Mail, section: "Google SyS", group: "google", external: true },
-  { href: "https://drive.google.com", label: "Google Drive", icon: HardDrive, section: "Google SyS", group: "google", external: true },
-  { href: "https://sheets.google.com", label: "Google Sheets", icon: Table, section: "Google SyS", group: "google", external: true },
-  { href: "https://docs.google.com", label: "Google Docs", icon: FileText, section: "Google SyS", group: "google", external: true },
-  { href: "https://tasks.google.com", label: "Google Tasks", icon: ListTodo, section: "Google SyS", group: "google", external: true },
+  { href: "/google/gmail", label: "Gmail", icon: Mail, section: "Google SyS", group: "google" },
+  { href: "/google/drive", label: "Google Drive", icon: HardDrive, section: "Google SyS", group: "google" },
+  { href: "/google/sheets", label: "Google Sheets", icon: Table, section: "Google SyS", group: "google" },
+  { href: "/google/docs", label: "Google Docs", icon: FileText, section: "Google SyS", group: "google" },
+  { href: "/google/tasks", label: "Google Tasks", icon: ListTodo, section: "Google SyS", group: "google" },
 ];
 
 const FOOTER_ITEMS: { label: string; icon: LucideIcon }[] = [
