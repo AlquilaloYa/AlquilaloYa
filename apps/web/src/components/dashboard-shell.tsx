@@ -39,6 +39,11 @@ import {
   ScrollText,
   LayoutGrid,
   UserCog,
+  HardDrive,
+  ListTodo,
+  Mail,
+  Table,
+  ExternalLink,
   type LucideIcon,
 } from "lucide-react";
 
@@ -49,8 +54,11 @@ interface NavItem {
   section: string;
   phase?: string;
   permission?: Permission;
-  group?: "contratos" | "marketing";
+  external?: boolean;
+  group?: "contratos" | "marketing" | "google";
 }
+
+const GOOGLE_CONSOLE = "https://console.cloud.google.com/apis/library/";
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "Dashboard" },
@@ -72,6 +80,11 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/work-123", label: "Work 123", icon: Kanban, section: "Work 123", permission: "contract.read" },
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "contract.read" },
+  { href: `${GOOGLE_CONSOLE}docs.googleapis.com?project=alquilaloya-509617`, label: "Google Docs API", icon: FileText, section: "Google SyS", group: "google", external: true },
+  { href: `${GOOGLE_CONSOLE}drive.googleapis.com?project=alquilaloya-509617`, label: "Google Drive API", icon: HardDrive, section: "Google SyS", group: "google", external: true },
+  { href: `${GOOGLE_CONSOLE}sheets.googleapis.com?project=alquilaloya-509617`, label: "Google Sheets API", icon: Table, section: "Google SyS", group: "google", external: true },
+  { href: `${GOOGLE_CONSOLE}tasks.googleapis.com?project=alquilaloya-509617`, label: "Google Tasks API", icon: ListTodo, section: "Google SyS", group: "google", external: true },
+  { href: `${GOOGLE_CONSOLE}gmail.googleapis.com?project=alquilaloya-509617`, label: "Gmail API", icon: Mail, section: "Google SyS", group: "google", external: true },
 ];
 
 const FOOTER_ITEMS: { label: string; icon: LucideIcon }[] = [
@@ -92,11 +105,13 @@ function visibleNav(role: import("@contract/domain/rbac").UserRole): NavItem[] {
   return NAV_ITEMS.filter((n) => !n.permission || ac.can(n.permission));
 }
 
-const SEARCH_RESULTS: SearchResult[] = [...NAV_ITEMS, ...CONFIGURATION_ITEMS].map((n) => ({
-  href: n.href,
-  label: n.label,
-  section: n.section,
-}));
+const SEARCH_RESULTS: SearchResult[] = [...NAV_ITEMS, ...CONFIGURATION_ITEMS]
+  .filter((n) => !n.external)
+  .map((n) => ({
+    href: n.href,
+    label: n.label,
+    section: n.section,
+  }));
 
 function NavLink({
   item,
@@ -110,6 +125,31 @@ function NavLink({
   const pathname = usePathname();
   const active = pathname === item.href;
   const Icon = item.icon;
+  const className = `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+    active
+      ? "bg-surface-container-low text-primary border-l-2 border-primary font-bold dark:bg-white/10 dark:text-white dark:border-white"
+      : "text-on-surface-variant hover:bg-surface-container-high dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white border-l-2 border-transparent"
+  } ${collapsed ? "justify-center px-0" : ""}`;
+  if (item.external) {
+    return (
+      <a
+        href={item.href}
+        target="_blank"
+        rel="noreferrer"
+        title={collapsed ? item.label : undefined}
+        aria-label={item.label}
+        className={className}
+      >
+        <Icon className="h-[18px] w-[18px] shrink-0" />
+        {!collapsed ? (
+          <>
+            <span className="flex-1">{item.label}</span>
+            <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-50" />
+          </>
+        ) : null}
+      </a>
+    );
+  }
   return (
     <Link
       href={item.href}
@@ -119,11 +159,7 @@ function NavLink({
       {...(collapsed
         ? { title: item.label, "aria-label": item.label }
         : {})}
-      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-        active
-          ? "bg-surface-container-low text-primary border-l-2 border-primary font-bold dark:bg-white/10 dark:text-white dark:border-white"
-          : "text-on-surface-variant hover:bg-surface-container-high dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white border-l-2 border-transparent"
-      } ${collapsed ? "justify-center px-0" : ""}`}
+      className={className}
     >
       <Icon className="h-[18px] w-[18px] shrink-0" />
       {!collapsed ? (
@@ -198,6 +234,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [contractsOpen, setContractsOpen] = useState(false);
   const [marketingOpen, setMarketingOpen] = useState(false);
+  const [googleOpen, setGoogleOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -298,6 +335,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 icon: Briefcase,
                 open: contractsOpen,
                 onToggle: () => setContractsOpen((open) => !open),
+              },
+              {
+                key: "google",
+                label: "Google SyS",
+                icon: LayoutGrid,
+                open: googleOpen,
+                onToggle: () => setGoogleOpen((open) => !open),
               },
             ];
             const renderedGroups = new Set<NonNullable<NavItem["group"]>>();
