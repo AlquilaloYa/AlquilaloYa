@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { AccessControl } from "@contract/domain/rbac";
 import type { Permission } from "@contract/domain/rbac";
 import { TopBar, type SearchResult } from "@/components/top-bar";
+import { AppointmentReminders } from "@/components/appointment-reminders";
 import {
   LayoutDashboard,
   Star,
@@ -382,6 +383,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+
+      <AppointmentReminders />
     </div>
   );
 }

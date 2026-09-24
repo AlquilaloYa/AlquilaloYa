@@ -55,3 +55,6 @@ apps/desktop/src-tauri/build-*.txt
 scripts/.tmp-*
 .vercel
 .env*
+
+# Salidas de scripts de base de datos
+packages/db/regen-*.txt
