@@ -58,8 +58,6 @@ interface NavItem {
   group?: "contratos" | "marketing" | "google";
 }
 
-const GOOGLE_CONSOLE = "https://console.cloud.google.com/apis/library/";
-
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "Dashboard" },
   { href: "/disponibilidad", label: "Disponibilidad", icon: LayoutGrid, section: "Disponibilidad", permission: "department.read" },
@@ -80,11 +78,11 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/work-123", label: "Work 123", icon: Kanban, section: "Work 123", permission: "contract.read" },
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "contract.read" },
-  { href: `${GOOGLE_CONSOLE}gmail.googleapis.com?project=alquilaloya-509617`, label: "Gmail", icon: Mail, section: "Google SyS", group: "google", external: true },
-  { href: `${GOOGLE_CONSOLE}drive.googleapis.com?project=alquilaloya-509617`, label: "Google Drive", icon: HardDrive, section: "Google SyS", group: "google", external: true },
-  { href: `${GOOGLE_CONSOLE}sheets.googleapis.com?project=alquilaloya-509617`, label: "Google Sheets", icon: Table, section: "Google SyS", group: "google", external: true },
-  { href: `${GOOGLE_CONSOLE}docs.googleapis.com?project=alquilaloya-509617`, label: "Google Docs", icon: FileText, section: "Google SyS", group: "google", external: true },
-  { href: `${GOOGLE_CONSOLE}tasks.googleapis.com?project=alquilaloya-509617`, label: "Google Tasks", icon: ListTodo, section: "Google SyS", group: "google", external: true },
+  { href: "https://mail.google.com", label: "Gmail", icon: Mail, section: "Google SyS", group: "google", external: true },
+  { href: "https://drive.google.com", label: "Google Drive", icon: HardDrive, section: "Google SyS", group: "google", external: true },
+  { href: "https://sheets.google.com", label: "Google Sheets", icon: Table, section: "Google SyS", group: "google", external: true },
+  { href: "https://docs.google.com", label: "Google Docs", icon: FileText, section: "Google SyS", group: "google", external: true },
+  { href: "https://tasks.google.com", label: "Google Tasks", icon: ListTodo, section: "Google SyS", group: "google", external: true },
 ];
 
 const FOOTER_ITEMS: { label: string; icon: LucideIcon }[] = [
