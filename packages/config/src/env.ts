@@ -25,6 +25,9 @@ export const env = createEnv({
     GOOGLE_GMAIL_SCOPE: z
       .string()
       .default("https://www.googleapis.com/auth/gmail.send"),
+    GOOGLE_DRIVE_SCOPE: z
+      .string()
+      .default("https://www.googleapis.com/auth/drive.file"),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

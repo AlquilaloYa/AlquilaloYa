@@ -6,7 +6,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
-import { CalendarPlus, Download, Edit, FileCheck, Plus, RefreshCw, ShieldCheck, Trash2, X } from "lucide-react";
+import { CalendarPlus, Download, Edit, FileCheck, Plus, RefreshCw, ShieldCheck, Trash2, X, MoveUpRight } from "lucide-react";
 import { AdendaModal, EditAdendaModal, ExtensionModal } from "@/components/adenda-modals";
 import { useAuth } from "@/lib/auth-context";
 
@@ -57,6 +57,7 @@ export default function AdendasPage() {
   const [error, setError] = useState<string | null>(null);
   const [verificacion, setVerificacion] = useState<Record<string, boolean | undefined>>({});
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [driveId, setDriveId] = useState<string | null>(null);
   const [regenerandoId, setRegenerandoId] = useState<string | null>(null);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
@@ -224,6 +225,22 @@ export default function AdendasPage() {
       setVerificacion((v) => ({ ...v, [d.id]: Boolean(body.ok) }));
     } catch {
       setVerificacion((v) => ({ ...v, [d.id]: false }));
+    }
+  }
+
+  async function subirADrive(d: AdendaApi) {
+    setDriveId(d.id);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/documents/${encodeURIComponent(d.id)}/drive`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? `Error ${res.status}`);
+      const link = (body as { webViewLink?: string }).webViewLink;
+      if (link) window.open(link, "_blank", "noreferrer");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setDriveId(null);
     }
   }
 
@@ -405,6 +422,18 @@ export default function AdendasPage() {
                             >
                               <Download className="h-3.5 w-3.5" />
                               {downloadingId === d.id ? "…" : "Descargar"}
+                            </button>
+                          ) : null}
+                          {puedeDescargar(d) ? (
+                            <button
+                              type="button"
+                              onClick={() => void subirADrive(d)}
+                              disabled={driveId === d.id}
+                              className="inline-flex items-center gap-1 text-on-surface-variant hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Subir el PDF a tu Google Drive"
+                            >
+                              <MoveUpRight className="h-3.5 w-3.5" />
+                              {driveId === d.id ? "…" : "Drive"}
                             </button>
                           ) : null}
                           {d.sha256 && d.estadoGeneracion === "GENERADO" ? (

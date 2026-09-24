@@ -11,10 +11,11 @@ export type GCalConfig = {
   scope: string;
 };
 
-/** Scopes Google combinados (calendario + gmail + los que se quiera añadir). */
+/** Scopes Google combinados (calendario + gmail + drive + los que se quiera añadir). */
 export function gcalScopes(): string[] {
   const scopes = [env.GOOGLE_CALENDAR_SCOPE];
   if (env.GOOGLE_GMAIL_SCOPE) scopes.push(env.GOOGLE_GMAIL_SCOPE);
+  if (env.GOOGLE_DRIVE_SCOPE) scopes.push(env.GOOGLE_DRIVE_SCOPE);
   return [...new Set(scopes.filter(Boolean))];
 }
 
