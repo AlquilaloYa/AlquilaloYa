@@ -11,6 +11,13 @@ export type GCalConfig = {
   scope: string;
 };
 
+/** Scopes Google combinados (calendario + gmail + los que se quiera añadir). */
+export function gcalScopes(): string[] {
+  const scopes = [env.GOOGLE_CALENDAR_SCOPE];
+  if (env.GOOGLE_GMAIL_SCOPE) scopes.push(env.GOOGLE_GMAIL_SCOPE);
+  return [...new Set(scopes.filter(Boolean))];
+}
+
 /** Devuelve la config de Google o null si aun no se configuraron las env vars. */
 export function gcalConfig(): GCalConfig | null {
   const clientId = env.GOOGLE_CLIENT_ID;
@@ -20,7 +27,7 @@ export function gcalConfig(): GCalConfig | null {
     clientId,
     clientSecret,
     redirectUri: env.GOOGLE_REDIRECT_URI ?? "",
-    scope: env.GOOGLE_CALENDAR_SCOPE,
+    scope: gcalScopes().join(" "),
   };
 }
 

@@ -114,6 +114,7 @@ export async function POST(req: Request, { params }: Ctx) {
           canal: conv.canal,
           to: conv.contactoTelefono,
           text: contenido,
+          userEmail: c.user.email,
         });
         // El estado lo decide el dispatcher: ENVIADO solo cuando hubo entrega
         // real o registro local (MANUAL). Sin conector => FALLO, no se finge.

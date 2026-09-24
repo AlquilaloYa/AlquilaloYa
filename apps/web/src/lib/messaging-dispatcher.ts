@@ -5,7 +5,6 @@ type Db = typeof import("@contract/db").db;
 /** Proveedor y tipo de conector por canal de la bandeja. */
 const PROVEEDOR_POR_CANAL: Record<string, { provider: string; type: string }> = {
   WHATSAPP: { provider: "whatsapp-cloud", type: "WHATSAPP" },
-  EMAIL: { provider: "gmail", type: "GMAIL" },
 };
 
 export type EstadoMensaje = "PENDIENTE" | "ENVIADO" | "FALLO";
@@ -18,8 +17,59 @@ export interface DispatchOutboundResult {
 }
 
 /**
- * Despacha un mensaje saliente por el conector activo del canal.
+ * Envía un correo real con la cuenta de Google del usuario (conectada en /agenda).
+ * Usa el mismo token OAuth2 que la agenda (con refresh automático) para no
+ * depender de conexiones manuales de credenciales con expiración.
+ */
+async function enviarCorreoGmail(input: {
+  messageId: string;
+  to: string;
+  text: string;
+  userEmail: string;
+}): Promise<DispatchOutboundResult> {
+  try {
+    const { getValidAccessToken } = await import("@/lib/google-calendar");
+    const { GmailAdapter } = await import("@contract/integrations");
+    const { token } = await getValidAccessToken(input.userEmail);
+    const adapter = new GmailAdapter({
+      accessToken: token,
+      from: input.userEmail,
+    });
+    const result = await adapter.dispatch({
+      kind: "SEND",
+      payload: {
+        to: input.to,
+        subject: `Mensaje de Contactos e Inmobiliarias`,
+        body: input.text,
+      },
+      idempotencyKey: `msg:${input.messageId}`,
+    });
+    return {
+      delivered: result.ok,
+      provider: "gmail",
+      error: result.error ?? null,
+      estado: result.ok ? "ENVIADO" : "FALLO",
+    };
+  } catch (error) {
+    const msg =
+      error instanceof Error ? error.message : "Error desconocido enviando correo";
+    const userEmail = input.userEmail;
+    return {
+      delivered: false,
+      provider: "gmail",
+      error: /Sin cuenta de Google|GcalNotConnected/.test(msg)
+        ? `No hay cuenta de Google conectada para ${userEmail}. Conéctala en /agenda.`
+        : `Gmail: ${msg}`,
+      estado: "FALLO",
+    };
+  }
+}
+
+/**
+ * Despacha un mensaje saliente.
  *
+ * - EMAIL: envía con la cuenta OAuth2 del usuario (requiere userEmail).
+ * - WHATSAPP: usa el conector activo whatsapp-cloud.
  * - Sin conector configurado para el canal => no envía (delivered:false con
  *   error descriptivo). MANUAL es un registro local intencional y cuenta como
  *   ENVIADO; el resto de canales sin transmisor real quedan como FALLO para no
@@ -32,8 +82,27 @@ export async function despacharMensajeSaliente(input: {
   canal: string;
   to: string;
   text: string;
+  userEmail?: string;
 }): Promise<DispatchOutboundResult> {
   const proveedor = PROVEEDOR_POR_CANAL[input.canal];
+
+  if (input.canal === "EMAIL") {
+    if (!input.userEmail?.trim()) {
+      return {
+        delivered: false,
+        provider: "gmail",
+        error: "No se puede enviar correo sin la cuenta de Google del usuario",
+        estado: "FALLO",
+      };
+    }
+    return enviarCorreoGmail({
+      messageId: input.messageId,
+      to: input.to,
+      text: input.text,
+      userEmail: input.userEmail.trim(),
+    });
+  }
+
   if (!proveedor) {
     const estado: EstadoMensaje = input.canal === "MANUAL" ? "ENVIADO" : "FALLO";
     return {
@@ -72,9 +141,7 @@ export async function despacharMensajeSaliente(input: {
   const result = await service.dispatch(
     connector.id,
     "SEND",
-    input.canal === "EMAIL"
-      ? { to: input.to, subject: `Mensaje de Contactos e Inmobiliarias`, body: input.text }
-      : { to: input.to, text: input.text },
+    { to: input.to, text: input.text },
     `msg:${input.messageId}`
   );
 

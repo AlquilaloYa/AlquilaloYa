@@ -22,6 +22,9 @@ export const env = createEnv({
     GOOGLE_CALENDAR_SCOPE: z
       .string()
       .default("https://www.googleapis.com/auth/calendar.events"),
+    GOOGLE_GMAIL_SCOPE: z
+      .string()
+      .default("https://www.googleapis.com/auth/gmail.send"),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,
