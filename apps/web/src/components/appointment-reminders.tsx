@@ -26,10 +26,29 @@ const POLL_MS = 60_000;
 const ADVANCE_MIN = 15;
 const AUTO_DISMISS_MS = 20_000;
 
+function notifyDesktop(p: Popup) {
+  if (typeof window === "undefined" || !("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  try {
+    const n = new Notification("AlquilaYa ERP — Cita", {
+      body: `${p.label}: ${p.summary}${p.description ? `\n${p.description}` : ""}`,
+      icon: "/logo-light.svg",
+      tag: `cita-${p.id}`,
+    });
+    n.onclick = () => {
+      window.focus();
+      window.location.href = "/agenda";
+    };
+  } catch {
+    /* silencioso */
+  }
+}
+
 export function AppointmentReminders() {
   const pathname = usePathname();
   const [popups, setPopups] = useState<Popup[]>([]);
   const dismissedRef = useRef<Set<string>>(new Set());
+  const notifiedRef = useRef<Set<string>>(new Set());
 
   const dismiss = useCallback((id: string) => {
     dismissedRef.current.add(id);
@@ -43,10 +62,16 @@ export function AppointmentReminders() {
   }, [pathname]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission === "default") {
+      void Notification.requestPermission();
+    }
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     const tick = async () => {
-      if (document.visibilityState === "hidden") return;
       try {
         const now = new Date();
         const min = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
@@ -77,6 +102,11 @@ export function AppointmentReminders() {
           }
         }
         if (due.length > 0) {
+          for (const d of due) {
+            if (notifiedRef.current.has(d.id)) continue;
+            notifiedRef.current.add(d.id);
+            notifyDesktop(d);
+          }
           setPopups((prev) => {
             const existing = new Set(prev.map((p) => p.id));
             return [...prev, ...due.filter((d) => !existing.has(d.id))];
