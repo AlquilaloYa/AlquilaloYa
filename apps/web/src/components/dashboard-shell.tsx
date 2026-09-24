@@ -312,7 +312,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 px-2">
+        <nav className="scrollbar-invisible flex flex-1 flex-col gap-1 overflow-y-auto px-2">
           {(() => {
             const items = visibleNav(user.role);
             const gruposNav: Array<{

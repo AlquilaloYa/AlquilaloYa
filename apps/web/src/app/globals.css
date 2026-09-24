@@ -151,6 +151,17 @@ body {
   height: 0;
 }
 
+/* Barra de desplazamiento invisible pero funcional (menús / paneles internos) */
+.scrollbar-invisible {
+  scrollbar-width: none;
+}
+.scrollbar-invisible::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-invisible {
+  -ms-overflow-style: none;
+}
+
 body,
 .theme-transition {
   transition:
