@@ -27,6 +27,15 @@ export interface ProximoAVencer {
   renovacionMeses: number | null;
 }
 
+export interface PagoVenceHoy {
+  id: string;
+  codigoContrato: string;
+  cliente: string;
+  departamento: string | null;
+  monto: number;
+  periodo: string;
+}
+
 export interface ResumenPortafolio {
   unidadesTotales: number;
   ocupadas: number;
@@ -42,6 +51,7 @@ export interface ResumenPortafolio {
   morosidad: number;
   clientesReportados: number;
   enProceso: number;
+  pagosVencenHoy: PagoVenceHoy[];
 }
 
 /** Agrega las métricas del dashboard (Fase 5). */
@@ -261,6 +271,47 @@ export class DrizzleDashboardRepository {
     const incidencias =
       erroresGeneracion + (fallosActividad?.value ?? 0) + vencidos.length;
 
+    const vencenHoy = await db
+      .select({
+        id: schema.payments.id,
+        codigoContrato: schema.contracts.codigoContrato,
+        cliente: sql<string>`trim(coalesce(${schema.clients.nombres}, '') || ' ' || coalesce(${schema.clients.apellidos}, ''))`,
+        departamento: schema.departments.codigo,
+        monto: schema.payments.monto,
+        mantenimiento: schema.payments.mantenimiento,
+        periodo: schema.payments.periodo,
+      })
+      .from(schema.payments)
+      .innerJoin(
+        schema.contracts,
+        eq(schema.contracts.id, schema.payments.contractId)
+      )
+      .leftJoin(
+        schema.clients,
+        eq(schema.clients.id, schema.contracts.clienteId)
+      )
+      .leftJoin(
+        schema.departments,
+        eq(schema.departments.id, schema.contracts.departamentoId)
+      )
+      .where(
+        and(
+          eq(schema.payments.periodo, hoyStr),
+          ne(schema.payments.estado, "PAGADO"),
+          ne(schema.payments.estado, "CANCELADO")
+        )
+      )
+      .orderBy(schema.contracts.codigoContrato);
+
+    const pagosVencenHoy: PagoVenceHoy[] = vencenHoy.map((p) => ({
+      id: p.id,
+      codigoContrato: p.codigoContrato,
+      cliente: p.cliente || "—",
+      departamento: p.departamento ?? null,
+      monto: Number(p.monto) + Number(p.mantenimiento),
+      periodo: p.periodo,
+    }));
+
     return {
       unidadesTotales,
       ocupadas,
@@ -278,6 +329,7 @@ export class DrizzleDashboardRepository {
       morosidad,
       clientesReportados,
       enProceso,
+      pagosVencenHoy,
     };
   }
 }

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { FileText, AlertTriangle, Activity } from "lucide-react";
+import { FileText, AlertTriangle, Activity, X } from "lucide-react";
 import { DonutChart } from "@/components/donut-chart";
 import { CobranzaVendedores } from "@/components/cobranza-vendedores";
 
@@ -18,6 +18,15 @@ interface ProximoAVencer {
   diasRestantes: number;
   renuevaProximoMes: boolean | null;
   renovacionMeses: number | null;
+}
+
+interface PagoVenceHoy {
+  id: string;
+  codigoContrato: string;
+  cliente: string;
+  departamento: string | null;
+  monto: number;
+  periodo: string;
 }
 
 interface Resumen {
@@ -35,6 +44,7 @@ interface Resumen {
   morosidad: number;
   clientesReportados: number;
   enProceso: number;
+  pagosVencenHoy?: PagoVenceHoy[];
 }
 
 interface DashboardData {
@@ -279,10 +289,80 @@ function ProximosAVencerBox({
   );
 }
 
+function PagarHoyPopup({
+  pagos,
+  onCerrar,
+}: {
+  pagos: PagoVenceHoy[];
+  onCerrar: () => void;
+}) {
+  const total = pagos.reduce((s, p) => s + p.monto, 0);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onCerrar}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-surface-container-lowest p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400/20 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+            </span>
+            <div>
+              <h3 className="font-label-lg text-on-surface">
+                Pagos de hoy ({pagos.length})
+              </h3>
+              <p className="font-body-sm text-on-surface-variant">
+                Clientes que deben pagar el día de hoy · Total S/{" "}
+                {total.toLocaleString("es-PE")}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onCerrar}
+            className="rounded p-1 text-on-surface-variant transition hover:bg-surface-container-high hover:text-on-surface"
+            aria-label="Cerrar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <ul className="max-h-72 space-y-2 overflow-y-auto">
+          {pagos.map((p) => (
+            <li
+              key={p.id}
+              className="flex items-center justify-between gap-2 rounded-lg border border-outline-variant/60 bg-surface-container-low px-3 py-2"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-label-md text-on-surface">
+                  {p.cliente}
+                </p>
+                <p className="truncate font-body-sm text-on-surface-variant">
+                  {p.departamento ?? p.codigoContrato}
+                  {" · "}
+                  {p.codigoContrato}
+                </p>
+              </div>
+              <span className="shrink-0 font-label-lg text-emerald-600">
+                S/ {p.monto.toLocaleString("es-PE")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [verPopupPagos, setVerPopupPagos] = useState(false);
 
   useEffect(() => {
     apiFetch("/api/dashboard")
@@ -296,6 +376,13 @@ export default function DashboardPage() {
       .then(setData)
       .catch((e) => setError((e as Error).message));
   }, []);
+
+  const pagosHoy = data?.resumen?.pagosVencenHoy;
+  useEffect(() => {
+    if (pagosHoy && pagosHoy.length > 0) {
+      setVerPopupPagos(true);
+    }
+  }, [pagosHoy]);
 
   const resumen = useMemo<Resumen | null>(() => {
     if (!data) return null;
@@ -428,6 +515,13 @@ return (
           </>
         )}
       </div>
+
+      {verPopupPagos && data?.resumen?.pagosVencenHoy?.length ? (
+        <PagarHoyPopup
+          pagos={data.resumen.pagosVencenHoy}
+          onCerrar={() => setVerPopupPagos(false)}
+        />
+      ) : null}
     </DashboardShell>
   );
 }
