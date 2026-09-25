@@ -41,6 +41,7 @@ interface DepartmentView {
   disponibilidad: { disponible: false; fechaFin: string; dias: number } | null;
   enMantenimiento?: boolean;
   bloqueado?: boolean;
+  contratoEstado?: string | null;
 }
 
 export default function DepartamentosPage() {
@@ -115,7 +116,19 @@ export default function DepartamentosPage() {
     return () => clearInterval(interval);
   }, []);
 
-  function obtenerTiempoRestante(sep: SeparacionRecord) {
+  function obtenerTiempoRestante(sep: SeparacionRecord, dept?: DepartmentView) {
+    // Si hay un contrato aprobado (firmado/notariado) para el departamento,
+    // el concepto de "vencido" ya no aplica: el cliente pasó a Aprobado y,
+    // si se notaría, a Notariado.
+    if (dept) {
+      const estado = contratoAprobado(dept);
+      if (estado) {
+        return {
+          texto: estado === "FIRMADO" ? "APROBADO" : estado === "NOTARIADO" ? "NOTARIADO" : "CONTRATO ACTIVO",
+          color: "text-green-600",
+        };
+      }
+    }
     if (sep.estado === "PERDER_TODO") return { texto: "DINERO PERDIDO", color: "text-red-600" };
     if (sep.estado === "CONTRATO_REAL") return { texto: "CONTRATO ACTIVO", color: "text-green-600" };
     if (sep.estado === "CONTRATO_PREVIO") return { texto: "—", color: "text-muted-foreground" };
@@ -184,7 +197,16 @@ export default function DepartamentosPage() {
     return sep.fechaLimite48h;
   }
 
-  function getEstadoActual(sep: SeparacionRecord): string {
+  /** Devuelve el estado del contrato aprobado (FIRMADO/NOTARIADO o legado) del depto, o null. */
+  function contratoAprobado(dept: DepartmentView): string | null {
+    const estado = dept.contratoEstado;
+    if (!estado) return null;
+    return ["FIRMADO", "NOTARIADO", "ACTIVO", "VIGENTE"].includes(estado) ? estado : null;
+  }
+
+  function getEstadoActual(sep: SeparacionRecord, dept?: DepartmentView): string {
+    const aprobado = dept ? contratoAprobado(dept) : null;
+    if (aprobado) return "CONTRATO_REAL";
     const ahora = Date.now();
     if (sep.estado === "PERDER_TODO" || sep.estado === "CONTRATO_REAL") return sep.estado;
     if (sep.estado === "CONTRATO_PREVIO") return "CONTRATO_PREVIO";
@@ -198,15 +220,17 @@ export default function DepartamentosPage() {
   }
 
   function estaSeparado(dept: DepartmentView): boolean {
+    if (contratoAprobado(dept)) return false;
     const sep = separaciones.find((s) => s.departamentoId === dept.id);
     if (!sep) return false;
-    const estado = getEstadoActual(sep);
-    return !["PERDER_TODO", "INACTIVO_48H", "INACTIVO_168H"].includes(estado);
+    const estado = getEstadoActual(sep, dept);
+    return !["PERDER_TODO", "INACTIVO_48H", "INACTIVO_168H", "CONTRATO_REAL"].includes(estado);
   }
 
   function estadoDepartamento(dept: DepartmentView): "OCUPADO" | "SEPARADO" | "DISPONIBLE" | "MANTENIMIENTO" | "BLOQUEADO" {
     if (dept.bloqueado) return "BLOQUEADO";
     if (dept.enMantenimiento) return "MANTENIMIENTO";
+    if (contratoAprobado(dept)) return "OCUPADO";
     if (dept.disponibilidad) return "OCUPADO";
     if (estaSeparado(dept)) return "SEPARADO";
     return "DISPONIBLE";
@@ -233,7 +257,7 @@ export default function DepartamentosPage() {
             department.precio,
             department.garantia,
             department.mantenimiento,
-            sep ? getEstadoActual(sep) : estadoDepartamento(department),
+            sep ? getEstadoActual(sep, department) : estadoDepartamento(department),
             sep ? getTipoSeparacion(sep) : "",
             sep?.montoSeparacion,
             contacto?.nombre,
@@ -878,7 +902,7 @@ export default function DepartamentosPage() {
                             <td className="px-3 py-2">
                               {sep ? (
                                 (() => {
-                                  const { texto, color } = obtenerTiempoRestante(sep);
+                                  const { texto, color } = obtenerTiempoRestante(sep, d);
                                   return (
                                     <span className={`font-bold ${color}`}>
                                       {texto}

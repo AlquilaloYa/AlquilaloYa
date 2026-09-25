@@ -31,6 +31,7 @@ export async function GET(req: Request) {
         fechaInicio: schema.contracts.fechaInicio,
         fechaFin: schema.contracts.fechaFin,
         clienteId: schema.contracts.clienteId,
+        estado: schema.contracts.estado,
       })
       .from(schema.contracts)
       .where(
@@ -61,11 +62,25 @@ export async function GET(req: Request) {
       }
     }
 
+    // Estado del contrato más reciente por departamento: si existe un contrato
+    // firmado (aprobado) o notariado, el concepto de "vencido" deja de aplicar
+    // en el temporizador de separación.
+    const contratoEstadoPorDepartamento = new Map<string, string>();
+    for (const c of ocupantes) {
+      const prev = contratoEstadoPorDepartamento.get(c.departamentoId);
+      const peso = (e: string) =>
+        e === "NOTARIADO" ? 3 : e === "FIRMADO" ? 2 : e === "ACTIVO" ? 1 : e === "VIGENTE" ? 1 : 0;
+      if (!prev || peso(c.estado) >= peso(prev)) {
+        contratoEstadoPorDepartamento.set(c.departamentoId, c.estado);
+      }
+    }
+
     function diasRestantes(fecha: string): number {
       return Math.max(0, Math.round((new Date(fecha).getTime() - hoy.getTime()) / 86_400_000));
     }
 
     const resultado = rows.map((d) => {
+      const contratoEstado = contratoEstadoPorDepartamento.get(d.id) ?? null;
       const ocupando = ocupantes
         .filter(
           (c) =>
@@ -77,14 +92,14 @@ export async function GET(req: Request) {
         .sort();
       if (ocupando.length === 0) {
         if (d.estadoManual === "BLOQUEADO") {
-          return { ...d, disponibilidad: null, enMantenimiento: false, bloqueado: true };
+          return { ...d, contratoEstado, disponibilidad: null, enMantenimiento: false, bloqueado: true };
         }
         if (d.estadoManual === "MANTENIMIENTO") {
-          return { ...d, disponibilidad: null, enMantenimiento: true, bloqueado: false };
+          return { ...d, contratoEstado, disponibilidad: null, enMantenimiento: true, bloqueado: false };
         }
         const ultimoFin = ultimoFinPorDepartamento.get(d.id);
         const enMantenimiento = Boolean(ultimoFin && ultimoFin < hoyISO);
-        return { ...d, disponibilidad: null, enMantenimiento, bloqueado: false };
+        return { ...d, contratoEstado, disponibilidad: null, enMantenimiento, bloqueado: false };
       }
       const fin = ocupando[ocupando.length - 1] as string;
       const ocupanteIds = new Set(
@@ -93,6 +108,7 @@ export async function GET(req: Request) {
       const cliente = [...ocupanteIds].map((id) => clientePorId.get(id)).find(Boolean);
       return {
         ...d,
+        contratoEstado,
         disponibilidad: { disponible: false, fechaFin: fin, dias: diasRestantes(fin) },
         enMantenimiento: false,
         bloqueado: false,
