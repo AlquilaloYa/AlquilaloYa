@@ -176,65 +176,127 @@ const INFORMACION: { titulo: string; cuerpo: string }[] = [
 ];
 
 export function renderBoletaSeparacionHtml(data: BoletaSeparacionData): string {
-  const filasValidacion: [string, string][] = [
-    ["Persona Firmante", data.personaFirmante],
-    ["DNI persona firmante", data.dniFirmante],
-    ["Dirección de la persona", data.direccion],
-    ["Departamento", data.departamento],
-    ["Código", data.codigo],
-    ["Check-in", data.checkIn],
-    ["Check-out", data.checkOut],
-    ["Separación", data.montoSeparacion],
-    ["Día de pago", data.diaPago],
-    ["Persona a pagar", data.personaPago],
-    ["DNI persona a pagar", data.dniPersonaPago],
-  ];
+  const esc2 = esc;
+  const monto = data.montoSeparacion || "—";
+  const codigoDep = data.codigo || "—";
 
-  const filasHtml = filasValidacion
+  const filasHtml = [
+    ["Persona Firmante", data.personaFirmante, "data"],
+    ["DNI persona firmante", data.dniFirmante, "data"],
+    ["Dirección de la persona", data.direccion, "data"],
+    ["Departamento", data.departamento, "data"],
+    ["Código", data.codigo, "data"],
+    ["Check-in", data.checkIn, "data"],
+    ["Check-out", data.checkOut, "data"],
+    ["Separación", monto, "monto"],
+    ["Día de pago", data.diaPago, "data"],
+    ["Persona a pagar", data.personaPago, "data"],
+    ["DNI persona a pagar", data.dniPersonaPago, "data"],
+  ]
     .map(
-      ([label, valor]) =>
-        `<tr><td class="lbl">${esc(label)}</td><td>${esc(valor || "—")}</td></tr>`
+      ([label, valor, tipo]: string[]) =>
+        `<tr><td class="${tipo === "monto" ? "lbl lbl-monto" : "lbl"}">${esc2(label ?? "")}</td><td class="${tipo === "monto" ? "monto" : "data"}">${esc2(valor || "—")}</td></tr>`
     )
     .join("");
 
   const infoHtml = INFORMACION.map(
-    (bloque) => `<h3>${esc(bloque.titulo)}</h3><p>${esc(bloque.cuerpo)}</p>`
+    (bloque) =>
+      `<li><div class="info-titulo">${esc2(bloque.titulo)}</div><div class="info-cuerpo">${esc2(bloque.cuerpo)}</div></li>`
   ).join("");
+
+  const nroBoleta = codigoDep;
 
   return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="utf-8"><title>Boleta de Separación</title>
 <style>
-@page { size: A4; margin: 18mm; }
-body { font-family: Arial, Helvetica, sans-serif; color: #111; line-height: 1.45; }
-h1 { text-align: center; font-size: 16pt; margin: 0 0 2mm; letter-spacing: 1px; }
-.sistema { text-align: center; color: #294261; font-size: 10pt; margin: 0 0 8mm; text-transform: uppercase; letter-spacing: 2px; }
-h2 { font-size: 11.5pt; border-bottom: 1.2px solid #1f2f45; padding-bottom: 2px; margin: 8mm 0 3mm; }
-h3 { font-size: 10.5pt; margin: 5mm 0 1mm; color: #1f2f45; }
-p { font-size: 10pt; margin: 0 0 4mm; text-align: justify; }
-table.datos { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
-table.datos td { padding: 3px 6px; }
-table.datos .lbl { color: #294261; font-weight: bold; width: 34%; }
-.firmas { margin-top: 18mm; display: flex; justify-content: space-between; font-size: 9.5pt; }
-.firmas div { width: 45%; border-top: 1px solid #333; padding-top: 4px; text-align: center; }
-.pie { margin-top: 12mm; font-size: 8pt; color: #666; text-align: center; }
+@page { size: A4; margin: 10mm; }
+* { box-sizing: border-box; }
+body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #141414; line-height: 1.4; margin: 0; }
+/* Marco característico de boleta: doble borde exterior */
+.marco {
+  border: 3px solid #0d1b2a;
+  outline: 1.2px solid #0d1b2a;
+  outline-offset: -2.2mm;
+  padding: 18mm 16mm 14mm;
+}
+/* Cabecera emisor */
+.cabecera { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2.5px solid #0d1b2a; padding-bottom: 4mm; margin-bottom: 5mm; }
+.emisor-nombre { font-size: 15pt; font-weight: 800; letter-spacing: 1.5px; color: #0d1b2a; text-transform: uppercase; }
+.emisor-lema { font-size: 8.5pt; color: #446; margin-top: 1mm; }
+.caja-num { text-align: right; }
+.caja-num .idi { font-size: 7pt; color: #555; letter-spacing: 2px; text-transform: uppercase; }
+.caja-num .nro { font-weight: 800; font-size: 12pt; border: 2px solid #0d1b2a; padding: 2mm 5mm; margin-top: 1.5mm; display: inline-block; }
+/* Título del documento */
+.titulo { text-align: center; margin: 3mm 0 4mm; }
+.titulo h1 { font-size: 17pt; letter-spacing: 3px; margin: 0; color: #0d1b2a; text-transform: uppercase; }
+.titulo .sub { font-size: 8.5pt; color: #446; letter-spacing: 1px; text-transform: uppercase; margin-top: 1mm; }
+/* Tabla de datos con celdas bordeadas */
+table.datos { width: 100%; border-collapse: collapse; font-size: 10pt; }
+table.datos td { border: 1px solid #0d1b2a; padding: 2.6mm 3mm; vertical-align: middle; }
+table.datos .lbl { background: #eef2f6; color: #0d1b2a; font-weight: 700; width: 38%; }
+table.datos .lbl-monto { background: #dce6ef; }
+table.datos .data { font-weight: 500; }
+table.datos .monto { font-weight: 800; font-size: 11.5pt; color: #0d1b2a; text-align: right; }
+/* Información en caja con borde */
+.info { border: 2px solid #0d1b2a; margin-top: 6mm; padding: 4mm 5mm; }
+.info h2 { font-size: 11.5pt; letter-spacing: 1px; text-transform: uppercase; color: #fff; background: #0d1b2a; margin: -4mm -5mm 3mm; padding: 2.5mm 5mm; text-align: center; }
+.info ul { list-style: none; margin: 0; padding: 0; }
+.info li { margin-bottom: 2.6mm; }
+.info .info-titulo { font-weight: 700; font-size: 9.8pt; color: #0d1b2a; }
+.info .info-cuerpo { font-size: 9pt; text-align: justify; margin-top: 0.6mm; }
+.info .cierre { font-size: 9.5pt; margin-top: 1mm; }
+/* Firmas */
+.firmas { margin-top: 10mm; display: flex; justify-content: space-between; }
+.firmas .firma { width: 46%; text-align: center; }
+.firmas .linea { border-top: 1.5px solid #0d1b2a; padding-top: 1.5mm; font-size: 9pt; color: #333; }
+.firmas .rol { font-size: 7.5pt; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-top: 1mm; }
+/* Pie */
+.pie { margin-top: 6mm; font-size: 7.5pt; color: #666; text-align: center; }
+.pie .nota { border: 1px solid #999; display: inline-block; padding: 1.5mm 4mm; }
 </style></head>
 <body>
-<h1>BOLETA DE SEPARACIÓN</h1>
-<p class="sistema">AlquilaYa ERP</p>
-<table class="datos">
-  ${filasHtml}
-</table>
-<h2>Información para una buena estadía</h2>
-<p>Con el objetivo de garantizar una estadía cómoda, tranquila y agradable, así como una adecuada convivencia entre todos los residentes, compartimos las siguientes consideraciones de uso y convivencia de la propiedad.</p>
-${infoHtml}
-<p>Agradecemos su colaboración y compromiso con el adecuado uso de las instalaciones y el respeto de las normas de convivencia.</p>
-<p><strong>Nuestro objetivo es mantener un espacio ordenado, seguro, tranquilo y agradable para todos.</strong></p>
-<div class="firmas">
-  <div>Persona Firmante: ${esc(data.personaFirmante || "—")}</div>
-  <div>Administración: ${esc(data.personaPago || "—")}</div>
+<div class="marco">
+  <div class="cabecera">
+    <div>
+      <div class="emisor-nombre">AlquilaYa ERP</div>
+      <div class="emisor-lema">Departamentos amueblados · Separatas de departamento</div>
+    </div>
+    <div class="caja-num">
+      <div class="idi">Código de departamento</div>
+      <div class="nro">${esc2(codigoDep)}</div>
+    </div>
+  </div>
+
+  <div class="titulo">
+    <h1>Boleta de Separación</h1>
+    <div class="sub">Comprobante de dinero en custodia — Concepto no remunerativo</div>
+  </div>
+
+  <table class="datos">${filasHtml}</table>
+
+  <div class="info">
+    <h2>Información para una buena estadía</h2>
+    <p class="info-cuerpo" style="margin:0 0 3mm;">Con el objetivo de garantizar una estadía cómoda, tranquila y agradable, así como una adecuada convivencia entre todos los residentes, compartimos las siguientes consideraciones de uso y convivencia de la propiedad.</p>
+    <ul>${infoHtml}</ul>
+    <p class="info-cuerpo">Agradecemos su colaboración y compromiso con el adecuado uso de las instalaciones y el respeto de las normas de convivencia.</p>
+    <p class="info-cuerpo cierre"><strong>Nuestro objetivo es mantener un espacio ordenado, seguro, tranquilo y agradable para todos.</strong></p>
+  </div>
+
+  <div class="firmas">
+    <div class="firma">
+      <div class="linea">Persona Firmante: ${esc2(data.personaFirmante || "—")}</div>
+      <div class="rol">Firma</div>
+    </div>
+    <div class="firma">
+      <div class="linea">Administración: ${esc2(data.personaPago || "—")}</div>
+      <div class="rol">Firma</div>
+    </div>
+  </div>
+
+  <p class="pie">Documento generado por AlquilaYa ERP el ${esc2(new Date().toLocaleDateString("es-PE", { dateStyle: "long" }))}</p>
+  <p class="pie"><span class="nota">El monto otorgado en concepto de separación será imputado a la primera renta del contrato de alquiler.</span></p>
 </div>
-<p class="pie">Documento generado por AlquilaYa ERP el ${esc(new Date().toLocaleDateString("es-PE", { dateStyle: "long" }))}</p>
 </body>
 </html>`;
 }
