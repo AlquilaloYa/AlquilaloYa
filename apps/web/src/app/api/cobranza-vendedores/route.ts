@@ -155,9 +155,8 @@ export async function GET(req: Request) {
     ).getTime();
     const mesStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
 
-    const pagoFueEnEsteMes = (p: (typeof pagos)[number]): boolean =>
-      p.estado === "PAGADO" &&
-      (p.fechaPago ? String(p.fechaPago).slice(0, 7) === mesStr : true);
+    const pagoEsCuotaDelMes = (p: (typeof pagos)[number]): boolean =>
+      toDateStr(p.periodo).slice(0, 7) === mesStr;
 
     const mapa = new Map<string, BucketPersona>();
     for (const k of PERSONAS) {
@@ -174,7 +173,7 @@ export async function GET(req: Request) {
 
     let totalGenerado = 0;
     for (const p of pagos) {
-      if (pagoFueEnEsteMes(p)) {
+      if (p.estado === "PAGADO" && pagoEsCuotaDelMes(p)) {
         totalGenerado += Number(p.monto ?? 0) + Number(p.mantenimiento ?? 0);
       }
     }
@@ -186,17 +185,15 @@ export async function GET(req: Request) {
 
       const pagosDe = pagos.filter((p) => p.contractId === c.id);
       const montoPagado = pagosDe
-        .filter((p) => pagoFueEnEsteMes(p))
+        .filter((p) => p.estado === "PAGADO" && pagoEsCuotaDelMes(p))
         .reduce(
           (s, p) => s + Number(p.monto ?? 0) + Number(p.mantenimiento ?? 0),
           0
         );
-      bucket.generado += montoPagado;
-
-      const cancelado =
-        c.estado === "CANCELADO" || c.estado === "RESUELTO";
       const montoCuota =
         Number(c.montoCanonMensual ?? 0) + Number(c.mantenimiento ?? 50);
+      const cancelado =
+        c.estado === "CANCELADO" || c.estado === "RESUELTO";
       let estadoCuota = "FINALIZADO";
       let pendiente = 0;
 
@@ -209,7 +206,9 @@ export async function GET(req: Request) {
         const cuota = addMonths(ini, k);
         if (cuota.getTime() < fin.getTime()) {
           const pStr = localDateStr(cuota);
-          const pagoCuota = pagosDe.find((p) => toDateStr(p.periodo) === pStr);
+          const pagoCuota = pagosDe.find(
+            (p) => toDateStr(p.periodo) === pStr
+          );
           const pagado = pagoCuota?.estado === "PAGADO";
           if (pagado) {
             estadoCuota = "PAGADO";
@@ -221,6 +220,7 @@ export async function GET(req: Request) {
             pendiente = montoCuota;
           }
           bucket.porCobrar += pendiente;
+          if (pagado) bucket.generado += montoCuota;
         }
       }
 
