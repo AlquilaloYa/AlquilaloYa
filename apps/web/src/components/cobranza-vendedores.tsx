@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -84,15 +84,32 @@ function compacto(n: number): string {
   return moneda(n);
 }
 
+const VENDEDORES_INICIALES: Vendedor[] = [
+  { key: "miguel", nombre: "Miguel", generado: 0, porCobrar: 0, porcentaje: 0, contratos: [], departamentos: [] },
+  { key: "emely", nombre: "Emely", generado: 0, porCobrar: 0, porcentaje: 0, contratos: [], departamentos: [] },
+  { key: "evelin", nombre: "Evelyn", generado: 0, porCobrar: 0, porcentaje: 0, contratos: [], departamentos: [] },
+];
+
 export function CobranzaVendedores() {
   const [data, setData] = useState<VendedoresData | null>(null);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [seleccionado, setSeleccionado] = useState<Vendedor | null>(null);
 
   useEffect(() => {
     apiFetch("/api/cobranza-vendedores")
-      .then(async (r) => (r.ok ? await r.json() : null))
-      .then(setData)
-      .catch(() => setData(null));
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.error ?? `Error ${r.status}`);
+        }
+        const json = (await r.json()) as VendedoresData;
+        setData(json);
+        setErrorCarga(null);
+      })
+      .catch((e: unknown) => {
+        setData(null);
+        setErrorCarga((e as Error).message);
+      });
   }, []);
 
   useEffect(() => {
@@ -103,15 +120,26 @@ export function CobranzaVendedores() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!data || data.vendedores.length === 0) return null;
+  const vendedores = useMemo<Vendedor[]>(() => {
+    if (data && data.vendedores.length > 0) return data.vendedores;
+    return VENDEDORES_INICIALES.map((v) => ({
+      ...v,
+      ...(data?.vendedores.find((x) => x.key === v.key) ?? {}),
+    }));
+  }, [data]);
 
   return (
     <section className="space-y-3">
       <h2 className="font-headline-md text-on-surface">
         Generado por cobrador · mes en curso
       </h2>
+      {errorCarga ? (
+        <p className="rounded-lg bg-error-container p-3 font-body-sm text-error-container-foreground">
+          No se pudo cargar la cobranza: {errorCarga}
+        </p>
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {data.vendedores.map((v) => (
+        {vendedores.map((v) => (
           <button
             key={v.key}
             onClick={() => setSeleccionado(v)}
@@ -213,7 +241,7 @@ export function CobranzaVendedores() {
                     },
                     {
                       label: "Resto",
-                      value: Math.max(0, data.totalGenerado - seleccionado.generado),
+                      value: Math.max(0, vendedores.reduce((s, x) => s + x.generado, 0) - seleccionado.generado),
                       color: "rgb(203, 213, 225)",
                     },
                   ]}
