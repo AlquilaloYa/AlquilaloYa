@@ -16,6 +16,8 @@ interface ProximoAVencer {
   departamento: string | null;
   fechaFin: string;
   diasRestantes: number;
+  renuevaProximoMes: boolean | null;
+  renovacionMeses: number | null;
 }
 
 interface Resumen {
@@ -73,7 +75,7 @@ interface StatItem {
   label: string;
   valueKey: keyof Resumen;
   tone?: Tone;
-  format?: "number" | "percent" | "money";
+  format?: "number" | "percent" | "money" | "moneyK";
 }
 
 const stats: StatItem[] = [
@@ -83,13 +85,27 @@ const stats: StatItem[] = [
   { label: "Tasa de ocupación", valueKey: "tasaOcupacion", format: "percent" },
   { label: "Mantenimiento", valueKey: "mantenimiento" },
   { label: "Incidencias", valueKey: "incidencias" },
-  { label: "Ingresos YTD", valueKey: "ingresosYTD", tone: "blue", format: "money" },
-  { label: "Egresos YTD", valueKey: "egresos", tone: "yellow", format: "money" },
-  { label: "Resultados YTD", valueKey: "resultadosYTD", format: "money" },
+  { label: "Ingresos YTD", valueKey: "ingresosYTD", tone: "blue", format: "moneyK" },
+  { label: "Egresos YTD", valueKey: "egresos", tone: "yellow", format: "moneyK" },
+  { label: "Resultados YTD", valueKey: "resultadosYTD", format: "moneyK" },
   { label: "Morosidad", valueKey: "morosidad", tone: "black", format: "percent" },
   { label: "A punto de finalizar", valueKey: "aPuntoDeFinalizar", tone: "red" },
   { label: "Clientes reportados", valueKey: "clientesReportados", tone: "red" },
 ];
+
+function moneyCompact(n: number): string {
+  const signo = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) {
+    const v = abs / 1_000_000;
+    return `${signo}${v >= 10 ? v.toFixed(0) : v.toFixed(1)}M`;
+  }
+  if (abs >= 1_000) {
+    const v = abs / 1_000;
+    return `${signo}${v >= 10 ? v.toFixed(0) : v.toFixed(1)}K`;
+  }
+  return `${signo}${abs.toLocaleString("es-PE")}`;
+}
 
 function actionLabel(action: string): string {
   const map: Record<string, string> = {
@@ -113,6 +129,9 @@ function statValue(s: StatItem, r: Resumen): number | string {
   if (s.format === "percent") {
     return `${n}%`;
   }
+  if (s.format === "moneyK") {
+    return moneyCompact(n);
+  }
   if (s.format === "money") {
     return n.toLocaleString("es-PE", {
       style: "currency",
@@ -121,6 +140,143 @@ function statValue(s: StatItem, r: Resumen): number | string {
     });
   }
   return n.toLocaleString("es-PE");
+}
+
+function StatCard({ s, r }: { s: StatItem; r: Resumen }) {
+  return (
+    <div
+      className={
+        "col-span-12 flex flex-col justify-between rounded-lg p-4 shadow-sm transition-shadow hover:shadow-md sm:col-span-6 md:col-span-4 lg:col-span-2 " +
+        (s.tone ? toneCardClass[s.tone] : toneCardClass.default)
+      }
+    >
+      <div className="mb-2">
+        <span className="font-label-md uppercase tracking-wider">
+          {s.label}
+        </span>
+      </div>
+      <div>
+        <span className="block font-display leading-none">
+          {statValue(s, r)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ProximosAVencerBox({
+  contratos,
+  onCambio,
+}: {
+  contratos: ProximoAVencer[];
+  onCambio: (id: string, renueva: boolean, meses: number | null) => Promise<void>;
+}) {
+  const [guardados, setGuardados] = useState<Record<string, { renueva: boolean; meses: string }>>(
+    () => {
+      const init: Record<string, { renueva: boolean; meses: string }> = {};
+      for (const c of contratos) {
+        if (c.renuevaProximoMes !== null) {
+          init[c.id] = {
+            renueva: Boolean(c.renuevaProximoMes),
+            meses: c.renovacionMeses ? String(c.renovacionMeses) : "",
+          };
+        }
+      }
+      return init;
+    }
+  );
+  const [salvando, setSalvando] = useState<string | null>(null);
+
+  async function guardar(id: string, renueva: boolean, meses: string) {
+    const mesesNum = meses.trim() === "" ? null : Number(meses);
+    setSalvando(id);
+    try {
+      await onCambio(id, renueva, mesesNum);
+      setGuardados((prev) => ({ ...prev, [id]: { renueva, meses } }));
+    } catch {
+      /* error de red: se deja sin cambio */
+    } finally {
+      setSalvando(null);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-400/60 bg-amber-400/10 p-3">
+      <div className="mb-2 flex items-center gap-2 font-label-md text-amber-700 dark:text-amber-300">
+        <AlertTriangle className="h-4 w-4" />
+        {contratos.length}{" "}
+        {contratos.length === 1
+          ? "contrato vence en el próximo mes:"
+          : "contratos vencen en el próximo mes:"}
+      </div>
+      <ul className="divide-y divide-amber-400/20">
+        {contratos.map((p) => {
+          const estado = guardados[p.id];
+          const marcado = estado?.renueva ?? false;
+          const noMarcado = estado ? !estado.renueva : false;
+          const meses = estado?.meses ?? "";
+          const enProceso = salvando === p.id;
+          return (
+            <li key={p.id} className="flex flex-wrap items-center gap-3 py-2">
+              <Link
+                href={`/contratos/${p.id}`}
+                className="min-w-0 flex-1 font-body-sm text-on-surface hover:text-primary hover:underline"
+              >
+                <span className="font-semibold">{p.codigoContrato}</span>
+                {" · "}
+                {p.cliente}
+                {p.departamento ? ` · ${p.departamento}` : ""}
+              </Link>
+              <span className="text-xs text-on-surface-variant">
+                vence el{" "}
+                {new Date(`${p.fechaFin}T12:00:00`).toLocaleDateString("es-PE")}
+              </span>
+              <label className="flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                <input
+                  type="checkbox"
+                  checked={marcado}
+                  onChange={(e) =>
+                    void guardar(p.id, e.target.checked, e.target.checked ? "12" : "")
+                  }
+                  className="h-3.5 w-3.5 accent-emerald-600"
+                />
+                Renueva
+              </label>
+              <label className="flex items-center gap-1 text-xs font-medium text-destructive">
+                <input
+                  type="checkbox"
+                  checked={noMarcado}
+                  onChange={(e) =>
+                    void guardar(p.id, false, e.target.checked ? "" : "12")
+                  }
+                  className="h-3.5 w-3.5 accent-destructive"
+                />
+                No renueva
+              </label>
+              {marcado ? (
+                <label className="flex items-center gap-1 text-xs text-on-surface-variant">
+                  <span>Renueva por</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={meses}
+                    onChange={(e) => setGuardados((prev) => ({ ...prev, [p.id]: { renueva: true, meses: e.target.value } }))}
+                    onBlur={(e) => void guardar(p.id, true, e.target.value)}
+                    className="w-14 rounded border border-outline-variant bg-surface-container-lowest px-1 py-0.5 text-center text-xs text-on-surface focus:border-primary focus:outline-none"
+                  />
+                  <span>meses</span>
+                </label>
+              ) : null}
+              {enProceso ? (
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-outline border-t-primary" />
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -177,58 +333,24 @@ return (
         ) : (
           <>
             {data.resumen.proximosAVencer && data.resumen.proximosAVencer.length > 0 ? (
-              <div className="rounded-lg border border-amber-400/60 bg-amber-400/10 p-4">
-                <div className="mb-2 flex items-center gap-2 font-label-md text-amber-700 dark:text-amber-300">
-                  <AlertTriangle className="h-4 w-4" />
-                  {data.resumen.proximosAVencer.length}{" "}
-                  {data.resumen.proximosAVencer.length === 1
-                    ? "contrato vence en el próximo mes:"
-                    : "contratos vencen en el próximo mes:"}
-                </div>
-                <ul className="space-y-1">
-                  {data.resumen.proximosAVencer.map((p) => (
-                    <li key={p.id}>
-                      <Link
-                        href={`/contratos/${p.id}`}
-                        className="font-body-sm text-on-surface hover:text-primary hover:underline"
-                      >
-                        <span className="font-semibold">{p.codigoContrato}</span>
-                        {" · "}
-                        {p.cliente}
-                        {p.departamento ? ` · ${p.departamento}` : ""} · vence el{" "}
-                        {new Date(`${p.fechaFin}T12:00:00`).toLocaleDateString("es-PE")} (
-                        {p.diasRestantes === 0
-                          ? "hoy"
-                          : p.diasRestantes === 1
-                            ? "en 1 día"
-                            : `en ${p.diasRestantes} días`}
-                        )
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <ProximosAVencerBox
+                contratos={data.resumen.proximosAVencer}
+                onCambio={async (id, renueva, meses) => {
+                  const r = await apiFetch(`/api/contracts/${id}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "renovacion", renueva, meses }),
+                  });
+                  if (!r.ok) {
+                    const b = await r.json().catch(() => ({}));
+                    throw new Error((b as { error?: string }).error ?? "No se pudo guardar");
+                  }
+                }}
+              />
             ) : null}
             <div className="grid grid-cols-12 gap-4">
             {stats.map((s) => (
-              <div
-                key={s.label}
-                className={
-                  "col-span-12 flex flex-col justify-between rounded-lg p-4 shadow-sm transition-shadow hover:shadow-md sm:col-span-6 md:col-span-4 lg:col-span-2 " +
-                  (s.tone ? toneCardClass[s.tone] : toneCardClass.default)
-                }
-              >
-                <div className="mb-2">
-                  <span className="font-label-md uppercase tracking-wider">
-                    {s.label}
-                  </span>
-                </div>
-                <div>
-                  <span className="block font-display leading-none">
-                    {statValue(s, resumen!)}
-                  </span>
-                </div>
-              </div>
+              <StatCard key={s.label} s={s} r={resumen!} />
             ))}
 
             <div className="col-span-12">

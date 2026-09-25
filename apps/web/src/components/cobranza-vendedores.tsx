@@ -17,6 +17,18 @@ interface ContratoVendedor {
   montoPagado: number;
 }
 
+interface DepartamentoAsignado {
+  id: string;
+  codigo: string;
+  nombre: string;
+  numero: string;
+  estadoManual: string | null;
+  ocupado: boolean;
+  cliente: string;
+  codigoContrato: string | null;
+  fechaFin: string | null;
+}
+
 interface Vendedor {
   key: string;
   nombre: string;
@@ -24,6 +36,7 @@ interface Vendedor {
   porCobrar: number;
   porcentaje: number;
   contratos: ContratoVendedor[];
+  departamentos: DepartamentoAsignado[];
 }
 
 interface VendedoresData {
@@ -43,8 +56,32 @@ const AGENT_COLORS: Record<string, { dot: string; slice: string }> = {
   evelin: { dot: "bg-violet-500", slice: "rgb(167, 139, 250)" },
 };
 
+function estadoDepartamento(d: DepartamentoAsignado): {
+  label: string;
+  cls: string;
+} {
+  if (d.estadoManual === "BLOQUEADO") return { label: "Bloqueado", cls: "bg-outline text-on-surface" };
+  if (d.estadoManual === "MANTENIMIENTO") return { label: "Mantenimiento", cls: "bg-amber-400 text-amber-900" };
+  if (d.ocupado) return { label: "Con cliente", cls: "bg-emerald-600 text-white" };
+  return { label: "Libre", cls: "bg-blue-600 text-white" };
+}
+
 function moneda(n: number): string {
   return n.toLocaleString("es-PE", { style: "currency", currency: "PEN" });
+}
+
+function compacto(n: number): string {
+  const signo = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) {
+    const v = abs / 1_000_000;
+    return `S/ ${signo}${v >= 10 ? v.toFixed(0) : v.toFixed(1)}M`;
+  }
+  if (abs >= 1_000) {
+    const v = abs / 1_000;
+    return `S/ ${signo}${v >= 10 ? v.toFixed(0) : v.toFixed(1)}K`;
+  }
+  return moneda(n);
 }
 
 export function CobranzaVendedores() {
@@ -70,7 +107,9 @@ export function CobranzaVendedores() {
 
   return (
     <section className="space-y-3">
-      <h2 className="font-headline-md text-on-surface">Generado por cobrador</h2>
+      <h2 className="font-headline-md text-on-surface">
+        Generado por cobrador · mes en curso
+      </h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {data.vendedores.map((v) => (
           <button
@@ -83,16 +122,16 @@ export function CobranzaVendedores() {
               {v.nombre}
             </div>
             <div className="mt-2 font-headline-md text-on-surface">
-              {moneda(v.generado)}
+              {compacto(v.generado)}
             </div>
             <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-xs text-on-surface-variant">
               <span>
                 Por cobrar:{" "}
                 <span className="font-semibold text-destructive">
-                  {moneda(v.porCobrar)}
+                  {compacto(v.porCobrar)}
                 </span>
               </span>
-              <span>{v.porcentaje}% del total</span>
+              <span>{v.porcentaje}% del total del mes</span>
             </div>
           </button>
         ))}
@@ -111,9 +150,9 @@ export function CobranzaVendedores() {
                   {seleccionado.nombre}
                 </h3>
                 <p className="font-body-sm text-on-surface-variant">
-                  Generado {moneda(seleccionado.generado)} · Por cobrar{" "}
-                  {moneda(seleccionado.porCobrar)} · {seleccionado.porcentaje}%
-                  del total ganado
+                  Cobrado en el mes {compacto(seleccionado.generado)} · Por cobrar{" "}
+                  {compacto(seleccionado.porCobrar)} · {seleccionado.porcentaje}%
+                  del total del mes
                 </p>
               </div>
               <button
@@ -160,7 +199,7 @@ export function CobranzaVendedores() {
               </div>
               <div className="rounded-lg border border-outline-variant/50 p-4">
                 <h4 className="mb-2 font-label-md text-on-surface-variant">
-                  % de todo lo ganado
+                  % del total del mes
                 </h4>
                 <DonutChart
                   size={180}
@@ -182,6 +221,53 @@ export function CobranzaVendedores() {
                   centerLabel="del total"
                 />
               </div>
+            </div>
+
+            <div className="border-t border-outline-variant/50 p-4">
+              <h4 className="mb-2 font-label-md text-on-surface-variant">
+                Departamentos asignados ({seleccionado.departamentos.length})
+              </h4>
+              <ul className="max-h-64 divide-y divide-outline-variant/50 overflow-y-auto">
+                {seleccionado.departamentos.length === 0 ? (
+                  <li className="py-2 font-body-sm text-on-surface-variant">
+                    Sin departamentos asignados.
+                  </li>
+                ) : (
+                  seleccionado.departamentos.map((d) => {
+                    const est = estadoDepartamento(d);
+                    return (
+                      <li key={d.id} className="py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="block font-mono text-xs text-primary">
+                              {d.codigo}
+                            </span>
+                            <span className="block truncate text-sm font-medium text-on-surface">
+                              {d.nombre} · N° {d.numero}
+                            </span>
+                            <span className="block text-xs text-on-surface-variant">
+                              {d.ocupado
+                                ? `${d.cliente} · ${d.codigoContrato ?? ""} · vence ${d.fechaFin ? new Date(`${d.fechaFin}T12:00:00`).toLocaleDateString("es-PE") : "—"}`
+                                : d.estadoManual
+                                  ? d.estadoManual === "BLOQUEADO"
+                                    ? "No disponible"
+                                    : "En mantenimiento"
+                                  : "Disponible"}
+                            </span>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <span
+                              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${est.cls}`}
+                            >
+                              {est.label}
+                            </span>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
             </div>
 
             <div className="border-t border-outline-variant/50 p-4">

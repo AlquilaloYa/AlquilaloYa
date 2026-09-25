@@ -45,29 +45,6 @@ interface ContractView {
   estado: string;
 }
 
-function DiaPagoInput({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <input
-      type="text"
-      inputMode="numeric"
-      value={value}
-      maxLength={2}
-      onChange={(e) =>
-        onChange(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))
-      }
-      placeholder="05"
-      title="Día de pago del alquiler"
-      className="w-16 rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-center text-sm text-on-surface focus:border-primary focus:outline-none"
-    />
-  );
-}
-
 export default function SeparacionesPage() {
   const [contactos, setContactos] = useState<ContactSeedView[]>([]);
   const [departamentos, setDepartamentos] = useState<DepartmentView[]>([]);
@@ -163,7 +140,7 @@ export default function SeparacionesPage() {
           new Date(hoy.getFullYear() + 1, hoy.getMonth(), hoy.getDate()).toISOString().slice(0, 10))
       );
     }
-  }, [contacto, departamento]); // eslint-disable-line react-hooks/exhaustive-deps;
+  }, [contacto, departamento]);
 
   async function generarPdf() {
     if (!contacto || !departamento) {
@@ -298,6 +275,23 @@ export default function SeparacionesPage() {
                         type="date"
                         value={checkOut || (boleta.checkOut !== "—" ? boleta.checkOut.slice(0, 10) : "")}
                         onChange={(e) => setCheckOut(e.target.value)}
+                        className="w-full rounded border border-outline-variant bg-surface p-2 text-on-surface focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block font-label-md text-on-surface-variant">
+                        Día de pago
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={diaPago}
+                        maxLength={2}
+                        onChange={(e) =>
+                          setDiaPago(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))
+                        }
                         className="w-full rounded border border-outline-variant bg-surface p-2 text-on-surface focus:border-primary focus:outline-none"
                       />
                     </div>

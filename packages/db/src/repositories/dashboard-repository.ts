@@ -23,6 +23,8 @@ export interface ProximoAVencer {
   departamento: string | null;
   fechaFin: string;
   diasRestantes: number;
+  renuevaProximoMes: boolean | null;
+  renovacionMeses: number | null;
 }
 
 export interface ResumenPortafolio {
@@ -132,6 +134,8 @@ export class DrizzleDashboardRepository {
         id: schema.contracts.id,
         codigoContrato: schema.contracts.codigoContrato,
         fechaFin: schema.contracts.fechaFin,
+        renuevaProximoMes: schema.contracts.renuevaProximoMes,
+        renovacionMeses: schema.contracts.renovacionMeses,
         cliente: sql<string>`trim(coalesce(${schema.clients.nombres}, '') || ' ' || coalesce(${schema.clients.apellidos}, ''))`,
         departamento: schema.departments.codigo,
       })
@@ -166,6 +170,8 @@ export class DrizzleDashboardRepository {
         departamento: c.departamento ?? null,
         fechaFin: c.fechaFin,
         diasRestantes: Math.max(0, dias),
+        renuevaProximoMes: c.renuevaProximoMes ?? null,
+        renovacionMeses: c.renovacionMeses ?? null,
       };
     });
 

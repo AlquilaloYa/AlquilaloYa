@@ -204,8 +204,6 @@ export function renderBoletaSeparacionHtml(data: BoletaSeparacionData): string {
       `<li><div class="info-titulo">${esc2(bloque.titulo)}</div><div class="info-cuerpo">${esc2(bloque.cuerpo)}</div></li>`
   ).join("");
 
-  const nroBoleta = codigoDep;
-
   return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="utf-8"><title>Boleta de Separación</title>

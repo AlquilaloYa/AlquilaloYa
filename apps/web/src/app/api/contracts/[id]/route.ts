@@ -266,6 +266,35 @@ export async function POST(request: Request, { params }: Ctx) {
         });
         return NextResponse.json({ ...nuevo, esRenovacion: true });
       }
+      case "renovacion": {
+        const denied = requirePermission(auth.user.role, Permission.CONTRACT_UPDATE);
+        if (denied) return denied;
+        const data = body as {
+          action: string;
+          renueva?: boolean;
+          meses?: number | null;
+        };
+        const renueva = data.renueva ?? null;
+        const meses =
+          typeof data.meses === "number" && Number.isFinite(data.meses)
+            ? Math.max(1, Math.min(60, Math.floor(data.meses)))
+            : null;
+        const { db, schema } = await import("@contract/db");
+        const { eq } = await import("drizzle-orm");
+        await db
+          .update(schema.contracts)
+          .set({
+            renuevaProximoMes: renueva,
+            renovacionMeses: renueva ? meses : null,
+            actualizadoEn: new Date(),
+          })
+          .where(eq(schema.contracts.id, params.id));
+        return NextResponse.json({
+          id: params.id,
+          renuevaProximoMes: renueva,
+          renovacionMeses: renueva ? meses : null,
+        });
+      }
       case "snapshot": {
         const denied = requirePermission(auth.user.role, Permission.CONTRACT_READ);
         if (denied) return denied;

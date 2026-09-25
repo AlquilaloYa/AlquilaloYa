@@ -36,6 +36,18 @@ interface ContratoVendedor {
   montoPagado: number;
 }
 
+interface DepartamentoAsignado {
+  id: string;
+  codigo: string;
+  nombre: string;
+  numero: string;
+  estadoManual: string | null;
+  ocupado: boolean;
+  cliente: string;
+  codigoContrato: string | null;
+  fechaFin: string | null;
+}
+
 interface BucketPersona {
   key: string;
   nombre: string;
@@ -43,6 +55,7 @@ interface BucketPersona {
   porCobrar: number;
   porcentaje: number;
   contratos: ContratoVendedor[];
+  departamentos: DepartamentoAsignado[];
 }
 
 export async function GET(req: Request) {
@@ -57,9 +70,9 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq } = await import("drizzle-orm");
+    const { eq, inArray } = await import("drizzle-orm");
 
-    const [contratos, pagos] = await Promise.all([
+    const [contratos, pagos, departamentos, contratosOcupacion] = await Promise.all([
       db
         .select({
           id: schema.contracts.id,
@@ -90,8 +103,48 @@ export async function GET(req: Request) {
           monto: schema.payments.monto,
           mantenimiento: schema.payments.mantenimiento,
           estado: schema.payments.estado,
+          fechaPago: schema.payments.fechaPago,
         })
         .from(schema.payments),
+      db
+        .select({
+          id: schema.departments.id,
+          codigo: schema.departments.codigo,
+          nombre: schema.departments.nombre,
+          numero: schema.departments.numero,
+          personaPago: schema.departments.personaPago,
+          estadoManual: schema.departments.estadoManual,
+        })
+        .from(schema.departments),
+      db
+        .select({
+          id: schema.contracts.id,
+          codigoContrato: schema.contracts.codigoContrato,
+          departamentoId: schema.contracts.departamentoId,
+          personaPago: schema.departments.personaPago,
+          fechaInicio: schema.contracts.fechaInicio,
+          fechaFin: schema.contracts.fechaFin,
+          estado: schema.contracts.estado,
+          clienteNombre: schema.clients.nombres,
+          clienteApellido: schema.clients.apellidos,
+        })
+        .from(schema.contracts)
+        .leftJoin(
+          schema.clients,
+          eq(schema.clients.id, schema.contracts.clienteId)
+        )
+        .leftJoin(
+          schema.departments,
+          eq(schema.departments.id, schema.contracts.departamentoId)
+        )
+        .where(
+          inArray(schema.contracts.estado, [
+            "FIRMADO",
+            "ACTIVO",
+            "VIGENTE",
+            "NOTARIADO",
+          ])
+        ),
     ]);
 
     const hoy = new Date();
@@ -100,6 +153,11 @@ export async function GET(req: Request) {
       hoy.getMonth(),
       hoy.getDate()
     ).getTime();
+    const mesStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+
+    const pagoFueEnEsteMes = (p: (typeof pagos)[number]): boolean =>
+      p.estado === "PAGADO" &&
+      (p.fechaPago ? String(p.fechaPago).slice(0, 7) === mesStr : true);
 
     const mapa = new Map<string, BucketPersona>();
     for (const k of PERSONAS) {
@@ -110,12 +168,13 @@ export async function GET(req: Request) {
         porCobrar: 0,
         porcentaje: 0,
         contratos: [],
+        departamentos: [],
       });
     }
 
     let totalGenerado = 0;
     for (const p of pagos) {
-      if (p.estado === "PAGADO") {
+      if (pagoFueEnEsteMes(p)) {
         totalGenerado += Number(p.monto ?? 0) + Number(p.mantenimiento ?? 0);
       }
     }
@@ -127,7 +186,7 @@ export async function GET(req: Request) {
 
       const pagosDe = pagos.filter((p) => p.contractId === c.id);
       const montoPagado = pagosDe
-        .filter((p) => p.estado === "PAGADO")
+        .filter((p) => pagoFueEnEsteMes(p))
         .reduce(
           (s, p) => s + Number(p.monto ?? 0) + Number(p.mantenimiento ?? 0),
           0
@@ -177,6 +236,44 @@ export async function GET(req: Request) {
           montoPagado,
         });
       }
+    }
+
+    const hoyStr = localDateStr(hoy);
+    for (const d of departamentos) {
+      const persona = normalizarPersona(d.personaPago ?? "");
+      if (!persona) continue;
+      const bucket = mapa.get(persona)!;
+      const ocupado = contratosOcupacion.some(
+        (c) =>
+          c.departamentoId === d.id &&
+          toDateStr(c.fechaInicio) <= hoyStr &&
+          (c.fechaFin ?? "") >= hoyStr
+      );
+      const ocupante = contratosOcupacion.find(
+        (c) => c.departamentoId === d.id &&
+          toDateStr(c.fechaInicio) <= hoyStr &&
+          (c.fechaFin ?? "") >= hoyStr
+      );
+      bucket.departamentos.push({
+        id: d.id,
+        codigo: d.codigo,
+        nombre: d.nombre,
+        numero: d.numero,
+        estadoManual: d.estadoManual ?? null,
+        ocupado,
+        cliente:
+          ocupante
+            ? [ocupante.clienteNombre, ocupante.clienteApellido]
+                .filter(Boolean)
+                .join(" ")
+            : "",
+        codigoContrato: ocupante?.codigoContrato ?? null,
+        fechaFin: ocupante?.fechaFin ?? null,
+      });
+    }
+
+    for (const b of mapa.values()) {
+      b.departamentos.sort((a, z) => a.codigo.localeCompare(z.codigo));
     }
 
     const vendedores = PERSONAS.map((k) => {
