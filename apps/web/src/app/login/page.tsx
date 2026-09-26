@@ -137,17 +137,6 @@ export default function LoginPage() {
               {submitting ? "Verificando…" : "Iniciar sesión"}
             </Button>
           </form>
-
-          <div className="mt-6 rounded-md border border-outline-variant bg-surface-container-lowest p-4">
-            <p className="font-label-md text-on-surface-variant">
-              Accesos (Supabase Auth · usa la contraseña asignada a tu usuario)
-            </p>
-            <ul className="mt-2 space-y-1 font-body-sm text-on-surface-variant">
-              <li>admin@sistema.com — Admin</li>
-              <li>operador@sistema.com — Operador</li>
-              <li>supervisor@sistema.com — Supervisor</li>
-            </ul>
-          </div>
         </div>
       </section>
     </div>
