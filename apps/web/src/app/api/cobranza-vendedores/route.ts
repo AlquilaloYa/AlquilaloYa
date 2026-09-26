@@ -4,6 +4,7 @@ import { requireUser, requirePermission } from "@/lib/session";
 import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 const PERSONAS = ["miguel", "emely", "evelin"] as const;
 const NOMBRES: Record<string, string> = {
