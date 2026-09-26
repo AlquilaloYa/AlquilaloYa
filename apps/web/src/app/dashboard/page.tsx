@@ -7,7 +7,6 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { FileText, AlertTriangle, Activity, X } from "lucide-react";
 import { DonutChart } from "@/components/donut-chart";
-import { CobranzaVendedores } from "@/components/cobranza-vendedores";
 
 interface ProximoAVencer {
   id: string;
@@ -439,10 +438,6 @@ return (
             {stats.map((s) => (
               <StatCard key={s.label} s={s} r={resumen!} />
             ))}
-
-            <div className="col-span-12">
-              <CobranzaVendedores />
-            </div>
 
             <div className="col-span-12 flex flex-col rounded-lg bg-surface-container-lowest shadow-sm lg:col-span-6">
               <div className="flex items-center justify-between p-5">

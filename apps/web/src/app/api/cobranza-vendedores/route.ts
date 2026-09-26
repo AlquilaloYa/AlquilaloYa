@@ -28,7 +28,7 @@ function toDateStr(v: unknown): string {
   return String(v ?? "").slice(0, 10);
 }
 
-interface ContratoVendedor {
+export interface ContratoVendedor {
   id: string;
   codigoContrato: string;
   clienteNombre: string;
@@ -39,7 +39,7 @@ interface ContratoVendedor {
   montoPagado: number;
 }
 
-interface DepartamentoAsignado {
+export interface DepartamentoAsignado {
   id: string;
   codigo: string;
   nombre: string;
@@ -51,7 +51,7 @@ interface DepartamentoAsignado {
   fechaFin: string | null;
 }
 
-interface BucketPersona {
+export interface VendedorCobranza {
   key: string;
   nombre: string;
   generado: number;
@@ -62,91 +62,81 @@ interface BucketPersona {
 }
 
 export async function GET(req: Request) {
-  const t0 = Date.now();
   try {
-    const t1 = Date.now();
     const auth = await requireUser({ DrizzleUserRepository }, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(auth.user.role, Permission.CONTRACT_READ);
     if (denied) return denied;
 
-    const t2 = Date.now();
-    const [contratos, pagos, departamentos, contratosOcupacion] = await Promise.all([
-      db
-        .select({
-          id: schema.contracts.id,
-          codigoContrato: schema.contracts.codigoContrato,
-          clienteNombre: schema.clients.nombres,
-          clienteApellido: schema.clients.apellidos,
-          departamentoCodigo: schema.departments.codigo,
-          personaPago: schema.departments.personaPago,
-          estado: schema.contracts.estado,
-          montoCanonMensual: schema.contracts.montoCanonMensual,
-          mantenimiento: schema.contracts.mantenimiento,
-          fechaInicio: schema.contracts.fechaInicio,
-          fechaFin: schema.contracts.fechaFin,
-        })
-        .from(schema.contracts)
-        .leftJoin(
-          schema.clients,
-          eq(schema.clients.id, schema.contracts.clienteId)
-        )
-        .leftJoin(
-          schema.departments,
-          eq(schema.departments.id, schema.contracts.departamentoId)
-        ),
-      db
-        .select({
-          contractId: schema.payments.contractId,
-          periodo: schema.payments.periodo,
-          monto: schema.payments.monto,
-          mantenimiento: schema.payments.mantenimiento,
-          estado: schema.payments.estado,
-          fechaPago: schema.payments.fechaPago,
-        })
-        .from(schema.payments),
-      db
-        .select({
-          id: schema.departments.id,
-          codigo: schema.departments.codigo,
-          nombre: schema.departments.nombre,
-          numero: schema.departments.numero,
-          personaPago: schema.departments.personaPago,
-          estadoManual: schema.departments.estadoManual,
-        })
-        .from(schema.departments),
-      db
-        .select({
-          id: schema.contracts.id,
-          codigoContrato: schema.contracts.codigoContrato,
-          departamentoId: schema.contracts.departamentoId,
-          personaPago: schema.departments.personaPago,
-          fechaInicio: schema.contracts.fechaInicio,
-          fechaFin: schema.contracts.fechaFin,
-          estado: schema.contracts.estado,
-          clienteNombre: schema.clients.nombres,
-          clienteApellido: schema.clients.apellidos,
-        })
-        .from(schema.contracts)
-        .leftJoin(
-          schema.clients,
-          eq(schema.clients.id, schema.contracts.clienteId)
-        )
-        .leftJoin(
-          schema.departments,
-          eq(schema.departments.id, schema.contracts.departamentoId)
-        )
-        .where(
-          inArray(schema.contracts.estado, [
-            "FIRMADO",
-            "ACTIVO",
-            "VIGENTE",
-            "NOTARIADO",
-          ])
-        ),
-    ]);
+    const contratos = await db
+      .select({
+        id: schema.contracts.id,
+        codigoContrato: schema.contracts.codigoContrato,
+        clienteNombre: schema.clients.nombres,
+        clienteApellido: schema.clients.apellidos,
+        departamentoCodigo: schema.departments.codigo,
+        personaPago: schema.departments.personaPago,
+        estado: schema.contracts.estado,
+        montoCanonMensual: schema.contracts.montoCanonMensual,
+        mantenimiento: schema.contracts.mantenimiento,
+        fechaInicio: schema.contracts.fechaInicio,
+        fechaFin: schema.contracts.fechaFin,
+      })
+      .from(schema.contracts)
+      .leftJoin(schema.clients, eq(schema.clients.id, schema.contracts.clienteId))
+      .leftJoin(
+        schema.departments,
+        eq(schema.departments.id, schema.contracts.departamentoId)
+      );
 
-    const t3 = Date.now();
+    const pagos = await db
+      .select({
+        contractId: schema.payments.contractId,
+        periodo: schema.payments.periodo,
+        monto: schema.payments.monto,
+        mantenimiento: schema.payments.mantenimiento,
+        estado: schema.payments.estado,
+        fechaPago: schema.payments.fechaPago,
+      })
+      .from(schema.payments);
+
+    const departamentos = await db
+      .select({
+        id: schema.departments.id,
+        codigo: schema.departments.codigo,
+        nombre: schema.departments.nombre,
+        numero: schema.departments.numero,
+        personaPago: schema.departments.personaPago,
+        estadoManual: schema.departments.estadoManual,
+      })
+      .from(schema.departments);
+
+    const contratosOcupacion = await db
+      .select({
+        id: schema.contracts.id,
+        codigoContrato: schema.contracts.codigoContrato,
+        departamentoId: schema.contracts.departamentoId,
+        personaPago: schema.departments.personaPago,
+        fechaInicio: schema.contracts.fechaInicio,
+        fechaFin: schema.contracts.fechaFin,
+        estado: schema.contracts.estado,
+        clienteNombre: schema.clients.nombres,
+        clienteApellido: schema.clients.apellidos,
+      })
+      .from(schema.contracts)
+      .leftJoin(schema.clients, eq(schema.clients.id, schema.contracts.clienteId))
+      .leftJoin(
+        schema.departments,
+        eq(schema.departments.id, schema.contracts.departamentoId)
+      )
+      .where(
+        inArray(schema.contracts.estado, [
+          "FIRMADO",
+          "ACTIVO",
+          "VIGENTE",
+          "NOTARIADO",
+        ])
+      );
 
     const hoy = new Date();
     const inicioDia = new Date(
@@ -159,7 +149,7 @@ export async function GET(req: Request) {
     const pagoEsCuotaDelMes = (p: (typeof pagos)[number]): boolean =>
       toDateStr(p.periodo).slice(0, 7) === mesStr;
 
-    const mapa = new Map<string, BucketPersona>();
+    const mapa = new Map<string, VendedorCobranza>();
     for (const k of PERSONAS) {
       mapa.set(k, {
         key: k,
@@ -193,8 +183,7 @@ export async function GET(req: Request) {
         );
       const montoCuota =
         Number(c.montoCanonMensual ?? 0) + Number(c.mantenimiento ?? 50);
-      const cancelado =
-        c.estado === "CANCELADO" || c.estado === "RESUELTO";
+      const cancelado = c.estado === "CANCELADO" || c.estado === "RESUELTO";
       let estadoCuota = "FINALIZADO";
       let pendiente = 0;
 
@@ -207,9 +196,7 @@ export async function GET(req: Request) {
         const cuota = addMonths(ini, k);
         if (cuota.getTime() < fin.getTime()) {
           const pStr = localDateStr(cuota);
-          const pagoCuota = pagosDe.find(
-            (p) => toDateStr(p.periodo) === pStr
-          );
+          const pagoCuota = pagosDe.find((p) => toDateStr(p.periodo) === pStr);
           const pagado = pagoCuota?.estado === "PAGADO";
           if (pagado) {
             estadoCuota = "PAGADO";
@@ -244,14 +231,9 @@ export async function GET(req: Request) {
       const persona = normalizarPersona(d.personaPago ?? "");
       if (!persona) continue;
       const bucket = mapa.get(persona)!;
-      const ocupado = contratosOcupacion.some(
+      const ocupante = contratosOcupacion.find(
         (c) =>
           c.departamentoId === d.id &&
-          toDateStr(c.fechaInicio) <= hoyStr &&
-          (c.fechaFin ?? "") >= hoyStr
-      );
-      const ocupante = contratosOcupacion.find(
-        (c) => c.departamentoId === d.id &&
           toDateStr(c.fechaInicio) <= hoyStr &&
           (c.fechaFin ?? "") >= hoyStr
       );
@@ -261,13 +243,12 @@ export async function GET(req: Request) {
         nombre: d.nombre,
         numero: d.numero,
         estadoManual: d.estadoManual ?? null,
-        ocupado,
-        cliente:
-          ocupante
-            ? [ocupante.clienteNombre, ocupante.clienteApellido]
-                .filter(Boolean)
-                .join(" ")
-            : "",
+        ocupado: Boolean(ocupante),
+        cliente: ocupante
+          ? [ocupante.clienteNombre, ocupante.clienteApellido]
+              .filter(Boolean)
+              .join(" ")
+          : "",
         codigoContrato: ocupante?.codigoContrato ?? null,
         fechaFin: ocupante?.fechaFin ?? null,
       });
@@ -284,15 +265,7 @@ export async function GET(req: Request) {
       return b;
     });
 
-    const t4 = Date.now();
-
-    console.error("[cobranza-debug]", JSON.stringify({ t0, msAuth: t1 - t0, msQueries: t3 - t2, msRender: t4 - t3, nC: contratos.length, nP: pagos.length, nD: departamentos.length }));
-
-    return NextResponse.json({
-      vendedores,
-      totalGenerado,
-      _debugTimings: { t0, t1: t1 - t0, t2: t2 - t1, t3: t3 - t2, t4: t4 - t3 },
-    });
+    return NextResponse.json({ vendedores, totalGenerado });
   } catch (error) {
     return NextResponse.json(
       { error: (error as Error).message },

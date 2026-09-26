@@ -5,7 +5,6 @@ import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
-import { CobranzaVendedores } from "@/components/cobranza-vendedores";
 import { apiFetch } from "@/lib/api";
 import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
 
@@ -340,8 +339,6 @@ export default function PagosPage() {
             </div>
           </div>
         </div>
-
-        <CobranzaVendedores />
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
