@@ -332,6 +332,27 @@ function VistaDocs(props: {
   const esPdf =
     archivo?.tipo === "application/pdf" ||
     /\.pdf$/i.test(archivo?.nombre ?? "");
+  const [pdfSrc, setPdfSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!esPdf || !archivo?.dataUrl) {
+      setPdfSrc(null);
+      return;
+    }
+    let objetoUrl: string | null = null;
+    let vivo = true;
+    fetch(archivo.dataUrl)
+      .then((res) => res.blob())
+      .then((blob) => {
+        if (!vivo) return;
+        objetoUrl = URL.createObjectURL(blob);
+        setPdfSrc(objetoUrl);
+      })
+      .catch(() => setPdfSrc(null));
+    return () => {
+      vivo = false;
+      if (objetoUrl) URL.revokeObjectURL(objetoUrl);
+    };
+  }, [archivo, esPdf]);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -368,7 +389,7 @@ function VistaDocs(props: {
             />
           ) : esPdf ? (
             <iframe
-              src={archivo!.dataUrl}
+              src={pdfSrc ?? ""}
               title={archivo!.nombre}
               className="h-[60vh] w-full bg-white"
             />
