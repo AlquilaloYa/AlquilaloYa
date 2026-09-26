@@ -62,12 +62,15 @@ interface BucketPersona {
 }
 
 export async function GET(req: Request) {
+  const t0 = Date.now();
   try {
+    const t1 = Date.now();
     const auth = await requireUser({ DrizzleUserRepository }, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(auth.user.role, Permission.CONTRACT_READ);
     if (denied) return denied;
 
+    const t2 = Date.now();
     const [contratos, pagos, departamentos, contratosOcupacion] = await Promise.all([
       db
         .select({
@@ -142,6 +145,8 @@ export async function GET(req: Request) {
           ])
         ),
     ]);
+
+    const t3 = Date.now();
 
     const hoy = new Date();
     const inicioDia = new Date(
@@ -279,7 +284,15 @@ export async function GET(req: Request) {
       return b;
     });
 
-    return NextResponse.json({ vendedores, totalGenerado });
+    const t4 = Date.now();
+
+    console.error("[cobranza-debug]", JSON.stringify({ t0, msAuth: t1 - t0, msQueries: t3 - t2, msRender: t4 - t3, nC: contratos.length, nP: pagos.length, nD: departamentos.length }));
+
+    return NextResponse.json({
+      vendedores,
+      totalGenerado,
+      _debugTimings: { t0, t1: t1 - t0, t2: t2 - t1, t3: t3 - t2, t4: t4 - t3 },
+    });
   } catch (error) {
     return NextResponse.json(
       { error: (error as Error).message },
