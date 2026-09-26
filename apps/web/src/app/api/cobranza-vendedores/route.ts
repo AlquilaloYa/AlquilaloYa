@@ -1,5 +1,7 @@
+import { eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
+import { db, schema, DrizzleUserRepository } from "@contract/db";
 import { requireUser, requirePermission } from "@/lib/session";
 import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
 
@@ -61,17 +63,10 @@ interface BucketPersona {
 
 export async function GET(req: Request) {
   try {
-    const dbModule = await import("@contract/db");
-    const auth = await requireUser(dbModule, req);
+    const auth = await requireUser({ DrizzleUserRepository }, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(auth.user.role, Permission.CONTRACT_READ);
     if (denied) return denied;
-
-    const { db, schema } = dbModule as {
-      db: typeof import("@contract/db").db;
-      schema: typeof import("@contract/db").schema;
-    };
-    const { eq, inArray } = await import("drizzle-orm");
 
     const [contratos, pagos, departamentos, contratosOcupacion] = await Promise.all([
       db
