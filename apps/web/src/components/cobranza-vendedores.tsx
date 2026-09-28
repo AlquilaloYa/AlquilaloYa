@@ -172,7 +172,7 @@ export function CobranzaVendedores() {
             onClick={() => setSeleccionado(null)}
           />
           <div className="relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-outline-variant/50 p-4">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-outline-variant/50 p-4">
               <div>
                 <h3 className="font-headline-md text-on-surface">
                   {seleccionado.nombre}
@@ -192,7 +192,7 @@ export function CobranzaVendedores() {
               </button>
             </div>
 
-            <div className="grid gap-4 overflow-y-auto p-4 sm:grid-cols-2">
+            <div className="grid shrink-0 gap-4 p-4 sm:grid-cols-2">
               <div className="rounded-lg border border-outline-variant/50 p-4">
                 <h4 className="mb-2 font-label-md text-on-surface-variant">
                   Cobrado vs Cuentas por cobrar
@@ -251,105 +251,109 @@ export function CobranzaVendedores() {
               </div>
             </div>
 
-            <div className="border-t border-outline-variant/50 p-4">
-              <h4 className="mb-2 font-label-md text-on-surface-variant">
-                Departamentos asignados ({seleccionado.departamentos.length})
-              </h4>
-              <ul className="max-h-64 divide-y divide-outline-variant/50 overflow-y-auto">
-                {seleccionado.departamentos.length === 0 ? (
-                  <li className="py-2 font-body-sm text-on-surface-variant">
-                    Sin departamentos asignados.
-                  </li>
-                ) : (
-                  seleccionado.departamentos.map((d) => {
-                    const est = estadoDepartamento(d);
-                    return (
-                      <li key={d.id} className="py-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <span className="block font-mono text-xs text-primary">
-                              {d.codigo}
-                            </span>
-                            <span className="block truncate text-sm font-medium text-on-surface">
-                              {d.nombre} · N° {d.numero}
-                            </span>
-                            <span className="block text-xs text-on-surface-variant">
-                              {d.ocupado
-                                ? `${d.cliente} · ${d.codigoContrato ?? ""} · vence ${d.fechaFin ? new Date(`${d.fechaFin}T12:00:00`).toLocaleDateString("es-PE") : "—"}`
-                                : d.estadoManual
-                                  ? d.estadoManual === "BLOQUEADO"
-                                    ? "No disponible"
-                                    : "En mantenimiento"
-                                  : "Disponible"}
-                            </span>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <span
-                              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${est.cls}`}
-                            >
-                              {est.label}
-                            </span>
-                          </div>
-                        </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="grid gap-4 border-t border-outline-variant/50 p-4 sm:grid-cols-2">
+                <div className="min-w-0">
+                  <h4 className="mb-2 font-label-md text-on-surface-variant">
+                    Departamentos asignados ({seleccionado.departamentos.length})
+                  </h4>
+                  <ul className="divide-y divide-outline-variant/50">
+                    {seleccionado.departamentos.length === 0 ? (
+                      <li className="py-2 font-body-sm text-on-surface-variant">
+                        Sin departamentos asignados.
                       </li>
-                    );
-                  })
-                )}
-              </ul>
-            </div>
+                    ) : (
+                      seleccionado.departamentos.map((d) => {
+                        const est = estadoDepartamento(d);
+                        return (
+                          <li key={d.id} className="py-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <span className="block font-mono text-xs text-primary">
+                                  {d.codigo}
+                                </span>
+                                <span className="block truncate text-sm font-medium text-on-surface">
+                                  {d.nombre} · N° {d.numero}
+                                </span>
+                                <span className="block text-xs text-on-surface-variant">
+                                  {d.ocupado
+                                    ? `${d.cliente} · ${d.codigoContrato ?? ""} · vence ${d.fechaFin ? new Date(`${d.fechaFin}T12:00:00`).toLocaleDateString("es-PE") : "—"}`
+                                    : d.estadoManual
+                                      ? d.estadoManual === "BLOQUEADO"
+                                        ? "No disponible"
+                                        : "En mantenimiento"
+                                      : "Disponible"}
+                                </span>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <span
+                                  className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${est.cls}`}
+                                >
+                                  {est.label}
+                                </span>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                </div>
 
-            <div className="border-t border-outline-variant/50 p-4">
-              <h4 className="mb-2 font-label-md text-on-surface-variant">
-                Clientes ({seleccionado.contratos.length}) por código de contrato
-              </h4>
-              <ul className="max-h-64 divide-y divide-outline-variant/50 overflow-y-auto">
-                {seleccionado.contratos.length === 0 ? (
-                  <li className="py-2 font-body-sm text-on-surface-variant">
-                    Sin clientes con cuota vigente.
-                  </li>
-                ) : (
-                  seleccionado.contratos.map((ctr) => {
-                    const meta =
-                      ESTADO_META[ctr.estado] ?? ESTADO_META.PENDIENTE!;
-                    return (
-                      <li key={ctr.id}>
-                        <Link
-                          href={`/contratos/${ctr.id}`}
-                          className="flex items-center justify-between gap-3 rounded py-2 transition hover:bg-surface"
-                        >
-                          <div className="min-w-0">
-                            <span className="block font-mono text-xs text-primary">
-                              {ctr.codigoContrato}
-                            </span>
-                            <span className="block truncate text-sm font-medium text-on-surface">
-                              {ctr.clienteNombre}
-                              {ctr.clienteApellido
-                                ? ` ${ctr.clienteApellido}`
-                                : ""}
-                            </span>
-                            <span className="block text-xs text-on-surface-variant">
-                              {ctr.departamento ?? "—"}
-                            </span>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <span className="inline-flex items-center gap-1.5 text-xs">
-                              <span
-                                className={`h-1.5 w-1.5 rounded-full ${meta.cls}`}
-                              />
-                              {meta.label}
-                            </span>
-                            <span className="block text-xs text-on-surface-variant">
-                              {ctr.montoPagado > 0
-                                ? moneda(ctr.montoPagado)
-                                : "sin pagos"}
-                            </span>
-                          </div>
-                        </Link>
+                <div className="min-w-0">
+                  <h4 className="mb-2 font-label-md text-on-surface-variant">
+                    Clientes ({seleccionado.contratos.length}) por código de contrato
+                  </h4>
+                  <ul className="divide-y divide-outline-variant/50">
+                    {seleccionado.contratos.length === 0 ? (
+                      <li className="py-2 font-body-sm text-on-surface-variant">
+                        Sin clientes con cuota vigente.
                       </li>
-                    );
-                  })
-                )}
-              </ul>
+                    ) : (
+                      seleccionado.contratos.map((ctr) => {
+                        const meta =
+                          ESTADO_META[ctr.estado] ?? ESTADO_META.PENDIENTE!;
+                        return (
+                          <li key={ctr.id}>
+                            <Link
+                              href={`/contratos/${ctr.id}`}
+                              className="flex items-center justify-between gap-3 rounded py-2 transition hover:bg-surface"
+                            >
+                              <div className="min-w-0">
+                                <span className="block font-mono text-xs text-primary">
+                                  {ctr.codigoContrato}
+                                </span>
+                                <span className="block truncate text-sm font-medium text-on-surface">
+                                  {ctr.clienteNombre}
+                                  {ctr.clienteApellido
+                                    ? ` ${ctr.clienteApellido}`
+                                    : ""}
+                                </span>
+                                <span className="block text-xs text-on-surface-variant">
+                                  {ctr.departamento ?? "—"}
+                                </span>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <span className="inline-flex items-center gap-1.5 text-xs">
+                                  <span
+                                    className={`h-1.5 w-1.5 rounded-full ${meta.cls}`}
+                                  />
+                                  {meta.label}
+                                </span>
+                                <span className="block text-xs text-on-surface-variant">
+                                  {ctr.montoPagado > 0
+                                    ? moneda(ctr.montoPagado)
+                                    : "sin pagos"}
+                                </span>
+                              </div>
+                            </Link>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         </div>
