@@ -45,6 +45,7 @@ import {
   Mail,
   Table,
   ExternalLink,
+  Globe,
   type LucideIcon,
 } from "lucide-react";
 
@@ -62,6 +63,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "Dashboard" },
   { href: "/disponibilidad", label: "Disponibilidad", icon: LayoutGrid, section: "Disponibilidad", permission: "department.read" },
+  { href: "/contenido-web", label: "Panel Web", icon: Globe, section: "Panel Web", permission: "web_content.read" },
   { href: "/pipeline", label: "Pipeline", icon: Filter, section: "Pipeline", permission: "client.read", group: "marketing" },
   { href: "/mensajes", label: "Mensajes", icon: MessageSquare, section: "Mensajes", permission: "client.read", group: "marketing" },
   { href: "/automatizaciones", label: "Automatizaciones", icon: Zap, section: "Automatizaciones", permission: "client.read", group: "marketing" },
