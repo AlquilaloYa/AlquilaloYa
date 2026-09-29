@@ -31,6 +31,8 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.DOCUMENT_DOWNLOAD,
     P.TEMPLATE_READ,
     P.ACTIVITY_READ,
+    P.WEB_CONTENT_READ,
+    P.WEB_CONTENT_UPDATE,
   ]),
   SUPERVISOR: new Set([
     P.CLIENT_READ,
@@ -53,6 +55,8 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.USER_READ,
     P.INTEGRATION_READ,
     P.INTEGRATION_MANAGE,
+    P.WEB_CONTENT_READ,
+    P.WEB_CONTENT_UPDATE,
   ]),
   AUDITOR: new Set([
     P.CLIENT_READ,
@@ -64,6 +68,7 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.AUDIT_READ,
     P.USER_READ,
     P.INTEGRATION_READ,
+    P.WEB_CONTENT_READ,
   ]),
   FIRMANTE: new Set([
     P.CONTRACT_READ,

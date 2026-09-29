@@ -54,4 +54,15 @@ describe("AccessControl", () => {
     expect(ac.canAny([P.CLIENT_CREATE, P.CLIENT_READ])).toBe(true);
     expect(ac.canAny([P.CLIENT_CREATE, P.CONTRACT_EMIT])).toBe(false);
   });
+
+  it("OPERADOR edita contenido web y AUDITOR solo lee", () => {
+    const operador = AccessControl.forRole("OPERADOR");
+    const auditor = AccessControl.forRole("AUDITOR");
+    const firmante = AccessControl.forRole("FIRMANTE");
+    expect(operador.can(P.WEB_CONTENT_READ)).toBe(true);
+    expect(operador.can(P.WEB_CONTENT_UPDATE)).toBe(true);
+    expect(auditor.can(P.WEB_CONTENT_READ)).toBe(true);
+    expect(auditor.can(P.WEB_CONTENT_UPDATE)).toBe(false);
+    expect(firmante.can(P.WEB_CONTENT_READ)).toBe(false);
+  });
 });

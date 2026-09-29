@@ -28,6 +28,10 @@ export const env = createEnv({
     GOOGLE_DRIVE_SCOPE: z
       .string()
       .default("https://www.googleapis.com/auth/drive.file"),
+    /** Sitio web AlquilaYa: base de la API del sitio y credenciales admin. */
+    ALQUILAYA_API_URL: z.string().url().optional(),
+    ALQUILAYA_ADMIN_EMAIL: z.string().email().optional(),
+    ALQUILAYA_ADMIN_PASSWORD: z.string().min(1).optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,
