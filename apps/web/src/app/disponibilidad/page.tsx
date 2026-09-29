@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { RefreshCw, X } from "lucide-react";
@@ -25,106 +26,27 @@ function fmtPrecio(val: string | undefined): string {
   return `S/ ${numero.toLocaleString("es-PE", { minimumFractionDigits: 0 })}/mes`;
 }
 
-function PopupDepartamento({
-  dept,
-  onClose,
-}: {
-  dept: DisponibilidadDepartment;
-  onClose: () => void;
-}) {
-  const plazo = dept.disponibilidad?.fechaFin;
-  const fechaCorta = plazo
-    ? new Date(`${plazo}T12:00:00`).toLocaleDateString("es-PE", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
-    : null;
-
+function TarjetaDisponible({ dept }: { dept: DisponibilidadDepartment }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-xl border bg-background p-5 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="font-mono-label text-lg font-bold text-foreground">{dept.codigo}</h3>
-            <p className="text-sm text-muted-foreground">{dept.nombre}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar"
-            className="rounded p-1 text-muted-foreground hover:bg-muted"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="mt-4 space-y-3">
-          <div className="rounded-lg bg-[#DC143C]/10 px-3 py-2 text-sm font-semibold text-[#C41230] dark:text-[#FF5C77]">
-            Ocupado
-            {dept.disponibilidad!.dias === 0
-              ? " · se libera hoy"
-              : ` · libre en ~${dept.disponibilidad!.dias} d`}
-          </div>
-          <div className="grid grid-cols-[80px_1fr] gap-y-2 text-sm">
-            <span className="text-muted-foreground">Precio</span>
-            <span className="font-semibold text-foreground">{fmtPrecio(dept.precio) || "—"}</span>
-            <span className="text-muted-foreground">Ocupante</span>
-            <span className="font-medium text-foreground">
-              {dept.ocupante?.nombres} {dept.ocupante?.apellidos ?? ""}
-            </span>
-            <span className="text-muted-foreground">Teléfono</span>
-            <span className="font-medium text-foreground">{dept.ocupante?.telefono || "—"}</span>
-            <span className="text-muted-foreground">Hasta</span>
-            <span className="font-medium text-foreground">{fechaCorta}</span>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-5 h-9 w-full rounded-lg bg-foreground font-medium text-background hover:opacity-90"
-        >
-          Cerrar
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function TarjetaDisponible({ dept, onOpen }: { dept: DisponibilidadDepartment; onOpen: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      title="Ver precio"
+    <Link
+      href={`/disponibilidad/${encodeURIComponent(dept.codigo)}`}
+      title="Ver propiedad"
       className="flex items-center justify-center rounded-xl border border-green-600/20 bg-green-500/10 border-l-4 border-l-green-600 p-4 transition-colors hover:bg-green-500/15"
     >
       <span className="font-mono-label text-base font-bold text-green-700 dark:text-green-500">{dept.codigo}</span>
-    </button>
+    </Link>
   );
 }
 
-function TarjetaOcupada({
-  dept,
-  onOpen,
-}: {
-  dept: DisponibilidadDepartment;
-  onOpen: () => void;
-}) {
+function TarjetaOcupada({ dept }: { dept: DisponibilidadDepartment }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      title="Ver información"
+    <Link
+      href={`/disponibilidad/${encodeURIComponent(dept.codigo)}`}
+      title="Ver propiedad"
       className="flex items-center justify-center rounded-xl border border-red-600/20 bg-red-500/10 border-l-4 border-l-red-600 p-4 transition-colors hover:bg-red-500/15"
     >
       <span className="font-mono-label text-base font-bold text-red-700 dark:text-red-500">{dept.codigo}</span>
-    </button>
+    </Link>
   );
 }
 
@@ -280,65 +202,14 @@ function PopupCambiarEstado({
   );
 }
 
-function PopupDetalle({ dept, onClose }: { dept: DisponibilidadDepartment; onClose: () => void }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-xl border bg-background p-5 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="font-mono-label text-lg font-bold text-foreground">{dept.codigo}</h3>
-            <p className="text-sm text-muted-foreground">{dept.nombre}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar"
-            className="rounded p-1 text-muted-foreground hover:bg-muted"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="mt-4 space-y-3">
-          <div className="rounded-lg bg-green-500/10 px-3 py-2 text-sm font-semibold text-green-700 dark:text-green-500">
-            Disponible
-          </div>
-          <div className="grid grid-cols-[80px_1fr] gap-y-2 text-sm">
-            <span className="text-muted-foreground">Precio</span>
-            <span className="font-semibold text-foreground">{fmtPrecio(dept.precio) || "—"}</span>
-            <span className="text-muted-foreground">Piso</span>
-            <span className="font-medium text-foreground">{dept.piso}</span>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-5 h-9 w-full rounded-lg bg-foreground font-medium text-background hover:opacity-90"
-        >
-          Cerrar
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function GrupoDepartamentos({
   titulo,
   departamentos,
-  onAbrirPopup,
   onAbrirCambio,
-  onAbrirPrecio,
 }: {
   titulo: string;
   departamentos: DisponibilidadDepartment[];
-  onAbrirPopup: (dept: DisponibilidadDepartment) => void;
   onAbrirCambio: (dept: DisponibilidadDepartment) => void;
-  onAbrirPrecio: (dept: DisponibilidadDepartment) => void;
 }) {
   const disponibles = departamentos.filter((d) => !d.disponibilidad && !d.enMantenimiento && !d.bloqueado);
   const mantenimiento = departamentos.filter((d) => !d.disponibilidad && d.enMantenimiento && !d.bloqueado);
@@ -360,7 +231,7 @@ function GrupoDepartamentos({
       </h2>
       <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columnas}, minmax(0, 1fr))` }}>
         {disponibles.map((dept) => (
-          <TarjetaDisponible key={dept.id} dept={dept} onOpen={() => onAbrirPrecio(dept)} />
+          <TarjetaDisponible key={dept.id} dept={dept} />
         ))}
         {mantenimiento.map((dept) => (
           <TarjetaMantenimiento key={dept.id} dept={dept} onOpen={() => onAbrirCambio(dept)} />
@@ -369,7 +240,7 @@ function GrupoDepartamentos({
           <TarjetaBloqueada key={dept.id} dept={dept} onOpen={() => onAbrirCambio(dept)} />
         ))}
         {ocupados.map((dept) => (
-          <TarjetaOcupada key={dept.id} dept={dept} onOpen={() => onAbrirPopup(dept)} />
+          <TarjetaOcupada key={dept.id} dept={dept} />
         ))}
       </div>
     </section>
@@ -380,9 +251,7 @@ export default function DisponibilidadPage() {
   const [departamentos, setDepartamentos] = useState<DisponibilidadDepartment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [popup, setPopup] = useState<DisponibilidadDepartment | null>(null);
   const [popupCambio, setPopupCambio] = useState<DisponibilidadDepartment | null>(null);
-  const [popupPrecio, setPopupPrecio] = useState<DisponibilidadDepartment | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -485,23 +354,17 @@ export default function DisponibilidadPage() {
             <GrupoDepartamentos
             titulo="Benavides 2195"
             departamentos={benavides}
-            onAbrirPopup={setPopup}
             onAbrirCambio={setPopupCambio}
-            onAbrirPrecio={setPopupPrecio}
           />
           <GrupoDepartamentos
             titulo="Angamos 170"
             departamentos={angamos}
-            onAbrirPopup={setPopup}
             onAbrirCambio={setPopupCambio}
-            onAbrirPrecio={setPopupPrecio}
           />
           </div>
         )}
       </div>
 
-      {popup ? <PopupDepartamento dept={popup} onClose={() => setPopup(null)} /> : null}
-      {popupPrecio ? <PopupDetalle dept={popupPrecio} onClose={() => setPopupPrecio(null)} /> : null}
       {popupCambio ? (
         <PopupCambiarEstado
           dept={popupCambio}
