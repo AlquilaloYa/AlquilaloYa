@@ -28,7 +28,7 @@ const EMPTY_DRAFT: PropertyDraft = {
   price: 0,
   expenses: 0,
   surface_m2: 20,
-  coordinates: { lat: -12.1116, lng: -77.0294 },
+  google_maps_url: null,
   amenities: {
     is_furnished: false,
     pets_allowed: false,
@@ -60,7 +60,7 @@ function toDraft(property: AdminProperty): PropertyDraft {
     price: property.price,
     expenses: property.expenses,
     surface_m2: property.surface_m2,
-    coordinates: property.coordinates,
+    google_maps_url: property.google_maps_url,
     amenities: property.amenities,
     description: property.description,
     is_featured: property.is_featured,
@@ -207,23 +207,12 @@ export function PropertyEditor({
         />
 
         <Input
-          label="Latitud"
-          type="number"
-          step="0.0001"
-          value={draft.coordinates.lat}
-          onChange={(event) =>
-            patch({ coordinates: { ...draft.coordinates, lat: Number(event.target.value) } })
-          }
-        />
-
-        <Input
-          label="Longitud"
-          type="number"
-          step="0.0001"
-          value={draft.coordinates.lng}
-          onChange={(event) =>
-            patch({ coordinates: { ...draft.coordinates, lng: Number(event.target.value) } })
-          }
+          label="URL de Google Maps"
+          type="url"
+          placeholder="https://maps.app.goo.gl/…"
+          value={draft.google_maps_url ?? ""}
+          onChange={(event) => patch({ google_maps_url: event.target.value.trim() || null })}
+          hint="Abre Google Maps, ubica la dirección exacta y pega el enlace (Compartir → Copiar enlace)"
         />
 
         <ToggleCheck

@@ -36,7 +36,7 @@ export interface AdminProperty {
   price: number;
   expenses: number;
   surface_m2: number;
-  coordinates: { lat: number; lng: number };
+  google_maps_url: string | null;
   amenities: AdminAmenities;
   description: string;
   is_featured: boolean;
