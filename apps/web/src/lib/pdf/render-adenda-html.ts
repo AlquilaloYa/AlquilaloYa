@@ -228,6 +228,9 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
   const fechaInicioAdenda = parseFecha(field(contrato, ["fechaInicioAdenda"]));
   const fechaFinAdenda = parseFecha(field(contrato, ["fechaFinAdenda"]));
   const montoRenta = parseFloat(field(contrato, ["montoCanonMensual"])) || 0;
+  const mantenimiento =
+    parseFloat(field(contrato, ["mantenimiento"])) || 50;
+  const montoTotal = montoRenta + mantenimiento;
 
   const deptoNumero = field(departamento, ["numero"]) || codigoCorto(field(departamento, ["codigo"]));
   const arrendador = datosArrendador(departamento);
@@ -235,8 +238,11 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
   const domicilio = field(cliente, ["domicilio"]) || "________________";
 
   const nacimiento = field(cliente, ["nacionalidad"]) || "Peruano(a)";
-  const montoRentaTxt = Math.round(montoRenta).toString();
-  const montoLetras = `${numeroEnLetras(Math.floor(montoRenta))} y ${String(Math.round((montoRenta % 1) * 100)).padStart(2, "0")}/100 soles`;
+  const fmtSoles = (n: number): string => n.toFixed(2);
+  const canonTxt = fmtSoles(montoRenta);
+  const mantenimientoTxt = fmtSoles(mantenimiento);
+  const totalTxt = fmtSoles(montoTotal);
+  const totalLetras = `${numeroEnLetras(Math.floor(montoTotal))} y ${String(Math.round((montoTotal % 1) * 100)).padStart(2, "0")}/100 soles`;
 
   const fmt = (obj: { dia: string; mes: string; año: string } | null): string =>
     obj ? `${obj.dia} de ${obj.mes} del ${obj.año}` : "________________";
@@ -335,7 +341,7 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
 
     <div class="section-block">
         <h2>ANTECEDENTES</h2>
-        <p><span class="bold">PRIMERO.-</span> Con fecha del <span class="bold">${inicioOriginal} hasta el día ${finOriginal}</span>; las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <span class="bold">${deptoNumero}</span> ubicado en <span class="bold">${direccionInmueble(departamento)}</span>; con una merced conductiva de S/ <span class="bold">${montoRentaTxt}.00 (${montoLetras})</span> mensuales, la cual incluye mantenimiento de S/ 50.00 (cincuenta con 00/100 soles) y los servicios de luz y agua, siendo cancelada en la <span class="bold">${datosCuenta(departamento)}</span>.</p>
+        <p><span class="bold">PRIMERO.-</span> Con fecha del <span class="bold">${inicioOriginal} hasta el día ${finOriginal}</span>; las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <span class="bold">${deptoNumero}</span> ubicado en <span class="bold">${direccionInmueble(departamento)}</span>; con una merced conductiva de S/ <span class="bold">${totalTxt} (${totalLetras})</span> mensuales, correspondiente al canon de S/ <span class="bold">${canonTxt}</span> más mantenimiento de S/ <span class="bold">${mantenimientoTxt}</span> e incluye los servicios de luz y agua, siendo cancelada en la <span class="bold">${datosCuenta(departamento)}</span>.</p>
     </div>
 
     <div class="section-block">
@@ -406,6 +412,7 @@ export function renderExtensionAdendaHtml(snapshot: ContractSnapshot): string {
   const nuevaFin = field(contrato, ["fechaFin"]);
   const montoCanon = field(contrato, ["montoCanonMensual", "montoCanonMensualFormatted"]);
   const mantenimiento = field(contrato, ["mantenimiento"]);
+  const montoTotal = (Number(montoCanon) || 0) + (Number(mantenimiento) || 50);
   const contenido =
     (snapshot.anexos ?? [])
       .map((a) => a.contenido)
@@ -462,6 +469,7 @@ export function renderExtensionAdendaHtml(snapshot: ContractSnapshot): string {
   <table>
     ${richRow("Canon mensual", montoCanon)}
     ${richRow("Mantenimiento mensual", mantenimiento)}
+    ${richRow("Total mensual", `S/ ${montoTotal.toFixed(2)}`)}
   </table>
 
   <div class="adenda">

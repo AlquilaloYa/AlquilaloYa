@@ -340,6 +340,7 @@ export async function POST(request: Request) {
     if (esExtension) {
       const monto = Number(contract.montoCanonMensual).toFixed(2);
       const mant = Number(contract.mantenimiento ?? "50").toFixed(2);
+      const total = Number(monto) + Number(mant);
       const lineas = [
         `${titulo}\n`,
         `Por la presente, las partes acuerdan EXTENDER el plazo del Contrato de Arrendamiento ${contract.codigoContrato} sobre el inmueble ${dstrDepartamento(contract)}, en los siguientes términos:`,
@@ -347,14 +348,15 @@ export async function POST(request: Request) {
         `- Nueva fecha de término: ${fmtFechaEs(nuevaFechaFin)}`,
         `- Canon mensual: ${MONTO.format(Number(monto))}`,
         `- Mantenimiento mensual: ${MONTO.format(Number(mant))}`,
+        `- Total mensual: ${MONTO.format(total)}`,
         ``,
         `Se mantienen vigentes todas las demás cláusulas del contrato original que no se opongan a la presente adenda.`,
       ];
       if (cuotasNuevas.length > 0) {
         lineas.push(
           ``,
-          `Anexo: cronograma de las cuotas por el período extendido (${MONTO.format(Number(monto))} cada una):`,
-          ...cuotasNuevas.map((p, i) => `Cuota ${i + 1} (${fmtFechaEs(p)}): ${MONTO.format(Number(monto))}`)
+          `Anexo: cronograma de las cuotas por el período extendido (${MONTO.format(total)} cada una, canon + mantenimiento):`,
+          ...cuotasNuevas.map((p, i) => `Cuota ${i + 1} (${fmtFechaEs(p)}): ${MONTO.format(total)}`)
         );
       }
       if (contenido) lineas.push(``, contenido);
