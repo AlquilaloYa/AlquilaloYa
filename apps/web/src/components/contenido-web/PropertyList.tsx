@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button, Card, Input, Select } from "./ui";
 import { contenidoWebApi, formatPrice } from "@/lib/contenido-web-client";
 import type { AdminProperty, Zone } from "@/lib/contenido-web-client";
@@ -11,11 +11,13 @@ export interface PropertyListProps {
   onSelect: (property: AdminProperty) => void;
   onError: (error: unknown) => void;
   onUpdated: (property: AdminProperty) => void;
+  onDeleted: (id: number) => void;
 }
 
-export function PropertyList({ selectedId, onSelect, onError, onUpdated }: PropertyListProps) {
+export function PropertyList({ selectedId, onSelect, onError, onUpdated, onDeleted }: PropertyListProps) {
   const [properties, setProperties] = useState<AdminProperty[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [zone, setZone] = useState<Zone | "all">("all");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
@@ -43,6 +45,24 @@ export function PropertyList({ selectedId, onSelect, onError, onUpdated }: Prope
       onUpdated(updated);
     } catch (error) {
       onError(error);
+    }
+  }
+
+  async function remove(property: AdminProperty) {
+    const confirmed = window.confirm(
+      `¿Eliminar ${property.property_code} · ${property.title}? Esta acción no se puede deshacer.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingId(property.id);
+    try {
+      await contenidoWebApi.properties.remove(property.id);
+      setProperties((current) => current.filter((item) => item.id !== property.id));
+      onDeleted(property.id);
+    } catch (error) {
+      onError(error);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -137,6 +157,15 @@ export function PropertyList({ selectedId, onSelect, onError, onUpdated }: Prope
               >
                 {property.is_featured ? "Quitar destacado" : "Destacar"}
               </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                aria-label={`Eliminar ${property.property_code}`}
+                title="Eliminar unidad"
+                isLoading={deletingId === property.id}
+                leadingIcon={<Trash2 aria-hidden className="h-4 w-4" />}
+                onClick={() => void remove(property)}
+              />
             </div>
           </li>
         ))}

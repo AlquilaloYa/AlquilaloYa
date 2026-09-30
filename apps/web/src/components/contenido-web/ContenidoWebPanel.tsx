@@ -46,9 +46,11 @@ export function ContenidoWebPanel() {
     setLastSaved("configuración del sitio");
   }
 
-  function handleDeleted() {
+  function handleDeleted(id?: number) {
     setEditorOpen(false);
-    setSelected(null);
+    if (id === undefined || selected?.id === id) {
+      setSelected(null);
+    }
     setLastSaved("unidad eliminada");
   }
 
@@ -156,6 +158,7 @@ export function ContenidoWebPanel() {
             onSelect={openEditor}
             onError={pushError}
             onUpdated={handleSaved}
+            onDeleted={handleDeleted}
           />
         </div>
       )}

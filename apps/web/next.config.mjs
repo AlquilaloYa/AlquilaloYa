@@ -6,10 +6,13 @@ const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "connect-src 'self' https:",
   "object-src 'none'",
+  // El visor de PDF de la vista previa va en un iframe con URL blob:/data:.
+  // Sin frame-src, el navegador cae a default-src 'self' y lo bloquea.
+  "frame-src 'self' blob: data:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

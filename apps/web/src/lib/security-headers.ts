@@ -16,17 +16,21 @@ export const SECURITY_HEADERS: Record<string, string> = {
 
 /**
  * CSP pragmática: permite inline (necesario por el script de tema y Next dev),
- * data:/blob: para imágenes de adjuntos (fichas con dataUrl) y el bucket de
- * Supabase en storage. Aun así bloquea framing, object y base externa.
+ * data:/blob: para imágenes de adjuntos (fichas con dataUrl) y cualquier origen
+ * https: para las fotos del Panel Web, que llegan por URL (p. ej. Unsplash) o
+ * desde el bucket público de Supabase Storage. frame-src permite blob:/data:
+ * para la vista previa de PDF (el visor del navegador va en un iframe). Aun así
+ * bloquea framing de la app (frame-ancestors), object embebido y base externa.
  */
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "connect-src 'self' https:",
   "object-src 'self' blob: data:",
+  "frame-src 'self' blob: data:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
