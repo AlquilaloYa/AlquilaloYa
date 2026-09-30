@@ -255,14 +255,6 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
   const mantenimientoLetras = letrasDe(mantenimiento);
   const totalLetras = letrasDe(montoTotal);
 
-  const periodoMeses = (() => {
-    const f = (String(contrato.fechaFin ?? "").split("T")[0] ?? "").split("-").map(Number);
-    const i = (String(contrato.fechaInicio ?? "").split("T")[0] ?? "").split("-").map(Number);
-    if (f.length < 3 || i.length < 3 || isNaN(f[0] as number) || isNaN(i[0] as number)) return "";
-    const meses = ((f[0] as number) - (i[0] as number)) * 12 + ((f[1] as number) - (i[1] as number));
-    return meses === 1 ? " por un periodo de 1 mes" : ` por un periodo de ${Math.max(meses, 0)} meses`;
-  })();
-
   const ORDINALES = ["", "PRIMERA", "SEGUNDA", "TERCERA", "CUARTA", "QUINTA", "SEXTA", "SÉPTIMA", "OCTAVA", "NOVENA", "DÉCIMA"] as const;
   const nOrdinal = parseInt(numeroAdenda, 10) || 1;
   const ordinalAdenda = ORDINALES[nOrdinal] ?? `N° ${nOrdinal}ª`;
@@ -275,7 +267,7 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
 
   const inicioOriginal = fmt(fechaInicioOriginal);
   const inicioAdenda = fmt(fechaInicioAdenda);
-  const inicioPlazo = fmt(fechaInicioAdenda || fechaInicioOriginal);
+  const inicioPlazo = fmt(fechaInicioOriginal);
   const finAdendaMesFin = fmtMesFin(fechaFinAdenda);
 
   const tituloAdenda = String(contrato.titulo ?? "ADENDA").trim() || "ADENDA";
@@ -313,20 +305,20 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
         }
         p {
             font-size: 13px;
-            line-height: 1.5;
+            line-height: 1.42;
             text-align: justify;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
         .section-title {
             font-weight: bold;
             text-transform: uppercase;
-            margin-top: 12px;
-            margin-bottom: 6px;
+            margin-top: 10px;
+            margin-bottom: 5px;
             font-size: 13px;
         }
         .left-dots {
             text-align: left;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             font-weight: bold;
             letter-spacing: 2px;
         }
@@ -344,15 +336,15 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
             font-size: 13px;
         }
         .date-line {
-            margin-top: 14px;
-            margin-bottom: 20px;
+            margin-top: 12px;
+            margin-bottom: 16px;
             text-align: left;
         }
         .signatures-container {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-top: 20px;
+            margin-top: 16px;
             padding: 0 6px;
         }
         .signature-block {
@@ -373,9 +365,9 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
             margin-top: 3px;
         }
         .footer-page {
-            margin-top: 18px;
+            margin-top: 14px;
             border-top: 1px solid #e5e7eb;
-            padding-top: 8px;
+            padding-top: 6px;
             display: flex;
             justify-content: space-between;
             font-size: 11px;
@@ -391,7 +383,7 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
     <p>Conste por el presente documento la <strong>${ordinalAdenda} ADENDA AL CONTRATO DE ARRENDAMIENTO</strong> de fecha <strong>${inicioOriginal}</strong>, que celebran de una parte ${arrendador.trat} <strong>${arrendador.nombres} ${arrendador.apellidos.toUpperCase()}</strong>, identificado con DNI N° <strong>${arrendador.dni}</strong>, domiciliado en <strong>${escapeHtml(domicilioArrendador)}</strong>, a quien en adelante se le denominará <strong>LA ARRENDADOR(A)</strong> y, de la otra parte, el Sr.(a) <strong>${escapeHtml(nombreCompleto)}</strong>, identificado con DNI / C.E. / Pasaporte N° <strong>${escapeHtml(clienteDocumento || "________________")}</strong>, de nacionalidad <strong>${escapeHtml(nacimiento)}</strong>, domiciliado en <strong>${escapeHtml(domicilio)}</strong>, a quien en adelante se denominará <strong>EL ARRENDATARIO</strong>, en los términos y bajo las condiciones siguientes:</p>
 
     <div class="section-title">PRIMERO: ANTECEDENTES</div>
-    <p>Con fecha <strong>${inicioOriginal}</strong>, las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <strong>${escapeHtml(deptoNumero)}</strong> ubicado en <strong>${escapeHtml(direccionInmueble(departamento))}</strong>${periodoMeses}, con una merced conductiva de S/ <strong>${canonTxt} (${canonLetras})</strong> más mantenimiento de S/ <strong>${mantenimientoTxt} (${mantenimientoLetras})</strong> un total de S/ <strong>${totalTxt} (${totalLetras})</strong> mensuales.</p>
+    <p>Con fecha <strong>${inicioOriginal}</strong>, las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <strong>${escapeHtml(deptoNumero)}</strong> ubicado en <strong>${escapeHtml(direccionInmueble(departamento))}</strong> con una merced conductiva de S/ <strong>${canonTxt} (${canonLetras})</strong> más mantenimiento de S/ <strong>${mantenimientoTxt} (${mantenimientoLetras})</strong> un total de S/ <strong>${totalTxt} (${totalLetras})</strong> mensuales; e incluye los servicios de luz y agua, siendo cancelada en la ${datosCuenta(departamento)}.</p>
 
     <div class="section-title">SEGUNDO: OBJETO</div>
     <p>Las partes acuerdan modificar la Cláusula QUINTA del contrato de arrendamiento del Mini departamento N° <strong>${escapeHtml(deptoNumero)}</strong>, bajo los siguientes términos:</p>
