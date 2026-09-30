@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button, Card, Input, Select } from "./ui";
-import { contenidoWebApi, formatPrice } from "@/lib/contenido-web-client";
+import { contenidoWebApi, coverImageUrl, formatPrice } from "@/lib/contenido-web-client";
 import type { AdminProperty, Zone } from "@/lib/contenido-web-client";
 
 export interface PropertyListProps {
@@ -123,7 +123,7 @@ export function PropertyList({ selectedId, onSelect, onError, onUpdated, onDelet
               }`}
             >
               <img
-                src={property.images[0]?.url ?? ""}
+                src={coverImageUrl(property.images) ?? ""}
                 alt=""
                 width={56}
                 height={42}
@@ -135,7 +135,7 @@ export function PropertyList({ selectedId, onSelect, onError, onUpdated, onDelet
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {property.address || "Sin dirección"} · {formatPrice(property.price)} ·{" "}
-                  {property.images.length} foto{property.images.length === 1 ? "" : "s"}
+                  {property.images.length} medio{property.images.length === 1 ? "" : "s"}
                 </p>
               </div>
               <Button variant="secondary" size="sm" onClick={() => onSelect(property)}>

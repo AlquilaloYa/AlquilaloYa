@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Globe, Plus, Settings2, X } from "lucide-react";
 import { Button } from "./ui";
 import { PropertyList } from "./PropertyList";
 import { PropertyEditor } from "./PropertyEditor";
 import { SiteSettingsEditor, type SiteSettingsEditorProps } from "./SiteSettingsEditor";
-import type { AdminProperty } from "@/lib/contenido-web-client";
+import { contenidoWebApi, type AdminProperty } from "@/lib/contenido-web-client";
+import type { SiteSettings } from "@/lib/site-settings";
 
 export type ContenidoWebErrorState = { message: string; statusCode?: number };
 
@@ -16,8 +17,9 @@ export function ContenidoWebPanel() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [errors, setErrors] = useState<ContenidoWebErrorState[]>([]);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [customTags, setCustomTags] = useState<SiteSettings["advanced"]["custom_tags"]>([]);
 
-  function pushError(error: unknown) {
+  const pushError = useCallback((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     const hasStatus =
       error != null && typeof error === "object" && "statusCode" in error &&
@@ -26,7 +28,22 @@ export function ContenidoWebPanel() {
       ? { message, statusCode: (error as { statusCode: number }).statusCode }
       : { message };
     setErrors((current) => [...current, entry]);
-  }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    contenidoWebApi.settings
+      .get()
+      .then((settings) => {
+        if (!active) return;
+        const tags = settings.advanced?.custom_tags;
+        setCustomTags(Array.isArray(tags) ? tags as SiteSettings["advanced"]["custom_tags"] : []);
+      })
+      .catch(pushError);
+    return () => {
+      active = false;
+    };
+  }, [pushError]);
 
   function dismissError(index: number) {
     setErrors((current) => current.filter((_, i) => i !== index));
@@ -42,7 +59,8 @@ export function ContenidoWebPanel() {
     setLastSaved(property.property_code);
   }
 
-  function handleSettingsSaved() {
+  function handleSettingsSaved(settings: SiteSettings) {
+    setCustomTags(settings.advanced.custom_tags);
     setLastSaved("configuración del sitio");
   }
 
@@ -140,6 +158,7 @@ export function ContenidoWebPanel() {
         <div className={editorOpen ? "" : "hidden"}>
           <PropertyEditor
             property={selected}
+            customTags={customTags}
             onSaved={(property) => {
               handleSaved(property);
               setEditorOpen(false);

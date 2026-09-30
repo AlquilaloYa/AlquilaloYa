@@ -18,6 +18,7 @@ export function SiteSettingsEditor({ mode, onSaved, onError }: SiteSettingsEdito
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [newTagLabel, setNewTagLabel] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -40,6 +41,22 @@ export function SiteSettingsEditor({ mode, onSaved, onError }: SiteSettingsEdito
 
   function patchSection<K extends keyof SiteSettings>(key: K, section: SiteSettings[K]) {
     setSettings((current) => ({ ...current, [key]: section }));
+  }
+
+  function addCustomTag() {
+    const label = newTagLabel.trim();
+    const key = label
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    if (!label || !key || settings.advanced.custom_tags.some((tag) => tag.key === key)) return;
+    patchSection("advanced", {
+      ...settings.advanced,
+      custom_tags: [...settings.advanced.custom_tags, { key, label }],
+    });
+    setNewTagLabel("");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -352,7 +369,7 @@ export function SiteSettingsEditor({ mode, onSaved, onError }: SiteSettingsEdito
 
       {mode === "config" && (
       <Card title="Configuración avanzada">
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-3">
           <Input
             label="Precio mínimo (S/)"
             type="number"
@@ -386,18 +403,6 @@ export function SiteSettingsEditor({ mode, onSaved, onError }: SiteSettingsEdito
               patchSection("advanced", {
                 ...settings.advanced,
                 price_step: Number(event.target.value),
-              })
-            }
-          />
-          <Input
-            label="Superficie (m²)"
-            type="number"
-            min={1}
-            value={settings.advanced.surface_m2}
-            onChange={(event) =>
-              patchSection("advanced", {
-                ...settings.advanced,
-                surface_m2: Number(event.target.value),
               })
             }
           />
@@ -441,6 +446,53 @@ export function SiteSettingsEditor({ mode, onSaved, onError }: SiteSettingsEdito
               </div>
             </li>
           ))}
+        </ul>
+
+        <h4 className="mt-5 text-sm font-semibold text-foreground">Etiquetas personalizadas</h4>
+        <div className="mt-2 flex flex-wrap items-end gap-3">
+          <div className="min-w-0 flex-1">
+            <Input
+              label="Nueva etiqueta"
+              maxLength={80}
+              placeholder="Ej. Balcón privado"
+              value={newTagLabel}
+              onChange={(event) => setNewTagLabel(event.target.value)}
+            />
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!newTagLabel.trim() || settings.advanced.custom_tags.length >= 30}
+            onClick={addCustomTag}
+            leadingIcon={<Plus aria-hidden className="h-4 w-4" />}
+          >
+            Añadir etiqueta
+          </Button>
+        </div>
+        <ul className="mt-2 space-y-2">
+          {settings.advanced.custom_tags.map((tag) => (
+            <li key={tag.key} className="flex items-center gap-3 rounded-md border border-border p-3">
+              <code className="text-xs text-muted-foreground">{tag.key}</code>
+              <span className="min-w-0 flex-1 text-sm">{tag.label}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={`Eliminar etiqueta ${tag.label}`}
+                onClick={() =>
+                  patchSection("advanced", {
+                    ...settings.advanced,
+                    custom_tags: settings.advanced.custom_tags.filter((item) => item.key !== tag.key),
+                  })
+                }
+              >
+                <Trash2 aria-hidden className="h-4 w-4" />
+              </Button>
+            </li>
+          ))}
+          {settings.advanced.custom_tags.length === 0 && (
+            <li className="py-3 text-sm text-muted-foreground">No hay etiquetas personalizadas.</li>
+          )}
         </ul>
       </Card>
       )}

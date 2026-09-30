@@ -7,6 +7,7 @@ import { Button, Card, Input, Select, TextArea, ToggleCheck } from "./ui";
 import { ImageManager } from "./ImageManager";
 import { contenidoWebApi } from "@/lib/contenido-web-client";
 import type { AdminProperty, PropertyDraft, Zone } from "@/lib/contenido-web-client";
+import type { SiteSettings } from "@/lib/site-settings";
 
 const ZONES: Zone[] = ["Angamos", "Benavides"];
 
@@ -38,6 +39,7 @@ const EMPTY_DRAFT: PropertyDraft = {
     mini_departamento: false,
     mini_con_tendal: false,
   },
+  custom_tags: [],
   description: "",
   is_featured: false,
   is_active: true,
@@ -45,6 +47,7 @@ const EMPTY_DRAFT: PropertyDraft = {
 
 export interface PropertyEditorProps {
   property: AdminProperty | null;
+  customTags: SiteSettings["advanced"]["custom_tags"];
   onSaved: (property: AdminProperty) => void;
   onDeleted: (id: number) => void;
   onError: (error: unknown) => void;
@@ -61,6 +64,7 @@ function toDraft(property: AdminProperty): PropertyDraft {
     expenses: property.expenses,
     surface_m2: property.surface_m2,
     google_maps_url: property.google_maps_url,
+    custom_tags: property.custom_tags ?? [],
     amenities: property.amenities,
     description: property.description,
     is_featured: property.is_featured,
@@ -70,6 +74,7 @@ function toDraft(property: AdminProperty): PropertyDraft {
 
 export function PropertyEditor({
   property,
+  customTags,
   onSaved,
   onDeleted,
   onError,
@@ -96,6 +101,15 @@ export function PropertyEditor({
       ...current,
       amenities: { ...current.amenities, [key]: value },
     }));
+  }
+
+  function patchCustomTag(key: string, checked: boolean) {
+    const current = draft.custom_tags ?? [];
+    patch({
+      custom_tags: checked
+        ? [...current, key]
+        : current.filter((item) => item !== key),
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -199,14 +213,6 @@ export function PropertyEditor({
         />
 
         <Input
-          label="Superficie (m²)"
-          type="number"
-          min={1}
-          value={draft.surface_m2}
-          onChange={(event) => patch({ surface_m2: Number(event.target.value) })}
-        />
-
-        <Input
           label="URL de Google Maps"
           type="url"
           placeholder="https://maps.app.goo.gl/…"
@@ -239,6 +245,24 @@ export function PropertyEditor({
             />
           ))}
         </div>
+
+        {customTags.length > 0 && (
+          <div className="mt-4 border-t border-border pt-3">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+              Etiquetas adicionales
+            </h4>
+            <div className="mt-2 flex flex-wrap gap-4">
+              {customTags.map(({ key, label }) => (
+                <ToggleCheck
+                  key={key}
+                  checked={(draft.custom_tags ?? []).includes(key)}
+                  label={label}
+                  onChange={(checked) => patchCustomTag(key, checked)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         <TextArea
           id="description"

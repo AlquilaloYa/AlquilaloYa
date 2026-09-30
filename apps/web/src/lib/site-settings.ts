@@ -34,9 +34,9 @@ export interface SiteSettings {
     price_min: number;
     max_price: number;
     price_step: number;
-    surface_m2: number;
     zones: { slug: "Angamos" | "Benavides"; label: string; address: string }[];
     amenities: { key: string; label: string }[];
+    custom_tags: { key: string; label: string }[];
   };
 }
 
@@ -86,7 +86,6 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
     price_min: 1500,
     max_price: 500000,
     price_step: 500,
-    surface_m2: 20,
     zones: [
       { slug: "Angamos", label: "Angamos", address: "Av. Angamos, Miraflores" },
       { slug: "Benavides", label: "Benavides", address: "Av. Benavides, Miraflores" },
@@ -100,6 +99,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
       { key: "mini_departamento", label: "Mini departamento" },
       { key: "mini_con_tendal", label: "Mini con tendal" },
     ],
+    custom_tags: [],
   },
 };
 
@@ -107,6 +107,9 @@ export function normalizeSettings(
   raw: Record<string, Record<string, unknown>>
 ): SiteSettings {
   const defaults = DEFAULT_SITE_SETTINGS;
+  const advanced = { ...defaults.advanced, ...(raw.advanced ?? {}) };
+  delete (advanced as Record<string, unknown>).surface_m2;
+
   return {
     hero: { ...defaults.hero, ...(raw.hero ?? {}) },
     about: {
@@ -124,8 +127,10 @@ export function normalizeSettings(
     contact: { ...defaults.contact, ...(raw.contact ?? {}) },
     seo: { ...defaults.seo, ...(raw.seo ?? {}) },
     advanced: {
-      ...defaults.advanced,
-      ...(raw.advanced ?? {}),
+      ...advanced,
+      custom_tags: Array.isArray(raw.advanced?.custom_tags)
+        ? (raw.advanced.custom_tags as { key: string; label: string }[])
+        : defaults.advanced.custom_tags,
       zones:
         Array.isArray(raw.advanced?.zones) && (raw.advanced.zones as unknown[]).length > 0
           ? (raw.advanced.zones as { slug: "Angamos" | "Benavides"; label: string; address: string }[])

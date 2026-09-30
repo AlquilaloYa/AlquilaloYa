@@ -38,4 +38,18 @@ describe("normalizeSettings", () => {
     expect(merged.advanced.price_min).toBe(DEFAULT_SITE_SETTINGS.advanced.price_min);
     expect(merged.advanced.zones).toEqual(DEFAULT_SITE_SETTINGS.advanced.zones);
   });
+
+  it("omite superficie heredada y conserva etiquetas personalizadas", () => {
+    const merged = normalizeSettings({
+      advanced: {
+        surface_m2: 20,
+        custom_tags: [{ key: "balcon-privado", label: "Balcón privado" }],
+      },
+    });
+
+    expect(merged.advanced).not.toHaveProperty("surface_m2");
+    expect(merged.advanced.custom_tags).toEqual([
+      { key: "balcon-privado", label: "Balcón privado" },
+    ]);
+  });
 });
