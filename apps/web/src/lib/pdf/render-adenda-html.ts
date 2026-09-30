@@ -342,21 +342,21 @@ export function renderAdendaPlantillaHtml(
             font-size: 15px;
             font-weight: bold;
             text-transform: uppercase;
-            margin-bottom: 18px;
+            margin-bottom: 12px;
             letter-spacing: 0.5px;
             text-decoration: underline;
         }
         p {
             font-size: 13px;
-            line-height: 1.42;
+            line-height: 1.34;
             text-align: justify;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .section-title {
             font-weight: bold;
             text-transform: uppercase;
-            margin-top: 10px;
-            margin-bottom: 5px;
+            margin-top: 8px;
+            margin-bottom: 4px;
             font-size: 13px;
         }
         .left-dots {
@@ -379,15 +379,15 @@ export function renderAdendaPlantillaHtml(
             font-size: 13px;
         }
         .date-line {
-            margin-top: 12px;
-            margin-bottom: 16px;
+            margin-top: 10px;
+            margin-bottom: 70px;
             text-align: left;
         }
         .signatures-container {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-top: 16px;
+            margin-top: 0;
             padding: 0 6px;
         }
         .signature-block {
@@ -396,7 +396,7 @@ export function renderAdendaPlantillaHtml(
         }
         .signature-line {
             border-top: 1px solid #000000;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .signature-name {
             font-weight: bold;
@@ -408,9 +408,9 @@ export function renderAdendaPlantillaHtml(
             margin-top: 3px;
         }
         .footer-page {
-            margin-top: 14px;
+            margin-top: 10px;
             border-top: 1px solid #e5e7eb;
-            padding-top: 6px;
+            padding-top: 5px;
             display: flex;
             justify-content: space-between;
             font-size: 11px;
