@@ -251,8 +251,9 @@ function ChecklistModal(props: {
 function ArchivoAdjunto(props: {
   archivo: ArchivoAdjunto;
   onQuitar: () => void;
+  onVer?: () => void;
 }) {
-  const { archivo, onQuitar } = props;
+  const { archivo, onQuitar, onVer } = props;
   const esImagen = archivo.tipo.startsWith("image/");
   const esPdf =
     archivo.tipo === "application/pdf" || /\.pdf$/i.test(archivo.nombre);
@@ -273,7 +274,18 @@ function ArchivoAdjunto(props: {
           <FileText className="h-4 w-4 text-muted-foreground" />
         </span>
       )}
-      <span className="min-w-0 flex-1 truncate font-medium">{archivo.nombre}</span>
+      {onVer ? (
+        <button
+          type="button"
+          onClick={onVer}
+          className="min-w-0 flex-1 truncate text-left font-medium hover:text-primary hover:underline"
+          title={`Ver ${archivo.nombre}`}
+        >
+          {archivo.nombre}
+        </button>
+      ) : (
+        <span className="min-w-0 flex-1 truncate font-medium">{archivo.nombre}</span>
+      )}
       <button
         type="button"
         onClick={onQuitar}
@@ -996,6 +1008,14 @@ export default function ContactosPage() {
                       <ArchivoAdjunto
                         key={a.id}
                         archivo={a}
+                        onVer={() =>
+                          setPreview({
+                            titulo: `${[form.nombre, form.apellido]
+                              .filter(Boolean)
+                              .join(" ")} · Copia de DNI`,
+                            archivos: form.copiaDni ?? [],
+                          })
+                        }
                         onQuitar={() => quitarArchivo("copiaDni", a.id)}
                       />
                     ))}
@@ -1023,6 +1043,14 @@ export default function ContactosPage() {
                       <ArchivoAdjunto
                         key={a.id}
                         archivo={a}
+                        onVer={() =>
+                          setPreview({
+                            titulo: `${[form.nombre, form.apellido]
+                              .filter(Boolean)
+                              .join(" ")} · Copia de boletas`,
+                            archivos: form.copiaBoletas ?? [],
+                          })
+                        }
                         onQuitar={() => quitarArchivo("copiaBoletas", a.id)}
                       />
                     ))}
@@ -1050,6 +1078,14 @@ export default function ContactosPage() {
                       <ArchivoAdjunto
                         key={a.id}
                         archivo={a}
+                        onVer={() =>
+                          setPreview({
+                            titulo: `${[form.nombre, form.apellido]
+                              .filter(Boolean)
+                              .join(" ")} · Copia de antecedentes penales`,
+                            archivos: form.copiaAntecedentes ?? [],
+                          })
+                        }
                         onQuitar={() => quitarArchivo("copiaAntecedentes", a.id)}
                       />
                     ))}

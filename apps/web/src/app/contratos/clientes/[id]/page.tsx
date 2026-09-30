@@ -124,7 +124,11 @@ export default function ClienteContratoPage() {
   >({});
   const [registrando, setRegistrando] = useState<string | null>(null);
   const [errorPago, setErrorPago] = useState<string | null>(null);
-  const [previewVoucher, setPreviewVoucher] = useState<string | null>(null);
+  const [previewVoucher, setPreviewVoucher] = useState<{
+    dataUrl: string;
+    nombre: string;
+    tipo: string;
+  } | null>(null);
 
   const cargarPagos = async (contractId: string) => {
     try {
@@ -168,6 +172,34 @@ export default function ClienteContratoPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [previewVoucher]);
+
+  // Los PDF no se pueden mostrar en un <img>: se convierte el dataUrl en un
+  // blob URL para embeberlo en un <iframe> (si no, sale la imagen rota).
+  const previewEsPdf =
+    previewVoucher?.tipo === "application/pdf" ||
+    /\.pdf$/i.test(previewVoucher?.nombre ?? "") ||
+    previewVoucher?.dataUrl.startsWith("data:application/pdf");
+  const [previewPdfSrc, setPreviewPdfSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!previewEsPdf || !previewVoucher?.dataUrl) {
+      setPreviewPdfSrc(null);
+      return;
+    }
+    let objetoUrl: string | null = null;
+    let vivo = true;
+    fetch(previewVoucher.dataUrl)
+      .then((res) => res.blob())
+      .then((blob) => {
+        if (!vivo) return;
+        objetoUrl = URL.createObjectURL(blob);
+        setPreviewPdfSrc(objetoUrl);
+      })
+      .catch(() => setPreviewPdfSrc(null));
+    return () => {
+      vivo = false;
+      if (objetoUrl) URL.revokeObjectURL(objetoUrl);
+    };
+  }, [previewEsPdf, previewVoucher?.dataUrl]);
 
   const [contacto, setContacto] = useState<ContactoDetalle | null>(null);
   useEffect(() => {
@@ -603,7 +635,13 @@ export default function ClienteContratoPage() {
                                   <button
                                     key={`${v.url.slice(0, 24)}-${i}`}
                                     type="button"
-                                    onClick={() => setPreviewVoucher(v.url)}
+                                    onClick={() =>
+                                      setPreviewVoucher({
+                                        dataUrl: v.url,
+                                        nombre: v.nombre,
+                                        tipo: "image/jpeg",
+                                      })
+                                    }
                                     className="block"
                                     title={v.nombre}
                                   >
@@ -674,7 +712,13 @@ export default function ClienteContratoPage() {
                                     <div key={v.nombre + i} className="relative">
                                       <button
                                         type="button"
-                                        onClick={() => setPreviewVoucher(v.dataUrl)}
+                                        onClick={() =>
+                                          setPreviewVoucher({
+                                            dataUrl: v.dataUrl,
+                                            nombre: v.nombre,
+                                            tipo: v.tipo,
+                                          })
+                                        }
                                         title={v.nombre}
                                         className="block"
                                       >
@@ -730,15 +774,28 @@ export default function ClienteContratoPage() {
                   {b.dataUrl ? (
                     <button
                       type="button"
-                      onClick={() => setPreviewVoucher(b.dataUrl ?? null)}
+                      onClick={() =>
+                        setPreviewVoucher({
+                          dataUrl: b.dataUrl ?? "",
+                          nombre: b.nombre,
+                          tipo: b.tipo ?? "",
+                        })
+                      }
                       className="shrink-0"
                       title="Ver baucher"
                     >
-                      <img
-                        src={b.dataUrl}
-                        alt={b.nombre}
-                        className="h-14 w-16 rounded object-cover"
-                      />
+                      {b.tipo === "application/pdf" ||
+                      /\.pdf$/i.test(b.nombre) ? (
+                        <span className="flex h-14 w-16 items-center justify-center rounded border border-outline-variant bg-destructive/10 text-[10px] font-bold text-destructive">
+                          PDF
+                        </span>
+                      ) : (
+                        <img
+                          src={b.dataUrl}
+                          alt={b.nombre}
+                          className="h-14 w-16 rounded object-cover"
+                        />
+                      )}
                     </button>
                   ) : (
                     <FileText className="h-4 w-4 shrink-0 text-primary" />
@@ -778,11 +835,19 @@ export default function ClienteContratoPage() {
                 ✕
               </button>
             </div>
-            <img
-              src={previewVoucher}
-              alt="Baucher"
-              className="max-h-[70vh] w-full object-contain"
-            />
+            {previewEsPdf ? (
+              <iframe
+                src={previewPdfSrc ?? ""}
+                title={previewVoucher.nombre}
+                className="h-[70vh] w-full bg-white"
+              />
+            ) : (
+              <img
+                src={previewVoucher.dataUrl}
+                alt={previewVoucher.nombre || "Baucher"}
+                className="max-h-[70vh] w-full object-contain"
+              />
+            )}
           </div>
         </div>
       ) : null}
