@@ -238,11 +238,34 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
   const domicilio = field(cliente, ["domicilio"]) || "________________";
 
   const nacimiento = field(cliente, ["nacionalidad"]) || "Peruano(a)";
-  const fmtSoles = (n: number): string => n.toFixed(2);
-  const canonTxt = fmtSoles(montoRenta);
-  const mantenimientoTxt = fmtSoles(mantenimiento);
-  const totalTxt = fmtSoles(montoTotal);
-  const totalLetras = `${numeroEnLetras(Math.floor(montoTotal))} y ${String(Math.round((montoTotal % 1) * 100)).padStart(2, "0")}/100 soles`;
+  const esAngamos = (field(departamento, ["codigo"]) || "").toUpperCase().startsWith("ANG");
+  const domicilioArrendador = esAngamos
+    ? "Av. Angamos Este 170, distrito de Miraflores, Departamento y Provincia de Lima"
+    : "Av. Alfredo Benavides 2195, distrito de Miraflores, Departamento y Provincia de Lima";
+  const telf = "937205274";
+
+  const fmtMiles = (n: number): string =>
+    n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const letrasDe = (n: number): string =>
+    `${numeroEnLetras(Math.floor(n))} y ${String(Math.round((n % 1) * 100)).padStart(2, "0")}/100 soles`;
+  const canonTxt = fmtMiles(montoRenta);
+  const mantenimientoTxt = fmtMiles(mantenimiento);
+  const totalTxt = fmtMiles(montoTotal);
+  const canonLetras = letrasDe(montoRenta);
+  const mantenimientoLetras = letrasDe(mantenimiento);
+  const totalLetras = letrasDe(montoTotal);
+
+  const periodoMeses = (() => {
+    const f = (String(contrato.fechaFin ?? "").split("T")[0] ?? "").split("-").map(Number);
+    const i = (String(contrato.fechaInicio ?? "").split("T")[0] ?? "").split("-").map(Number);
+    if (f.length < 3 || i.length < 3 || isNaN(f[0] as number) || isNaN(i[0] as number)) return "";
+    const meses = ((f[0] as number) - (i[0] as number)) * 12 + ((f[1] as number) - (i[1] as number));
+    return meses === 1 ? " por un periodo de 1 mes" : ` por un periodo de ${Math.max(meses, 0)} meses`;
+  })();
+
+  const ORDINALES = ["", "PRIMERA", "SEGUNDA", "TERCERA", "CUARTA", "QUINTA", "SEXTA", "SÉPTIMA", "OCTAVA", "NOVENA", "DÉCIMA"] as const;
+  const nOrdinal = parseInt(numeroAdenda, 10) || 1;
+  const ordinalAdenda = ORDINALES[nOrdinal] ?? `N° ${nOrdinal}ª`;
 
   const fmt = (obj: { dia: string; mes: string; año: string } | null): string =>
     obj ? `${obj.dia} de ${obj.mes} del ${obj.año}` : "________________";
@@ -250,9 +273,9 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
   const fmtMesFin = (obj: { dia: string; mes: string; año: string } | null): string =>
     obj ? `${obj.dia}, ${obj.mes} del ${obj.año}` : "________________";
 
-  const finOriginal = fmt(fechaFinOriginal);
   const inicioOriginal = fmt(fechaInicioOriginal);
   const inicioAdenda = fmt(fechaInicioAdenda);
+  const inicioPlazo = fmt(fechaInicioAdenda || fechaInicioOriginal);
   const finAdendaMesFin = fmtMesFin(fechaFinAdenda);
 
   const tituloAdenda = String(contrato.titulo ?? "ADENDA").trim() || "ADENDA";
@@ -272,117 +295,136 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
     <title>Primera Adenda al Contrato de Arrendamiento</title>
     <style>
         @page { size: A4; margin: 20mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: Arial, sans-serif;
-            font-size: 10pt;
-            line-height: 1.3;
-            color: #000000;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #111111;
             background-color: #ffffff;
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            height: auto;
+            line-height: 1.6;
         }
         h1 {
             text-align: center;
-            font-size: 12.5pt;
+            font-size: 15px;
             font-weight: bold;
             text-transform: uppercase;
-            margin-top: 0;
-            margin-bottom: 12px;
-            line-height: 1.3;
-        }
-        h2 {
-            font-size: 10.5pt;
-            font-weight: bold;
-            text-transform: uppercase;
-            margin-top: 8px;
-            margin-bottom: 4px;
+            margin-bottom: 18px;
+            letter-spacing: 0.5px;
+            text-decoration: underline;
         }
         p {
-            font-size: 10pt;
+            font-size: 13px;
+            line-height: 1.5;
             text-align: justify;
+            margin-bottom: 10px;
+        }
+        .section-title {
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-top: 12px;
             margin-bottom: 6px;
+            font-size: 13px;
         }
-        .bold { font-weight: bold; }
-        .section-block { page-break-inside: avoid; break-inside: avoid; margin-bottom: 6px; }
-        .titulo-adenda { text-align: center; font-size: 11pt; font-weight: bold; margin: 2px 0 10px; text-transform: uppercase; }
-        .contenido-adenda { white-space: pre-wrap; margin-top: 4px; }
-        .signature-section {
-            margin-top: 18px;
-            width: 100%;
-            page-break-inside: avoid;
-            break-inside: avoid;
+        .left-dots {
+            text-align: left;
+            margin-bottom: 8px;
+            font-weight: bold;
+            letter-spacing: 2px;
         }
-        .signature-table { width: 100%; border-collapse: collapse; }
-        .signature-table td { width: 50%; vertical-align: top; padding: 0 15px; text-align: center; }
-        .signature-line { border-top: 1px solid #000000; margin-top: 28px; margin-bottom: 4px; }
-        .footer {
+        .clause-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            font-size: 13px;
+        }
+        .titulo-adenda {
+            text-align: center;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 2px 0 14px;
+            font-size: 13px;
+        }
+        .date-line {
             margin-top: 14px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .signatures-container {
             display: flex;
             justify-content: space-between;
-            font-size: 9pt;
-            color: #555555;
-            border-top: 1px solid #cccccc;
+            align-items: flex-start;
+            margin-top: 20px;
+            padding: 0 6px;
+        }
+        .signature-block {
+            width: 42%;
+            text-align: center;
+        }
+        .signature-line {
+            border-top: 1px solid #000000;
+            margin-bottom: 8px;
+        }
+        .signature-name {
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        .signature-dni {
+            font-size: 12px;
+            margin-top: 3px;
+        }
+        .footer-page {
+            margin-top: 18px;
+            border-top: 1px solid #e5e7eb;
             padding-top: 8px;
-            page-break-inside: avoid;
-            break-inside: avoid;
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #6b7280;
         }
     </style>
 </head>
 <body>
 
-    <h1>ADENDA N° ${numeroAdenda} AL CONTRATO DE<br>ARRENDAMIENTO</h1>
+    <h1>ADENDA N° ${escapeHtml(numeroAdenda)} AL CONTRATO DE<br>ARRENDAMIENTO</h1>
     ${titularDistinto ? `<p class="titulo-adenda">${escapeHtml(tituloAdenda)}</p>` : ""}
 
-    <div class="section-block">
-        <p>Conste por el presente documento la <span class="bold">ADENDA AL CONTRATO DE ARRENDAMIENTO</span> de fecha <span class="bold">${inicioOriginal}</span> que celebran de una parte ${arrendador.trat} <span class="bold">${arrendador.nombres} ${arrendador.apellidos.toUpperCase()}</span>, identificado(a) con D.N.I. N° <span class="bold">${arrendador.dni}</span>, domiciliado(a) en <span class="bold">Av. Alfredo Benavides 2195, distrito de Miraflores, Departamento y Provincia de Lima</span>, a quien en adelante se le denominará <span class="bold">LA ARRENDADOR(A)</span>; y, de la otra parte, el Sr.(a) <span class="bold">${nombreCompleto}</span>, identificado(a) con D.N.I. / C.E. / Pasaporte N° <span class="bold">${clienteDocumento || "________________"}</span>, de nacionalidad <span class="bold">${nacimiento}</span>, domiciliado(a) en <span class="bold">${domicilio}</span>, a quien en adelante se denominará <span class="bold">EL ARRENDATARIO(A)</span>, en los términos y bajo las condiciones siguientes:</p>
+    <p>Conste por el presente documento la <strong>${ordinalAdenda} ADENDA AL CONTRATO DE ARRENDAMIENTO</strong> de fecha <strong>${inicioOriginal}</strong>, que celebran de una parte ${arrendador.trat} <strong>${arrendador.nombres} ${arrendador.apellidos.toUpperCase()}</strong>, identificado con DNI N° <strong>${arrendador.dni}</strong>, domiciliado en <strong>${escapeHtml(domicilioArrendador)}</strong>, a quien en adelante se le denominará <strong>LA ARRENDADOR(A)</strong> y, de la otra parte, el Sr.(a) <strong>${escapeHtml(nombreCompleto)}</strong>, identificado con DNI / C.E. / Pasaporte N° <strong>${escapeHtml(clienteDocumento || "________________")}</strong>, de nacionalidad <strong>${escapeHtml(nacimiento)}</strong>, domiciliado en <strong>${escapeHtml(domicilio)}</strong>, a quien en adelante se denominará <strong>EL ARRENDATARIO</strong>, en los términos y bajo las condiciones siguientes:</p>
+
+    <div class="section-title">PRIMERO: ANTECEDENTES</div>
+    <p>Con fecha <strong>${inicioOriginal}</strong>, las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <strong>${escapeHtml(deptoNumero)}</strong> ubicado en <strong>${escapeHtml(direccionInmueble(departamento))}</strong>${periodoMeses}, con una merced conductiva de S/ <strong>${canonTxt} (${canonLetras})</strong> más mantenimiento de S/ <strong>${mantenimientoTxt} (${mantenimientoLetras})</strong> un total de S/ <strong>${totalTxt} (${totalLetras})</strong> mensuales.</p>
+
+    <div class="section-title">SEGUNDO: OBJETO</div>
+    <p>Las partes acuerdan modificar la Cláusula QUINTA del contrato de arrendamiento del Mini departamento N° <strong>${escapeHtml(deptoNumero)}</strong>, bajo los siguientes términos:</p>
+
+    <div class="left-dots">...</div>
+
+    <div class="clause-title">PLAZO DEL CONTRATO:</div>
+    <p><strong>QUINTA.-</strong> Las partes convienen fijar un plazo de duración determinada para el presente contrato, el cual será del <strong>${inicioPlazo}</strong> hasta el día <strong>${finAdendaMesFin}</strong>; fecha en la que EL ARRENDATARIO(A) está obligado a desocupar y devolver el bien arrendado.</p>
+    <p>El presente contrato podrá ser renovado con una anticipación no menor de quince (15) días calendarios a la conclusión del arrendamiento y que exista acuerdo entre ambas partes confirmando vía WhatsApp al telf. <strong>${telf}</strong> o mediante adenda firmada.</p>
+
+    <div class="left-dots">...</div>
+
+    <div class="section-title">TERCERO: RATIFICACIÓN</div>
+    <p>Salvo por la modificación señalada en la presente adenda, todas las demás cláusulas y condiciones del contrato de arrendamiento original se mantienen vigentes y sin alteración alguna.</p>
+    ${conContenido ? `<p>Otras precisiones convenidas: ${escapeHtml(contenidoAdenda).replace(/\n/g, "<br>")}</p>` : ""}
+    <p>En señal de conformidad, ambas partes suscriben la presente adenda en dos ejemplares de igual tenor y validez, en esta ciudad.</p>
+
+    <p class="date-line">Miraflores, <strong>${inicioAdenda}</strong>.</p>
+
+    <div class="signatures-container">
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-name">${arrendador.nombres} ${arrendador.apellidos}</div>
+            <div class="signature-dni">DNI N° ${arrendador.dni}</div>
+        </div>
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-name">${escapeHtml(nombreCompleto.toUpperCase())}</div>
+            <div class="signature-dni">DNI / C.E. / PASAPORTE N° ${escapeHtml(clienteDocumento || "________________")}</div>
+        </div>
     </div>
 
-    <div class="section-block">
-        <h2>ANTECEDENTES</h2>
-        <p><span class="bold">PRIMERO.-</span> Con fecha del <span class="bold">${inicioOriginal} hasta el día ${finOriginal}</span>; las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <span class="bold">${deptoNumero}</span> ubicado en <span class="bold">${direccionInmueble(departamento)}</span>; con una merced conductiva de S/ <span class="bold">${totalTxt} (${totalLetras})</span> mensuales, correspondiente al canon de S/ <span class="bold">${canonTxt}</span> más mantenimiento de S/ <span class="bold">${mantenimientoTxt}</span> e incluye los servicios de luz y agua, siendo cancelada en la <span class="bold">${datosCuenta(departamento)}</span>.</p>
-    </div>
-
-    <div class="section-block">
-        <h2>OBJETO</h2>
-        <p><span class="bold">SEGUNDO.-</span> Las partes acuerdan modificar la Cláusula QUINTA del contrato de arrendamiento del Mini departamento N° <span class="bold">${deptoNumero}</span>, bajo los siguientes términos:</p>
-
-        <p><span class="bold">PLAZO DEL CONTRATO:</span></p>
-        <p><span class="bold">QUINTA.-</span> Las partes convienen fijar un plazo de duración determinada para el presente contrato, el cual será del <span class="bold">${inicioOriginal} hasta el ${finAdendaMesFin}</span>; fecha en la que EL ARRENDATARIO está obligado a desocupar y devolver el bien arrendado.</p>
-        <p>El presente contrato podrá ser renovado con una anticipación no menor de quince (15) días calendarios a la conclusión del arrendamiento y que exista acuerdo entre ambas partes confirmando via WhatsApp al telf. <span class="bold">937205274</span> o mediante adenda firmada.</p>
-    </div>
-
-    <div class="section-block">
-        <h2>RATIFICACIÓN</h2>
-        <p><span class="bold">TERCERO.</span> Salvo por la modificación señalada en la presente adenda, todas las demás cláusulas y condiciones del contrato de arrendamiento original se mantienen vigentes y sin alteración alguna.</p>
-
-        <p>En señal de conformidad, ambas partes suscriben la presente adenda en dos ejemplares de igual tenor y validez, en esta ciudad.</p>
-        ${conContenido ? `<div class="section-block"><p>Otras precisiones convenidas: <span class="bold">${escapeHtml(contenidoAdenda).replace(/\n/g, "<br>")}</span></p></div>` : ""}
-
-        <p>Miraflores, <span class="bold">${inicioAdenda}</span>.</p>
-    </div>
-
-    <div class="signature-section">
-        <table class="signature-table">
-            <tr>
-                <td>
-                    <div class="signature-line"></div>
-                    <p><span class="bold">LA ARRENDADOR(A)</span><br>
-                    ${arrendador.nombres} ${arrendador.apellidos}<br>
-                    DNI: ${arrendador.dni}</p>
-                </td>
-                <td>
-                    <div class="signature-line"></div>
-                    <p><span class="bold">EL ARRENDATARIO(A)</span><br>
-                    ${nombreCompleto}<br>
-                    DNI/PASAPORTE: ${clienteDocumento || "________________"}</p>
-                </td>
-            </tr>
-        </table>
-    </div>
-
-    <div class="footer">
+    <div class="footer-page">
         <span>Adenda al Contrato de Arrendamiento</span>
         <span>Página 1</span>
     </div>
