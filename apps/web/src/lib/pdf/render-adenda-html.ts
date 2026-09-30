@@ -74,9 +74,42 @@ function codigoCorto(codigo: string): string {
  * del departamento ("BEN2195-*" -> Benavides, "ANG170-*" -> Angamos).
  * Si el código no permite determinarlo, cae al modelo Benavides.
  */
-function direccionInmueble(departamento: Record<string, unknown>): string {
+/**
+ * Resuelve el PISO VIGENTE del departamento en la base de datos.
+ * El snapshot congela el piso con el que se creó el contrato; si después se
+ * corrige en la tabla departments, la adenda debe salir con el dato actual.
+ * El import de @contract/db es perezoso para no abrir el pool en build-time.
+ */
+async function pisoVigenteDepartamento(
+  departamento: Record<string, unknown>
+): Promise<number | null> {
+  try {
+    const id = String(field(departamento, ["id"]) ?? "").trim();
+    const codigo = String(field(departamento, ["codigo"]) ?? "").trim().toUpperCase();
+    if (!id && !codigo) return null;
+    const dbModule = (await import("@contract/db")) as typeof import("@contract/db");
+    const { db, schema } = dbModule;
+    const { eq } = await import("drizzle-orm");
+    const filas = await db
+      .select({ piso: schema.departments.piso })
+      .from(schema.departments)
+      .where(id ? eq(schema.departments.id, id) : eq(schema.departments.codigo, codigo))
+      .limit(1);
+    const piso = filas[0]?.piso;
+    if (piso === null || piso === undefined) return null;
+    const n = Number(piso);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function direccionInmueble(
+  departamento: Record<string, unknown>,
+  pisoVigente?: number | null
+): string {
   const codigo = (field(departamento, ["codigo"]) || "").toUpperCase();
-  const piso = field(departamento, ["piso"]);
+  const piso = pisoVigente ?? field(departamento, ["piso"]);
   if (codigo.startsWith("ANG")) {
     return `Av. Angamos Este 170, Miraflores, Piso ${piso}, Lima Metropolitana, Lima`;
   }
@@ -133,13 +166,16 @@ function datosCuenta(departamento: Record<string, unknown>): string {
  * Si el snapshot de adenda incluye fechaInicioAdenda/fechaFinAdenda usa
  * la plantilla formal (modelo Benavides) con el nuevo plazo de la adenda.
  */
-export function renderAdendaHtml(snapshot: ContractSnapshot): string {
+export async function renderAdendaHtml(snapshot: ContractSnapshot): Promise<string> {
   const contrato = snapshot.datosContrato as Record<string, unknown>;
   if (contrato.tipoDocumento === "ADENDA_EXTENSION") {
     return renderExtensionAdendaHtml(snapshot);
   }
   if (contrato.fechaInicioAdenda && contrato.fechaFinAdenda) {
-    return renderAdendaPlantillaHtml(snapshot);
+    const piso = await pisoVigenteDepartamento(
+      (snapshot.datosDepartamento ?? {}) as Record<string, unknown>
+    );
+    return renderAdendaPlantillaHtml(snapshot, piso);
   }
   const cliente = snapshot.datosCliente as Record<string, unknown>;
   const departamento = snapshot.datosDepartamento as Record<string, unknown>;
@@ -212,8 +248,15 @@ export function renderAdendaHtml(snapshot: ContractSnapshot): string {
 </html>`;
 }
 
-/** Plantilla formal de adenda (modelo Benavides) usando datos del snapshot. */
-export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
+/**
+ * Plantilla formal de adenda (modelo Benavides) usando datos del snapshot.
+ * `pisoVigente` es el piso leído de la tabla departments al momento de generar
+ * el PDF; si viene null se usa el congelado en el snapshot.
+ */
+export function renderAdendaPlantillaHtml(
+  snapshot: ContractSnapshot,
+  pisoVigente?: number | null
+): string {
   const contrato = snapshot.datosContrato as Record<string, unknown>;
   const cliente = snapshot.datosCliente as Record<string, unknown>;
   const departamento = snapshot.datosDepartamento as Record<string, unknown>;
@@ -383,7 +426,7 @@ export function renderAdendaPlantillaHtml(snapshot: ContractSnapshot): string {
     <p>Conste por el presente documento la <strong>${ordinalAdenda} ADENDA AL CONTRATO DE ARRENDAMIENTO</strong> de fecha <strong>${inicioOriginal}</strong>, que celebran de una parte ${arrendador.trat} <strong>${arrendador.nombres} ${arrendador.apellidos.toUpperCase()}</strong>, identificado con DNI N° <strong>${arrendador.dni}</strong>, domiciliado en <strong>${escapeHtml(domicilioArrendador)}</strong>, a quien en adelante se le denominará <strong>LA ARRENDADOR(A)</strong> y, de la otra parte, el Sr.(a) <strong>${escapeHtml(nombreCompleto)}</strong>, identificado con DNI / C.E. / Pasaporte N° <strong>${escapeHtml(clienteDocumento || "________________")}</strong>, de nacionalidad <strong>${escapeHtml(nacimiento)}</strong>, domiciliado en <strong>${escapeHtml(domicilio)}</strong>, a quien en adelante se denominará <strong>EL ARRENDATARIO</strong>, en los términos y bajo las condiciones siguientes:</p>
 
     <div class="section-title">PRIMERO: ANTECEDENTES</div>
-    <p>Con fecha <strong>${inicioOriginal}</strong>, las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <strong>${escapeHtml(deptoNumero)}</strong> ubicado en <strong>${escapeHtml(direccionInmueble(departamento))}</strong> con una merced conductiva de S/ <strong>${canonTxt} (${canonLetras})</strong> más mantenimiento de S/ <strong>${mantenimientoTxt} (${mantenimientoLetras})</strong> un total de S/ <strong>${totalTxt} (${totalLetras})</strong> mensuales; e incluye los servicios de luz y agua, siendo cancelada en la ${datosCuenta(departamento)}.</p>
+    <p>Con fecha <strong>${inicioOriginal}</strong>, las partes celebraron un Contrato de Arrendamiento respecto al mini departamento N° <strong>${escapeHtml(deptoNumero)}</strong> ubicado en <strong>${escapeHtml(direccionInmueble(departamento, pisoVigente))}</strong> con una merced conductiva de S/ <strong>${canonTxt} (${canonLetras})</strong> más mantenimiento de S/ <strong>${mantenimientoTxt} (${mantenimientoLetras})</strong> un total de S/ <strong>${totalTxt} (${totalLetras})</strong> mensuales; e incluye los servicios de luz y agua, siendo cancelada en la ${datosCuenta(departamento)}.</p>
 
     <div class="section-title">SEGUNDO: OBJETO</div>
     <p>Las partes acuerdan modificar la Cláusula QUINTA del contrato de arrendamiento del Mini departamento N° <strong>${escapeHtml(deptoNumero)}</strong>, bajo los siguientes términos:</p>

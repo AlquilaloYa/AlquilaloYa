@@ -69,7 +69,7 @@ export async function generateAdendaPdf(
   snapshot: ContractSnapshot
 ): Promise<PdfResult> {
   return pdfFromHtml(
-    renderAdendaHtml(snapshot),
+    await renderAdendaHtml(snapshot),
     `${snapshot.codigoContrato || "adenda"}.pdf`
   );
 }
