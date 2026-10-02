@@ -58,3 +58,8 @@ scripts/.tmp-*
 
 # Salidas de scripts de base de datos
 packages/db/regen-*.txt
+
+# Archivos locales de trabajo (no versionar)
+prodcheck.env
+pull.txt
+*.local.env
