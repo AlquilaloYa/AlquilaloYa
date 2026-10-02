@@ -5,7 +5,7 @@ import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { FileText, AlertTriangle, Activity, X } from "lucide-react";
+import { AlertTriangle, X } from "lucide-react";
 import { DonutChart } from "@/components/donut-chart";
 import { CobranzaVendedores } from "@/components/cobranza-vendedores";
 
@@ -59,15 +59,6 @@ interface DashboardData {
   };
   erroresGeneracion: number;
   resumen: Resumen;
-  actividadReciente: {
-    id: string;
-    timestamp: string;
-    actor: string;
-    action: string;
-    module: string;
-    entityId: string;
-    result: string;
-  }[];
 }
 
 type Tone = "default" | "green" | "red" | "yellow" | "black" | "blue";
@@ -115,22 +106,6 @@ function moneyCompact(n: number): string {
     return `${signo}${v >= 10 ? v.toFixed(0) : v.toFixed(1)}K`;
   }
   return `${signo}${abs.toLocaleString("es-PE")}`;
-}
-
-function actionLabel(action: string): string {
-  const map: Record<string, string> = {
-    CONTRACT_CREATED: "creó el contrato",
-    CONTRACT_UPDATED: "actualizó el contrato",
-    CONTRACT_EMISSION_REQUESTED: "solicitó emisión",
-    SNAPSHOT_CREATED: "generó instantánea",
-    CONTRACT_EMITTED: "emitió el contrato",
-    CONTRACT_SIGNATURE_REQUESTED: "solicitó la firma",
-    CONTRACT_SIGNED: "firmó el contrato",
-    CONTRACT_RESOLVED: "resolvió el contrato",
-    CONTRACT_RENEWED: "renovó el contrato",
-    CONTRACT_CANCELLED: "canceló el contrato",
-  };
-  return map[action] ?? action.toLowerCase().replace(/_/g, " ");
 }
 
 function statValue(s: StatItem, r: Resumen): number | string {
@@ -479,38 +454,6 @@ return (
               </div>
             </div>
 
-            <div className="col-span-12 flex flex-col rounded-lg bg-surface-container-lowest shadow-sm">
-              <div className="flex items-center justify-between p-5">
-                <h3 className="font-headline-md text-primary">Actividad reciente</h3>
-                <Activity className="h-5 w-5 text-primary" />
-              </div>
-              <ul className="max-h-[400px] flex-1 divide-y divide-outline-variant/50 overflow-y-auto">
-                {data.actividadReciente.length === 0 ? (
-                  <li className="p-4 font-body-sm text-on-surface-variant">Sin actividad.</li>
-                ) : (
-                  data.actividadReciente.map((a) => (
-                    <li key={a.id} className="flex gap-3 p-4 transition-colors hover:bg-surface">
-                      <div className="mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-surface-container-highest text-on-surface">
-                        <FileText className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-body-sm text-on-surface break-words">
-                          <span className="font-semibold">{a.actor}</span> {actionLabel(a.action)}
-                        </p>
-                        <span className="font-mono-label text-on-surface-variant">
-                          {new Date(a.timestamp).toLocaleString()}
-                        </span>
-                      </div>
-                    </li>
-                  ))
-                )}
-              </ul>
-              <div className="p-3 text-center">
-                <Link href="/actividad" className="font-label-md text-primary-container hover:text-primary">
-                  Ver actividad completa
-                </Link>
-              </div>
-            </div>
           </div>
           </>
         )}
