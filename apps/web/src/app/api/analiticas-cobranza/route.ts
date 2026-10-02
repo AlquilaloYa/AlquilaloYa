@@ -191,11 +191,13 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       year,
-      meses: meses.map(({ mes, valores }) => ({
+meses: meses.map(({ mes, valores }) => ({
         mes,
-        miguel: redondear(valores.miguel),
+        valores: {
+          miguel: redondear(valores.miguel),
           emely: redondear(valores.emely),
           evelin: redondear(valores.evelin),
+        },
       })),
       vendedores,
     });
