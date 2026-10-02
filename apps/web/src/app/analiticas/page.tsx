@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
@@ -16,19 +16,28 @@ const PERSONAS = [
 type PersonaKey = (typeof PERSONAS)[number]["key"];
 type Categoria = "mensualidad" | "mantenimiento" | "penalidad";
 type Base = "cuota" | "pago";
+type Vista = "acumulado" | "mes-en-curso" | "por-fecha-pago";
 
-const BASES = [
+const VISTAS = [
   {
-    key: "cuota",
-    label: "Por cuota",
-    ayuda: "Cada canon se suma en el mes al que corresponde la cuota.",
+    key: "acumulado",
+    label: "Acumulado",
+    base: "cuota",
+    ayuda: "Cada canon se suma en el mes de su cuota, de enero a diciembre.",
   },
   {
-    key: "pago",
+    key: "mes-en-curso",
+    label: "Mes en curso",
+    base: "pago",
+    ayuda: "Solo lo pagado durante este mes. Sube conforme registras pagos.",
+  },
+  {
+    key: "por-fecha-pago",
     label: "Por fecha de pago",
-    ayuda: "Se suma en el mes en que se registró el pago.",
+    base: "pago",
+    ayuda: "Agrupa cada pago en el mes en que se registró.",
   },
-] as const satisfies { key: Base; label: string; ayuda: string }[];
+] as const satisfies { key: Vista; label: string; base: Base; ayuda: string }[];
 
 const CATEGORIAS: { key: Categoria; label: string; corto: string }[] = [
   { key: "mensualidad", label: "Mensualidad", corto: "Mensualidad" },
@@ -69,40 +78,65 @@ const money = (value: number) =>
 export default function AnaliticasPage() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState<number | "todos">("todos");
-  const [base, setBase] = useState<Base>("cuota");
+  const [vista, setVista] = useState<Vista>("acumulado");
   const [categoria, setCategoria] = useState<Categoria>("mensualidad");
   const [data, setData] = useState<AnaliticasData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actualizado, setActualizado] = useState<Date | null>(null);
+
+  const vistaActual = VISTAS.find((item) => item.key === vista) ?? VISTAS[0];
+  const enCurso = vista === "mes-en-curso";
+  const petición = useRef(0);
+
+  const cargar = useCallback(
+    async (silencioso = false) => {
+      const id = ++petición.current;
+      if (!silencioso) {
+        setLoading(true);
+        setError("");
+      }
+      const params = new URLSearchParams({ year: String(year), base: vistaActual.base });
+      if (enCurso) params.set("month", "actual");
+      else if (month !== "todos") params.set("month", String(month));
+      try {
+        const response = await apiFetch(`/api/analiticas-cobranza?${params.toString()}`);
+        if (!response.ok) throw new Error("No se pudieron cargar las analíticas de cobranza.");
+        const resultado = (await response.json()) as AnaliticasData;
+        if (id !== petición.current) return;
+        setData(resultado);
+        setActualizado(new Date());
+        setError("");
+      } catch (err) {
+        if (id !== petición.current) return;
+        if (!silencioso) {
+          setError(err instanceof Error ? err.message : "Ocurrió un error al cargar los datos.");
+        }
+      } finally {
+        if (!silencioso && id === petición.current) setLoading(false);
+      }
+    },
+    [year, month, vistaActual.base, enCurso]
+  );
 
   useEffect(() => {
-    let activo = true;
-    setLoading(true);
-    setError("");
-    const params = new URLSearchParams({ year: String(year), base });
-    if (month !== "todos") params.set("month", String(month));
-    apiFetch(`/api/analiticas-cobranza?${params.toString()}`)
-      .then(async (response) => {
-        if (!response.ok) throw new Error("No se pudieron cargar las analíticas de cobranza.");
-        return (await response.json()) as AnaliticasData;
-      })
-      .then((resultado) => {
-        if (activo) setData(resultado);
-      })
-      .catch((err: unknown) => {
-        if (activo) setError(err instanceof Error ? err.message : "Ocurrió un error al cargar los datos.");
-      })
-      .finally(() => {
-        if (activo) setLoading(false);
-      });
-return () => {
-      activo = false;
-    };
-  }, [year, month, base]);
+    void cargar();
+  }, [cargar]);
+
+  // En "Mes en curso" los totales suben solos conforme se registran pagos.
+  useEffect(() => {
+    if (!enCurso) return;
+    const id = setInterval(() => void cargar(true), 60_000);
+    return () => clearInterval(id);
+  }, [enCurso, cargar]);
 
   const meses = data?.meses ?? [];
-  const alcance = month === "todos" ? `Todo el año ${year}` : `${MESES[month - 1]} ${year}`;
-  const baseActual = BASES.find((item) => item.key === base) ?? BASES[0];
+  const mesActual = data?.month ?? new Date().getMonth() + 1;
+  const alcance = enCurso
+    ? `Mes en curso · ${MESES[mesActual - 1]} ${data?.year ?? year}`
+    : month === "todos"
+      ? `Todo el año ${year}`
+      : `${MESES[month - 1]} ${year}`;
   const maxValor = Math.max(
     1,
     ...meses.flatMap((fila) => PERSONAS.map(({ key }) => fila[categoria][key] ?? 0))
@@ -123,8 +157,9 @@ return () => {
             <label className="flex items-center gap-2 text-sm font-medium">
               Mes
               <select
-                className="h-10 rounded-md border border-input bg-background px-3"
-                value={month === "todos" ? "todos" : String(month)}
+                className="h-10 rounded-md border border-input bg-background px-3 disabled:cursor-not-allowed disabled:opacity-50"
+                value={enCurso ? "todos" : month === "todos" ? "todos" : String(month)}
+                disabled={enCurso}
                 onChange={(event) =>
                   setMonth(event.target.value === "todos" ? "todos" : Number(event.target.value))
                 }
@@ -139,28 +174,37 @@ return () => {
             <label className="flex items-center gap-2 text-sm font-medium">
               Año
               <select
-                className="h-10 rounded-md border border-input bg-background px-3"
+                className="h-10 rounded-md border border-input bg-background px-3 disabled:cursor-not-allowed disabled:opacity-50"
                 value={year}
+                disabled={enCurso}
                 onChange={(event) => setYear(Number(event.target.value))}
                 aria-label="Seleccionar año de cobranza"
               >
                 {years.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
             </label>
+            {enCurso ? (
+              <button
+                onClick={() => void cargar(true)}
+                className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                Actualizar
+              </button>
+            ) : null}
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-muted-foreground">Contar por:</span>
-          {BASES.map((item) => (
+          <span className="text-sm font-medium text-muted-foreground">Vista:</span>
+          {VISTAS.map((item) => (
             <button
               key={item.key}
-              onClick={() => setBase(item.key)}
-              aria-pressed={base === item.key}
+              onClick={() => setVista(item.key)}
+              aria-pressed={vista === item.key}
               title={item.ayuda}
               className={
                 "rounded-full border px-3 py-1 text-sm font-medium transition-colors " +
-                (base === item.key
+                (vista === item.key
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border text-muted-foreground hover:bg-muted")
               }
@@ -168,7 +212,12 @@ return () => {
               {item.label}
             </button>
           ))}
-          <span className="text-sm text-muted-foreground">{baseActual.ayuda}</span>
+          <span className="text-sm text-muted-foreground">{vistaActual.ayuda}</span>
+          {enCurso && actualizado ? (
+            <span className="text-sm text-muted-foreground">
+              · Actualiza solo cada minuto
+            </span>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
@@ -207,7 +256,7 @@ return () => {
             <div>
               <CardTitle>Cobrado por mes · {alcance}</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">
-                Cada barra es lo que cobró esa persona · {baseActual.label.toLowerCase()}
+                Cada barra es lo que cobró esa persona · {vistaActual.label.toLowerCase()}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

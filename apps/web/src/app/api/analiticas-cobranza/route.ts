@@ -67,18 +67,24 @@ export async function GET(req: Request) {
     const denied = requirePermission(auth.user.role, Permission.CONTRACT_READ);
     if (denied) return denied;
 
-    const requestedYear = Number(new URL(req.url).searchParams.get("year"));
-    const currentYear = new Date().getFullYear();
+const params = new URL(req.url).searchParams;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const requestedYear = Number(params.get("year"));
     const year = Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= currentYear
       ? requestedYear
       : currentYear;
-    const requestedMonth = Number(new URL(req.url).searchParams.get("month"));
-    const month = Number.isInteger(requestedMonth) && requestedMonth >= 1 && requestedMonth <= 12
-      ? requestedMonth
-      : null;
-    const base: "cuota" | "pago" =
-      new URL(req.url).searchParams.get("base") === "pago" ? "pago" : "cuota";
-    const hoy = localDateStr(new Date());
+    const requestedMonth = params.get("month");
+    const monthNumero = Number(requestedMonth);
+    // "actual" = mes en curso: caja del mes, sube conforme se registran pagos.
+    const month =
+      requestedMonth === "actual"
+        ? now.getMonth() + 1
+        : Number.isInteger(monthNumero) && monthNumero >= 1 && monthNumero <= 12
+          ? monthNumero
+          : null;
+    const base: "cuota" | "pago" = params.get("base") === "pago" ? "pago" : "cuota";
+    const hoy = localDateStr(now);
 
     const contratos = await db
       .select({
