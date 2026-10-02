@@ -49,11 +49,22 @@ const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "O
 
 type PorPersona = Record<PersonaKey, number>;
 
+interface FilaMes {
+  mes: string;
+  indice: number;
+  pagos: number;
+  periodos: string[];
+  mensualidad: PorPersona;
+  mantenimiento: PorPersona;
+  penalidad: PorPersona;
+}
+
 interface AnaliticasData {
   year: number;
   month: number | null;
   base: Base;
-  meses: ({ mes: string; indice: number } & Record<Categoria, PorPersona>)[];
+  mesEnCurso: number;
+  meses: FilaMes[];
   totales: Record<Categoria, PorPersona>;
   vendedores: {
     key: PersonaKey;
@@ -97,8 +108,7 @@ export default function AnaliticasPage() {
         setError("");
       }
       const params = new URLSearchParams({ year: String(year), base: vistaActual.base });
-      if (enCurso) params.set("month", "actual");
-      else if (month !== "todos") params.set("month", String(month));
+      if (!enCurso && month !== "todos") params.set("month", String(month));
       try {
         const response = await apiFetch(`/api/analiticas-cobranza?${params.toString()}`);
         if (!response.ok) throw new Error("No se pudieron cargar las analíticas de cobranza.");
@@ -131,9 +141,10 @@ export default function AnaliticasPage() {
   }, [enCurso, cargar]);
 
   const meses = data?.meses ?? [];
-  const mesActual = data?.month ?? new Date().getMonth() + 1;
+  const mesEnCurso = data?.mesEnCurso ?? new Date().getMonth() + 1;
+  const filaEnCurso = enCurso ? meses.find((fila) => fila.indice === mesEnCurso) : undefined;
   const alcance = enCurso
-    ? `Mes en curso · ${MESES[mesActual - 1]} ${data?.year ?? year}`
+    ? `Mes en curso · ${MESES[mesEnCurso - 1]} ${data?.year ?? year}`
     : month === "todos"
       ? `Todo el año ${year}`
       : `${MESES[month - 1]} ${year}`;
@@ -142,6 +153,8 @@ export default function AnaliticasPage() {
     ...meses.flatMap((fila) => PERSONAS.map(({ key }) => fila[categoria][key] ?? 0))
   );
   const years = Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index);
+  const totalDe = (persona: PersonaKey, item: Categoria) =>
+    enCurso ? filaEnCurso?.[item][persona] ?? 0 : data?.totales[item][persona] ?? 0;
 
   return (
     <DashboardShell>
@@ -222,9 +235,9 @@ export default function AnaliticasPage() {
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           {PERSONAS.map((persona) => {
-            const mensualidad = data?.totales.mensualidad[persona.key] ?? 0;
-            const mantenimiento = data?.totales.mantenimiento[persona.key] ?? 0;
-            const penalidad = data?.totales.penalidad[persona.key] ?? 0;
+            const mensualidad = totalDe(persona.key, "mensualidad");
+            const mantenimiento = totalDe(persona.key, "mantenimiento");
+            const penalidad = totalDe(persona.key, "penalidad");
             return (
               <Card key={persona.key}>
                 <CardHeader className="border-b border-border">
@@ -237,12 +250,17 @@ export default function AnaliticasPage() {
                       {money(mensualidad + mantenimiento + penalidad)}
                     </span>
                   </div>
+                  {enCurso ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Pagado en {MESES[mesEnCurso - 1]} · sube con cada pago registrado
+                    </p>
+                  ) : null}
                 </CardHeader>
                 <CardContent className="space-y-1 pt-4 text-sm">
                   {CATEGORIAS.map((item) => (
                     <div key={item.key} className="flex items-center justify-between gap-2">
                       <span className="text-muted-foreground">{item.label}</span>
-                      <span className="font-medium tabular-nums">{money(data?.totales[item.key][persona.key] ?? 0)}</span>
+                      <span className="font-medium tabular-nums">{money(totalDe(persona.key, item.key))}</span>
                     </div>
                   ))}
                 </CardContent>
@@ -254,9 +272,13 @@ export default function AnaliticasPage() {
         <Card>
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4">
             <div>
-              <CardTitle>Cobrado por mes · {alcance}</CardTitle>
+              <CardTitle>
+                {enCurso ? `Caja del año · ${data?.year ?? year}` : `Cobrado por mes · ${alcance}`}
+              </CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">
-                Cada barra es lo que cobró esa persona · {vistaActual.label.toLowerCase()}
+                {enCurso
+                  ? "Lo pagado en cada mes. El mes en curso sube conforme registras pagos."
+                  : `Cada barra es lo que cobró esa persona · ${vistaActual.label.toLowerCase()}`}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -301,31 +323,89 @@ export default function AnaliticasPage() {
                   role="img"
                   aria-label={`${CATEGORIAS.find((item) => item.key === categoria)?.label} cobrada en ${alcance}, por responsable`}
                 >
-                  {meses.map((fila) => (
-                    <div key={fila.mes} className="flex h-56 min-w-0 flex-col items-center justify-end">
-                      <div className="flex h-48 w-full items-end justify-center gap-1 border-b border-border px-0.5">
-                        {PERSONAS.map((persona) => {
-                          const amount = fila[categoria][persona.key] ?? 0;
-                          const height = amount > 0 ? Math.max(2, (amount / maxValor) * 100) : 0;
-                          return (
-                            <div
-                              key={persona.key}
-                              className={`w-full max-w-5 rounded-t-sm ${persona.color}`}
-                              style={{ height: `${height}%` }}
-                              title={`${persona.nombre}, ${fila.mes}: ${money(amount)}`}
-                              aria-label={`${persona.nombre}, ${fila.mes}: ${money(amount)}`}
-                            />
-                          );
-                        })}
+                  {meses.map((fila) => {
+                    const enMesEnCurso = enCurso && fila.indice === mesEnCurso;
+                    return (
+                      <div key={fila.mes} className="flex h-56 min-w-0 flex-col items-center justify-end">
+                        <div className="flex h-48 w-full items-end justify-center gap-1 border-b border-border px-0.5">
+                          {PERSONAS.map((persona) => {
+                            const amount = fila[categoria][persona.key] ?? 0;
+                            const height = amount > 0 ? Math.max(2, (amount / maxValor) * 100) : 0;
+                            return (
+                              <div
+                                key={persona.key}
+                                className={`w-full max-w-5 rounded-t-sm ${persona.color}`}
+                                style={{ height: `${height}%` }}
+                                title={`${persona.nombre}, ${fila.mes}: ${money(amount)}`}
+                                aria-label={`${persona.nombre}, ${fila.mes}: ${money(amount)}`}
+                              />
+                            );
+                          })}
+                        </div>
+                        <span
+                          className={
+                            "mt-2 text-xs " + (enMesEnCurso ? "font-semibold text-foreground" : "text-muted-foreground")
+                          }
+                        >
+                          {fila.mes}
+                          {enMesEnCurso ? " · en vivo" : ""}
+                        </span>
                       </div>
-                      <span className="mt-2 text-xs text-muted-foreground">{fila.mes}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
+
+        {vistaActual.base === "pago" && !loading && !error && meses.some((fila) => fila.pagos > 0) ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Qué se pagó en cada mes</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Pagos registrados en el mes y los periodos de cuota que cubrieron
+              </p>
+            </CardHeader>
+            <CardContent>
+              <ul className="divide-y divide-border">
+                {meses
+                  .filter((fila) => fila.pagos > 0)
+                  .map((fila) => {
+                    const total = PERSONAS.reduce(
+                      (suma, persona) =>
+                        suma +
+                        fila.mensualidad[persona.key] +
+                        fila.mantenimiento[persona.key] +
+                        fila.penalidad[persona.key],
+                      0
+                    );
+                    return (
+                      <li key={fila.mes} className="flex flex-wrap items-start justify-between gap-3 py-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">
+                            {fila.mes}
+                            {enCurso && fila.indice === mesEnCurso ? (
+                              <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                en vivo
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {fila.pagos} {fila.pagos === 1 ? "pago" : "pagos"} · cubre{" "}
+                            {fila.periodos.length === 1
+                              ? `la cuota ${fila.periodos[0]}`
+                              : `las cuotas ${fila.periodos[0]} a ${fila.periodos[fila.periodos.length - 1]} (${fila.periodos.length})`}
+                          </p>
+                        </div>
+                        <span className="shrink-0 font-semibold tabular-nums">{money(total)}</span>
+                      </li>
+                    );
+                  })}
+              </ul>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <section aria-labelledby="deudas-title" className="space-y-3">
           <div>

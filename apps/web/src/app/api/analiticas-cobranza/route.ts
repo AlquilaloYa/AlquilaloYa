@@ -128,6 +128,8 @@ const params = new URL(req.url).searchParams;
       mensualidad: vacio(),
       mantenimiento: vacio(),
       penalidad: vacio(),
+      pagos: 0,
+      periodos: new Set<string>(),
     }));
     const pagosPorContrato = new Map<string, Map<string, (typeof pagos)[number]>>();
     for (const pago of pagos) {
@@ -161,6 +163,9 @@ const params = new URL(req.url).searchParams;
       fila.mensualidad[persona] += Number(pago.monto ?? 0);
       fila.mantenimiento[persona] += Number(pago.mantenimiento ?? 0);
       fila.penalidad[persona] += Number(pago.penalidad ?? 0);
+      fila.pagos += 1;
+      // Periodos de cuota que se cubrieron con lo pagado en este mes.
+      fila.periodos.add(toDateStr(pago.periodo).slice(0, 7));
     }
 
     for (const contrato of contratos) {
@@ -238,6 +243,8 @@ const enRango = month === null ? porMes : porMes.filter((fila) => fila.indice ==
     const meses = enRango.map((fila) => ({
       mes: fila.mes,
       indice: fila.indice,
+      pagos: fila.pagos,
+      periodos: [...fila.periodos].sort(),
       ...redondearPorCategoria({
         mensualidad: fila.mensualidad,
         mantenimiento: fila.mantenimiento,
@@ -258,6 +265,7 @@ const enRango = month === null ? porMes : porMes.filter((fila) => fila.indice ==
       year,
       month,
       base,
+      mesEnCurso: now.getMonth() + 1,
       meses,
       totales: redondearPorCategoria(totales),
       vendedores,
