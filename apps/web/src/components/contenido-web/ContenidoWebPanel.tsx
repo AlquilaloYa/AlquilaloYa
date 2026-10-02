@@ -17,6 +17,7 @@ export function ContenidoWebPanel() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [errors, setErrors] = useState<ContenidoWebErrorState[]>([]);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [listRefresh, setListRefresh] = useState(0);
   const [customTags, setCustomTags] = useState<SiteSettings["advanced"]["custom_tags"]>([]);
 
   const pushError = useCallback((error: unknown) => {
@@ -56,7 +57,15 @@ export function ContenidoWebPanel() {
 
   function handleSaved(property: AdminProperty) {
     setSelected(property);
+    setListRefresh((current) => current + 1);
     setLastSaved(property.property_code);
+  }
+
+  // Subir, reordenar o borrar fotos no es guardar la ficha: el editor sigue
+  // abierto y no se anuncia un guardado que el usuario no hizo.
+  function handleImagesUpdated(property: AdminProperty) {
+    setSelected(property);
+    setListRefresh((current) => current + 1);
   }
 
   function handleSettingsSaved(settings: SiteSettings) {
@@ -163,6 +172,7 @@ export function ContenidoWebPanel() {
               handleSaved(property);
               setEditorOpen(false);
             }}
+            onImagesUpdated={handleImagesUpdated}
             onDeleted={handleDeleted}
             onError={pushError}
             onCancel={() => setEditorOpen(false)}
@@ -174,6 +184,7 @@ export function ContenidoWebPanel() {
         <div className={editorOpen ? "hidden" : ""}>
           <PropertyList
             selectedId={selected?.id ?? null}
+            refreshToken={listRefresh}
             onSelect={openEditor}
             onError={pushError}
             onUpdated={handleSaved}

@@ -49,6 +49,7 @@ export interface PropertyEditorProps {
   property: AdminProperty | null;
   customTags: SiteSettings["advanced"]["custom_tags"];
   onSaved: (property: AdminProperty) => void;
+  onImagesUpdated: (property: AdminProperty) => void;
   onDeleted: (id: number) => void;
   onError: (error: unknown) => void;
   onCancel: () => void;
@@ -76,6 +77,7 @@ export function PropertyEditor({
   property,
   customTags,
   onSaved,
+  onImagesUpdated,
   onDeleted,
   onError,
   onCancel,
@@ -84,9 +86,12 @@ export function PropertyEditor({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [syncedProperty, setSyncedProperty] = useState(property);
-  if (property !== syncedProperty) {
-    setSyncedProperty(property);
+  // El borrador solo se rehace cuando cambia la unidad abierta. Los refrescos de
+  // fotos llegan como un objeto nuevo con el mismo id y no deben borrar lo que
+  // el usuario todavia no guardo.
+  const [syncedId, setSyncedId] = useState<number | null>(property?.id ?? null);
+  if ((property?.id ?? null) !== syncedId) {
+    setSyncedId(property?.id ?? null);
     setDraft(property ? toDraft(property) : EMPTY_DRAFT);
   }
 
@@ -274,7 +279,7 @@ export function PropertyEditor({
         />
       </Card>
 
-      {property && <ImageManager property={property} onChange={onSaved} onError={onError} />}
+      {property && <ImageManager property={property} onChange={onImagesUpdated} onError={onError} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button

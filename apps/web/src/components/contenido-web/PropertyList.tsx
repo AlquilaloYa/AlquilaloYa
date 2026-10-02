@@ -8,13 +8,15 @@ import type { AdminProperty, Zone } from "@/lib/contenido-web-client";
 
 export interface PropertyListProps {
   selectedId: number | null;
+  /** Sube para volver a pedir la lista (por ejemplo, tras subir una foto). */
+  refreshToken?: number;
   onSelect: (property: AdminProperty) => void;
   onError: (error: unknown) => void;
   onUpdated: (property: AdminProperty) => void;
   onDeleted: (id: number) => void;
 }
 
-export function PropertyList({ selectedId, onSelect, onError, onUpdated, onDeleted }: PropertyListProps) {
+export function PropertyList({ selectedId, refreshToken = 0, onSelect, onError, onUpdated, onDeleted }: PropertyListProps) {
   const [properties, setProperties] = useState<AdminProperty[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -36,7 +38,7 @@ export function PropertyList({ selectedId, onSelect, onError, onUpdated, onDelet
   useEffect(() => {
     void load();
     // Los filtros se aplican volviendo a pedir la lista; el cargador es estable.
-  }, [search, zone, status]);
+  }, [search, zone, status, refreshToken]);
 
   async function toggle(property: AdminProperty, changes: Partial<AdminProperty>) {
     try {
