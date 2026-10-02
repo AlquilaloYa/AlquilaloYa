@@ -14,6 +14,26 @@ const NOMBRES: Record<(typeof PERSONAS)[number], string> = {
   evelin: "Evelyn",
 };
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const CATEGORIAS = ["mensualidad", "mantenimiento", "penalidad"] as const;
+
+type PersonaKey = (typeof PERSONAS)[number];
+type Categoria = (typeof CATEGORIAS)[number];
+type PorPersona = Record<PersonaKey, number>;
+
+function vacio(): PorPersona {
+  return { miguel: 0, emely: 0, evelin: 0 };
+}
+
+function sumarPorPersona(destino: PorPersona, origen: PorPersona): PorPersona {
+  for (const persona of PERSONAS) destino[persona] += origen[persona];
+  return destino;
+}
+
+function redondearPorPersona(valores: PorPersona): PorPersona {
+  const salida = vacio();
+  for (const persona of PERSONAS) salida[persona] = redondear(valores[persona] ?? 0);
+  return salida;
+}
 
 function normalizarPersona(persona: string | null): (typeof PERSONAS)[number] | null {
   const valor = (persona ?? "").trim().toLowerCase();
@@ -24,12 +44,20 @@ function normalizarPersona(persona: string | null): (typeof PERSONAS)[number] | 
 }
 
 function toDateStr(value: unknown): string {
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (value instanceof Date) return localDateStr(value);
   return String(value ?? "").slice(0, 10);
 }
 
 function redondear(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function redondearPorCategoria(categorias: Record<Categoria, PorPersona>): Record<Categoria, PorPersona> {
+  return {
+    mensualidad: redondearPorPersona(categorias.mensualidad),
+    mantenimiento: redondearPorPersona(categorias.mantenimiento),
+    penalidad: redondearPorPersona(categorias.penalidad),
+  };
 }
 
 export async function GET(req: Request) {
@@ -44,6 +72,12 @@ export async function GET(req: Request) {
     const year = Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= currentYear
       ? requestedYear
       : currentYear;
+    const requestedMonth = Number(new URL(req.url).searchParams.get("month"));
+    const month = Number.isInteger(requestedMonth) && requestedMonth >= 1 && requestedMonth <= 12
+      ? requestedMonth
+      : null;
+    const base: "cuota" | "pago" =
+      new URL(req.url).searchParams.get("base") === "pago" ? "pago" : "cuota";
     const hoy = localDateStr(new Date());
 
     const contratos = await db
@@ -72,6 +106,7 @@ export async function GET(req: Request) {
         fechaPago: schema.payments.fechaPago,
         monto: schema.payments.monto,
         mantenimiento: schema.payments.mantenimiento,
+        penalidad: schema.payments.penalidad,
         estadoPago: schema.payments.estado,
         codigoContrato: schema.contracts.codigoContrato,
         personaPago: schema.departments.personaPago,
@@ -81,9 +116,12 @@ export async function GET(req: Request) {
       .innerJoin(schema.clients, eq(schema.clients.id, schema.contracts.clienteId))
       .leftJoin(schema.departments, eq(schema.departments.id, schema.contracts.departamentoId));
 
-    const meses = MESES.map((mes) => ({
+    const porMes = MESES.map((mes, indice) => ({
       mes,
-      valores: { miguel: 0, emely: 0, evelin: 0 },
+      indice: indice + 1,
+      mensualidad: vacio(),
+      mantenimiento: vacio(),
+      penalidad: vacio(),
     }));
     const pagosPorContrato = new Map<string, Map<string, (typeof pagos)[number]>>();
     for (const pago of pagos) {
@@ -104,19 +142,19 @@ export async function GET(req: Request) {
 
     for (const pago of pagos) {
       const persona = normalizarPersona(pago.personaPago);
-      if (!persona) continue;
+      if (!persona || pago.estadoPago !== "PAGADO") continue;
 
-      if (pago.estadoPago === "PAGADO" && pago.fechaPago) {
-        const fecha = toDateStr(pago.fechaPago);
-        if (Number(fecha.slice(0, 4)) === year) {
-          const indice = Number(fecha.slice(5, 7)) - 1;
-          if (indice >= 0 && indice < 12) {
-            const mes = meses[indice];
-            if (mes) mes.valores[persona] += Number(pago.monto ?? 0) + Number(pago.mantenimiento ?? 0);
-          }
-        }
-      }
+      // La cuota (periodo) reparte el canon en su mes; la fecha de pago dice
+      // cuando entro la plata. Con cargas masivas ambas dan cifras distintas.
+      const fecha =
+        base === "pago" ? (pago.fechaPago ? toDateStr(pago.fechaPago) : null) : toDateStr(pago.periodo);
+      if (!fecha || Number(fecha.slice(0, 4)) !== year) continue;
 
+      const fila = porMes[Number(fecha.slice(5, 7)) - 1];
+      if (!fila) continue;
+      fila.mensualidad[persona] += Number(pago.monto ?? 0);
+      fila.mantenimiento[persona] += Number(pago.mantenimiento ?? 0);
+      fila.penalidad[persona] += Number(pago.penalidad ?? 0);
     }
 
     for (const contrato of contratos) {
@@ -189,16 +227,33 @@ export async function GET(req: Request) {
       return { key, nombre: NOMBRES[key], clientes };
     });
 
+const enRango = month === null ? porMes : porMes.filter((fila) => fila.indice === month);
+
+    const meses = enRango.map((fila) => ({
+      mes: fila.mes,
+      indice: fila.indice,
+      ...redondearPorCategoria({
+        mensualidad: fila.mensualidad,
+        mantenimiento: fila.mantenimiento,
+        penalidad: fila.penalidad,
+      }),
+    }));
+
+    const totales: Record<Categoria, PorPersona> = {
+      mensualidad: vacio(),
+      mantenimiento: vacio(),
+      penalidad: vacio(),
+    };
+    for (const fila of enRango) {
+      for (const categoria of CATEGORIAS) sumarPorPersona(totales[categoria], fila[categoria]);
+    }
+
     return NextResponse.json({
       year,
-meses: meses.map(({ mes, valores }) => ({
-        mes,
-        valores: {
-          miguel: redondear(valores.miguel),
-          emely: redondear(valores.emely),
-          evelin: redondear(valores.evelin),
-        },
-      })),
+      month,
+      base,
+      meses,
+      totales: redondearPorCategoria(totales),
       vendedores,
     });
   } catch (error) {
