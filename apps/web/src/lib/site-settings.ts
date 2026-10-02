@@ -83,9 +83,9 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
       "Mini departamentos de alquiler sobre los ejes Angamos y Benavides en Miraflores, Lima. Amoblados, seguros y listos para habitar. Consulta disponibilidad por WhatsApp.",
   },
   advanced: {
-    price_min: 1500,
-    max_price: 500000,
-    price_step: 500,
+    price_min: 1300,
+    max_price: 2700,
+    price_step: 100,
     zones: [
       { slug: "Angamos", label: "Angamos", address: "Av. Angamos, Miraflores" },
       { slug: "Benavides", label: "Benavides", address: "Av. Benavides, Miraflores" },

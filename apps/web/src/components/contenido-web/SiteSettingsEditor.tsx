@@ -61,6 +61,15 @@ export function SiteSettingsEditor({ mode, onSaved, onError }: SiteSettingsEdito
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const advanced = settings.advanced;
+    if (!Number.isInteger(advanced.price_step) || advanced.price_step < 10) {
+      onError(new Error("El paso de precio debe ser un número entero de S/ 10 o más."));
+      return;
+    }
+    if (advanced.max_price < advanced.price_min) {
+      onError(new Error("El precio máximo debe ser mayor o igual al precio mínimo."));
+      return;
+    }
     setIsSaving(true);
     try {
       const updated = await contenidoWebApi.settings.update({
@@ -374,6 +383,7 @@ export function SiteSettingsEditor({ mode, onSaved, onError }: SiteSettingsEdito
             label="Precio mínimo (S/)"
             type="number"
             min={0}
+            max={100_000}
             value={settings.advanced.price_min}
             onChange={(event) =>
               patchSection("advanced", {
@@ -385,7 +395,8 @@ export function SiteSettingsEditor({ mode, onSaved, onError }: SiteSettingsEdito
           <Input
             label="Precio máximo (S/)"
             type="number"
-            min={0}
+            min={1}
+            max={200_000}
             value={settings.advanced.max_price}
             onChange={(event) =>
               patchSection("advanced", {
@@ -397,7 +408,10 @@ export function SiteSettingsEditor({ mode, onSaved, onError }: SiteSettingsEdito
           <Input
             label="Paso de precio (S/)"
             type="number"
-            min={1}
+            min={10}
+            max={50_000}
+            step={10}
+            hint="Los precios van en soles. El API exige un paso mínimo de S/ 10."
             value={settings.advanced.price_step}
             onChange={(event) =>
               patchSection("advanced", {
