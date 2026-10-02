@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@contract/ui/components/card";
@@ -179,7 +180,13 @@ export default function AnaliticasPage() {
                         {clientes.map((cliente) => (
                           <li key={cliente.clienteId} className="space-y-2 p-4">
                             <div className="flex items-start justify-between gap-3">
-                              <span className="font-medium">{cliente.cliente || "Cliente sin nombre"}</span>
+                              <Link
+                                href={`/contratos/clientes/${cliente.clienteId}`}
+                                className="font-medium text-primary hover:underline"
+                                title="Ver perfil del cliente"
+                              >
+                                {cliente.cliente || "Cliente sin nombre"}
+                              </Link>
                               <span className="shrink-0 text-sm font-semibold">{money(cliente.total)}</span>
                             </div>
                             {cliente.contratos.map((contrato) => (

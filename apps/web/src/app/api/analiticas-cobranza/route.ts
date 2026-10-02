@@ -106,8 +106,8 @@ export async function GET(req: Request) {
       const persona = normalizarPersona(pago.personaPago);
       if (!persona) continue;
 
-      if (pago.estadoPago === "PAGADO") {
-        const fecha = toDateStr(pago.fechaPago ?? pago.periodo);
+      if (pago.estadoPago === "PAGADO" && pago.fechaPago) {
+        const fecha = toDateStr(pago.fechaPago);
         if (Number(fecha.slice(0, 4)) === year) {
           const indice = Number(fecha.slice(5, 7)) - 1;
           if (indice >= 0 && indice < 12) {
