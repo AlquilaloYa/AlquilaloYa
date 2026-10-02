@@ -45,6 +45,16 @@ interface Resumen {
   clientesReportados: number;
   enProceso: number;
   pagosVencenHoy?: PagoVenceHoy[];
+  contratosRenovados: number;
+  contratosVencidosPeriodo: number;
+  tasaRenovacion: number;
+  duracionMediaContratoDias: number | null;
+  duracionContratos: { label: string; cantidad: number }[];
+  vacanciaMediaDias: number | null;
+  vacanciasObservadas: number;
+  distribucionVacancia: { label: string; cantidad: number }[];
+  vacanciaActualMediaDias: number | null;
+  departamentosLibresConHistorial: number;
 }
 
 interface DashboardData {
@@ -145,6 +155,37 @@ function StatCard({ s, r }: { s: StatItem; r: Resumen }) {
           {statValue(s, r)}
         </span>
       </div>
+    </div>
+  );
+}
+
+function DistributionBars({
+  items,
+  emptyLabel,
+}: {
+  items: { label: string; cantidad: number }[];
+  emptyLabel: string;
+}) {
+  const maximo = Math.max(1, ...items.map((item) => item.cantidad));
+  if (items.every((item) => item.cantidad === 0)) {
+    return <p className="py-8 text-center text-sm text-muted-foreground">{emptyLabel}</p>;
+  }
+  return (
+    <div className="space-y-4">
+      {items.map((item) => (
+        <div key={item.label} className="space-y-1.5">
+          <div className="flex justify-between gap-3 text-sm">
+            <span>{item.label}</span>
+            <span className="font-mono-label">{item.cantidad}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-surface-variant">
+            <div
+              className="h-full rounded-full bg-sky-600"
+              style={{ width: `${(item.cantidad / maximo) * 100}%` }}
+            />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -440,16 +481,63 @@ return (
 
             <div className="col-span-12 flex flex-col rounded-lg bg-surface-container-lowest shadow-sm lg:col-span-6">
               <div className="flex items-center justify-between p-5">
-                <h3 className="font-headline-md text-primary">Distribución de estados</h3>
+                <div>
+                  <h3 className="font-headline-md text-primary">Renovación de contratos</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">Contratos con vencimiento en los últimos 12 meses</p>
+                </div>
               </div>
               <div className="flex flex-1 flex-col justify-center p-5">
-                <DonutChart
-                  segments={[
-                    { label: "Ocupado", value: resumen!.ocupadas, color: "rgb(96, 165, 250)" },
-                    { label: "Disponible", value: resumen!.disponibles, color: "rgb(74, 222, 128)" },
-                    { label: "Mantenimiento", value: data.resumen.mantenimiento, color: "rgb(250, 204, 21)" },
-                    { label: "En proceso", value: resumen!.enProceso, color: "rgb(248, 113, 113)" },
-                  ]}
+                {resumen!.contratosVencidosPeriodo > 0 ? (
+                  <DonutChart
+                    segments={[
+                      { label: "Renovados", value: resumen!.contratosRenovados, color: "rgb(16, 185, 129)" },
+                      { label: "No renovados", value: resumen!.contratosVencidosPeriodo - resumen!.contratosRenovados, color: "rgb(251, 146, 60)" },
+                    ]}
+                    centerLabel="Renovación"
+                    centerValue={`${resumen!.tasaRenovacion}%`}
+                  />
+                ) : (
+                  <p className="py-8 text-center text-sm text-muted-foreground">Aún no hay contratos vencidos en este período.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="col-span-12 flex flex-col rounded-lg bg-surface-container-lowest shadow-sm lg:col-span-6">
+              <div className="p-5">
+                <h3 className="font-headline-md text-primary">Duración de contratos</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {resumen!.duracionMediaContratoDias === null
+                    ? "Promedio: sin datos históricos"
+                    : `Duración media: ${resumen!.duracionMediaContratoDias} días`}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">Plazo pactado; contratos resueltos medidos hasta su resolución.</p>
+              </div>
+              <div className="px-5 pb-5">
+                <DistributionBars
+                  items={resumen!.duracionContratos}
+                  emptyLabel="No hay contratos formalizados para medir."
+                />
+              </div>
+            </div>
+
+            <div className="col-span-12 flex flex-col rounded-lg bg-surface-container-lowest shadow-sm lg:col-span-6">
+              <div className="p-5">
+                <h3 className="font-headline-md text-primary">Tiempo para volver a alquilar</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {resumen!.vacanciaMediaDias === null
+                    ? "Promedio histórico: sin períodos libres cerrados"
+                    : `Promedio histórico: ${resumen!.vacanciaMediaDias} días · ${resumen!.vacanciasObservadas} períodos`}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {resumen!.vacanciaActualMediaDias === null
+                    ? "Sin departamentos libres con un alquiler previo terminado"
+                    : `Actualmente libres: ${resumen!.vacanciaActualMediaDias} días promedio · ${resumen!.departamentosLibresConHistorial} departamentos`}
+                </p>
+              </div>
+              <div className="px-5 pb-5">
+                <DistributionBars
+                  items={resumen!.distribucionVacancia}
+                  emptyLabel="La distribución aparecerá cuando se cierre una vacancia con un nuevo alquiler."
                 />
               </div>
             </div>

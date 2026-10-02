@@ -52,6 +52,16 @@ export interface ResumenPortafolio {
   clientesReportados: number;
   enProceso: number;
   pagosVencenHoy: PagoVenceHoy[];
+  contratosRenovados: number;
+  contratosVencidosPeriodo: number;
+  tasaRenovacion: number;
+  duracionMediaContratoDias: number | null;
+  duracionContratos: { label: string; cantidad: number }[];
+  vacanciaMediaDias: number | null;
+  vacanciasObservadas: number;
+  distribucionVacancia: { label: string; cantidad: number }[];
+  vacanciaActualMediaDias: number | null;
+  departamentosLibresConHistorial: number;
 }
 
 /** Agrega las métricas del dashboard (Fase 5). */
@@ -107,30 +117,37 @@ export class DrizzleDashboardRepository {
 
     const firmas = await db
       .select({
+        id: schema.contracts.id,
         departamentoId: schema.contracts.departamentoId,
         fechaInicio: schema.contracts.fechaInicio,
         fechaFin: schema.contracts.fechaFin,
+        estado: schema.contracts.estado,
+        renovadoDe: schema.contracts.renovadoDe,
+        resueltoEn: schema.contracts.resueltoEn,
       })
       .from(schema.contracts)
       .where(
-        inArray(schema.contracts.estado, [
-          "FIRMADO",
-          "ACTIVO",
-          "VIGENTE",
-          "NOTARIADO",
-        ])
+        inArray(schema.contracts.estado, ["FIRMADO", "NOTARIADO", "RESUELTO"])
       );
 
     const ocupadas = new Set(
       firmas
-        .filter((c) => c.fechaInicio <= hoyStr && (c.fechaFin ?? "") >= hoyStr)
+        .filter(
+          (c) =>
+            c.estado !== "RESUELTO" &&
+            c.fechaInicio <= hoyStr &&
+            (c.fechaFin ?? "") >= hoyStr
+        )
         .map((c) => c.departamentoId)
     ).size;
 
     let mantenimiento = 0;
     let aPuntoDeFinalizar = 0;
     for (const c of firmas) {
-      if (!(c.fechaInicio <= hoyStr && (c.fechaFin ?? "") >= hoyStr)) continue;
+      if (
+        c.estado === "RESUELTO" ||
+        !(c.fechaInicio <= hoyStr && (c.fechaFin ?? "") >= hoyStr)
+      ) continue;
       if (c.fechaFin && c.fechaFin <= finMantenimientoStr) {
         mantenimiento++;
       }
@@ -184,6 +201,151 @@ export class DrizzleDashboardRepository {
         renovacionMeses: c.renovacionMeses ?? null,
       };
     });
+
+    const adendas = await db
+      .select({
+        contractId: schema.documents.contractId,
+        tipo: schema.documents.tipo,
+        datosContrato: schema.contractSnapshots.datosContrato,
+      })
+      .from(schema.documents)
+      .leftJoin(
+        schema.contractSnapshots,
+        eq(schema.contractSnapshots.id, schema.documents.snapshotId)
+      )
+      .where(
+        and(
+          inArray(schema.documents.tipo, ["ADENDA", "ADENDA_EXTENSION"]),
+          eq(schema.documents.estadoGeneracion, "GENERADO")
+        )
+      );
+
+    const inicioVentanaRenovacion = new Date(hoy);
+    inicioVentanaRenovacion.setFullYear(inicioVentanaRenovacion.getFullYear() - 1);
+    const inicioVentanaRenovacionStr = toDateStr(inicioVentanaRenovacion);
+    const renovacionesPorContrato = new Map<string, Set<string>>();
+    for (const adenda of adendas) {
+      const datos = (adenda.datosContrato ?? {}) as Record<string, unknown>;
+      const fechaFinAdenda = typeof datos.fechaFinAdenda === "string"
+        ? String(datos.fechaFinAdenda).slice(0, 10)
+        : "";
+      const fechaFinSnapshot = typeof datos.fechaFin === "string"
+        ? String(datos.fechaFin).slice(0, 10)
+        : "";
+      const fechaFinAnterior = typeof datos.fechaFinAnterior === "string"
+        ? String(datos.fechaFinAnterior).slice(0, 10)
+        : adenda.tipo === "ADENDA" && fechaFinAdenda > fechaFinSnapshot
+          ? fechaFinSnapshot
+          : "";
+      const esExtensionConPlazo =
+        adenda.tipo === "ADENDA_EXTENSION" ||
+        Boolean(fechaFinAdenda && fechaFinAnterior);
+      if (!esExtensionConPlazo || !fechaFinAnterior) continue;
+      const fechas = renovacionesPorContrato.get(adenda.contractId) ?? new Set<string>();
+      fechas.add(fechaFinAnterior);
+      renovacionesPorContrato.set(adenda.contractId, fechas);
+    }
+
+    const sucesoresConfirmados = new Set(
+      firmas
+        .filter((contrato) => contrato.renovadoDe)
+        .map((contrato) => contrato.renovadoDe as string)
+    );
+    const expiraciones = new Map<string, boolean>();
+    for (const contrato of firmas) {
+      const fechasExtension = renovacionesPorContrato.get(contrato.id) ?? new Set<string>();
+      for (const fecha of fechasExtension) {
+        if (fecha < inicioVentanaRenovacionStr || fecha > hoyStr) continue;
+        expiraciones.set(`${contrato.id}:${fecha}`, true);
+      }
+
+      const fechaFinReal = contrato.estado === "RESUELTO" && contrato.resueltoEn
+        ? toDateStr(contrato.resueltoEn)
+        : toDateStr(contrato.fechaFin);
+      if (fechaFinReal < inicioVentanaRenovacionStr || fechaFinReal > hoyStr) continue;
+      const renovado = fechasExtension.has(fechaFinReal) || sucesoresConfirmados.has(contrato.id);
+      expiraciones.set(`${contrato.id}:${fechaFinReal}`, renovado);
+    }
+    const contratosVencidosPeriodo = expiraciones.size;
+    const contratosRenovados = [...expiraciones.values()].filter(Boolean).length;
+    const tasaRenovacion = contratosVencidosPeriodo
+      ? Math.round((contratosRenovados / contratosVencidosPeriodo) * 100)
+      : 0;
+
+    const duracionContratos = [
+      { label: "Menos de 3 meses", maxDias: 90, cantidad: 0 },
+      { label: "3 a 6 meses", maxDias: 180, cantidad: 0 },
+      { label: "6 a 12 meses", maxDias: 365, cantidad: 0 },
+      { label: "1 a 2 años", maxDias: 730, cantidad: 0 },
+      { label: "Más de 2 años", maxDias: Infinity, cantidad: 0 },
+    ];
+    const duracionesDias: number[] = [];
+    const periodosPorDepartamento = new Map<
+      string,
+      { inicio: string; fin: string }[]
+    >();
+    for (const contrato of firmas) {
+      const inicio = toDateStr(contrato.fechaInicio);
+      const fin = contrato.estado === "RESUELTO" && contrato.resueltoEn
+        ? toDateStr(contrato.resueltoEn)
+        : toDateStr(contrato.fechaFin);
+      if (inicio > hoyStr || fin < inicio) continue;
+      const finMedicion = fin > hoyStr ? hoyStr : fin;
+      const duracion = diffDays(inicio, fin) + 1;
+      duracionesDias.push(duracion);
+      const bucket = duracionContratos.find((item) => duracion <= item.maxDias);
+      if (bucket) bucket.cantidad++;
+      const periodos = periodosPorDepartamento.get(contrato.departamentoId) ?? [];
+      periodos.push({ inicio, fin: finMedicion });
+      periodosPorDepartamento.set(contrato.departamentoId, periodos);
+    }
+    const duracionMediaContratoDias = duracionesDias.length
+      ? Math.round(duracionesDias.reduce((suma, dias) => suma + dias, 0) / duracionesDias.length)
+      : null;
+
+    const distribucionVacancia = [
+      { label: "0 a 7 días", maxDias: 7, cantidad: 0 },
+      { label: "8 a 30 días", maxDias: 30, cantidad: 0 },
+      { label: "31 a 60 días", maxDias: 60, cantidad: 0 },
+      { label: "Más de 60 días", maxDias: Infinity, cantidad: 0 },
+    ];
+    const vacanciasCerradas: number[] = [];
+    const finMasRecientePorDepartamento = new Map<string, string>();
+    for (const [departamentoId, periodos] of periodosPorDepartamento) {
+      periodos.sort((a, b) => a.inicio.localeCompare(b.inicio));
+      let ocupadoHasta: string | null = null;
+      for (const periodo of periodos) {
+        if (ocupadoHasta && periodo.inicio > ocupadoHasta) {
+          const diasLibres = Math.max(0, diffDays(ocupadoHasta, periodo.inicio) - 1);
+          vacanciasCerradas.push(diasLibres);
+          const bucket = distribucionVacancia.find((item) => diasLibres <= item.maxDias);
+          if (bucket) bucket.cantidad++;
+        }
+        if (!ocupadoHasta || periodo.fin > ocupadoHasta) ocupadoHasta = periodo.fin;
+      }
+      if (ocupadoHasta) finMasRecientePorDepartamento.set(departamentoId, ocupadoHasta);
+    }
+    const vacanciaMediaDias = vacanciasCerradas.length
+      ? Math.round(vacanciasCerradas.reduce((suma, dias) => suma + dias, 0) / vacanciasCerradas.length)
+      : null;
+
+    const departamentosDisponibles = await db
+      .select({
+        id: schema.departments.id,
+        estadoManual: schema.departments.estadoManual,
+        activo: schema.departments.activo,
+      })
+      .from(schema.departments);
+    const vacanciasActuales: number[] = [];
+    for (const departamento of departamentosDisponibles) {
+      if (!departamento.activo || departamento.estadoManual === "BLOQUEADO" || departamento.estadoManual === "MANTENIMIENTO") continue;
+      const ultimoFin = finMasRecientePorDepartamento.get(departamento.id);
+      if (!ultimoFin || ultimoFin >= hoyStr) continue;
+      vacanciasActuales.push(Math.max(0, diffDays(ultimoFin, hoyStr)));
+    }
+    const vacanciaActualMediaDias = vacanciasActuales.length
+      ? Math.round(vacanciasActuales.reduce((suma, dias) => suma + dias, 0) / vacanciasActuales.length)
+      : null;
 
     const hoyInicioAnioStr = toDateStr(new Date(hoy.getFullYear(), 0, 1));
     const pagosAnio = await db
@@ -330,6 +492,16 @@ export class DrizzleDashboardRepository {
       clientesReportados,
       enProceso,
       pagosVencenHoy,
+      contratosRenovados,
+      contratosVencidosPeriodo,
+      tasaRenovacion,
+      duracionMediaContratoDias,
+      duracionContratos: duracionContratos.map(({ label, cantidad }) => ({ label, cantidad })),
+      vacanciaMediaDias,
+      vacanciasObservadas: vacanciasCerradas.length,
+      distribucionVacancia: distribucionVacancia.map(({ label, cantidad }) => ({ label, cantidad })),
+      vacanciaActualMediaDias,
+      departamentosLibresConHistorial: vacanciasActuales.length,
     };
   }
 }
@@ -337,4 +509,10 @@ export class DrizzleDashboardRepository {
 function toDateStr(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function diffDays(from: string, to: string): number {
+  const fromTime = new Date(`${from}T00:00:00Z`).getTime();
+  const toTime = new Date(`${to}T00:00:00Z`).getTime();
+  return Math.round((toTime - fromTime) / 86_400_000);
 }
