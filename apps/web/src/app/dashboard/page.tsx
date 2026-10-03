@@ -746,31 +746,85 @@ function OcupacionAnualPopup({ onCerrar }: { onCerrar: () => void }) {
       etiqueta: new Date(año, indice, 1).toLocaleDateString("es-PE", { month: "short" }),
       ocupadas,
       libres: Math.max(0, total - ocupadas),
+      porcentaje: total ? Math.round((ocupadas / total) * 100) : 0,
+      futuro: indice > new Date().getMonth(),
+      actual: indice === new Date().getMonth(),
     };
   });
+  const mesActual = meses[new Date().getMonth()];
+  const pico = meses.reduce((maximo, mes) => mes.ocupadas > maximo.ocupadas ? mes : maximo, meses[0]!);
+  const promedio = meses.length
+    ? Math.round(meses.reduce((suma, mes) => suma + mes.porcentaje, 0) / meses.length)
+    : 0;
 
   return (
-    <DashboardPanel titulo={`Ocupación · ${año}`} subtitulo="Departamentos ocupados frente al total disponible en cada mes" onCerrar={onCerrar}>
+    <DashboardPanel titulo={`Ocupación · ${año}`} subtitulo="Ocupadas frente al total de departamentos" onCerrar={onCerrar}>
       <EstadoCarga loading={loading} error={error} />
       {!loading && !error ? (
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-4 text-sm">
-            <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-sky-600" />Ocupadas</span>
-            <span className="flex items-center gap-2"><i className="h-3 w-3 rounded-sm bg-surface-variant" />Restantes hasta el total</span>
+        <div className="space-y-7">
+          <div className="grid grid-cols-3 divide-x divide-outline-variant border-b border-outline-variant pb-5">
+            <div className="pr-3">
+              <p className="text-xs uppercase text-on-surface-variant">Este mes</p>
+              <p className="mt-1 font-headline-md text-on-surface">{mesActual?.porcentaje ?? 0}%</p>
+              <p className="text-xs text-on-surface-variant">{mesActual?.ocupadas ?? 0} de {total}</p>
+            </div>
+            <div className="px-3">
+              <p className="text-xs uppercase text-on-surface-variant">Pico anual</p>
+              <p className="mt-1 font-headline-md text-on-surface">{pico.porcentaje}%</p>
+              <p className="text-xs capitalize text-on-surface-variant">{pico.etiqueta}</p>
+            </div>
+            <div className="pl-3">
+              <p className="text-xs uppercase text-on-surface-variant">Promedio</p>
+              <p className="mt-1 font-headline-md text-on-surface">{promedio}%</p>
+              <p className="text-xs text-on-surface-variant">año completo</p>
+            </div>
           </div>
-          {meses.map((mes) => {
-            const porcentaje = total ? (mes.ocupadas / total) * 100 : 0;
-            return (
-              <div key={mes.etiqueta} className="grid grid-cols-[3.5rem_1fr_5rem] items-center gap-3 text-sm">
-                <span className="capitalize text-on-surface-variant">{mes.etiqueta}</span>
-                <div className="flex h-5 overflow-hidden rounded-sm bg-surface-variant" aria-label={`${mes.ocupadas} de ${total} ocupados`}>
-                  <div className="h-full bg-sky-600" style={{ width: `${porcentaje}%` }} />
-                </div>
-                <span className="text-right font-mono-label">{mes.ocupadas}/{total}</span>
+
+          <div>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-4 text-xs text-on-surface-variant">
+                <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-sky-600" />Ocupación</span>
+                <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-surface-variant" />Capacidad libre</span>
               </div>
-            );
-          })}
-          <p className="pt-2 text-xs text-on-surface-variant">Los meses futuros se proyectan según las fechas de contratos registradas.</p>
+              <span className="text-xs text-on-surface-variant">{total} deptos.</span>
+            </div>
+
+            <div className="relative h-56 border-b border-outline-variant sm:h-64">
+              <div className="pointer-events-none absolute inset-0 flex flex-col justify-between pb-1">
+                {[100, 75, 50, 25, 0].map((nivel) => (
+                  <div key={nivel} className="flex items-center gap-2">
+                    <span className="w-7 text-right text-[10px] text-on-surface-variant">{nivel}%</span>
+                    <div className="h-px flex-1 border-t border-dashed border-outline-variant/70" />
+                  </div>
+                ))}
+              </div>
+              <div className="absolute inset-y-0 left-9 right-0 grid grid-cols-12 items-end gap-1 sm:gap-3">
+                {meses.map((mes) => (
+                  <div key={mes.etiqueta} className="flex h-full min-w-0 flex-col items-center justify-end gap-2">
+                    <span className={`text-[10px] font-semibold tabular-nums sm:text-xs ${mes.actual ? "text-emerald-700" : "text-on-surface-variant"}`}>
+                      {mes.porcentaje}%
+                    </span>
+                    <div
+                      className="relative flex h-[calc(100%-2.25rem)] w-full max-w-9 items-end overflow-hidden rounded-t-sm bg-surface-variant"
+                      title={`${mes.etiqueta}: ${mes.ocupadas} ocupados de ${total} (${mes.porcentaje}%)${mes.futuro ? ", proyección" : ""}`}
+                      aria-label={`${mes.etiqueta}: ${mes.ocupadas} de ${total} departamentos ocupados`}
+                    >
+                      <div
+                        className={`w-full rounded-t-sm transition-[height] ${mes.actual ? "bg-emerald-600" : mes.futuro ? "bg-sky-400" : "bg-sky-700"}`}
+                        style={{ height: `${mes.porcentaje}%` }}
+                      />
+                    </div>
+                    <span className={`w-full truncate text-center text-[10px] capitalize sm:text-xs ${mes.actual ? "font-bold text-emerald-700" : "text-on-surface-variant"}`}>
+                      {mes.etiqueta.replace(".", "")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p className="mt-3 text-center text-[11px] text-on-surface-variant">
+              Meses futuros: proyección basada en contratos registrados
+            </p>
+          </div>
         </div>
       ) : null}
     </DashboardPanel>
