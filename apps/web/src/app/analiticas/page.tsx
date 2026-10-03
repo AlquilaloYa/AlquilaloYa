@@ -15,29 +15,22 @@ const PERSONAS = [
 
 type PersonaKey = (typeof PERSONAS)[number]["key"];
 type Categoria = "mensualidad" | "mantenimiento" | "penalidad";
-type Base = "cuota" | "pago";
-type Vista = "acumulado" | "mes-en-curso" | "por-fecha-pago";
+type Vista = "acumulado" | "mes-en-curso";
 
+// Todas las vistas usan la misma base: el importe va al mes de la CUOTA, no al
+// mes en que se registro o se cancelo el voucher.
 const VISTAS = [
   {
     key: "acumulado",
     label: "Acumulado",
-    base: "cuota",
-    ayuda: "Cada canon se suma en el mes de su cuota, de enero a diciembre.",
+    ayuda: "Suma de enero a diciembre de lo cobrado en cada mes.",
   },
   {
     key: "mes-en-curso",
     label: "Mes en curso",
-    base: "pago",
-    ayuda: "Solo lo pagado durante este mes. Sube conforme registras pagos.",
+    ayuda: "Solo lo cobrado en el mes de la cuota de este mes. Sube conforme registras pagos.",
   },
-  {
-    key: "por-fecha-pago",
-    label: "Por fecha de pago",
-    base: "pago",
-    ayuda: "Agrupa cada pago en el mes en que se registró.",
-  },
-] as const satisfies { key: Vista; label: string; base: Base; ayuda: string }[];
+] as const satisfies { key: Vista; label: string; ayuda: string }[];
 
 const CATEGORIAS: { key: Categoria; label: string; corto: string }[] = [
   { key: "mensualidad", label: "Mensualidad", corto: "Mensualidad" },
@@ -62,7 +55,6 @@ interface FilaMes {
 interface AnaliticasData {
   year: number;
   month: number | null;
-  base: Base;
   mesEnCurso: number;
   meses: FilaMes[];
   totales: Record<Categoria, PorPersona>;
@@ -107,8 +99,9 @@ export default function AnaliticasPage() {
         setLoading(true);
         setError("");
       }
-      const params = new URLSearchParams({ year: String(year), base: vistaActual.base });
-      if (!enCurso && month !== "todos") params.set("month", String(month));
+      const params = new URLSearchParams({ year: String(year) });
+      if (enCurso) params.set("month", "actual");
+      else if (month !== "todos") params.set("month", String(month));
       try {
         const response = await apiFetch(`/api/analiticas-cobranza?${params.toString()}`);
         if (!response.ok) throw new Error("No se pudieron cargar las analíticas de cobranza.");
@@ -126,7 +119,7 @@ export default function AnaliticasPage() {
         if (!silencioso && id === petición.current) setLoading(false);
       }
     },
-    [year, month, vistaActual.base, enCurso]
+    [year, month, enCurso]
   );
 
   useEffect(() => {
@@ -252,7 +245,7 @@ export default function AnaliticasPage() {
                   </div>
                   {enCurso ? (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Pagado en {MESES[mesEnCurso - 1]} · sube con cada pago registrado
+                      Cobrado en {MESES[mesEnCurso - 1]} · cuotas de este mes
                     </p>
                   ) : null}
                 </CardHeader>
@@ -277,7 +270,7 @@ export default function AnaliticasPage() {
               </CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">
                 {enCurso
-                  ? "Lo pagado en cada mes. El mes en curso sube conforme registras pagos."
+                  ? "Cada mes lleva solo las cuotas que le corresponden. El mes en curso sube conforme registras pagos."
                   : `Cada barra es lo que cobró esa persona · ${vistaActual.label.toLowerCase()}`}
               </p>
             </div>
@@ -359,12 +352,12 @@ export default function AnaliticasPage() {
           </CardContent>
         </Card>
 
-        {vistaActual.base === "pago" && !loading && !error && meses.some((fila) => fila.pagos > 0) ? (
+        {!loading && !error && meses.some((fila) => fila.pagos > 0) ? (
           <Card>
             <CardHeader>
-              <CardTitle>Qué se pagó en cada mes</CardTitle>
+              <CardTitle>Cobrado en cada mes</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">
-                Pagos registrados en el mes y los periodos de cuota que cubrieron
+                Cada mes lleva solo las cuotas que le corresponden. No arrastra meses anteriores.
               </p>
             </CardHeader>
             <CardContent>
@@ -392,10 +385,17 @@ export default function AnaliticasPage() {
                             ) : null}
                           </p>
                           <p className="mt-1 text-sm text-muted-foreground">
-                            {fila.pagos} {fila.pagos === 1 ? "pago" : "pagos"} · cubre{" "}
-                            {fila.periodos.length === 1
-                              ? `la cuota ${fila.periodos[0]}`
-                              : `las cuotas ${fila.periodos[0]} a ${fila.periodos[fila.periodos.length - 1]} (${fila.periodos.length})`}
+                            {fila.pagos} {fila.pagos === 1 ? "cuota cobrada" : "cuotas cobradas"}
+                            {" · "}
+                            {PERSONAS.filter(({ key }) =>
+                              fila.mensualidad[key] + fila.mantenimiento[key] + fila.penalidad[key] > 0
+                            )
+                              .map(({ nombre, key }) =>
+                                `${nombre} ${money(
+                                  fila.mensualidad[key] + fila.mantenimiento[key] + fila.penalidad[key]
+                                )}`
+                              )
+                              .join(" · ")}
                           </p>
                         </div>
                         <span className="shrink-0 font-semibold tabular-nums">{money(total)}</span>

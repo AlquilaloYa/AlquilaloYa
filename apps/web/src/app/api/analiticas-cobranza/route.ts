@@ -76,14 +76,13 @@ const params = new URL(req.url).searchParams;
       : currentYear;
     const requestedMonth = params.get("month");
     const monthNumero = Number(requestedMonth);
-    // "actual" = mes en curso: caja del mes, sube conforme se registran pagos.
+    // "actual" = mes en curso. "todos" o ausente = el ano completo.
     const month =
       requestedMonth === "actual"
         ? now.getMonth() + 1
         : Number.isInteger(monthNumero) && monthNumero >= 1 && monthNumero <= 12
           ? monthNumero
           : null;
-    const base: "cuota" | "pago" = params.get("base") === "pago" ? "pago" : "cuota";
     const hoy = localDateStr(now);
 
     const contratos = await db
@@ -152,20 +151,19 @@ const params = new URL(req.url).searchParams;
       const persona = normalizarPersona(pago.personaPago);
       if (!persona || pago.estadoPago !== "PAGADO") continue;
 
-      // La cuota (periodo) reparte el canon en su mes; la fecha de pago dice
-      // cuando entro la plata. Con cargas masivas ambas dan cifras distintas.
-      const fecha =
-        base === "pago" ? (pago.fechaPago ? toDateStr(pago.fechaPago) : null) : toDateStr(pago.periodo);
-      if (!fecha || Number(fecha.slice(0, 4)) !== year) continue;
+      // El importe va al mes de la CUOTA (periodo), no al mes en que se
+      // registro o se cancelo el voucher: asi un mes nunca se lleva el
+      // arrastre de los anteriores.
+      const periodo = toDateStr(pago.periodo);
+      if (Number(periodo.slice(0, 4)) !== year) continue;
 
-      const fila = porMes[Number(fecha.slice(5, 7)) - 1];
+      const fila = porMes[Number(periodo.slice(5, 7)) - 1];
       if (!fila) continue;
       fila.mensualidad[persona] += Number(pago.monto ?? 0);
       fila.mantenimiento[persona] += Number(pago.mantenimiento ?? 0);
       fila.penalidad[persona] += Number(pago.penalidad ?? 0);
       fila.pagos += 1;
-      // Periodos de cuota que se cubrieron con lo pagado en este mes.
-      fila.periodos.add(toDateStr(pago.periodo).slice(0, 7));
+      fila.periodos.add(periodo.slice(0, 7));
     }
 
     for (const contrato of contratos) {
@@ -264,7 +262,6 @@ const enRango = month === null ? porMes : porMes.filter((fila) => fila.indice ==
     return NextResponse.json({
       year,
       month,
-      base,
       mesEnCurso: now.getMonth() + 1,
       meses,
       totales: redondearPorCategoria(totales),
