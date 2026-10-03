@@ -74,6 +74,7 @@ interface ContratoDashboard {
   departamentoId: string;
   fechaInicio: string;
   fechaFin: string;
+  resueltoEn?: string | null;
   estado: string;
 }
 
@@ -529,11 +530,13 @@ function DashboardPanel({
   subtitulo,
   onCerrar,
   children,
+  panelClassName = "max-w-4xl",
 }: {
   titulo: string;
   subtitulo: string;
   onCerrar: () => void;
   children: React.ReactNode;
+  panelClassName?: string;
 }) {
   return (
     <div
@@ -543,7 +546,7 @@ function DashboardPanel({
       onClick={onCerrar}
     >
       <section
-        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-2xl"
+        className={`flex max-h-[90vh] w-full ${panelClassName} flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-2xl`}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-start justify-between gap-4 border-b border-outline-variant p-5">
@@ -578,6 +581,28 @@ function EstadoCarga({ loading, error }: { loading: boolean; error: string | nul
   return error ? (
     <p className="rounded-lg bg-error-container p-4 text-sm text-error-container-foreground">{error}</p>
   ) : null;
+}
+
+interface PuntoOcupacion {
+  x: number;
+  y: number;
+  mes: string;
+  ocupadas: number;
+  porcentaje: number;
+}
+
+function curvaSuave(puntos: PuntoOcupacion[]): string {
+  if (puntos.length === 0) return "";
+  const primero = puntos[0]!;
+  let path = `M ${primero.x} ${primero.y}`;
+  for (let indice = 0; indice < puntos.length - 1; indice++) {
+    const previo = puntos[Math.max(0, indice - 1)]!;
+    const inicio = puntos[indice]!;
+    const fin = puntos[indice + 1]!;
+    const siguiente = puntos[Math.min(puntos.length - 1, indice + 2)]!;
+    path += ` C ${inicio.x + (fin.x - previo.x) / 6} ${inicio.y + (fin.y - previo.y) / 6}, ${fin.x - (siguiente.x - inicio.x) / 6} ${fin.y - (siguiente.y - inicio.y) / 6}, ${fin.x} ${fin.y}`;
+  }
+  return path;
 }
 
 function OcupadasPopup({ onCerrar }: { onCerrar: () => void }) {
@@ -729,101 +754,131 @@ function DisponiblesPopup({ onCerrar }: { onCerrar: () => void }) {
 function OcupacionAnualPopup({ onCerrar }: { onCerrar: () => void }) {
   const { data: departamentos, loading: cargandoDeptos, error: errorDeptos } = useDashboardJson<DepartamentoDashboard[]>("/api/departamentos");
   const { data: contratos, loading: cargandoContratos, error: errorContratos } = useDashboardJson<ContratoDashboard[]>("/api/contracts");
+  const [aniosVisibles, setAniosVisibles] = useState<number[]>([]);
   const loading = cargandoDeptos || cargandoContratos;
   const error = errorDeptos ?? errorContratos;
   const año = new Date().getFullYear();
   const total = (departamentos ?? []).filter((departamento) => departamento.activo).length;
-  const estadosOcupacion = new Set(["FIRMADO", "NOTARIADO", "ACTIVO", "VIGENTE"]);
-  const meses = Array.from({ length: 12 }, (_, indice) => {
-    const inicio = `${año}-${String(indice + 1).padStart(2, "0")}-01`;
-    const fin = localDateStr(new Date(año, indice + 1, 0));
-    const ocupadas = new Set(
-      (contratos ?? [])
-        .filter((contrato) => estadosOcupacion.has(contrato.estado) && contrato.fechaInicio <= fin && contrato.fechaFin >= inicio)
-        .map((contrato) => contrato.departamentoId)
-    ).size;
-    return {
-      etiqueta: new Date(año, indice, 1).toLocaleDateString("es-PE", { month: "short" }),
-      ocupadas,
-      libres: Math.max(0, total - ocupadas),
-      porcentaje: total ? Math.round((ocupadas / total) * 100) : 0,
-      futuro: indice > new Date().getMonth(),
-      actual: indice === new Date().getMonth(),
-    };
-  });
-  const mesActual = meses[new Date().getMonth()];
-  const pico = meses.reduce((maximo, mes) => mes.ocupadas > maximo.ocupadas ? mes : maximo, meses[0]!);
-  const promedio = meses.length
-    ? Math.round(meses.reduce((suma, mes) => suma + mes.porcentaje, 0) / meses.length)
+  const anios = [año - 2, año - 1, año];
+  const estadosOcupacion = new Set(["FIRMADO", "NOTARIADO", "ACTIVO", "VIGENTE", "RESUELTO"]);
+  const colores = ["#f59e0b", "#22d3ee", "#fb7185"];
+  const series = anios.map((anio, serieIndex) => ({
+    anio,
+    color: colores[serieIndex]!,
+    puntos: Array.from({ length: 12 }, (_, indice) => {
+      const inicio = `${anio}-${String(indice + 1).padStart(2, "0")}-01`;
+      const fin = localDateStr(new Date(anio, indice + 1, 0));
+      const ocupadas = new Set(
+        (contratos ?? [])
+          .filter((contrato) => {
+            if (!estadosOcupacion.has(contrato.estado) || contrato.fechaInicio > fin) return false;
+            const finReal = contrato.estado === "RESUELTO"
+              ? contrato.resueltoEn?.slice(0, 10) ?? contrato.fechaFin
+              : contrato.fechaFin;
+            return finReal >= inicio;
+          })
+          .map((contrato) => contrato.departamentoId)
+      ).size;
+      const porcentaje = total ? Math.round((ocupadas / total) * 100) : 0;
+      return {
+        mes: new Date(anio, indice, 1).toLocaleDateString("es-PE", { month: "short" }).replace(".", ""),
+        ocupadas,
+        porcentaje,
+        x: 76 + (indice / 11) * 796,
+        y: 286 - (porcentaje / 100) * 238,
+      };
+    }),
+  }));
+  const seriesEfectivas = aniosVisibles.length > 0 ? aniosVisibles : anios;
+  const puntosActuales = series.find((serie) => serie.anio === año)?.puntos ?? [];
+  const mesActual = puntosActuales[new Date().getMonth()];
+  const pico = puntosActuales.reduce((maximo, mes) => mes.ocupadas > maximo.ocupadas ? mes : maximo, puntosActuales[0]!);
+  const promedio = puntosActuales.length
+    ? Math.round(puntosActuales.reduce((suma, mes) => suma + mes.porcentaje, 0) / puntosActuales.length)
     : 0;
 
+  function alternarAnio(anio: number) {
+    setAniosVisibles((actuales) => {
+      const visibles = actuales.length > 0 ? actuales : anios;
+      if (visibles.includes(anio)) {
+        const siguientes = visibles.filter((item) => item !== anio);
+        return siguientes.length > 0 ? siguientes : anios;
+      }
+      return [...visibles, anio];
+    });
+  }
+
   return (
-    <DashboardPanel titulo={`Ocupación · ${año}`} subtitulo="Ocupadas frente al total de departamentos" onCerrar={onCerrar}>
+    <DashboardPanel titulo={`Ocupación · ${año}`} subtitulo="Tendencia mensual de departamentos ocupados" onCerrar={onCerrar} panelClassName="max-w-5xl">
       <EstadoCarga loading={loading} error={error} />
       {!loading && !error ? (
-        <div className="space-y-7">
-          <div className="grid grid-cols-3 divide-x divide-outline-variant border-b border-outline-variant pb-5">
-            <div className="pr-3">
-              <p className="text-xs uppercase text-on-surface-variant">Este mes</p>
-              <p className="mt-1 font-headline-md text-on-surface">{mesActual?.porcentaje ?? 0}%</p>
-              <p className="text-xs text-on-surface-variant">{mesActual?.ocupadas ?? 0} de {total}</p>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-baseline gap-2">
+              <span className="font-headline-md text-on-surface">{mesActual?.porcentaje ?? 0}%</span>
+              <span className="text-sm text-on-surface-variant">este mes · {mesActual?.ocupadas ?? 0}/{total}</span>
             </div>
-            <div className="px-3">
-              <p className="text-xs uppercase text-on-surface-variant">Pico anual</p>
-              <p className="mt-1 font-headline-md text-on-surface">{pico.porcentaje}%</p>
-              <p className="text-xs capitalize text-on-surface-variant">{pico.etiqueta}</p>
-            </div>
-            <div className="pl-3">
-              <p className="text-xs uppercase text-on-surface-variant">Promedio</p>
-              <p className="mt-1 font-headline-md text-on-surface">{promedio}%</p>
-              <p className="text-xs text-on-surface-variant">año completo</p>
+            <div className="flex items-center gap-1 rounded-md bg-surface-container-low p-1" aria-label="Mostrar años">
+              {series.map((serie) => {
+                const activa = seriesEfectivas.includes(serie.anio);
+                return (
+                  <button
+                    key={serie.anio}
+                    type="button"
+                    aria-pressed={activa}
+                    onClick={() => alternarAnio(serie.anio)}
+                    className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-semibold transition-colors ${activa ? "bg-surface-container-lowest text-on-surface shadow-sm" : "text-on-surface-variant hover:text-on-surface"}`}
+                  >
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: activa ? serie.color : "#9ca3af" }} />
+                    {serie.anio}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-4 text-xs text-on-surface-variant">
-                <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-sky-600" />Ocupación</span>
-                <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-surface-variant" />Capacidad libre</span>
-              </div>
-              <span className="text-xs text-on-surface-variant">{total} deptos.</span>
-            </div>
+          <div className="overflow-x-auto rounded-lg bg-[#171a20] p-2 sm:p-4">
+            <svg viewBox="0 0 900 340" role="img" aria-label={`Tendencia mensual de ocupación entre ${anios[0]} y ${año}`} className="h-auto min-w-[640px] w-full">
+              {[0, 25, 50, 75, 100].map((nivel) => {
+                const y = 286 - (nivel / 100) * 238;
+                return (
+                  <g key={nivel}>
+                    <text x="50" y={y + 4} textAnchor="end" fill="#9ca3af" fontSize="11">{nivel}%</text>
+                    <line x1="64" x2="872" y1={y} y2={y} stroke="#ffffff" strokeOpacity="0.1" strokeDasharray="3 5" />
+                  </g>
+                );
+              })}
+              {seriesEfectivas.map((anio) => {
+                const serie = series.find((item) => item.anio === anio)!;
+                const linea = curvaSuave(serie.puntos);
+                const primero = serie.puntos[0]!;
+                const ultimo = serie.puntos[serie.puntos.length - 1]!;
+                return (
+                  <g key={anio}>
+                    <path d={`${linea} L ${ultimo.x} 286 L ${primero.x} 286 Z`} fill={serie.color} fillOpacity="0.12" />
+                    <path d={linea} fill="none" stroke={serie.color} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                    {serie.puntos.map((punto) => (
+                      <circle key={`${anio}-${punto.mes}`} cx={punto.x} cy={punto.y} r="3.5" fill={serie.color} stroke="#171a20" strokeWidth="2">
+                        <title>{`${anio} ${punto.mes}: ${punto.ocupadas} departamentos · ${punto.porcentaje}%`}</title>
+                      </circle>
+                    ))}
+                  </g>
+                );
+              })}
+              {series[0]!.puntos.map((punto) => (
+                <text key={punto.mes} x={punto.x} y="320" textAnchor="middle" fill="#d1d5db" fontSize="11" className="capitalize">{punto.mes}</text>
+              ))}
+            </svg>
+          </div>
 
-            <div className="relative h-56 border-b border-outline-variant sm:h-64">
-              <div className="pointer-events-none absolute inset-0 flex flex-col justify-between pb-1">
-                {[100, 75, 50, 25, 0].map((nivel) => (
-                  <div key={nivel} className="flex items-center gap-2">
-                    <span className="w-7 text-right text-[10px] text-on-surface-variant">{nivel}%</span>
-                    <div className="h-px flex-1 border-t border-dashed border-outline-variant/70" />
-                  </div>
-                ))}
-              </div>
-              <div className="absolute inset-y-0 left-9 right-0 grid grid-cols-12 items-end gap-1 sm:gap-3">
-                {meses.map((mes) => (
-                  <div key={mes.etiqueta} className="flex h-full min-w-0 flex-col items-center justify-end gap-2">
-                    <span className={`text-[10px] font-semibold tabular-nums sm:text-xs ${mes.actual ? "text-emerald-700" : "text-on-surface-variant"}`}>
-                      {mes.porcentaje}%
-                    </span>
-                    <div
-                      className="relative flex h-[calc(100%-2.25rem)] w-full max-w-9 items-end overflow-hidden rounded-t-sm bg-surface-variant"
-                      title={`${mes.etiqueta}: ${mes.ocupadas} ocupados de ${total} (${mes.porcentaje}%)${mes.futuro ? ", proyección" : ""}`}
-                      aria-label={`${mes.etiqueta}: ${mes.ocupadas} de ${total} departamentos ocupados`}
-                    >
-                      <div
-                        className={`w-full rounded-t-sm transition-[height] ${mes.actual ? "bg-emerald-600" : mes.futuro ? "bg-sky-400" : "bg-sky-700"}`}
-                        style={{ height: `${mes.porcentaje}%` }}
-                      />
-                    </div>
-                    <span className={`w-full truncate text-center text-[10px] capitalize sm:text-xs ${mes.actual ? "font-bold text-emerald-700" : "text-on-surface-variant"}`}>
-                      {mes.etiqueta.replace(".", "")}
-                    </span>
-                  </div>
-                ))}
-              </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-on-surface-variant">
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {seriesEfectivas.map((anio) => {
+                const serie = series.find((item) => item.anio === anio)!;
+                return <span key={anio} className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: serie.color }} />{anio}</span>;
+              })}
             </div>
-            <p className="mt-3 text-center text-[11px] text-on-surface-variant">
-              Meses futuros: proyección basada en contratos registrados
-            </p>
+            <span>Pico {pico.porcentaje}% · Promedio {promedio}% · Total {total}</span>
           </div>
         </div>
       ) : null}
