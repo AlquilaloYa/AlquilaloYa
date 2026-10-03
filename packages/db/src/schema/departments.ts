@@ -25,6 +25,7 @@ export const departments = pgTable(
     servicios: varchar("servicios", { length: 255 }).notNull().default("Agua, luz"),
     activo: boolean("activo").notNull().default(true),
     estadoManual: varchar("estado_manual", { length: 20 }),
+    motivoBloqueo: varchar("motivo_bloqueo", { length: 500 }),
     estadoManualUpdatedAt: timestamp("estado_manual_updated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

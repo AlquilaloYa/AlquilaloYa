@@ -35,6 +35,7 @@ export async function PATCH(
       precio?: string | number;
       garantia?: string | number;
       estadoManual?: string | null;
+      motivoBloqueo?: string | null;
       personaPago?: string;
     };
 
@@ -44,10 +45,11 @@ export async function PATCH(
     const tieneGarantia =
       "garantia" in body && body.garantia !== undefined && body.garantia !== null && body.garantia !== "";
     const tieneEstadoManual = "estadoManual" in body;
+    const tieneMotivoBloqueo = "motivoBloqueo" in body;
     const tienePersonaPago =
       "personaPago" in body && body.personaPago !== undefined && body.personaPago !== null && String(body.personaPago).trim() !== "";
 
-    if (!tienePrecio && !tieneGarantia && !tieneEstadoManual && !tienePersonaPago) {
+    if (!tienePrecio && !tieneGarantia && !tieneEstadoManual && !tieneMotivoBloqueo && !tienePersonaPago) {
       return NextResponse.json(
         { error: "Indica el precio (mensualidad), la garantía, el estado manual y/o la persona de pago" },
         { status: 400 }
@@ -84,6 +86,13 @@ export async function PATCH(
       }
       values.estadoManual = estado === "MANTENIMIENTO" || estado === "BLOQUEADO" ? estado : null;
       values.estadoManualUpdatedAt = new Date();
+    }
+    if (tieneMotivoBloqueo) {
+      const motivo = typeof body.motivoBloqueo === "string" ? body.motivoBloqueo.trim() : "";
+      if (motivo.length > 500) {
+        return NextResponse.json({ error: "La causa no puede superar 500 caracteres" }, { status: 400 });
+      }
+      values.motivoBloqueo = motivo || null;
     }
     if (tienePersonaPago) {
       values.personaPago = String(body.personaPago).trim();

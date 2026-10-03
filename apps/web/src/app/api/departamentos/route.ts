@@ -81,16 +81,15 @@ export async function GET(req: Request) {
 
     const resultado = rows.map((d) => {
       const contratoEstado = contratoEstadoPorDepartamento.get(d.id) ?? null;
-      const ocupando = ocupantes
+      const contratosOcupando = ocupantes
         .filter(
           (c) =>
             c.departamentoId === d.id &&
             c.fechaInicio <= hoyISO &&
             c.fechaFin >= hoyISO
         )
-        .map((c) => c.fechaFin)
-        .sort();
-      if (ocupando.length === 0) {
+        .sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio));
+      if (contratosOcupando.length === 0) {
         if (d.estadoManual === "BLOQUEADO") {
           return { ...d, contratoEstado, disponibilidad: null, enMantenimiento: false, bloqueado: true };
         }
@@ -101,11 +100,12 @@ export async function GET(req: Request) {
         const enMantenimiento = Boolean(ultimoFin && ultimoFin < hoyISO);
         return { ...d, contratoEstado, disponibilidad: null, enMantenimiento, bloqueado: false };
       }
-      const fin = ocupando[ocupando.length - 1] as string;
-      const ocupanteIds = new Set(
-        ocupantes.filter((c) => c.departamentoId === d.id).map((c) => c.clienteId)
+      const contratoVigente = contratosOcupando[0]!;
+      const fin = contratosOcupando.reduce(
+        (fechaMasLejana, contrato) => contrato.fechaFin > fechaMasLejana ? contrato.fechaFin : fechaMasLejana,
+        contratoVigente.fechaFin
       );
-      const cliente = [...ocupanteIds].map((id) => clientePorId.get(id)).find(Boolean);
+      const cliente = clientePorId.get(contratoVigente.clienteId);
       return {
         ...d,
         contratoEstado,
