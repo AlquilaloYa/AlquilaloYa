@@ -693,25 +693,32 @@ function UnidadesTotalesPopup({ onCerrar }: { onCerrar: () => void }) {
                     {grupo.titulo}
                     <span className="text-xs font-normal text-on-surface-variant">{grupo.departamentos.length} unidades</span>
                   </h3>
-                  <ul className="divide-y divide-outline-variant">
+                  <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                     {grupo.departamentos.map((departamento) => {
                       const meta = estado(departamento);
+                      const tarjetaClase = departamento.disponibilidad
+                        ? "border-red-600/20 bg-red-500/10 border-l-red-600 hover:bg-red-500/15"
+                        : departamento.bloqueado
+                          ? "border-black bg-black border-l-black hover:opacity-90"
+                          : departamento.enMantenimiento
+                            ? "border-blue-600/20 bg-blue-500/10 border-l-blue-600 hover:bg-blue-500/15"
+                            : "border-green-600/20 bg-green-500/10 border-l-green-600 hover:bg-green-500/15";
+                      const codigoClase = departamento.disponibilidad
+                        ? "text-red-700 dark:text-red-500"
+                        : departamento.bloqueado
+                          ? "text-white"
+                          : departamento.enMantenimiento
+                            ? "text-blue-700 dark:text-blue-500"
+                            : "text-green-700 dark:text-green-500";
                       return (
                         <li key={departamento.id}>
                           <Link
                             href={`/disponibilidad/${encodeURIComponent(departamento.codigo)}`}
-                            className="flex flex-wrap items-center gap-3 px-2 py-2.5 transition-colors hover:bg-surface-container-low focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                            title={`${departamento.codigo} · ${meta.texto}${departamento.disponibilidad ? ` hasta ${fechaLegible(departamento.disponibilidad.fechaFin)}` : ""}`}
+                            className={`flex min-h-20 aspect-[1.8] flex-col items-center justify-center gap-1 rounded-lg border border-l-4 p-2 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${tarjetaClase}`}
                           >
-                            <span className="min-w-0 flex-1">
-                              <span className="block font-mono-label font-semibold text-on-surface">{departamento.codigo}</span>
-                              <span className="block text-xs text-on-surface-variant">{departamento.nombre}{departamento.piso ? ` · piso ${departamento.piso}` : ""}</span>
-                            </span>
-                            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${meta.clase}`}>{meta.texto}</span>
-                            {departamento.disponibilidad ? (
-                              <span className="w-full text-right text-xs text-on-surface-variant sm:w-auto">
-                                Hasta {fechaLegible(departamento.disponibilidad.fechaFin)}
-                              </span>
-                            ) : null}
+                            <span className={`font-mono-label text-sm font-bold sm:text-base ${codigoClase}`}>{departamento.codigo}</span>
+                            <span className={`text-[10px] font-medium sm:text-xs ${departamento.bloqueado ? "text-white/80" : "text-on-surface-variant"}`}>{meta.texto}</span>
                           </Link>
                         </li>
                       );
