@@ -794,7 +794,7 @@ function DisponiblesPopup({ onCerrar }: { onCerrar: () => void }) {
               {editando ? "Cancelar" : "Bloquear"}
             </button>
           ) : (
-            <button type="button" disabled={guardando === departamento.id} onClick={() => void actualizarEstado(departamento.id, "LIBRE", null)} className="rounded border border-outline-variant px-3 py-1.5 text-sm font-medium text-on-surface hover:bg-surface-container-high disabled:opacity-50">
+            <button type="button" disabled={guardando === departamento.id} onClick={() => void actualizarEstado(departamento.id, "DISPONIBLE", null)} className="rounded border border-outline-variant px-3 py-1.5 text-sm font-medium text-on-surface hover:bg-surface-container-high disabled:opacity-50">
               {guardando === departamento.id ? "Guardando…" : "Marcar disponible"}
             </button>
           )}

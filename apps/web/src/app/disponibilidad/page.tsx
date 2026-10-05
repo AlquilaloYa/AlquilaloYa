@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
-import { RefreshCw, X } from "lucide-react";
+import { Check, RefreshCw, X } from "lucide-react";
 
 interface DisponibilidadDepartment {
   id: string;
@@ -53,37 +53,86 @@ function TarjetaOcupada({ dept }: { dept: DisponibilidadDepartment }) {
 function TarjetaMantenimiento({
   dept,
   onOpen,
+  onDisponible,
+  guardando,
 }: {
   dept: DisponibilidadDepartment;
   onOpen: () => void;
+  onDisponible: () => void;
+  guardando: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      title="Cambiar estado"
-      className="flex items-center justify-center rounded-xl border border-blue-600/20 bg-blue-500/10 border-l-4 border-l-blue-600 p-4 transition-colors hover:bg-blue-500/15"
-    >
-      <span className="font-mono-label text-base font-bold text-blue-700 dark:text-blue-500">{dept.codigo}</span>
-    </button>
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onOpen}
+        title="Cambiar estado"
+        className="flex w-full items-center justify-center rounded-xl border border-blue-600/20 bg-blue-500/10 border-l-4 border-l-blue-600 p-4 transition-colors hover:bg-blue-500/15"
+      >
+        <span className="font-mono-label text-base font-bold text-blue-700 dark:text-blue-500">{dept.codigo}</span>
+      </button>
+      <BotonDisponibleRapido
+        codigo={dept.codigo}
+        onClick={onDisponible}
+        guardando={guardando}
+        className="text-blue-700 dark:text-blue-500 hover:bg-blue-500/20"
+      />
+    </div>
   );
 }
 
 function TarjetaBloqueada({
   dept,
   onOpen,
+  onDisponible,
+  guardando,
 }: {
   dept: DisponibilidadDepartment;
   onOpen: () => void;
+  onDisponible: () => void;
+  guardando: boolean;
+}) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onOpen}
+        title="Cambiar estado"
+        className="flex w-full items-center justify-center rounded-xl border border-black bg-black border-l-4 p-4 transition-colors hover:opacity-90"
+      >
+        <span className="font-mono-label text-base font-bold text-white">{dept.codigo}</span>
+      </button>
+      <BotonDisponibleRapido
+        codigo={dept.codigo}
+        onClick={onDisponible}
+        guardando={guardando}
+        className="text-white hover:bg-white/20"
+      />
+    </div>
+  );
+}
+
+function BotonDisponibleRapido({
+  codigo,
+  onClick,
+  guardando,
+  className,
+}: {
+  codigo: string;
+  onClick: () => void;
+  guardando: boolean;
+  className?: string;
 }) {
   return (
     <button
       type="button"
-      onClick={onOpen}
-      title="Cambiar estado"
-      className="flex items-center justify-center rounded-xl border border-black bg-black border-l-4 p-4 transition-colors hover:opacity-90"
+      onClick={onClick}
+      disabled={guardando}
+      title={`Marcar ${codigo} como disponible`}
+      aria-label={`Marcar ${codigo} como disponible`}
+      className={`absolute bottom-1.5 right-1.5 flex size-7 items-center justify-center rounded-md border border-current/30 bg-white/20 text-xs transition-colors hover:bg-white/40 disabled:opacity-60 ${className ?? ""}`}
     >
-      <span className="font-mono-label text-base font-bold text-white">{dept.codigo}</span>
+      <Check aria-hidden className="size-4" strokeWidth={3} />
     </button>
   );
 }
@@ -99,21 +148,18 @@ function PopupCambiarEstado({
 }) {
   const [guardando, setGuardando] = useState(false);
   const [errorCambio, setErrorCambio] = useState<string | null>(null);
-  const manual = dept.estadoManual;
+  const manual = dept.estadoManual ?? null;
 
-  async function cambiarEstado(estado: "MANTENIMIENTO" | "BLOQUEADO" | "AUTO") {
+  async function cambiarEstado(estado: "DISPONIBLE" | "MANTENIMIENTO" | "BLOQUEADO" | null) {
     if (guardando) return;
-    if (estado === "AUTO" && (manual === null || manual === undefined)) return;
-    if (estado !== "AUTO" && estado === manual) return;
+    if (estado === manual) return;
     setGuardando(true);
     setErrorCambio(null);
     try {
       const res = await apiFetch(`/api/departamentos/${dept.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          estadoManual: estado === "AUTO" ? "LIBRE" : estado,
-        }),
+        body: JSON.stringify({ estadoManual: estado }),
       });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
@@ -158,6 +204,16 @@ function PopupCambiarEstado({
           <button
             type="button"
             disabled={guardando}
+            onClick={() => void cambiarEstado("DISPONIBLE")}
+            className={`flex w-full items-center gap-3 rounded-lg border-l-4 border-green-600 bg-green-500/15 px-3 py-2 text-sm font-semibold text-green-700 transition-colors dark:text-green-500 ${
+              manual === "DISPONIBLE" ? "ring-2 ring-inset ring-green-600 opacity-80" : "hover:bg-green-500/25"
+            }`}
+          >
+            Disponible{manual === "DISPONIBLE" ? " · actual" : ""}
+          </button>
+          <button
+            type="button"
+            disabled={guardando}
             onClick={() => void cambiarEstado("MANTENIMIENTO")}
             className={`flex w-full items-center gap-3 rounded-lg border-l-4 border-blue-600 bg-blue-500/10 px-3 py-2 text-sm font-semibold text-blue-700 transition-colors dark:text-blue-500 ${
               manual === "MANTENIMIENTO" ? "ring-2 ring-inset ring-blue-600 opacity-80" : "hover:bg-blue-500/15"
@@ -178,17 +234,19 @@ function PopupCambiarEstado({
           <button
             type="button"
             disabled={guardando}
-            onClick={() => void cambiarEstado("AUTO")}
+            onClick={() => void cambiarEstado(null)}
             className={`flex w-full items-center gap-3 rounded-lg border border-dashed border-outline px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted ${
-              manual === null || manual === undefined
-                ? "ring-2 ring-inset ring-primary/60 text-foreground font-semibold"
-                : ""
+              manual === null ? "ring-2 ring-inset ring-primary/60 font-semibold text-foreground" : ""
             }`}
           >
-            Automático (según contratos)
-            {manual === null || manual === undefined ? " · actual" : ""}
+            Automático (según contratos){manual === null ? " · actual" : ""}
           </button>
         </div>
+        {manual === null ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Sin estado manual: la unidad cae en mantenimiento si su contrato venció sin renovar.
+          </p>
+        ) : null}
         {errorCambio ? <p className="mt-3 text-sm text-red-600">{errorCambio}</p> : null}
         <button
           type="button"
@@ -206,10 +264,14 @@ function GrupoDepartamentos({
   titulo,
   departamentos,
   onAbrirCambio,
+  onMarcarDisponible,
+  guardandoId,
 }: {
   titulo: string;
   departamentos: DisponibilidadDepartment[];
   onAbrirCambio: (dept: DisponibilidadDepartment) => void;
+  onMarcarDisponible: (dept: DisponibilidadDepartment) => void;
+  guardandoId: string | null;
 }) {
   const disponibles = departamentos.filter((d) => !d.disponibilidad && !d.enMantenimiento && !d.bloqueado);
   const mantenimiento = departamentos.filter((d) => !d.disponibilidad && d.enMantenimiento && !d.bloqueado);
@@ -234,10 +296,22 @@ function GrupoDepartamentos({
           <TarjetaDisponible key={dept.id} dept={dept} />
         ))}
         {mantenimiento.map((dept) => (
-          <TarjetaMantenimiento key={dept.id} dept={dept} onOpen={() => onAbrirCambio(dept)} />
+          <TarjetaMantenimiento
+            key={dept.id}
+            dept={dept}
+            onOpen={() => onAbrirCambio(dept)}
+            onDisponible={() => onMarcarDisponible(dept)}
+            guardando={guardandoId === dept.id}
+          />
         ))}
         {bloqueados.map((dept) => (
-          <TarjetaBloqueada key={dept.id} dept={dept} onOpen={() => onAbrirCambio(dept)} />
+          <TarjetaBloqueada
+            key={dept.id}
+            dept={dept}
+            onOpen={() => onAbrirCambio(dept)}
+            onDisponible={() => onMarcarDisponible(dept)}
+            guardando={guardandoId === dept.id}
+          />
         ))}
         {ocupados.map((dept) => (
           <TarjetaOcupada key={dept.id} dept={dept} />
@@ -252,6 +326,8 @@ export default function DisponibilidadPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [popupCambio, setPopupCambio] = useState<DisponibilidadDepartment | null>(null);
+  const [guardandoId, setGuardandoId] = useState<string | null>(null);
+  const [avisoRapido, setAvisoRapido] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -274,6 +350,34 @@ export default function DisponibilidadPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Atajo de las tarjetas de mantenimiento y bloqueados: marca la unidad como
+  // disponible sin abrir el popup. Requiere un estado manual explícito porque,
+  // si solo se limpiara el estado, el ERP volvería a inferir mantenimiento en
+  // los departamentos con contrato vencido.
+  const marcarDisponible = useCallback(
+    async (dept: DisponibilidadDepartment) => {
+      setGuardandoId(dept.id);
+      setAvisoRapido(null);
+      try {
+        const res = await apiFetch(`/api/departamentos/${dept.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ estadoManual: "DISPONIBLE" }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? `Error ${res.status}`);
+        }
+        await load();
+      } catch (e) {
+        setAvisoRapido(`${dept.codigo}: ${(e as Error).message}`);
+      } finally {
+        setGuardandoId(null);
+      }
+    },
+    [load]
+  );
 
   const { benavides, angamos } = useMemo(() => {
     const clave = (codigo: string): [number, string] => {
@@ -344,6 +448,8 @@ export default function DisponibilidadPage() {
 
         {error ? (
           <p className="text-sm text-red-600">{error}</p>
+        ) : avisoRapido ? (
+          <p className="text-sm text-red-600">{avisoRapido}</p>
         ) : loading ? (
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-surface-variant border-t-primary" />
@@ -355,11 +461,15 @@ export default function DisponibilidadPage() {
             titulo="Benavides 2195"
             departamentos={benavides}
             onAbrirCambio={setPopupCambio}
+            onMarcarDisponible={(dept) => void marcarDisponible(dept)}
+            guardandoId={guardandoId}
           />
           <GrupoDepartamentos
             titulo="Angamos 170"
             departamentos={angamos}
             onAbrirCambio={setPopupCambio}
+            onMarcarDisponible={(dept) => void marcarDisponible(dept)}
+            guardandoId={guardandoId}
           />
           </div>
         )}

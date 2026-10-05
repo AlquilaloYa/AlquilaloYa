@@ -9,7 +9,10 @@ export const dynamic = "force-dynamic";
  * - precio  → mensualidad del departamento. Si no se envía garantía, esta se
  *   iguala automáticamente al precio (la garantía depende de la mensualidad).
  * - garantia→ valor independiente de la garantía (puede sobreescribirse aparte).
- * - estadoManual → modo manual del departamento: 'MANTENIMIENTO' | 'BLOQUEADO'.
+ * - estadoManual → modo manual del departamento: 'MANTENIMIENTO' | 'BLOQUEADO' |
+ *   'DISPONIBLE'. 'DISPONIBLE' marca la unidad como disponible aunque tenga un
+ *   contrato vencido (si no, el ERP la inferiría en mantenimiento); null vuelve
+ *   al modo automático.
  *   'LIBRE' (o null) limpia el modo manual y vuelve al estado automático.
  * - personaPago → persona que cobra la renta de este departamento (Emely,
  *   Evelyn, Miguel u otro). Debe ser un texto no vacío.
@@ -77,6 +80,7 @@ export async function PATCH(
       const valido =
         estado === "MANTENIMIENTO" ||
         estado === "BLOQUEADO" ||
+        estado === "DISPONIBLE" ||
         estado === "LIBRE" ||
         estado === null ||
         estado === undefined ||
@@ -84,7 +88,10 @@ export async function PATCH(
       if (!valido) {
         return NextResponse.json({ error: "Estado manual inválido" }, { status: 400 });
       }
-      values.estadoManual = estado === "MANTENIMIENTO" || estado === "BLOQUEADO" ? estado : null;
+      values.estadoManual =
+        estado === "MANTENIMIENTO" || estado === "BLOQUEADO" || estado === "DISPONIBLE"
+          ? estado
+          : null;
       values.estadoManualUpdatedAt = new Date();
     }
     if (tieneMotivoBloqueo) {

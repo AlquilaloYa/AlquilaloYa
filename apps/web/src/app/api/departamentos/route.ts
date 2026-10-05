@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import { clasificarSinOcupante, normalizarEstadoManual } from "@/lib/estado-departamento";
 
 export const dynamic = "force-dynamic";
 
@@ -90,15 +91,16 @@ export async function GET(req: Request) {
         )
         .sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio));
       if (contratosOcupando.length === 0) {
-        if (d.estadoManual === "BLOQUEADO") {
-          return { ...d, contratoEstado, disponibilidad: null, enMantenimiento: false, bloqueado: true };
-        }
-        if (d.estadoManual === "MANTENIMIENTO") {
-          return { ...d, contratoEstado, disponibilidad: null, enMantenimiento: true, bloqueado: false };
-        }
-        const ultimoFin = ultimoFinPorDepartamento.get(d.id);
-        const enMantenimiento = Boolean(ultimoFin && ultimoFin < hoyISO);
-        return { ...d, contratoEstado, disponibilidad: null, enMantenimiento, bloqueado: false };
+        // Un contrato vigente manda siempre sobre el estado manual. Sin contrato
+        // vigente se delega la clasificacion a la funcion pura: el estado manual
+        // explicito (incluido DISPONIBLE) gana sobre el mantenimiento automatico
+        // por contrato vencido.
+        const { enMantenimiento, bloqueado } = clasificarSinOcupante({
+          estadoManual: normalizarEstadoManual(d.estadoManual),
+          ultimoFin: ultimoFinPorDepartamento.get(d.id) ?? null,
+          hoy: hoyISO,
+        });
+        return { ...d, contratoEstado, disponibilidad: null, enMantenimiento, bloqueado };
       }
       const contratoVigente = contratosOcupando[0]!;
       const fin = contratosOcupando.reduce(

@@ -278,11 +278,11 @@ export function CobranzaVendedores() {
                                 <span className="block text-xs text-on-surface-variant">
                                   {d.ocupado
                                     ? `${d.cliente} · ${d.codigoContrato ?? ""} · vence ${d.fechaFin ? new Date(`${d.fechaFin}T12:00:00`).toLocaleDateString("es-PE") : "—"}`
-                                    : d.estadoManual
-                                      ? d.estadoManual === "BLOQUEADO"
-                                        ? "No disponible"
-                                        : "En mantenimiento"
-                                      : "Disponible"}
+                                    : d.estadoManual === "BLOQUEADO"
+                                      ? "No disponible"
+                                      : d.estadoManual === "MANTENIMIENTO"
+                                        ? "En mantenimiento"
+                                        : "Disponible"}
                                 </span>
                               </div>
                               <div className="shrink-0 text-right">

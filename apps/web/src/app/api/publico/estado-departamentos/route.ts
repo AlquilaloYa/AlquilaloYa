@@ -39,7 +39,8 @@ type EstadoDepartamento = "disponible" | "ocupado" | "mantenimiento" | "bloquead
  *   1. contrato vigente hoy  -> ocupado      (disponibleDesde = fechaFin)
  *   2. estado_manual MANTENIMIENTO -> mantenimiento (reparación corta)
  *   3. estado_manual BLOQUEADO -> bloqueado      (reparación larga)
- *   4. en cualquier otro caso -> disponible
+ *   4. estado_manual DISPONIBLE -> disponible   (decisión manual explícita)
+ *   5. en cualquier otro caso -> disponible
  *
  * No expone ocupantes, teléfonos, id internos ni datos sensibles.
  */
@@ -110,6 +111,18 @@ export async function GET() {
           return {
             codigo: d.codigo,
             estado: "bloqueado",
+            disponibleDesde: null,
+            edificio: edificioDeCodigo(d.codigo),
+          };
+        }
+
+        // Marcado a mano como disponible: cae igual que el final de la función
+        // (disponible, sin fecha), pero se deja explícito para que quede claro
+        // en el código que es una decisión del usuario y no un descarte.
+        if (d.estadoManual === "DISPONIBLE") {
+          return {
+            codigo: d.codigo,
+            estado: "disponible",
             disponibleDesde: null,
             edificio: edificioDeCodigo(d.codigo),
           };

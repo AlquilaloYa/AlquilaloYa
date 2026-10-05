@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
+import { ETIQUETA_ESTADO_MANUAL } from "@/lib/estado-departamento";
 
 interface DisponibilidadDepartment {
   id: string;
@@ -156,7 +157,7 @@ export default function PropiedadPage() {
                   <Fila etiqueta="Número" valor={dept.numero} />
                   <Fila
                     etiqueta="Estado manual"
-                    valor={dept.estadoManual ?? "Automático"}
+                    valor={ETIQUETA_ESTADO_MANUAL[dept.estadoManual ?? ""] ?? "Automático"}
                   />
                 </div>
               </div>
