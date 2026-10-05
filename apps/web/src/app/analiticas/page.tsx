@@ -360,7 +360,7 @@ export default function AnaliticasPage() {
                 Cada mes lleva solo las cuotas que le corresponden. No arrastra meses anteriores.
               </p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="max-h-[264px] overflow-y-auto">
               <ul className="divide-y divide-border">
                 {meses
                   .filter((fila) => fila.pagos > 0)
