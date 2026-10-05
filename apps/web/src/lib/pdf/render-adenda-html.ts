@@ -267,7 +267,6 @@ export function renderAdendaPlantillaHtml(
 
   const numeroAdenda = field(contrato, ["numeroAdenda"]) || "1";
   const fechaInicioOriginal = parseFecha(field(contrato, ["fechaInicio"]));
-  const fechaFinOriginal = parseFecha(field(contrato, ["fechaFin"]));
   const fechaInicioAdenda = parseFecha(field(contrato, ["fechaInicioAdenda"]));
   const fechaFinAdenda = parseFecha(field(contrato, ["fechaFinAdenda"]));
   const montoRenta = parseFloat(field(contrato, ["montoCanonMensual"])) || 0;
