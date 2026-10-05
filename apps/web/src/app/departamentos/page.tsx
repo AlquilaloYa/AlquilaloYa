@@ -885,7 +885,9 @@ export default function DepartamentosPage() {
                                 <span className="inline-flex items-center gap-1 rounded-full bg-black/10 px-2 py-0.5 text-xs font-medium text-black dark:bg-white/20 dark:text-white">
                                   <span className="h-1.5 w-1.5 rounded-full bg-black dark:bg-white" />
                                   Ocupado
-                                  <span className="text-black/70 dark:text-white/70">· hasta {new Date(`${d.disponibilidad!.fechaFin}T12:00:00`).toLocaleDateString("es-PE")}</span>
+                                  {d.disponibilidad ? (
+                                    <span className="text-black/70 dark:text-white/70">· hasta {new Date(`${d.disponibilidad.fechaFin}T12:00:00`).toLocaleDateString("es-PE")}</span>
+                                  ) : null}
                                 </span>
                               ) : estaSeparado(d) ? (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
