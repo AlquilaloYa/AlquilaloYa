@@ -57,10 +57,13 @@ interface DepartamentoDashboard {
   codigo: string;
   nombre: string;
   numero: string;
+  piso?: number;
+  precio?: string;
   activo: boolean;
   motivoBloqueo?: string | null;
   enMantenimiento?: boolean;
   bloqueado?: boolean;
+  estadoManual?: string | null;
   disponibilidad: { disponible: false; fechaFin: string; dias: number } | null;
   ocupante?: { nombres: string; apellidos: string | null; telefono: string | null } | null;
 }
@@ -89,7 +92,7 @@ interface AdendaDashboard {
   departamentoNombre: string;
 }
 
-type DashboardPanel = "morosidad" | "ocupadas" | "disponibles" | "ocupacion" | "finalizan";
+type DashboardPanel = "morosidad" | "ocupadas" | "disponibles" | "ocupacion" | "finalizan" | "unidades";
 
 interface DetalleMorosidad {
   contrato: string;
@@ -261,7 +264,7 @@ function StatCard({
       </div>
     </>
   );
-  if (["morosidad", "ocupadas", "disponibles", "tasaOcupacion", "aPuntoDeFinalizar"].includes(s.valueKey)) {
+  if (["unidadesTotales", "morosidad", "ocupadas", "disponibles", "tasaOcupacion", "aPuntoDeFinalizar"].includes(s.valueKey)) {
     return (
       <button
         type="button"
@@ -634,6 +637,92 @@ function OcupadasPopup({ onCerrar }: { onCerrar: () => void }) {
           ))}
         </ul>
       ))}
+    </DashboardPanel>
+  );
+}
+
+function UnidadesTotalesPopup({ onCerrar }: { onCerrar: () => void }) {
+  const { data, loading, error } = useDashboardJson<DepartamentoDashboard[]>("/api/departamentos");
+  const departamentos = (data ?? [])
+    .filter((departamento) => !departamento.codigo.startsWith("EXT"))
+    .sort((a, b) => {
+      const clave = (codigo: string): [number, string] => {
+        const match = /(\d+)([A-Z]*)$/.exec(codigo);
+        return match ? [Number(match[1]), match[2] ?? ""] : [0, codigo];
+      };
+      const [numeroA, sufijoA] = clave(a.codigo);
+      const [numeroB, sufijoB] = clave(b.codigo);
+      return numeroA - numeroB || sufijoA.localeCompare(sufijoB);
+    });
+  const grupos = [
+    { titulo: "Benavides 2195", departamentos: departamentos.filter((departamento) => departamento.codigo.startsWith("BEN")) },
+    { titulo: "Angamos 170", departamentos: departamentos.filter((departamento) => departamento.codigo.startsWith("ANG")) },
+    { titulo: "Otros", departamentos: departamentos.filter((departamento) => !departamento.codigo.startsWith("BEN") && !departamento.codigo.startsWith("ANG")) },
+  ].filter((grupo) => grupo.departamentos.length > 0);
+
+  function estado(departamento: DepartamentoDashboard) {
+    if (departamento.disponibilidad) return { texto: "Ocupado", clase: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200" };
+    if (departamento.bloqueado) return { texto: "Bloqueado", clase: "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200" };
+    if (departamento.enMantenimiento) return { texto: "Mantenimiento", clase: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200" };
+    return { texto: "Disponible", clase: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" };
+  }
+
+  const ocupados = departamentos.filter((departamento) => departamento.disponibilidad).length;
+  const bloqueados = departamentos.filter((departamento) => !departamento.disponibilidad && departamento.bloqueado).length;
+  const mantenimiento = departamentos.filter((departamento) => !departamento.disponibilidad && !departamento.bloqueado && departamento.enMantenimiento).length;
+  const disponibles = departamentos.length - ocupados - bloqueados - mantenimiento;
+
+  return (
+    <DashboardPanel titulo="Unidades totales" subtitulo={`${departamentos.length} departamentos · inventario por sede y estado`} onCerrar={onCerrar}>
+      <EstadoCarga loading={loading} error={error} />
+      {!loading && !error ? (
+        <>
+          <div className="mb-4 flex flex-wrap gap-2 text-xs font-medium">
+            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{disponibles} disponibles</span>
+            <span className="rounded-full bg-rose-100 px-2.5 py-1 text-rose-800 dark:bg-rose-950 dark:text-rose-200">{ocupados} ocupados</span>
+            <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sky-800 dark:bg-sky-950 dark:text-sky-200">{mantenimiento} mantenimiento</span>
+            <span className="rounded-full bg-zinc-200 px-2.5 py-1 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">{bloqueados} bloqueados</span>
+          </div>
+          {grupos.length === 0 ? (
+            <p className="py-10 text-center text-sm text-on-surface-variant">No hay departamentos registrados.</p>
+          ) : (
+            <div className="space-y-5">
+              {grupos.map((grupo) => (
+                <section key={grupo.titulo}>
+                  <h3 className="mb-2 flex items-center justify-between gap-3 border-b border-outline-variant pb-2 font-label-lg text-on-surface">
+                    {grupo.titulo}
+                    <span className="text-xs font-normal text-on-surface-variant">{grupo.departamentos.length} unidades</span>
+                  </h3>
+                  <ul className="divide-y divide-outline-variant">
+                    {grupo.departamentos.map((departamento) => {
+                      const meta = estado(departamento);
+                      return (
+                        <li key={departamento.id}>
+                          <Link
+                            href={`/disponibilidad/${encodeURIComponent(departamento.codigo)}`}
+                            className="flex flex-wrap items-center gap-3 px-2 py-2.5 transition-colors hover:bg-surface-container-low focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-mono-label font-semibold text-on-surface">{departamento.codigo}</span>
+                              <span className="block text-xs text-on-surface-variant">{departamento.nombre}{departamento.piso ? ` · piso ${departamento.piso}` : ""}</span>
+                            </span>
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${meta.clase}`}>{meta.texto}</span>
+                            {departamento.disponibilidad ? (
+                              <span className="w-full text-right text-xs text-on-surface-variant sm:w-auto">
+                                Hasta {fechaLegible(departamento.disponibilidad.fechaFin)}
+                              </span>
+                            ) : null}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          )}
+        </>
+      ) : null}
     </DashboardPanel>
   );
 }
@@ -1293,6 +1382,7 @@ return (
                 r={resumen!}
                 onOpen={() => {
                   const paneles: Partial<Record<keyof Resumen, DashboardPanel>> = {
+                    unidadesTotales: "unidades",
                     morosidad: "morosidad",
                     ocupadas: "ocupadas",
                     disponibles: "disponibles",
@@ -1402,6 +1492,7 @@ return (
         />
       ) : null}
       {panelAbierto === "morosidad" ? <MorosidadPopup onCerrar={() => setPanelAbierto(null)} /> : null}
+      {panelAbierto === "unidades" ? <UnidadesTotalesPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "ocupadas" ? <OcupadasPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "disponibles" ? <DisponiblesPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "ocupacion" ? <OcupacionAnualPopup onCerrar={() => setPanelAbierto(null)} /> : null}
