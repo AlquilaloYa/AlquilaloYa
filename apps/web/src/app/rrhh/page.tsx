@@ -50,10 +50,8 @@ const ETAPAS_ONBOARDING: Array<{ value: EtapaOnboarding; label: string }> = [
   { value: "ASIGNACION", label: "Asignación organizacional" },
   { value: "FINALIZADO", label: "Completado" },
 ];
-type TipoEstructura = "organization" | "site" | "department" | "team" | "position";
+type TipoEstructura = "department" | "team" | "position";
 const TIPOS_ESTRUCTURA: Array<{ value: TipoEstructura; label: string }> = [
-  { value: "organization", label: "Organización" },
-  { value: "site", label: "Sede" },
   { value: "department", label: "Área / departamento" },
   { value: "team", label: "Equipo" },
   { value: "position", label: "Cargo" },
@@ -194,11 +192,8 @@ const EMPTY = {
   telefono: "",
   cargo: "",
   area: "",
-  sede: "",
   equipo: "",
   responsable: "",
-  organizationId: "",
-  siteId: "",
   departmentId: "",
   teamId: "",
   positionId: "",
@@ -229,7 +224,7 @@ export default function RecursosHumanosPage() {
   const [historyRows, setHistoryRows] = useState<Array<{ id: string; actor: string; action: string; before: Record<string, unknown> | null; after: Record<string, unknown> | null; createdAt: string }>>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [structureModalOpen, setStructureModalOpen] = useState(false);
-  const [structureType, setStructureType] = useState<TipoEstructura>("organization");
+  const [structureType, setStructureType] = useState<TipoEstructura>("department");
   const [structureName, setStructureName] = useState("");
   const [structureParentId, setStructureParentId] = useState("");
   const [structureSaving, setStructureSaving] = useState(false);
@@ -312,11 +307,8 @@ export default function RecursosHumanosPage() {
       telefono: r.telefono,
       cargo: r.cargo,
       area: r.area,
-      sede: r.sede,
       equipo: r.equipo,
       responsable: r.responsable,
-      organizationId: r.organizationId ?? "",
-      siteId: r.siteId ?? "",
       departmentId: r.departmentId ?? "",
       teamId: r.teamId ?? "",
       positionId: r.positionId ?? "",
@@ -350,31 +342,23 @@ export default function RecursosHumanosPage() {
     }
   }
 
-  function seleccionarEstructura(campo: "organizationId" | "siteId" | "departmentId" | "teamId" | "positionId" | "managerId", id: string) {
-    const organizationId = campo === "organizationId" ? id : form.organizationId;
+  function seleccionarEstructura(campo: "departmentId" | "teamId" | "positionId" | "managerId", id: string) {
     const departmentId = campo === "departmentId" ? id : form.departmentId;
-    const opcion = campo === "organizationId"
-      ? estructura.organizations.find((item) => item.id === id)
-      : campo === "siteId"
-        ? estructura.sites.find((item) => item.id === id)
-        : campo === "departmentId"
-          ? estructura.departments.find((item) => item.id === id)
-          : campo === "teamId"
-            ? estructura.teams.find((item) => item.id === id)
-            : campo === "positionId"
-              ? estructura.positions.find((item) => item.id === id)
-              : undefined;
+    const opcion = campo === "departmentId"
+      ? estructura.departments.find((item) => item.id === id)
+      : campo === "teamId"
+        ? estructura.teams.find((item) => item.id === id)
+        : campo === "positionId"
+          ? estructura.positions.find((item) => item.id === id)
+          : undefined;
     const nombreOpcion = opcion?.nombre ?? "";
     // Los responsables son una lista distinta (nombres/apellidos), por eso no
     // comparten el tipo con el resto de la estructura.
     const responsable = estructura.managers.find((item) => item.id === id);
     setForm((current) => ({
       ...current,
-      organizationId,
-      ...(campo === "organizationId" ? { siteId: "", departmentId: "", teamId: "", positionId: "", area: "", sede: "", equipo: "", cargo: "" } : {}),
       ...(campo === "departmentId" ? { teamId: "", equipo: "", departmentId } : {}),
       [campo]: id,
-      ...(campo === "siteId" ? { sede: nombreOpcion } : {}),
       ...(campo === "departmentId" ? { area: nombreOpcion } : {}),
       ...(campo === "teamId" ? { equipo: nombreOpcion } : {}),
       ...(campo === "positionId" ? { cargo: nombreOpcion } : {}),
@@ -403,7 +387,6 @@ export default function RecursosHumanosPage() {
     setError(null);
     try {
       const payload: Record<string, string> = { tipo: structureType, nombre: structureName.trim() };
-      if (structureType === "site" || structureType === "department" || structureType === "position") payload.organizationId = structureParentId;
       if (structureType === "team") payload.departmentId = structureParentId;
       const response = await apiFetch("/api/rrhh/estructura", {
         method: "POST",
@@ -782,7 +765,6 @@ export default function RecursosHumanosPage() {
                 </div>
                 <div className="space-y-1 font-mono-label text-on-surface-variant">
                   {r.area ? <p className="flex items-center gap-1"><Building2 className="h-3 w-3" /> {r.area}</p> : null}
-                  {r.sede ? <p className="flex items-center gap-1"><Building2 className="h-3 w-3" /> {r.sede}</p> : null}
                   {r.equipo ? <p className="flex items-center gap-1"><Users className="h-3 w-3" /> {r.equipo}</p> : null}
                   {r.responsable ? <p className="flex items-center gap-1"><User className="h-3 w-3" /> Responsable: {r.responsable}</p> : null}
                   {r.dni ? <p className="flex items-center gap-1"><IdCard className="h-3 w-3" /> {r.dni}</p> : null}
@@ -826,21 +808,9 @@ export default function RecursosHumanosPage() {
                 <Field label="Teléfono" value={form.telefono} onChange={(v) => setForm({ ...form, telefono: v })} />
                 <Field label="Correo" type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} />
                 <div>
-                  <label className="mb-1 block font-label-md text-on-surface">Organización</label>
-                  <select value={form.organizationId} onChange={(event) => seleccionarEstructura("organizationId", event.target.value)} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface">
-                    <option value="">Sin organización</option>{estructura.organizations.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block font-label-md text-on-surface">Sede</label>
-                  <select value={form.siteId} onChange={(event) => seleccionarEstructura("siteId", event.target.value)} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface">
-                    <option value="">Sin sede</option>{estructura.sites.filter((item) => item.organizationId === form.organizationId).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
-                  </select>
-                </div>
-                <div>
                   <label className="mb-1 block font-label-md text-on-surface">Área / departamento</label>
                   <select value={form.departmentId} onChange={(event) => seleccionarEstructura("departmentId", event.target.value)} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface">
-                    <option value="">Sin área</option>{estructura.departments.filter((item) => item.organizationId === form.organizationId).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
+                    <option value="">Sin área</option>{estructura.departments.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
                   </select>
                 </div>
                 <div>
@@ -852,7 +822,7 @@ export default function RecursosHumanosPage() {
                 <div>
                   <label className="mb-1 block font-label-md text-on-surface">Cargo / posición</label>
                   <select value={form.positionId} onChange={(event) => seleccionarEstructura("positionId", event.target.value)} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface">
-                    <option value="">Sin cargo</option>{estructura.positions.filter((item) => item.organizationId === form.organizationId).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
+                    <option value="">Sin cargo</option>{estructura.positions.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1055,18 +1025,18 @@ export default function RecursosHumanosPage() {
                   {TIPOS_ESTRUCTURA.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                 </select>
               </label>
-              {(structureType === "site" || structureType === "department" || structureType === "position" || structureType === "team") ? (
-                <label className="block text-sm font-medium text-on-surface">{structureType === "team" ? "Área" : "Organización"}
+              {structureType === "team" ? (
+                <label className="block text-sm font-medium text-on-surface">Área
                   <select value={structureParentId} onChange={(event) => setStructureParentId(event.target.value)} className="mt-1 w-full rounded-md border border-outline-variant bg-surface p-2">
                     <option value="">Selecciona…</option>
-                    {(structureType === "team" ? estructura.departments : estructura.organizations).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
+                    {estructura.departments.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
                   </select>
                 </label>
               ) : null}
               <Field label="Nombre" value={structureName} onChange={setStructureName} />
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setStructureModalOpen(false)} className="rounded-md bg-surface-container-high px-3 py-2 text-sm text-on-surface">Cancelar</button>
-                <button type="button" disabled={!structureName.trim() || structureSaving || ((structureType !== "organization") && !structureParentId)} onClick={() => void createStructureOption()} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">{structureSaving ? "Guardando…" : "Agregar"}</button>
+                <button type="button" disabled={!structureName.trim() || structureSaving || (structureType === "team" && !structureParentId)} onClick={() => void createStructureOption()} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">{structureSaving ? "Guardando…" : "Agregar"}</button>
               </div>
             </div>
           </section>

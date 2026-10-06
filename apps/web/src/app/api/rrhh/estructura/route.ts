@@ -47,6 +47,18 @@ export async function POST(req: Request) {
     const { db, schema } = dbModule;
     let row: unknown;
 
+    // Área y cargo se crean desde el panel sin selector de organización: la
+    // tabla exige organizationId, así que se toma la primera activa.
+    const organizationId =
+      body.organizationId ??
+      (await db
+        .select({ id: schema.hrOrganizations.id })
+        .from(schema.hrOrganizations)
+        .where(eq(schema.hrOrganizations.activa, true))
+        .orderBy(asc(schema.hrOrganizations.nombre))
+        .limit(1)
+        .then((rows) => rows[0]?.id));
+
     switch (body.tipo) {
       case "organization": {
         const [created] = await db.insert(schema.hrOrganizations).values({ nombre, ruc: body.ruc?.trim() ?? "" }).returning();
@@ -54,14 +66,14 @@ export async function POST(req: Request) {
         break;
       }
       case "site": {
-        if (!body.organizationId) return NextResponse.json({ error: "Selecciona una organización" }, { status: 400 });
-        const [created] = await db.insert(schema.hrSites).values({ organizationId: body.organizationId, nombre, direccion: body.direccion?.trim() ?? "" }).returning();
+        if (!organizationId) return NextResponse.json({ error: "Selecciona una organización" }, { status: 400 });
+        const [created] = await db.insert(schema.hrSites).values({ organizationId, nombre, direccion: body.direccion?.trim() ?? "" }).returning();
         row = created;
         break;
       }
       case "department": {
-        if (!body.organizationId) return NextResponse.json({ error: "Selecciona una organización" }, { status: 400 });
-        const [created] = await db.insert(schema.hrDepartments).values({ organizationId: body.organizationId, nombre }).returning();
+        if (!organizationId) return NextResponse.json({ error: "No hay una organización registrada en el sistema" }, { status: 400 });
+        const [created] = await db.insert(schema.hrDepartments).values({ organizationId, nombre }).returning();
         row = created;
         break;
       }
@@ -72,8 +84,8 @@ export async function POST(req: Request) {
         break;
       }
       case "position": {
-        if (!body.organizationId) return NextResponse.json({ error: "Selecciona una organización" }, { status: 400 });
-        const [created] = await db.insert(schema.hrPositions).values({ organizationId: body.organizationId, nombre }).returning();
+        if (!organizationId) return NextResponse.json({ error: "No hay una organización registrada en el sistema" }, { status: 400 });
+        const [created] = await db.insert(schema.hrPositions).values({ organizationId, nombre }).returning();
         row = created;
         break;
       }
