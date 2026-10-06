@@ -26,14 +26,14 @@ export function isStorageConfigured(): boolean {
   return Boolean(SUPABASE_URL && SERVICE_KEY);
 }
 
-async function storageFetch(path: string, init: RequestInit): Promise<Response> {
+async function storageFetch(path: string, init: RequestInit, bucket = BUCKET): Promise<Response> {
   if (!isStorageConfigured()) {
     throw new StorageError(
       "Storage no configurado: faltan SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY",
       500
     );
   }
-  const res = await fetch(`${SUPABASE_URL}/storage/v1${path}`, {
+  const res = await fetch(`${SUPABASE_URL}/storage/v1${path.replace("{bucket}", bucket)}`, {
     ...init,
     // Crítico en Next.js: sin esto, el Data Cache de la app cachea las
     // descargas GET y serviría bytes obsoletos tras un reemplazo del objeto.
@@ -59,9 +59,10 @@ export interface StoredObject {
 export async function uploadObject(
   key: string,
   bytes: Uint8Array,
-  contentType = "application/pdf"
+  contentType = "application/pdf",
+  bucket = BUCKET
 ): Promise<StoredObject> {
-  const res = await storageFetch(`/object/${BUCKET}/${key}`, {
+  const res = await storageFetch(`/object/{bucket}/${key}`, {
     method: "POST",
     headers: {
       "Content-Type": contentType,
@@ -71,7 +72,7 @@ export async function uploadObject(
       "cache-control": "no-store",
     },
     body: bytes as unknown as BodyInit,
-  });
+  }, bucket);
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new StorageError(
@@ -84,10 +85,10 @@ export async function uploadObject(
 }
 
 /** Elimina un objeto del bucket privado. No lanza si el objeto no existe. */
-export async function deleteObject(key: string): Promise<void> {
-  const res = await storageFetch(`/object/${BUCKET}/${key}`, {
+export async function deleteObject(key: string, bucket = BUCKET): Promise<void> {
+  const res = await storageFetch(`/object/{bucket}/${key}`, {
     method: "DELETE",
-  });
+  }, bucket);
   if (res.ok || res.status === 404) return;
   const detail = await res.text().catch(() => "");
   throw new StorageError(
@@ -97,10 +98,10 @@ export async function deleteObject(key: string): Promise<void> {
 }
 
 /** Descarga un objeto del bucket privado. Lanza StorageError si no existe. */
-export async function downloadObject(key: string): Promise<Uint8Array> {
-  const res = await storageFetch(`/object/${BUCKET}/${key}`, {
+export async function downloadObject(key: string, bucket = BUCKET): Promise<Uint8Array> {
+  const res = await storageFetch(`/object/{bucket}/${key}`, {
     method: "GET",
-  });
+  }, bucket);
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new StorageError(

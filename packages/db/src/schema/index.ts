@@ -18,3 +18,4 @@ export * from "./messaging";
 export * from "./automatizaciones";
 export * from "./bots";
 export * from "./hr";
+export * from "./hr-onboarding";

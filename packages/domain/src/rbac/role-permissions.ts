@@ -14,7 +14,19 @@ import type { UserRole } from "./role";
  */
 const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
   ADMIN: new Set(PERMISSIONS_ALL()),
+  RRHH: new Set([
+    P.HR_READ,
+    P.HR_CREATE,
+    P.HR_UPDATE,
+    // RRHH también es un trabajador: necesita pedir sus propias vacaciones
+    // y ver el directorio mínimo, como el resto del personal.
+    P.HR_REQUEST_CREATE,
+    P.HR_DIRECTORY_READ,
+    P.ACTIVITY_READ,
+  ]),
   OPERADOR: new Set([
+    P.HR_DIRECTORY_READ,
+    P.HR_REQUEST_CREATE,
     P.CLIENT_READ,
     P.CLIENT_CREATE,
     P.CLIENT_UPDATE,
@@ -35,6 +47,8 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.WEB_CONTENT_UPDATE,
   ]),
   SUPERVISOR: new Set([
+    P.HR_DIRECTORY_READ,
+    P.HR_REQUEST_CREATE,
     P.CLIENT_READ,
     P.CLIENT_CREATE,
     P.CLIENT_UPDATE,
@@ -59,6 +73,7 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.WEB_CONTENT_UPDATE,
   ]),
   AUDITOR: new Set([
+    P.HR_READ,
     P.CLIENT_READ,
     P.DEPARTMENT_READ,
     P.CONTRACT_READ,

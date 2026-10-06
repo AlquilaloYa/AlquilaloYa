@@ -32,6 +32,7 @@ interface UserItem {
 
 const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: "Administrador",
+  RRHH: "Recursos Humanos",
   OPERADOR: "Operador",
   SUPERVISOR: "Supervisor",
   AUDITOR: "Auditor",
@@ -40,6 +41,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
 
 const ROLE_COLORS: Record<UserRole, string> = {
   ADMIN: "bg-primary-container text-primary-container-foreground",
+  RRHH: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200",
   SUPERVISOR: "bg-secondary-container text-secondary-container-foreground",
   OPERADOR: "bg-surface-container-high text-on-surface",
   AUDITOR: "bg-surface-container-high text-on-surface-variant",

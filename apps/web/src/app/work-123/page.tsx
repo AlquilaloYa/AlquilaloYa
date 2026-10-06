@@ -89,6 +89,7 @@ interface Task {
   titulo: string;
   descripcion: string;
   asignadoA: string;
+  empleadoId?: string | null;
   fechaLimite: string | null;
   estado: TaskState;
   creadoPor: string;
@@ -97,6 +98,14 @@ interface Task {
   createdAt: string | null;
   updatedAt: string | null;
   completedAt: string | null;
+}
+
+interface EmployeeBrief {
+  id: string;
+  nombres: string;
+  apellidos: string;
+  email: string;
+  estado: string;
 }
 
 const ESTADOS: Array<{ value: TaskState; label: string }> = [
@@ -118,19 +127,6 @@ const COLUMNAS: Array<{ value: TaskState; title: string; hint: string }> = [
 ];
 
 const DIA_SEMANA = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"];
-
-const USUARIOS_SUGERIDOS = [
-  "Andrea Admin",
-  "Juan Operador",
-  "Sofia Supervisora",
-  "Alicia Auditora",
-  "Felipe Firmante",
-  "Maria Gomez",
-  "Carlos Rojas",
-  "Lucia Mendez",
-  "Pedro Sanchez",
-  "Ana Torres",
-];
 
 function dayKey(d: Date): string {
   const y = d.getFullYear();
@@ -187,6 +183,7 @@ function Modal({
 export default function Work123Page() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [contracts, setContracts] = useState<ContractBrief[]>([]);
+  const [employees, setEmployees] = useState<EmployeeBrief[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -199,7 +196,7 @@ export default function Work123Page() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
-  const [form, setForm] = useState({ titulo: "", descripcion: "", asignadoA: "", fechaLimite: "", estado: "PENDIENTE" as TaskState });
+  const [form, setForm] = useState({ titulo: "", descripcion: "", asignadoA: "", empleadoId: "", fechaLimite: "", estado: "PENDIENTE" as TaskState });
 
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<TaskState | null>(null);
@@ -207,15 +204,22 @@ export default function Work123Page() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [resTareas, resContratos] = await Promise.all([
+      const [resTareas, resContratos, resEmployees] = await Promise.all([
         apiFetch("/api/tareas"),
         apiFetch("/api/contracts").catch(() => null),
+        apiFetch("/api/rrhh/asignables").catch(() => null),
       ]);
       if (!resTareas.ok) {
         const body = await resTareas.json().catch(() => ({}));
         throw new Error(body.error ?? `Error ${resTareas.status}`);
       }
       setTasks((await resTareas.json()) as Task[]);
+      if (resEmployees?.ok) {
+        const staff = (await resEmployees.json()) as EmployeeBrief[];
+        setEmployees(staff.filter((employee) => employee.estado === "ACTIVO"));
+      } else {
+        setEmployees([]);
+      }
       if (resContratos && resContratos.ok) {
         setContracts((await resContratos.json()) as ContractBrief[]);
       } else {
@@ -304,7 +308,7 @@ export default function Work123Page() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ titulo: "", descripcion: "", asignadoA: "", fechaLimite: selectedDay, estado: "PENDIENTE" });
+    setForm({ titulo: "", descripcion: "", asignadoA: "", empleadoId: "", fechaLimite: selectedDay, estado: "PENDIENTE" });
     setModalOpen(true);
   }
 
@@ -314,6 +318,7 @@ export default function Work123Page() {
       titulo: task.titulo,
       descripcion: task.descripcion,
       asignadoA: task.asignadoA,
+      empleadoId: task.empleadoId ?? "",
       fechaLimite: task.fechaLimite ? dayKey(new Date(task.fechaLimite)) : "",
       estado: task.estado,
     });
@@ -337,6 +342,7 @@ export default function Work123Page() {
         titulo: form.titulo,
         descripcion: form.descripcion,
         asignadoA: form.asignadoA,
+        empleadoId: form.empleadoId || null,
         fechaLimite: form.fechaLimite,
         estado: form.estado,
       };
@@ -755,19 +761,38 @@ export default function Work123Page() {
               />
             </div>
             <div>
-              <label className="mb-1 block font-label-md text-on-surface">Asignada a</label>
-              <input
-                value={form.asignadoA}
-                onChange={(e) => setForm({ ...form, asignadoA: e.target.value })}
-                list="usuarios-sugeridos"
+              <label className="mb-1 block font-label-md text-on-surface">Personal de RRHH</label>
+              <select
+                value={form.empleadoId}
+                onChange={(event) => {
+                  const empleadoId = event.target.value;
+                  const empleado = employees.find((row) => row.id === empleadoId);
+                  setForm({
+                    ...form,
+                    empleadoId,
+                    asignadoA: empleado ? `${empleado.nombres} ${empleado.apellidos}`.trim() : form.asignadoA,
+                  });
+                }}
                 className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface focus:border-primary focus:outline-none"
-                placeholder="Nombre de la persona"
-              />
-              <datalist id="usuarios-sugeridos">
-                {USUARIOS_SUGERIDOS.map((u) => (
-                  <option key={u} value={u} />
+              >
+                <option value="">Sin vincular a un empleado</option>
+                {form.empleadoId && !employees.some((employee) => employee.id === form.empleadoId) ? (
+                  <option value={form.empleadoId}>{form.asignadoA} · no activo</option>
+                ) : null}
+                {employees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {[employee.nombres, employee.apellidos].filter(Boolean).join(" ")}{employee.email ? ` · ${employee.email}` : ""}
+                  </option>
                 ))}
-              </datalist>
+              </select>
+              {!form.empleadoId ? (
+                <input
+                  value={form.asignadoA}
+                  onChange={(event) => setForm({ ...form, asignadoA: event.target.value })}
+                  className="mt-2 w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface focus:border-primary focus:outline-none"
+                  placeholder="Asignación externa o libre"
+                />
+              ) : null}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

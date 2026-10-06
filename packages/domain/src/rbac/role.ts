@@ -1,5 +1,6 @@
 export const UserRole = {
   ADMIN: "ADMIN",
+  RRHH: "RRHH",
   OPERADOR: "OPERADOR",
   SUPERVISOR: "SUPERVISOR",
   AUDITOR: "AUDITOR",

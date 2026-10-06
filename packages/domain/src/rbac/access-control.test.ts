@@ -4,6 +4,23 @@ import { Permission as P } from "./permissions";
 import { permissionsForRole } from "./role-permissions";
 
 describe("AccessControl", () => {
+  it("RRHH gestiona personal sin permisos de usuarios, clientes ni contratos", () => {
+    const ac = AccessControl.forRole("RRHH");
+    expect(ac.can(P.HR_READ)).toBe(true);
+    expect(ac.can(P.HR_CREATE)).toBe(true);
+    expect(ac.can(P.HR_UPDATE)).toBe(true);
+    expect(ac.can(P.USER_MANAGE)).toBe(false);
+    expect(ac.can(P.CLIENT_READ)).toBe(false);
+    expect(ac.can(P.CONTRACT_READ)).toBe(false);
+  });
+
+  it("OPERADOR ve solo el directorio laboral mínimo y no expedientes", () => {
+    const ac = AccessControl.forRole("OPERADOR");
+    expect(ac.can(P.HR_DIRECTORY_READ)).toBe(true);
+    expect(ac.can(P.HR_READ)).toBe(false);
+    expect(ac.can(P.HR_UPDATE)).toBe(false);
+  });
+
   it("OPERADOR no administra usuarios ni roles", () => {
     const ac = AccessControl.forRole("OPERADOR");
     expect(ac.can(P.USER_MANAGE)).toBe(false);

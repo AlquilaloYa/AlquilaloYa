@@ -18,6 +18,7 @@ export const APP_USERS: AppUserSeed[] = [
   { email: "supervisor@sistema.com", name: "Sofia Supervisora", role: UserRole.SUPERVISOR },
   { email: "auditor@sistema.com", name: "Alicia Auditora", role: UserRole.AUDITOR },
   { email: "firmante@sistema.com", name: "Felipe Firmante", role: UserRole.FIRMANTE },
+  { email: "rrhh@sistema.com", name: "Rosa Recursos Humanos", role: UserRole.RRHH },
   { email: "maria.gomez@sistema.com", name: "Maria Gomez", role: UserRole.OPERADOR },
   { email: "carlos.rojas@sistema.com", name: "Carlos Rojas", role: UserRole.OPERADOR },
   { email: "lucia.mendez@sistema.com", name: "Lucia Mendez", role: UserRole.SUPERVISOR },

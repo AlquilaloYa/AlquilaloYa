@@ -47,6 +47,7 @@ const USERS = [
   "supervisor@sistema.com",
   "auditor@sistema.com",
   "firmante@sistema.com",
+  "rrhh@sistema.com",
 ];
 
 const headers = {

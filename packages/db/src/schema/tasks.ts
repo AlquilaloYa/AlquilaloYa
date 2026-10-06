@@ -6,6 +6,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
+import { hrEmployees } from "./hr";
 
 /** Tarea de trabajo interno asignada a una persona con fecha limite de resolucion. */
 export const tasks = pgTable(
@@ -15,6 +16,7 @@ export const tasks = pgTable(
     titulo: varchar("titulo", { length: 255 }).notNull(),
     descripcion: text("descripcion").notNull().default(""),
     asignadoA: varchar("asignado_a", { length: 255 }).notNull().default(""),
+    empleadoId: uuid("empleado_id").references(() => hrEmployees.id),
     fechaLimite: timestamp("fecha_limite", { withTimezone: true }).notNull(),
     estado: varchar("estado", { length: 30 }).notNull().default("PENDIENTE"),
     creadoPor: varchar("creado_por", { length: 255 }).notNull().default(""),
@@ -29,6 +31,7 @@ export const tasks = pgTable(
     index("tasks_estado_idx").on(table.estado),
     index("tasks_fecha_limite_idx").on(table.fechaLimite),
     index("tasks_asignado_idx").on(table.asignadoA),
+    index("tasks_empleado_idx").on(table.empleadoId),
     index("tasks_origen_contrato_idx").on(table.origenContratoId, table.origenEvento),
   ]
 );

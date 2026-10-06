@@ -1,4 +1,9 @@
 export const Permission = {
+  HR_READ: "hr.read",
+  HR_DIRECTORY_READ: "hr.directory.read",
+  HR_REQUEST_CREATE: "hr.request.create",
+  HR_CREATE: "hr.create",
+  HR_UPDATE: "hr.update",
   CLIENT_READ: "client.read",
   CLIENT_CREATE: "client.create",
   CLIENT_UPDATE: "client.update",
@@ -31,6 +36,11 @@ export type Permission = (typeof Permission)[keyof typeof Permission];
 export const PERMISSIONS: Permission[] = Object.values(Permission);
 
 export const PERMISSION_DESCRIPTIONS: Record<Permission, string> = {
+  [Permission.HR_READ]: "Ver expedientes y estructura de Recursos Humanos",
+  [Permission.HR_DIRECTORY_READ]: "Ver nombres y cargo del directorio laboral",
+  [Permission.HR_REQUEST_CREATE]: "Solicitar vacaciones o permisos propios",
+  [Permission.HR_CREATE]: "Crear expedientes de Recursos Humanos",
+  [Permission.HR_UPDATE]: "Editar y finalizar expedientes de Recursos Humanos",
   [Permission.CLIENT_READ]: "Ver clientes",
   [Permission.CLIENT_CREATE]: "Crear clientes",
   [Permission.CLIENT_UPDATE]: "Editar clientes",

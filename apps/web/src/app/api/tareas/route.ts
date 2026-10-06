@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 
@@ -13,6 +13,7 @@ type Body = {
   titulo?: string;
   descripcion?: string;
   asignadoA?: string;
+  empleadoId?: string | null;
   fechaLimite?: string;
   estado?: string;
 };
@@ -26,6 +27,7 @@ function toView(r: {
   titulo: string;
   descripcion: string;
   asignadoA: string;
+  empleadoId: string | null;
   fechaLimite: Date;
   estado: string;
   creadoPor: string;
@@ -41,6 +43,7 @@ function toView(r: {
     titulo: r.titulo,
     descripcion: r.descripcion,
     asignadoA: r.asignadoA,
+    empleadoId: r.empleadoId,
     fechaLimite: r.fechaLimite?.toISOString?.() ?? null,
     estado: r.estado,
     creadoPor: r.creadoPor,
@@ -96,13 +99,28 @@ export async function POST(req: Request) {
     if (!body.fechaLimite) {
       return NextResponse.json({ error: "Indica la fecha limite" }, { status: 400 });
     }
+    let empleadoId: string | null = null;
+    let asignadoA = (body.asignadoA ?? "").trim();
+    if (body.empleadoId) {
+      const [empleado] = await db
+        .select({ id: schema.hrEmployees.id, nombres: schema.hrEmployees.nombres, apellidos: schema.hrEmployees.apellidos, estado: schema.hrEmployees.estado })
+        .from(schema.hrEmployees)
+        .where(and(eq(schema.hrEmployees.id, body.empleadoId), isNull(schema.hrEmployees.deletedAt)))
+        .limit(1);
+      if (!empleado || empleado.estado !== "ACTIVO") {
+        return NextResponse.json({ error: "Solo se pueden asignar tareas a personal activo" }, { status: 400 });
+      }
+      empleadoId = empleado.id;
+      asignadoA = `${empleado.nombres} ${empleado.apellidos}`.trim();
+    }
     const estado = isState(body.estado) ? body.estado : "PENDIENTE";
     const [row] = await db
       .insert(schema.tasks)
       .values({
         titulo: body.titulo.trim(),
         descripcion: (body.descripcion ?? "").trim(),
-        asignadoA: (body.asignadoA ?? "").trim(),
+        asignadoA,
+        empleadoId,
         fechaLimite: new Date(body.fechaLimite),
         estado,
         creadoPor: auth.user.name || auth.user.email,
@@ -136,7 +154,7 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "Falta id" }, { status: 400 });
     }
     const [existing] = await db
-      .select({ id: schema.tasks.id, estado: schema.tasks.estado })
+      .select({ id: schema.tasks.id, estado: schema.tasks.estado, empleadoId: schema.tasks.empleadoId })
       .from(schema.tasks)
       .where(eq(schema.tasks.id, body.id));
     if (!existing) {
@@ -148,6 +166,7 @@ export async function PUT(req: Request) {
       asignadoA?: string;
       fechaLimite?: Date;
       estado?: string;
+      empleadoId?: string | null;
       completedAt?: Date | null;
       updatedAt: Date;
     } = {
@@ -160,7 +179,28 @@ export async function PUT(req: Request) {
       patch.titulo = body.titulo.trim();
     }
     if (body.descripcion !== undefined) patch.descripcion = body.descripcion.trim();
-    if (body.asignadoA !== undefined) patch.asignadoA = body.asignadoA.trim();
+    if (body.empleadoId !== undefined) {
+      if ((body.empleadoId || null) === existing.empleadoId) {
+        // Mantener la asignación histórica; solo una asignación nueva se valida contra estado ACTIVO.
+      } else if (body.empleadoId === null || body.empleadoId === "") {
+        patch.empleadoId = null;
+        if (body.asignadoA !== undefined) patch.asignadoA = body.asignadoA.trim();
+      } else {
+        const [empleado] = await db
+          .select({ id: schema.hrEmployees.id, nombres: schema.hrEmployees.nombres, apellidos: schema.hrEmployees.apellidos, estado: schema.hrEmployees.estado })
+          .from(schema.hrEmployees)
+          .where(and(eq(schema.hrEmployees.id, body.empleadoId), isNull(schema.hrEmployees.deletedAt)))
+          .limit(1);
+        if (!empleado || empleado.estado !== "ACTIVO") {
+          return NextResponse.json({ error: "Solo se pueden asignar tareas a personal activo" }, { status: 400 });
+        }
+        patch.empleadoId = empleado.id;
+        patch.asignadoA = `${empleado.nombres} ${empleado.apellidos}`.trim();
+      }
+    } else if (body.asignadoA !== undefined) {
+      patch.asignadoA = body.asignadoA.trim();
+      patch.empleadoId = null;
+    }
     if (body.fechaLimite) patch.fechaLimite = new Date(body.fechaLimite);
     if (body.estado !== undefined && isState(body.estado)) {
       patch.estado = body.estado;
