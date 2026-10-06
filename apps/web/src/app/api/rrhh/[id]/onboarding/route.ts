@@ -174,7 +174,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       for (const [indice, paso] of PASOS.entries()) {
         // El vencimiento crece un día por paso para que el tablero respete el orden.
         const vence = new Date(ahora.getTime() + (indice + 1) * 86_400_000);
-        const [tarea] = await db
+        const [tarea] = await tx
           .insert(schema.tasks)
           .values({
             titulo: `Onboarding · ${paso.titulo}`,
@@ -188,7 +188,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
             origenEvento: "ONBOARDING",
           })
           .returning({ id: schema.tasks.id });
-        await db.insert(schema.hrOnboardingTasks).values({
+        await tx.insert(schema.hrOnboardingTasks).values({
           processId: process.id,
           clave: paso.clave,
           titulo: paso.titulo,
@@ -201,7 +201,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         });
       }
 
-      await db.insert(schema.hrEmployeeHistory).values({
+      await tx.insert(schema.hrEmployeeHistory).values({
         employeeId: params.id,
         actor,
         action: "ONBOARDING_STARTED",
