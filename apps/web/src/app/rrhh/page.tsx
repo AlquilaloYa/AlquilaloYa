@@ -57,6 +57,11 @@ const TIPOS_ESTRUCTURA: Array<{ value: TipoEstructura; label: string }> = [
   { value: "position", label: "Cargo" },
 ];
 
+// Listas fijas del formulario: el resto de la estructura (área/cargo) se
+// escribe a mano, así que no depende de hr_departments / hr_positions.
+const EQUIPOS = ["Mantenimiento", "Administrativo"];
+const RESPONSABLES = ["Jefe de Mantenimiento", "Administradora (Emely Carpio)"];
+
 interface Employee {
   id: string;
   nombres: string;
@@ -340,32 +345,6 @@ export default function RecursosHumanosPage() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "No se pudo cargar el expediente relacionado");
     }
-  }
-
-  function seleccionarEstructura(campo: "departmentId" | "teamId" | "positionId" | "managerId", id: string) {
-    const departmentId = campo === "departmentId" ? id : form.departmentId;
-    const opcion = campo === "departmentId"
-      ? estructura.departments.find((item) => item.id === id)
-      : campo === "teamId"
-        ? estructura.teams.find((item) => item.id === id)
-        : campo === "positionId"
-          ? estructura.positions.find((item) => item.id === id)
-          : undefined;
-    const nombreOpcion = opcion?.nombre ?? "";
-    // Los responsables son una lista distinta (nombres/apellidos), por eso no
-    // comparten el tipo con el resto de la estructura.
-    const responsable = estructura.managers.find((item) => item.id === id);
-    setForm((current) => ({
-      ...current,
-      ...(campo === "departmentId" ? { teamId: "", equipo: "", departmentId } : {}),
-      [campo]: id,
-      ...(campo === "departmentId" ? { area: nombreOpcion } : {}),
-      ...(campo === "teamId" ? { equipo: nombreOpcion } : {}),
-      ...(campo === "positionId" ? { cargo: nombreOpcion } : {}),
-      ...(campo === "managerId"
-        ? { responsable: responsable ? `${responsable.nombres} ${responsable.apellidos}`.trim() : "" }
-        : {}),
-    }));
   }
 
   async function openHistory(employee: Employee) {
@@ -809,26 +788,22 @@ export default function RecursosHumanosPage() {
                 <Field label="Correo" type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} />
                 <div>
                   <label className="mb-1 block font-label-md text-on-surface">Área / departamento</label>
-                  <select value={form.departmentId} onChange={(event) => seleccionarEstructura("departmentId", event.target.value)} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface">
-                    <option value="">Sin área</option>{estructura.departments.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
-                  </select>
+                  <input value={form.area} onChange={(event) => setForm({ ...form, area: event.target.value, departmentId: "" })} placeholder="Escribe el área" className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface focus:border-primary focus:outline-none" />
                 </div>
                 <div>
                   <label className="mb-1 block font-label-md text-on-surface">Equipo</label>
-                  <select value={form.teamId} onChange={(event) => seleccionarEstructura("teamId", event.target.value)} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface">
-                    <option value="">Sin equipo</option>{estructura.teams.filter((item) => item.departmentId === form.departmentId).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
+                  <select value={form.equipo} onChange={(event) => setForm({ ...form, equipo: event.target.value, teamId: "" })} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface">
+                    <option value="">Sin equipo</option>{EQUIPOS.map((item) => <option key={item} value={item}>{item}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="mb-1 block font-label-md text-on-surface">Cargo / posición</label>
-                  <select value={form.positionId} onChange={(event) => seleccionarEstructura("positionId", event.target.value)} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface">
-                    <option value="">Sin cargo</option>{estructura.positions.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
-                  </select>
+                  <input value={form.cargo} onChange={(event) => setForm({ ...form, cargo: event.target.value, positionId: "" })} placeholder="Escribe el cargo" className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface focus:border-primary focus:outline-none" />
                 </div>
                 <div>
                   <label className="mb-1 block font-label-md text-on-surface">Responsable directo</label>
-                  <select value={form.managerId} onChange={(event) => seleccionarEstructura("managerId", event.target.value)} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface">
-                    <option value="">Sin responsable</option>{estructura.managers.filter((item) => item.id !== editing?.id).map((item) => <option key={item.id} value={item.id}>{item.nombres} {item.apellidos}</option>)}
+                  <select value={form.responsable} onChange={(event) => setForm({ ...form, responsable: event.target.value, managerId: "" })} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface">
+                    <option value="">Sin responsable</option>{RESPONSABLES.map((item) => <option key={item} value={item}>{item}</option>)}
                   </select>
                 </div>
                 <div>
