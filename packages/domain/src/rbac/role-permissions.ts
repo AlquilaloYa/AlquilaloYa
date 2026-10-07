@@ -18,6 +18,8 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.HR_READ,
     P.HR_CREATE,
     P.HR_UPDATE,
+    P.ATTENDANCE_READ,
+    P.ATTENDANCE_CREATE,
     // RRHH también es un trabajador: necesita pedir sus propias vacaciones
     // y ver el directorio mínimo, como el resto del personal.
     P.HR_REQUEST_CREATE,
@@ -28,6 +30,8 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
   OPERADOR: new Set([
     P.HR_DIRECTORY_READ,
     P.HR_REQUEST_CREATE,
+    P.ATTENDANCE_READ,
+    P.ATTENDANCE_CREATE,
     P.CLIENT_READ,
     P.CLIENT_CREATE,
     P.CLIENT_UPDATE,
@@ -53,6 +57,8 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
   SUPERVISOR: new Set([
     P.HR_DIRECTORY_READ,
     P.HR_REQUEST_CREATE,
+    P.ATTENDANCE_READ,
+    P.ATTENDANCE_CREATE,
     P.CLIENT_READ,
     P.CLIENT_CREATE,
     P.CLIENT_UPDATE,
@@ -81,6 +87,7 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
   ]),
   AUDITOR: new Set([
     P.HR_READ,
+    P.ATTENDANCE_READ,
     P.CLIENT_READ,
     P.DEPARTMENT_READ,
     P.CONTRACT_READ,
@@ -97,6 +104,7 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.CONTRACT_READ,
     P.CONTRACT_SIGN,
     P.DOCUMENT_READ,
+    P.ATTENDANCE_READ,
     P.DOCUMENT_DOWNLOAD,
     P.CLIENT_READ,
     P.DEPARTMENT_READ,
