@@ -42,11 +42,27 @@ type Inspeccion = {
   fecha: string | null;
   estado: string;
   items: InspeccionItem[];
+  workOrderId: string | null;
 };
 type GrupoPreguntas = { categoria: string; preguntas: string[] };
 type Plantilla = { id: string; nombre: string; categorias: GrupoPreguntas[] };
 type Departamento = { id: string; codigo: string; nombre: string; numero: string };
 type Filtro = "borrador" | "completado" | "plantillas";
+type EmpleadoMantenimiento = {
+  id: string;
+  nombres: string;
+  apellidos: string;
+  cargo: string | null;
+};
+type InfoOt = {
+  titulo: string;
+  issueType: string;
+  priority: string;
+  site: string;
+  targetAt: string;
+  assignee: string;
+  descripcion: string;
+};
 
 type SpeechAlternative = { transcript: string };
 type SpeechResult = { isFinal: boolean; 0: SpeechAlternative };
@@ -134,7 +150,6 @@ export default function InspeccionesPage() {
   const [departamentoId, setDepartamentoId] = useState("");
   const [persona, setPersona] = useState("");
   const [fecha, setFecha] = useState(() => fechaLocalInput(new Date()));
-  const [asignadoA, setAsignadoA] = useState("");
   const [grupos, setGrupos] = useState<GrupoPreguntas[]>([]);
   const [nuevaCategoria, setNuevaCategoria] = useState("");
   const [preguntaTexto, setPreguntaTexto] = useState<Record<string, string>>({});
@@ -146,6 +161,20 @@ export default function InspeccionesPage() {
 
   // Asignación de observaciones negativas a tareas
   const [asig, setAsig] = useState<Record<string, { persona: string; fecha: string }>>({});
+
+  // Derivar checklist finalizado a orden de trabajo + cita en agenda
+  const [empleadosMantenimiento, setEmpleadosMantenimiento] = useState<EmpleadoMantenimiento[]>([]);
+  const [otOrigen, setOtOrigen] = useState<Inspeccion | null>(null);
+  const [creandoOt, setCreandoOt] = useState(false);
+  const [infoOt, setInfoOt] = useState<InfoOt>({
+    titulo: "",
+    issueType: "",
+    priority: "MEDIA",
+    site: "",
+    targetAt: "",
+    assignee: "",
+    descripcion: "",
+  });
 
   const recRef = useRef<SpeechRecognitionLike | null>(null);
   const [recitando, setRecitando] = useState<string | null>(null);
@@ -168,6 +197,12 @@ export default function InspeccionesPage() {
     void apiFetch("/api/departamentos")
       .then((r) => (r.ok ? r.json() : []))
       .then((rows) => setDepartamentos(Array.isArray(rows) ? rows : []))
+      .catch(() => undefined);
+    void apiFetch("/api/operaciones/empleados")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((rows) => {
+        if (Array.isArray(rows)) setEmpleadosMantenimiento(rows as EmpleadoMantenimiento[]);
+      })
       .catch(() => undefined);
     void cargar();
     return () => recRef.current?.abort();
@@ -194,7 +229,6 @@ export default function InspeccionesPage() {
     setDepartamentoId("");
     setPersona(user?.name || user?.email || "");
     setFecha(fechaLocalInput(new Date()));
-    setAsignadoA("");
     setGrupos(desPlantilla ? desPlantilla.categorias.map((g) => ({ ...g, preguntas: [...g.preguntas] })) : []);
     setNuevaCategoria("");
     setPreguntaTexto({});
@@ -208,7 +242,7 @@ export default function InspeccionesPage() {
     if (!item || item.resultado !== "NEGATIVO") return;
     if (!item.motivo?.trim()) return notify("Primero describí el problema de esta revisión negativa", false);
     const clave = `${ins.id}:${idx}`;
-    const persona = (asig[clave]?.persona ?? item.tareaAsignado ?? ins.asignadoA ?? "").trim();
+    const persona = (asig[clave]?.persona ?? item.tareaAsignado ?? "").trim();
     if (!persona) return notify("Indicá a quién se le asigna la resolución", false);
     const limite = asig[clave]?.fecha || fechaLimiteDefecto();
     setBusy(true);
@@ -286,7 +320,6 @@ export default function InspeccionesPage() {
     setDepartamentoId("");
     setPersona(user?.name || user?.email || "");
     setFecha(fechaLocalInput(new Date()));
-    setAsignadoA("");
     setGrupos(pl.categorias.map((g) => ({ ...g, preguntas: [...g.preguntas] })));
     setPreguntaTexto({});
     setPlantillaExpandida(pl.id);
@@ -301,7 +334,6 @@ export default function InspeccionesPage() {
     setDepartamentoId(ins.departamentoId ?? "");
     setPersona(ins.personaInspecciona);
     setFecha(ins.fecha ? fechaLocalInput(new Date(ins.fecha)) : fechaLocalInput(new Date()));
-    setAsignadoA(ins.asignadoA);
     setGrupos(agruparPorCategoria(ins.items));
     setNuevaCategoria("");
     setPreguntaTexto({});
@@ -386,7 +418,6 @@ export default function InspeccionesPage() {
         departamentoNombre: `${departamento.codigo} · ${departamento.nombre}`,
         personaInspecciona: persona.trim(),
         fecha: new Date(fecha).toISOString(),
-        asignadoA,
         items: itemsConRespuesta,
       };
       const res = await apiFetch("/api/inspecciones", {
@@ -533,6 +564,122 @@ export default function InspeccionesPage() {
     URL.revokeObjectURL(url);
   }
 
+  function siteDeDepartamento(id: string | null): string {
+    const d = departamentos.find((x) => x.id === id);
+    if (!d) return "";
+    const code = (d.codigo ?? "").trim().toUpperCase();
+    if (code.startsWith("ANG170")) return "Angamos";
+    if (code.startsWith("BEN2195")) return "Benavides";
+    return "";
+  }
+
+  function abrirCrearOrden(ins: Inspeccion) {
+    if (ins.workOrderId) {
+      notify("Este checklist ya está vinculado a una orden de trabajo", false);
+      return;
+    }
+    const negativos = ins.items.filter((i) => i.resultado === "NEGATIVO");
+    const descripcion = negativos.length
+      ? `Observaciones de la inspección "${ins.nombre}" (${ins.departamentoNombre}):\n` +
+        negativos.map((n) => `- ${n.texto}: ${n.motivo || "sin detalle"}`).join("\n")
+      : `Inspección "${ins.nombre}" en ${ins.departamentoNombre} finalizada sin observaciones.`;
+    setInfoOt({
+      titulo: `${ins.nombre} · ${ins.departamentoNombre}`.slice(0, 255),
+      issueType: "",
+      priority: "MEDIA",
+      site: siteDeDepartamento(ins.departamentoId),
+      targetAt: fechaLocalInput(new Date()),
+      assignee: "",
+      descripcion,
+    });
+    setOtOrigen(ins);
+  }
+
+  async function crearOrdenYcita() {
+    const ins = otOrigen;
+    if (!ins) return;
+    if (!infoOt.titulo.trim()) return notify("Indicá el título de la orden de trabajo", false);
+    if (!infoOt.issueType.trim()) return notify("Seleccioná el tipo de incidencia", false);
+    if (!infoOt.site.trim()) return notify("Seleccioná la sede (Angamos o Benavides)", false);
+    if (!ins.departamentoId)
+      return notify("Este checklist no tiene departamento; no se puede crear la orden", false);
+    setCreandoOt(true);
+    try {
+      const inicioIso = infoOt.targetAt
+        ? new Date(infoOt.targetAt).toISOString()
+        : new Date().toISOString();
+      const resOrd = await apiFetch("/api/operaciones/ordenes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: infoOt.titulo.trim(),
+          issueType: infoOt.issueType.trim(),
+          priority: infoOt.priority,
+          site: infoOt.site,
+          departmentId: ins.departamentoId,
+          description: infoOt.descripcion.trim(),
+          targetAt: inicioIso,
+          assignedEmployeeId: infoOt.assignee || null,
+        }),
+      });
+      const ord = (await resOrd.json()) as { id: string; code: string; title: string; error?: string };
+      if (!resOrd.ok) throw new Error(ord.error ?? "No se pudo crear la orden de trabajo");
+
+      // Cita en la agenda con el día y la hora en que se genera la orden.
+      let agendaOk = true;
+      let agendaMsg = "";
+      try {
+        const resCita = await apiFetch("/api/agenda", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            summary: `OT ${ord.code} · ${ord.title}`,
+            description: `Orden ${ord.code} derivada del checklist "${ins.nombre}" (${ins.departamentoNombre}).${
+              infoOt.descripcion.trim() ? `\n${infoOt.descripcion.trim()}` : ""
+            }`.slice(0, 3000),
+            start: inicioIso,
+            end: new Date(new Date(inicioIso).getTime() + 60 * 60 * 1000).toISOString(),
+          }),
+        });
+        const cita = (await resCita.json()) as { error?: string };
+        if (!resCita.ok) {
+          agendaOk = false;
+          agendaMsg = cita.error ?? "no se pudo crear la cita";
+        }
+      } catch {
+        agendaOk = false;
+        agendaMsg = "no se pudo crear la cita";
+      }
+
+      // Vincula el checklist completado con la orden creada (evita duplicados).
+      await apiFetch("/api/inspecciones", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: ins.id,
+          nombre: ins.nombre,
+          numero: ins.numero,
+          items: ins.items,
+          estado: "COMPLETADO",
+          workOrderId: ord.id,
+        }),
+      }).catch(() => undefined);
+
+      setOtOrigen(null);
+      await cargar();
+      notify(
+        agendaOk
+          ? `Orden ${ord.code} creada y cita agendada en tu calendario.`
+          : `Orden ${ord.code} creada. La cita no se pudo agendar: ${agendaMsg}`,
+        agendaOk
+      );
+    } catch (error) {
+      notify((error as Error).message, false);
+    } finally {
+      setCreandoOt(false);
+    }
+  }
+
   async function guardarLista(ins: Inspeccion, completar: boolean, itemsOverride?: InspeccionItem[]) {
     const items = itemsOverride ?? itemsDe(ins);
     if (completar) {
@@ -567,7 +714,8 @@ export default function InspeccionesPage() {
       if (completar) {
         await descargarPdf(saved);
         setFiltro("completado");
-        notify("Checklist finalizado. PDF con las observaciones descargado.");
+        abrirCrearOrden(saved);
+        notify("Checklist finalizado. Completá los datos para crear la orden de trabajo.");
       } else {
         notify("Cambios guardados.");
       }
@@ -715,7 +863,7 @@ export default function InspeccionesPage() {
                 </span>
               )}
               <input
-                value={asig[`${ins.id}:${idx}`]?.persona ?? item.tareaAsignado ?? ins.asignadoA ?? ""}
+                value={asig[`${ins.id}:${idx}`]?.persona ?? item.tareaAsignado ?? ""}
                 onChange={(e) =>
                   setAsig((prev) => ({
                     ...prev,
@@ -735,7 +883,7 @@ export default function InspeccionesPage() {
                   setAsig((prev) => ({
                     ...prev,
                     [`${ins.id}:${idx}`]: {
-                      persona: prev[`${ins.id}:${idx}`]?.persona ?? item.tareaAsignado ?? ins.asignadoA ?? "",
+                      persona: prev[`${ins.id}:${idx}`]?.persona ?? item.tareaAsignado ?? "",
                       fecha: e.target.value,
                     },
                   }))
@@ -923,17 +1071,6 @@ export default function InspeccionesPage() {
                                 className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm"
                               />
                             </div>
-                            <div>
-                              <label className="mb-1 block text-xs font-medium text-on-surface-variant">
-                                Asignado a reparación / limpieza
-                              </label>
-                              <input
-                                value={asignadoA}
-                                onChange={(e) => setAsignadoA(e.target.value)}
-                                placeholder="Opcional"
-                                className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm"
-                              />
-                            </div>
                           </div>
                           <div className="mt-4 flex flex-wrap gap-2">
                             <button
@@ -1007,7 +1144,6 @@ export default function InspeccionesPage() {
                           <p className="text-xs text-on-surface-variant">
                             N° {ins.numero || "—"} · {ins.departamentoNombre} · {fmtFecha(ins.fecha)} · Inspecciona:{" "}
                             {ins.personaInspecciona} · Registró: {ins.inspectorNombre}
-                            {ins.asignadoA ? ` · Asignado: ${ins.asignadoA}` : ""}
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -1149,6 +1285,20 @@ export default function InspeccionesPage() {
                             </>
                           ) : (
                             <>
+                              {ins.workOrderId ? (
+                                <span className="inline-flex items-center gap-1 rounded border border-emerald-600/40 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200">
+                                  <CheckCircle2 className="h-4 w-4" />Orden de trabajo creada
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => abrirCrearOrden(ins)}
+                                  className="inline-flex items-center gap-2 rounded border border-primary/40 bg-primary/10 px-4 py-2 text-sm text-primary disabled:opacity-50"
+                                >
+                                  <ClipboardCheck className="h-4 w-4" />Crear orden de trabajo
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 disabled={busy}
@@ -1255,17 +1405,6 @@ export default function InspeccionesPage() {
                   className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm"
                 />
               </div>
-              <div className="md:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-on-surface">
-                  Asignado a reparación / limpieza
-                </label>
-                <input
-                  value={asignadoA}
-                  onChange={(e) => setAsignadoA(e.target.value)}
-                  placeholder="Nombre de la persona responsable (opcional)"
-                  className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm"
-                />
-              </div>
             </div>
 
             <h4 className="mt-6 font-headline-md text-on-surface">Preguntas por categoría</h4>
@@ -1368,6 +1507,136 @@ export default function InspeccionesPage() {
             </p>
           </div>
         )}
+
+        {otOrigen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-y-auto rounded-xl bg-surface-container-lowest p-5 shadow-lg">
+              <h3 className="font-headline-md text-on-surface">Crear orden de trabajo</h3>
+              <p className="mt-1 text-sm text-on-surface-variant">
+                El checklist <strong>{otOrigen.nombre}</strong> ({otOrigen.departamentoNombre}) quedó
+                finalizado. Completá la información para generar la orden y la cita en tu agenda.
+              </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-on-surface">Título de la orden *</label>
+                  <input
+                    value={infoOt.titulo}
+                    onChange={(e) => setInfoOt({ ...infoOt, titulo: e.target.value })}
+                    className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-on-surface">Tipo de incidencia *</label>
+                  <select
+                    value={infoOt.issueType}
+                    onChange={(e) => setInfoOt({ ...infoOt, issueType: e.target.value })}
+                    className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm"
+                  >
+                    <option value="">Seleccionar…</option>
+                    {["Plomería", "Electricidad", "Cerrajería", "Limpieza", "Mantenimiento", "Otro"].map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-on-surface">Prioridad</label>
+                  <select
+                    value={infoOt.priority}
+                    onChange={(e) => setInfoOt({ ...infoOt, priority: e.target.value })}
+                    className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm"
+                  >
+                    <option value="BAJA">Baja</option>
+                    <option value="MEDIA">Media</option>
+                    <option value="ALTA">Alta</option>
+                    <option value="URGENTE">Urgente</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-on-surface">Sede *</label>
+                  <select
+                    value={infoOt.site}
+                    onChange={(e) => setInfoOt({ ...infoOt, site: e.target.value })}
+                    className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm"
+                  >
+                    <option value="">Seleccionar…</option>
+                    <option value="Angamos">Angamos</option>
+                    <option value="Benavides">Benavides</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-on-surface">Departamento</label>
+                  <input
+                    value={otOrigen.departamentoNombre}
+                    disabled
+                    className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm opacity-70"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-on-surface">Día y hora de la cita</label>
+                  <input
+                    type="datetime-local"
+                    value={infoOt.targetAt}
+                    onChange={(e) => setInfoOt({ ...infoOt, targetAt: e.target.value })}
+                    className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-on-surface">
+                    Asignar personal de mantenimiento
+                  </label>
+                  <select
+                    value={infoOt.assignee}
+                    onChange={(e) => setInfoOt({ ...infoOt, assignee: e.target.value })}
+                    className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm"
+                  >
+                    <option value="">Sin asignar por ahora</option>
+                    {empleadosMantenimiento.map((em) => (
+                      <option key={em.id} value={em.id}>
+                        {em.nombres} {em.apellidos}
+                        {em.cargo ? ` · ${em.cargo}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {empleadosMantenimiento.length === 0 ? (
+                    <p className="mt-1 text-xs text-on-surface-variant">
+                      No hay personal de mantenimiento activo en RR. HH.
+                    </p>
+                  ) : null}
+                </div>
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-on-surface">Descripción</label>
+                  <textarea
+                    value={infoOt.descripcion}
+                    onChange={(e) => setInfoOt({ ...infoOt, descripcion: e.target.value })}
+                    rows={4}
+                    className="w-full rounded border border-outline-variant bg-transparent p-2 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={creandoOt}
+                  onClick={() => setOtOrigen(null)}
+                  className="rounded border border-outline-variant px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={creandoOt}
+                  onClick={() => void crearOrdenYcita()}
+                  className="inline-flex items-center gap-2 rounded bg-primary px-4 py-2 text-sm text-on-primary disabled:opacity-50"
+                >
+                  <ClipboardCheck className="h-4 w-4" />
+                  {creandoOt ? "Creando orden y cita…" : "Crear orden y cita"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </DashboardShell>
   );

@@ -28,6 +28,7 @@ type Body = {
   fecha?: string;
   estado?: string;
   items?: InspectionItem[];
+  workOrderId?: string | null;
 };
 
 function toItemArray(value: unknown): InspectionItem[] {
@@ -62,6 +63,7 @@ function toView(r: {
   fecha: Date;
   estado: string;
   items: unknown;
+  workOrderId: string | null;
   createdAt: Date;
   updatedAt: Date;
   completedAt: Date | null;
@@ -81,6 +83,7 @@ function toView(r: {
     fecha: r.fecha?.toISOString?.() ?? null,
     estado: r.estado,
     items: toItemArray(r.items),
+    workOrderId: r.workOrderId,
     createdAt: r.createdAt?.toISOString?.() ?? null,
     updatedAt: r.updatedAt?.toISOString?.() ?? null,
     completedAt: r.completedAt?.toISOString?.() ?? null,
@@ -211,6 +214,7 @@ export async function PUT(req: Request) {
       fecha?: Date;
       estado?: string;
       items: InspectionItem[];
+      workOrderId?: string | null;
       completedAt?: Date;
       updatedAt: Date;
     } = {
@@ -226,6 +230,7 @@ export async function PUT(req: Request) {
     if (body.departamentoNombre !== undefined)
       patch.departamentoNombre = body.departamentoNombre.trim();
     if (body.asignadoA !== undefined) patch.asignadoA = body.asignadoA.trim();
+    if (body.workOrderId !== undefined) patch.workOrderId = body.workOrderId || null;
     if (body.fecha) patch.fecha = new Date(body.fecha);
     if (estado) patch.estado = estado;
     if (estado === "COMPLETADO" && existing.estado !== "COMPLETADO") patch.completedAt = new Date();

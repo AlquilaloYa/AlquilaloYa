@@ -12,6 +12,7 @@ import {
   index,
 } from "drizzle-orm/pg-core";
 import { departments } from "./departments";
+import { workOrders } from "./work-orders";
 
 /** Contacto del equipo (antes lived solo en localStorage del navegador). */
 export const contacts = pgTable(
@@ -146,6 +147,9 @@ export const inspections = pgTable(
     fecha: timestamp("fecha", { withTimezone: true }).notNull().defaultNow(),
     estado: varchar("estado", { length: 30 }).notNull().default("BORRADOR"),
     items: jsonb("items").notNull().default([]),
+    workOrderId: uuid("work_order_id").references(() => workOrders.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
@@ -154,6 +158,7 @@ export const inspections = pgTable(
     index("inspections_estado_idx").on(table.estado),
     index("inspections_fecha_idx").on(table.fecha),
     index("inspections_contacto_idx").on(table.contactoId),
+    index("inspections_work_order_idx").on(table.workOrderId),
   ]
 );
 
