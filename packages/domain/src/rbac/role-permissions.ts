@@ -23,6 +23,7 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.HR_REQUEST_CREATE,
     P.HR_DIRECTORY_READ,
     P.ACTIVITY_READ,
+    P.WORK_ORDER_READ,
   ]),
   OPERADOR: new Set([
     P.HR_DIRECTORY_READ,
@@ -45,6 +46,9 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.ACTIVITY_READ,
     P.WEB_CONTENT_READ,
     P.WEB_CONTENT_UPDATE,
+    P.WORK_ORDER_READ,
+    P.WORK_ORDER_CREATE,
+    P.WORK_ORDER_UPDATE,
   ]),
   SUPERVISOR: new Set([
     P.HR_DIRECTORY_READ,
@@ -71,6 +75,9 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.INTEGRATION_MANAGE,
     P.WEB_CONTENT_READ,
     P.WEB_CONTENT_UPDATE,
+    P.WORK_ORDER_READ,
+    P.WORK_ORDER_CREATE,
+    P.WORK_ORDER_UPDATE,
   ]),
   AUDITOR: new Set([
     P.HR_READ,
@@ -84,6 +91,7 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.USER_READ,
     P.INTEGRATION_READ,
     P.WEB_CONTENT_READ,
+    P.WORK_ORDER_READ,
   ]),
   FIRMANTE: new Set([
     P.CONTRACT_READ,
@@ -93,6 +101,7 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.CLIENT_READ,
     P.DEPARTMENT_READ,
     P.ACTIVITY_READ,
+    P.WORK_ORDER_READ,
   ]),
 };
 

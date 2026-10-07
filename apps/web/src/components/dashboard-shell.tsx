@@ -43,6 +43,7 @@ import {
   UserCog,
   HardDrive,
   ListTodo,
+  ClipboardList,
   Mail,
   Table,
   ExternalLink,
@@ -67,13 +68,35 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/contenido-web", label: "Panel Web", icon: Globe, section: "Panel Web", permission: "web_content.read" },
   { href: "/pipeline", label: "Pipeline", icon: Filter, section: "Pipeline", permission: "client.read", group: "marketing" },
   { href: "/mensajes", label: "Mensajes", icon: MessageSquare, section: "Mensajes", permission: "client.read", group: "marketing" },
-  { href: "/automatizaciones", label: "Automatizaciones", icon: Zap, section: "Automatizaciones", permission: "client.read", group: "marketing" },
+  { href: "/chat-clientes", label: "Chat con clientes", icon: Star, section: "Chat con clientes", permission: "client.read", group: "marketing" },
+  {
+    href: "/automatizaciones",
+    label: "Automatizaciones",
+    icon: Zap,
+    section: "Automatizaciones",
+    permission: "client.read",
+    group: "marketing",
+  },
   { href: "/directorio", label: "Directorio", icon: BookUser, section: "Directorio", permission: "hr.directory.read" },
   { href: "/separaciones", label: "Separación", icon: Receipt, section: "Separación", permission: "contract.read" },
   { href: "/contactos", label: "Contactos", icon: Contact, section: "Contactos", group: "contratos" },
-  { href: "/departamentos", label: "Uni/Dep", icon: Building2, section: "Departamentos", permission: "department.read", group: "contratos" },
+  {
+    href: "/departamentos",
+    label: "Uni/Dep",
+    icon: Building2,
+    section: "Departamentos",
+    permission: "department.read",
+    group: "contratos",
+  },
   { href: "/contratos", label: "Pre contrato", icon: FileText, section: "Contratos", permission: "contract.read", group: "contratos" },
-  { href: "/contrato-final", label: "Contrato Final", icon: FileCheck, section: "Contrato Final", permission: "contract.read", group: "contratos" },
+  {
+    href: "/contrato-final",
+    label: "Contrato Final",
+    icon: FileCheck,
+    section: "Contrato Final",
+    permission: "contract.read",
+    group: "contratos",
+  },
   { href: "/adendas", label: "Adendas", icon: ScrollText, section: "Adendas", permission: "contract.read", group: "contratos" },
   { href: "/plantillas", label: "Plantillas", icon: FilePlus2, section: "Plantillas", permission: "template.read", group: "contratos" },
   { href: "/clientes", label: "Clientes", icon: Star, section: "Clientes", permission: "client.read" },
@@ -84,6 +107,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/work-123", label: "Work 123", icon: Kanban, section: "Work 123", permission: "contract.read" },
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "hr.read" },
+  { href: "/operaciones", label: "Órdenes de trabajo", icon: ClipboardList, section: "Operaciones", permission: "work_order.read" },
   { href: "/google/gmail", label: "Gmail", icon: Mail, section: "Google SyS", group: "google" },
   { href: "/google/drive", label: "Google Drive", icon: HardDrive, section: "Google SyS", group: "google" },
   { href: "/google/sheets", label: "Google Sheets", icon: Table, section: "Google SyS", group: "google" },
@@ -111,11 +135,7 @@ function visibleNav(role: import("@contract/domain/rbac").UserRole): NavItem[] {
 
 const SEARCH_RESULTS: SearchResult[] = [...NAV_ITEMS, ...CONFIGURATION_ITEMS]
   .filter((n) => !n.external)
-  .map((n) => ({
-    href: n.href,
-    label: n.label,
-    section: n.section,
-  }));
+  .map((n) => ({ href: n.href, label: n.label, section: n.section }));
 
 function GoogleLogoIcon({ className }: { className?: string }) {
   return (
@@ -140,15 +160,7 @@ function GoogleLogoIcon({ className }: { className?: string }) {
   );
 }
 
-function NavLink({
-  item,
-  collapsed,
-  onNavigate,
-}: {
-  item: NavItem;
-  collapsed: boolean;
-  onNavigate?: (() => void) | undefined;
-}) {
+function NavLink({ item, collapsed, onNavigate }: { item: NavItem; collapsed: boolean; onNavigate?: (() => void) | undefined }) {
   const pathname = usePathname();
   const active = pathname === item.href;
   const Icon = item.icon;
@@ -180,12 +192,8 @@ function NavLink({
   return (
     <Link
       href={item.href}
-      {...(onNavigate
-        ? { onClick: () => onNavigate() }
-        : {})}
-      {...(collapsed
-        ? { title: item.label, "aria-label": item.label }
-        : {})}
+      {...(onNavigate ? { onClick: () => onNavigate() } : {})}
+      {...(collapsed ? { title: item.label, "aria-label": item.label } : {})}
       className={className}
     >
       <Icon className="h-[18px] w-[18px] shrink-0" />
@@ -238,9 +246,7 @@ function NavGroup({
       >
         <Icon className="h-[18px] w-[18px] shrink-0" />
         {!collapsed ? <span className="flex-1 text-left">{label}</span> : null}
-        {!collapsed ? (
-          <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
-        ) : null}
+        {!collapsed ? <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} /> : null}
       </button>
       {open ? (
         <div className={collapsed ? "mt-1" : "ml-5 mt-1 flex flex-col gap-1 border-l border-outline-variant/40 pl-2 dark:border-white/10"}>
@@ -294,30 +300,18 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-surface text-on-surface">
       {mobileOpen ? (
-        <div
-          className="fixed inset-0 z-30 bg-black/10 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-          aria-hidden="true"
-        />
+        <div className="fixed inset-0 z-30 bg-black/10 lg:hidden" onClick={() => setMobileOpen(false)} aria-hidden="true" />
       ) : null}
 
       <aside
         className={`fixed left-0 top-0 flex h-full flex-col border-r border-outline-variant py-6 transition-transform duration-200 dark:border-white/10 ${
-          mobileOpen
-            ? "z-40 bg-surface dark:bg-[#151a24]"
-            : "z-20 dark:bg-[#151a24]"
-        } ${
-          collapsed ? "w-[68px]" : "w-64"
-        } ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0`}
+          mobileOpen ? "z-40 bg-surface dark:bg-[#151a24]" : "z-20 dark:bg-[#151a24]"
+        } ${collapsed ? "w-[68px]" : "w-64"} ${mobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
       >
         <div className={`mb-8 flex items-center ${collapsed ? "justify-center px-0" : "justify-between gap-2 px-5"}`}>
           {!collapsed ? (
             <>
-              <h1 className="font-headline-md font-bold leading-tight text-primary dark:text-white">
-                AlquilaYa ERP
-              </h1>
+              <h1 className="font-headline-md font-bold leading-tight text-primary dark:text-white">AlquilaYa ERP</h1>
               <button
                 onClick={() => setCollapsed(true)}
                 className="flex h-8 w-8 items-center justify-center rounded text-on-surface-variant transition-colors hover:bg-surface-container-high dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white"
@@ -375,14 +369,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             return items.map((item) => {
               const groupKey = item.group;
               if (!groupKey) {
-                return (
-                  <NavLink
-                    key={item.href}
-                    item={item}
-                    collapsed={collapsed}
-                    onNavigate={() => setMobileOpen(false)}
-                  />
-                );
+                return <NavLink key={item.href} item={item} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />;
               }
               if (renderedGroups.has(groupKey)) return null;
               renderedGroups.add(groupKey);
@@ -410,9 +397,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             {FOOTER_ITEMS.map((item) => {
               const Icon = item.icon;
               const configurationAc = AccessControl.forRole(user.role);
-              const configurationItems = CONFIGURATION_ITEMS.filter(
-                (n) => !n.permission || configurationAc.can(n.permission)
-              );
+              const configurationItems = CONFIGURATION_ITEMS.filter((n) => !n.permission || configurationAc.can(n.permission));
               const isConfiguration = item.label === "Configuración";
               return (
                 <li key={item.label}>
@@ -450,9 +435,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
       <div className={`flex min-w-0 flex-1 flex-col ${collapsed ? "lg:ml-[68px]" : "lg:ml-64"}`}>
         <TopBar results={SEARCH_RESULTS} onMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-container-padding">
-          {children}
-        </main>
+        <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-container-padding">{children}</main>
       </div>
 
       <AppointmentReminders />

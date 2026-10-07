@@ -10,6 +10,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { leads } from "./leads";
+import { clients } from "./clients";
 
 /** Conversación multicanal de la bandeja (Fase 0 mensajería). */
 export const conversations = pgTable(
@@ -21,6 +22,7 @@ export const conversations = pgTable(
     contactoNombre: varchar("contacto_nombre", { length: 255 }).notNull().default(""),
     contactoTelefono: varchar("contacto_telefono", { length: 50 }).notNull().default(""),
     leadId: uuid("lead_id").references(() => leads.id, { onDelete: "set null" }),
+    clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
     estado: varchar("estado", { length: 20 }).notNull().default("ABIERTA"),
     asignadoA: varchar("asignado_a", { length: 255 }).notNull().default(""),
     ultimoMensaje: text("ultimo_mensaje").notNull().default(""),

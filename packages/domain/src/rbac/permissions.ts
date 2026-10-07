@@ -29,6 +29,9 @@ export const Permission = {
   USER_READ: "user.read",
   USER_MANAGE: "user.manage",
   ROLE_MANAGE: "role.manage",
+  WORK_ORDER_READ: "work_order.read",
+  WORK_ORDER_CREATE: "work_order.create",
+  WORK_ORDER_UPDATE: "work_order.update",
 } as const;
 
 export type Permission = (typeof Permission)[keyof typeof Permission];
@@ -66,4 +69,7 @@ export const PERMISSION_DESCRIPTIONS: Record<Permission, string> = {
   [Permission.USER_READ]: "Ver usuarios",
   [Permission.USER_MANAGE]: "Gestionar usuarios",
   [Permission.ROLE_MANAGE]: "Gestionar roles",
+  [Permission.WORK_ORDER_READ]: "Ver órdenes de trabajo",
+  [Permission.WORK_ORDER_CREATE]: "Crear órdenes de trabajo",
+  [Permission.WORK_ORDER_UPDATE]: "Asignar y actualizar órdenes de trabajo",
 };

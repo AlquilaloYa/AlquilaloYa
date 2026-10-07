@@ -143,3 +143,11 @@ Para compilar los binarios de **Windows, macOS y Linux** en paralelo se usa el b
 ## Arquitectura
 
 La arquitectura mantiene el dominio desacoplado de la infraestructura (Tauri, Supabase, proveedores). El núcleo contractual es independiente y las integraciones externas viven en la capa de infraestructura mediante conectores.
+
+## Órdenes de trabajo
+
+El módulo de operaciones está disponible en `/operaciones` como panel ERP de despacho: permite crear órdenes para las sedes Angamos y Benavides, asociar un residente desde Clientes con su departamento UNI/DEP, asignarlas o reasignarlas a personal activo de Mantenimiento en RR. HH., adjuntar evidencias fotográficas y consultar el estado e historial. La aceptación y ejecución de las tareas por el personal se gestionará en una futura aplicación de mantenimiento; el ERP no presenta acciones para aceptar o avanzar la intervención.
+
+El esquema usa PostgreSQL/Drizzle y comparte la identidad y los empleados del ERP. Antes de habilitar el módulo en una base de datos, aplica `packages/db/drizzle/0014_work_orders.sql` con el flujo normal de migraciones o `supabase/migrations/20261006201000_work_orders.sql` en Supabase. Los trabajadores con rol `OPERADOR` deben tener su usuario vinculado a un expediente activo de RR. HH.; la API limita su consulta a órdenes asignadas a ese expediente.
+
+Las evidencias se guardan en el bucket privado de Supabase Storage `work-order-evidence`; la migración configura el bucket y sus límites. La futura aplicación de mantenimiento permitirá al trabajador aceptar sus tareas y al jefe de mantenimiento subasignarlas. Los movimientos de inventario, notificaciones/jobs y la app móvil Expo quedan como siguientes fases del módulo.

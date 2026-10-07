@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, FileText } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
+import { PdfCanvasPreview } from "@/components/pdf-canvas-preview";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
 
@@ -34,6 +35,12 @@ type ContractFichaApi = {
   fechaInicio: string;
   fechaFin: string;
   muebleriaItems?: string[];
+};
+
+type NotarizedDocument = {
+  id: string;
+  tipo: string;
+  filename: string | null;
 };
 
 type ContactoDetalle = {
@@ -114,7 +121,9 @@ function cronogramaMeses(inicio: Date, fin: Date): Date[] {
 
 export default function ClienteContratoPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const id = params.id;
+  const contractId = searchParams.get("contractId");
   const [cliente, setCliente] = useState<ClientFichaApi | null>(null);
   const [contrato, setContrato] = useState<ContractFichaApi | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,6 +138,16 @@ export default function ClienteContratoPage() {
     nombre: string;
     tipo: string;
   } | null>(null);
+  const [notarizedDocument, setNotarizedDocument] =
+    useState<NotarizedDocument | null>(null);
+  const [notarizedLoading, setNotarizedLoading] = useState(false);
+  const [notarizedError, setNotarizedError] = useState<string | null>(null);
+  const [notarizedAction, setNotarizedAction] = useState(false);
+  const [notarizedPreview, setNotarizedPreview] = useState<{
+    url: string;
+    filename: string;
+    contractCode: string;
+  } | null>(null);
 
   const cargarPagos = async (contractId: string) => {
     try {
@@ -142,7 +161,10 @@ export default function ClienteContratoPage() {
   useEffect(() => {
     async function cargar() {
       try {
-        const r = await apiFetch(`/api/ficha/${id}`);
+        const query = contractId
+          ? `?contractId=${encodeURIComponent(contractId)}`
+          : "";
+        const r = await apiFetch(`/api/ficha/${id}${query}`);
         if (!r.ok) {
           const b = await r.json().catch(() => ({}));
           throw new Error((b as { error?: string }).error ?? `Error ${r.status}`);
@@ -162,7 +184,58 @@ export default function ClienteContratoPage() {
       }
     }
     if (id) void cargar();
-  }, [id]);
+  }, [id, contractId]);
+
+  useEffect(() => {
+    if (!contrato?.id) {
+      setNotarizedDocument(null);
+      setNotarizedError(null);
+      setNotarizedLoading(false);
+      return;
+    }
+    let vivo = true;
+    setNotarizedLoading(true);
+    setNotarizedError(null);
+    void (async () => {
+      try {
+        const response = await apiFetch(
+          `/api/documents?contractId=${encodeURIComponent(contrato.id)}`
+        );
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.error ?? "No se pudo cargar el contrato notariado.");
+        }
+        const result = (await response.json()) as {
+          items?: NotarizedDocument[];
+        };
+        if (vivo) {
+          setNotarizedDocument(
+            result.items?.find((document) => document.tipo === "CONTRATO_NOTARIADO") ??
+              null
+          );
+        }
+      } catch (cause) {
+        if (vivo) {
+          setNotarizedError(
+            cause instanceof Error
+              ? cause.message
+              : "No se pudo cargar el contrato notariado."
+          );
+        }
+      } finally {
+        if (vivo) setNotarizedLoading(false);
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, [contrato?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (notarizedPreview) URL.revokeObjectURL(notarizedPreview.url);
+    };
+  }, [notarizedPreview]);
 
   useEffect(() => {
     if (!previewVoucher) return;
@@ -279,6 +352,45 @@ export default function ClienteContratoPage() {
       setCronSortDir("asc");
     }
   }
+
+  async function verContratoNotariado() {
+    if (!contrato || !notarizedDocument) return;
+    setNotarizedAction(true);
+    setNotarizedError(null);
+    try {
+      const response = await apiFetch(
+        `/api/documents/pdf?documentId=${encodeURIComponent(notarizedDocument.id)}`
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? "No se pudo abrir el contrato notariado.");
+      }
+      const blob = await response.blob();
+      if (!blob.size || !(await blob.slice(0, 1024).text()).includes("%PDF-")) {
+        throw new Error("El archivo guardado no contiene un PDF válido.");
+      }
+      setNotarizedPreview({
+        url: URL.createObjectURL(
+          blob.type === "application/pdf"
+            ? blob
+            : new Blob([blob], { type: "application/pdf" })
+        ),
+        filename:
+          notarizedDocument.filename ??
+          `contrato-notariado-${contrato.codigoContrato}.pdf`,
+        contractCode: contrato.codigoContrato,
+      });
+    } catch (cause) {
+      setNotarizedError(
+        cause instanceof Error
+          ? cause.message
+          : "No se pudo abrir el contrato notariado."
+      );
+    } finally {
+      setNotarizedAction(false);
+    }
+  }
+
   const meses =
     fechaFin && fechaFin.getTime() > hoy.getTime()
       ? Math.max(0, Math.round((fechaFin.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24 * 30)))
@@ -503,6 +615,42 @@ export default function ClienteContratoPage() {
             </dl>
           </section>
         </div>
+
+        <section className="rounded-xl border border-outline-variant bg-surface-container-lowest p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h4 className="font-label-md uppercase tracking-wider text-on-surface-variant">
+                Contrato notariado
+              </h4>
+              <p className="mt-1 text-sm text-on-surface-variant">
+                {notarizedDocument?.filename ??
+                  (notarizedLoading
+                    ? "Buscando el documento del contrato…"
+                    : "Documento notariado del contrato del cliente")}
+              </p>
+            </div>
+            {notarizedDocument ? (
+              <button
+                type="button"
+                onClick={() => void verContratoNotariado()}
+                disabled={notarizedAction}
+                className="inline-flex items-center gap-2 rounded bg-primary px-3 py-2 text-sm font-medium text-on-primary hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FileText className="h-4 w-4" />
+                {notarizedAction ? "Abriendo…" : "Ver contrato notariado"}
+              </button>
+            ) : null}
+          </div>
+          {notarizedError ? (
+            <p role="alert" className="mt-3 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              {notarizedError}
+            </p>
+          ) : !notarizedLoading && !notarizedDocument ? (
+            <p className="mt-3 text-sm text-on-surface-variant">
+              Este contrato todavía no tiene un PDF notariado adjunto.
+            </p>
+          ) : null}
+        </section>
 
         <section>
           <h4 className="mb-2 font-label-md uppercase tracking-wider text-on-surface-variant">
@@ -848,6 +996,39 @@ export default function ClienteContratoPage() {
                 className="max-h-[70vh] w-full object-contain"
               />
             )}
+          </div>
+        </div>
+      ) : null}
+      {notarizedPreview ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setNotarizedPreview(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Contrato notariado ${notarizedPreview.contractCode}`}
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-xl bg-surface p-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <h3 className="font-headline-md text-on-surface">
+                Contrato notariado · {notarizedPreview.contractCode}
+              </h3>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setNotarizedPreview(null)}
+                  className="rounded-md px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+            <PdfCanvasPreview
+              src={notarizedPreview.url}
+              title={notarizedPreview.filename}
+            />
           </div>
         </div>
       ) : null}

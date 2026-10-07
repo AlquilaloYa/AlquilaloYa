@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import {
+  buscarClienteNotariadoPorId,
+  buscarClienteUnicoPorTelefono,
+} from "@/lib/client-phone-match";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +74,48 @@ export async function GET(req: Request) {
       .select()
       .from(c.schema.conversations)
       .orderBy(desc(c.schema.conversations.ultimoMensajeEn), desc(c.schema.conversations.createdAt));
-    return NextResponse.json(rows.map(toView));
+    const tipo = new URL(req.url).searchParams.get("tipo");
+    if (tipo !== "clientes" && tipo !== "leads") {
+      return NextResponse.json(rows.map(toView));
+    }
+
+    const clientesPorTelefono = new Map<string, Awaited<ReturnType<typeof buscarClienteUnicoPorTelefono>>>();
+    const clientesPorId = new Map<string, Awaited<ReturnType<typeof buscarClienteUnicoPorTelefono>>>();
+    await Promise.all(rows.map(async (row) => {
+      if (row.clientId) {
+        if (!clientesPorId.has(row.clientId)) {
+          const cliente = await buscarClienteNotariadoPorId(c.db, c.schema, row.clientId);
+          if (cliente) clientesPorId.set(row.clientId, cliente);
+        }
+        const linkedClient = clientesPorId.get(row.clientId);
+        if (linkedClient) clientesPorTelefono.set(row.id, linkedClient);
+        return;
+      }
+      const telefono = row.contactoTelefono || row.externoId || "";
+      if (!clientesPorTelefono.has(`phone:${telefono}`)) {
+        const match = await buscarClienteUnicoPorTelefono(c.db, c.schema, telefono);
+        clientesPorTelefono.set(`phone:${telefono}`, match);
+      }
+      const cliente = clientesPorTelefono.get(`phone:${telefono}`);
+      if (cliente) clientesPorTelefono.set(row.id, cliente);
+    }));
+
+    return NextResponse.json(
+      rows.flatMap((row) => {
+        const cliente = clientesPorTelefono.get(row.id);
+        if (tipo === "clientes" && !cliente) return [];
+        if (tipo === "leads" && cliente) return [];
+        return [{
+          ...toView(row),
+          ...(cliente ? {
+            clienteId: cliente.id,
+            clienteNombre: `${cliente.nombre} ${cliente.apellidos ?? ""}`.trim(),
+            codigoDepartamento: cliente.codigoDepartamento,
+            departamentoNombre: cliente.departamentoNombre,
+          } : {}),
+        }];
+      })
+    );
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

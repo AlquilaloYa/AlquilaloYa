@@ -1,4 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { buscarClienteUnicoPorTelefono } from "@/lib/client-phone-match";
 
 type Db = typeof import("@contract/db").db;
 type Schema = typeof import("@contract/db").schema;
@@ -54,9 +55,24 @@ export async function ingresarMensaje(
   }
   if (!conv) throw new Error("No se pudo crear/obtener la conversación");
 
-  // Auto-creación de lead para primeros contactos entrantes sin CRM vinculado.
+  const cliente = direccion === "INBOUND" && !conv.clientId
+    ? await buscarClienteUnicoPorTelefono(
+        db,
+        schema,
+        msg.contactoTelefono || conv.contactoTelefono || externoId
+      )
+    : null;
+  if (cliente) {
+    await db
+      .update(schema.conversations)
+      .set({ clientId: cliente.id, updatedAt: new Date() })
+      .where(eq(schema.conversations.id, conv.id));
+    conv.clientId = cliente.id;
+  }
+
+  // Auto-creación de lead solo para contactos entrantes que no son clientes registrados.
   const leadId =
-    direccion === "INBOUND" && !conv.leadId
+    direccion === "INBOUND" && !conv.leadId && !cliente && !conv.clientId
       ? await asegurarLeadParaConversacion(db, schema, conv, contenido)
       : conv.leadId;
 

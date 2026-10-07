@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { PdfCanvasPreview } from "@/components/pdf-canvas-preview";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { Button } from "@contract/ui/components/button";
@@ -414,21 +415,45 @@ function VistaDocs(props: {
     archivo?.tipo === "application/pdf" ||
     /\.pdf$/i.test(archivo?.nombre ?? "");
   const [pdfSrc, setPdfSrc] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   useEffect(() => {
     if (!esPdf || !archivo?.dataUrl) {
       setPdfSrc(null);
+      setPdfLoading(false);
+      setPdfError(null);
       return;
     }
     let objetoUrl: string | null = null;
     let vivo = true;
-    fetch(archivo.dataUrl)
-      .then((res) => res.blob())
+    setPdfSrc(null);
+    setPdfLoading(true);
+    setPdfError(null);
+    void fetch(archivo.dataUrl)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`No se pudo cargar el PDF (HTTP ${res.status}).`);
+        const blob = await res.blob();
+        if (!blob.size || !(await blob.slice(0, 1024).text()).includes("%PDF-")) {
+          throw new Error("El archivo adjunto no contiene un PDF válido.");
+        }
+        return blob;
+      })
       .then((blob) => {
         if (!vivo) return;
-        objetoUrl = URL.createObjectURL(blob);
+        const pdfBlob = blob.type === "application/pdf"
+          ? blob
+          : new Blob([blob], { type: "application/pdf" });
+        objetoUrl = URL.createObjectURL(pdfBlob);
         setPdfSrc(objetoUrl);
       })
-      .catch(() => setPdfSrc(null));
+      .catch((error: unknown) => {
+        if (vivo) {
+          setPdfError(error instanceof Error ? error.message : "No se pudo preparar el PDF.");
+        }
+      })
+      .finally(() => {
+        if (vivo) setPdfLoading(false);
+      });
     return () => {
       vivo = false;
       if (objetoUrl) URL.revokeObjectURL(objetoUrl);
@@ -469,11 +494,30 @@ function VistaDocs(props: {
               className="mx-auto max-h-[60vh] max-w-full object-contain"
             />
           ) : esPdf ? (
-            <iframe
-              src={pdfSrc ?? ""}
-              title={archivo!.nombre}
-              className="h-[60vh] w-full bg-white"
-            />
+            <div className="flex h-full min-h-[60vh] flex-col">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant bg-surface px-3 py-2">
+                <span className="min-w-0 truncate text-sm text-on-surface">{archivo!.nombre}</span>
+                {pdfSrc ? (
+                  <div className="flex shrink-0 gap-3 text-sm">
+                    <a href={pdfSrc} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                      Abrir en pestaña
+                    </a>
+                    <a href={pdfSrc} download={archivo!.nombre} className="text-primary hover:underline">
+                      Descargar
+                    </a>
+                  </div>
+                ) : null}
+              </div>
+              {pdfLoading ? (
+                <p className="p-4 text-center text-sm text-muted-foreground">Cargando PDF…</p>
+              ) : pdfError ? (
+                <p role="alert" className="m-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  {pdfError}
+                </p>
+              ) : pdfSrc ? (
+                <PdfCanvasPreview src={pdfSrc} title={archivo!.nombre} />
+              ) : null}
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-2 p-8 text-muted-foreground">
               <FileText className="h-10 w-10" />
@@ -1254,13 +1298,12 @@ export default function ContactosPage() {
               </p>
             ) : (
               <TableScroll className="w-full rounded-md border" contentClassName="max-h-[30rem]">
-                <table className="w-full min-w-[2060px] table-fixed text-sm">
+                <table className="w-full min-w-[2090px] table-fixed text-sm">
                   <colgroup>
+                    <col style={{ width: "100px" }} />
                     <col style={{ width: "220px" }} />
                     <col style={{ width: "100px" }} />
                     <col style={{ width: "110px" }} />
-                    <col style={{ width: "130px" }} />
-                    <col style={{ width: "280px" }} />
                     <col style={{ width: "150px" }} />
                     <col style={{ width: "110px" }} />
                     <col style={{ width: "120px" }} />
@@ -1269,10 +1312,13 @@ export default function ContactosPage() {
                     <col style={{ width: "180px" }} />
                     <col style={{ width: "150px" }} />
                     <col style={{ width: "140px" }} />
-                    <col style={{ width: "100px" }} />
+                    <col style={{ width: "130px" }} />
+                    <col style={{ width: "280px" }} />
+                    <col style={{ width: "60px" }} />
                   </colgroup>
                   <thead className="sticky top-0 z-10 bg-muted text-left text-xs text-muted-foreground">
                     <tr>
+                      <th className="px-3 py-2 font-medium">Acciones</th>
                       <th
                         onClick={() => cambiarOrden("nombre")}
                         className={"cursor-pointer select-none px-3 py-2 font-medium transition-colors hover:bg-muted-foreground/10 " + (sortKey === "nombre" ? "font-semibold" : "")}
@@ -1295,20 +1341,6 @@ export default function ContactosPage() {
                         DNI/CE{sortKey === "dni" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                       </th>
                       <th
-                        onClick={() => cambiarOrden("ruc")}
-                        className={"w-[130px] cursor-pointer select-none px-3 py-2 font-medium transition-colors hover:bg-muted-foreground/10 " + (sortKey === "ruc" ? "font-semibold" : "")}
-                        title="Ordenar por RUC"
-                      >
-                        RUC{sortKey === "ruc" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-                      </th>
-                      <th
-                        onClick={() => cambiarOrden("email")}
-                        className={"w-[280px] cursor-pointer select-none px-3 py-2 font-medium transition-colors hover:bg-muted-foreground/10 " + (sortKey === "email" ? "font-semibold" : "")}
-                        title="Ordenar por email"
-                      >
-                        Email{sortKey === "email" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-                      </th>
-                      <th
                         onClick={() => cambiarOrden("telefono")}
                         className={"w-[150px] cursor-pointer select-none px-3 py-2 font-medium transition-colors hover:bg-muted-foreground/10 " + (sortKey === "telefono" ? "font-semibold" : "")}
                         title="Ordenar por teléfono"
@@ -1328,12 +1360,36 @@ export default function ContactosPage() {
                       >
                         Mascotas{sortKey === "mascotas" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                       </th>
-                      <th className="px-3 py-2 font-medium">Acciones</th>
+                      <th
+                        onClick={() => cambiarOrden("ruc")}
+                        className={"cursor-pointer select-none px-3 py-2 font-medium transition-colors hover:bg-muted-foreground/10 " + (sortKey === "ruc" ? "font-semibold" : "")}
+                        title="Ordenar por RUC"
+                      >
+                        RUC{sortKey === "ruc" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                      </th>
+                      <th
+                        onClick={() => cambiarOrden("email")}
+                        className={"cursor-pointer select-none px-3 py-2 font-medium transition-colors hover:bg-muted-foreground/10 " + (sortKey === "email" ? "font-semibold" : "")}
+                        title="Ordenar por email"
+                      >
+                        Email{sortKey === "email" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                      </th>
+                      <th className="px-3 py-2 font-medium">Eliminar</th>
                     </tr>
                   </thead>
                   <tbody>
                     {contactoOrdenados.map((c) => (
                       <tr key={c.id} className="border-t">
+                        <td className="px-3 py-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => iniciarEdicion(c)}
+                          >
+                            Editar
+                          </Button>
+                        </td>
                         <td className="max-w-[220px] break-words px-3 py-2 font-medium">
                           {[c.nombre, c.apellido].filter(Boolean).join(" ")}
                         </td>
@@ -1344,18 +1400,6 @@ export default function ContactosPage() {
                         </td>
                         <td className="w-[110px] max-w-[110px] overflow-hidden px-3 py-2 text-ellipsis whitespace-nowrap" title={c.dni}>
                           {c.dni ?? "—"}
-                        </td>
-                        <td
-                          className="w-[130px] max-w-[130px] overflow-hidden px-3 py-2 text-ellipsis whitespace-nowrap text-muted-foreground"
-                          title={c.ruc ?? undefined}
-                        >
-                          {c.ruc ?? "—"}
-                        </td>
-                        <td
-                          className="w-[280px] max-w-[280px] overflow-hidden px-3 py-2 text-ellipsis whitespace-nowrap text-muted-foreground"
-                          title={c.email}
-                        >
-                          {c.email}
                         </td>
                         <td className="w-[150px] max-w-[150px] overflow-hidden px-3 py-2 text-ellipsis whitespace-nowrap text-muted-foreground">
                           {formatearTelefono(c.telefono, c.codigoPais ?? "51")}
@@ -1482,28 +1526,31 @@ export default function ContactosPage() {
                             <span className="text-muted-foreground">No</span>
                           )}
                         </td>
+                        <td
+                          className="w-[130px] max-w-[130px] overflow-hidden px-3 py-2 text-ellipsis whitespace-nowrap text-muted-foreground"
+                          title={c.ruc ?? undefined}
+                        >
+                          {c.ruc ?? "—"}
+                        </td>
+                        <td
+                          className="w-[280px] max-w-[280px] overflow-hidden px-3 py-2 text-ellipsis whitespace-nowrap text-muted-foreground"
+                          title={c.email}
+                        >
+                          {c.email}
+                        </td>
                         <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => iniciarEdicion(c)}
-                            >
-                              Editar
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              disabled={eliminandoId === c.id}
-                              onClick={() => setPorEliminar(c)}
-                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              title="Eliminar contacto"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={eliminandoId === c.id}
+                            onClick={() => setPorEliminar(c)}
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            title="Eliminar contacto"
+                            aria-label={`Eliminar contacto ${[c.nombre, c.apellido].filter(Boolean).join(" ")}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </td>
                       </tr>
                     ))}

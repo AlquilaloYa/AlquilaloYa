@@ -84,6 +84,7 @@ export default function ContratoFinalDetailPage() {
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [registeringClient, setRegisteringClient] = useState(false);
+  const [clientRegistered, setClientRegistered] = useState<boolean | null>(null);
   const [clientMessage, setClientMessage] = useState<string | null>(null);
   const [notariando, setNotariando] = useState(false);
   const [notaryMessage, setNotaryMessage] = useState<string | null>(null);
@@ -91,9 +92,10 @@ export default function ContratoFinalDetailPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [cr, dr] = await Promise.all([
+      const [cr, dr, clientStatusResponse] = await Promise.all([
         apiFetch(`/api/contracts/${id}`),
         apiFetch(`/api/documents?contractId=${id}`),
+        apiFetch(`/api/contracts/${id}/client`),
       ]);
       if (!cr.ok) {
         const body = await cr.json().catch(() => ({}));
@@ -101,6 +103,14 @@ export default function ContratoFinalDetailPage() {
       }
       setContract((await cr.json()) as ContractDetail);
       if (dr.ok) setDocuments(((await dr.json()) as { items: Document[] }).items ?? []);
+      if (!clientStatusResponse.ok) {
+        const body = await clientStatusResponse.json().catch(() => ({}));
+        throw new Error(body.error ?? "No se pudo verificar el registro del cliente.");
+      }
+      const clientStatus = (await clientStatusResponse.json()) as {
+        registrado: boolean;
+      };
+      setClientRegistered(clientStatus.registrado);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -144,7 +154,8 @@ export default function ContratoFinalDetailPage() {
       const res = await apiFetch(`/api/contracts/${id}/client`, { method: "POST" });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? "No se pudo registrar como cliente");
-      setClientMessage("Registrado como cliente. Ya aparece en la pestaña Clientes.");
+      setClientRegistered(true);
+      setClientMessage(null);
     } catch (e) {
       setClientMessage((e as Error).message);
     } finally {
@@ -264,15 +275,27 @@ export default function ContratoFinalDetailPage() {
                   <div>
                     <h4 className="font-label-md text-on-surface">Cliente del contrato</h4>
                     <p className="mt-1 font-body-sm text-on-surface-variant">
-                      Registra al firmante para que aparezca en Clientes.
+                      {clientRegistered
+                        ? "El cliente ya está registrado en Clientes."
+                        : "Registra al firmante para que aparezca en Clientes."}
                     </p>
                   </div>
                   <button
                     onClick={registrarComoCliente}
-                    disabled={registeringClient}
-                    className="rounded bg-primary px-3 py-2 font-label-md text-on-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={registeringClient || clientRegistered !== false}
+                    className={`rounded px-3 py-2 font-label-md disabled:cursor-not-allowed disabled:opacity-60 ${
+                      clientRegistered
+                        ? "bg-surface-container-high text-on-surface-variant"
+                        : "bg-primary text-on-primary"
+                    }`}
                   >
-                    {registeringClient ? "Registrando…" : "Registrar como cliente"}
+                    {registeringClient
+                      ? "Registrando…"
+                      : clientRegistered
+                        ? "Registrado como cliente"
+                        : clientRegistered === false
+                          ? "Registrar como cliente"
+                          : "Verificando registro…"}
                   </button>
                 </div>
                 {clientMessage ? (

@@ -24,7 +24,8 @@ export async function GET(
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { desc, eq } = await import("drizzle-orm");
+    const { and, desc, eq } = await import("drizzle-orm");
+    const requestedContractId = new URL(req.url).searchParams.get("contractId");
 
     const [cliente] = await db
       .select()
@@ -36,6 +37,12 @@ export async function GET(
       return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
     }
 
+    const contractConditions = [
+      eq(schema.contracts.clienteId, cliente.id),
+    ];
+    if (requestedContractId) {
+      contractConditions.push(eq(schema.contracts.id, requestedContractId));
+    }
     const [contrato] = await db
       .select({
         id: schema.contracts.id,
@@ -58,11 +65,14 @@ export async function GET(
         schema.departments,
         eq(schema.departments.id, schema.contracts.departamentoId)
       )
-      .where(eq(schema.contracts.clienteId, cliente.id))
+      .where(and(...contractConditions))
       .orderBy(desc(schema.contracts.fechaFin))
       .limit(1);
 
-    if (!contrato || !["FIRMADO", "NOTARIADO"].includes(contrato.estado)) {
+    if (
+      !contrato ||
+      !["FIRMADO", "NOTARIADO", "ACTIVO", "VIGENTE", "RENOVADO"].includes(contrato.estado)
+    ) {
       return NextResponse.json(
         { error: "La ficha del cliente estará disponible cuando el contrato esté firmado o notariado" },
         { status: 403 }

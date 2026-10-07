@@ -79,6 +79,7 @@ export default function DepartamentosPage() {
   const [, setTick] = useState(0);
   const [garantiaModalDeptId, setGarantiaModalDeptId] = useState<string | null>(null);
   const [garantiaModalModo, setGarantiaModalModo] = useState<"activar" | "ver">("activar");
+  const [confirmarQuitarDeptId, setConfirmarQuitarDeptId] = useState<string | null>(null);
   const [baucherGarantiaUrl, setBaucherGarantiaUrl] = useState<string>("");
   const [inventarioDeptId, setInventarioDeptId] = useState<string | null>(null);
   const [inventarioItems, setInventarioItems] = useState<string[]>([]);
@@ -951,28 +952,35 @@ export default function DepartamentosPage() {
                               )}
                             </td>
                             <td className="px-3 py-2">
-                              {sepContacto
-                                ? [sepContacto.nombre, sepContacto.apellido].filter(Boolean).join(" ")
-                                : "—"}
-                              {sepContacto && sep && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  Monto: {fmtPrecio(sep.montoSeparacion.toString())}
+                              {sepContacto ? (
+                                <div className="flex min-w-[180px] flex-col items-start gap-1">
+                                  <div className="w-full border-b border-outline-variant/50 pb-1 text-xs">
+                                    <span className="font-semibold text-muted-foreground">Nombre: </span>
+                                    <span>{sepContacto.nombre || "—"}</span>
+                                  </div>
+                                  <div className="w-full border-b border-outline-variant/50 pb-1 text-xs">
+                                    <span className="font-semibold text-muted-foreground">Apellido: </span>
+                                    <span>{sepContacto.apellido || "—"}</span>
+                                  </div>
+                                  <div className="w-full border-b border-outline-variant/50 pb-1 text-xs text-muted-foreground">
+                                    Monto: {sep ? fmtPrecio(sep.montoSeparacion.toString()) : "—"}
+                                  </div>
+                                  <div className="w-full border-b border-outline-variant/50 pb-1 text-xs text-muted-foreground">
+                                    Fecha: {sep ? new Date(sep.fechaSeparacion).toLocaleDateString("es-PE") : "—"}
+                                  </div>
+                                  <div className="w-full">
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      className="h-6 px-2 text-xs"
+                                      onClick={(e) => { e.stopPropagation(); setConfirmarQuitarDeptId(d.id); }}
+                                    >
+                                      Quitar
+                                    </Button>
+                                  </div>
                                 </div>
-                              )}
-                              {sepContacto && sep && (
-                                <div className="text-xs text-muted-foreground">
-                                  Fecha: {new Date(sep.fechaSeparacion).toLocaleDateString("es-PE")}
-                                </div>
-                              )}
-                              {sepContacto && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="mt-1 h-6 px-2 text-xs"
-                                  onClick={(e) => { e.stopPropagation(); quitarAsignacion(d.id); }}
-                                >
-                                  Quitar
-                                </Button>
+                              ) : (
+                                "—"
                               )}
                             </td>
                           </tr>
@@ -1172,6 +1180,55 @@ export default function DepartamentosPage() {
                       Confirmar ampliación
                     </Button>
                   )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+        {confirmarQuitarDeptId && (() => {
+          const departamento = departments.find((item) => item.id === confirmarQuitarDeptId);
+          const separacion = separaciones.find(
+            (item) => item.departamentoId === confirmarQuitarDeptId
+          );
+          const contacto = contactos.find((item) => item.id === separacion?.contactoId);
+          return (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+              onClick={() => setConfirmarQuitarDeptId(null)}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="confirmar-quitar-titulo"
+            >
+              <div
+                className="w-full max-w-sm rounded-lg border bg-background p-6 shadow-lg"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <h3 id="confirmar-quitar-titulo" className="font-headline-md text-lg font-bold">
+                  ¿En serio desea quitar?
+                </h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {departamento
+                    ? `Se quitará la separación de ${departamento.codigo}${contacto ? ` asignada a ${contacto.nombre} ${contacto.apellido}` : ""}.`
+                    : "Se quitará la separación de este departamento."}
+                </p>
+                <div className="mt-5 flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setConfirmarQuitarDeptId(null)}
+                  >
+                    No
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => {
+                      quitarAsignacion(confirmarQuitarDeptId);
+                      setConfirmarQuitarDeptId(null);
+                    }}
+                  >
+                    Sí
+                  </Button>
                 </div>
               </div>
             </div>

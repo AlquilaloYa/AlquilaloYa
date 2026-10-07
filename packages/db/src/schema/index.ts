@@ -12,6 +12,7 @@ export * from "./payments";
 export * from "./integrations";
 export * from "./ops";
 export * from "./tasks";
+export * from "./work-orders";
 export * from "./agenda";
 export * from "./leads";
 export * from "./messaging";

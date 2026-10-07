@@ -187,6 +187,12 @@ body,
   }
 }
 
+@layer components {
+  .field {
+    @apply h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100;
+  }
+}
+
 @layer utilities {
   .font-label-md {
     font-family: var(--font-geist), var(--font-inter), sans-serif;

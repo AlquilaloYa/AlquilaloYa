@@ -26,26 +26,33 @@ export function isStorageConfigured(): boolean {
   return Boolean(SUPABASE_URL && SERVICE_KEY);
 }
 
-async function storageFetch(path: string, init: RequestInit, bucket = BUCKET): Promise<Response> {
+async function storageFetch(
+  path: string,
+  init: RequestInit,
+  bucket = BUCKET,
+): Promise<Response> {
   if (!isStorageConfigured()) {
     throw new StorageError(
       "Storage no configurado: faltan SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY",
-      500
+      500,
     );
   }
-  const res = await fetch(`${SUPABASE_URL}/storage/v1${path.replace("{bucket}", bucket)}`, {
-    ...init,
-    // Crítico en Next.js: sin esto, el Data Cache de la app cachea las
-    // descargas GET y serviría bytes obsoletos tras un reemplazo del objeto.
-    cache: "no-store",
-    headers: {
-      // Con las claves nuevas (sb_secret_/sb_publishable_) Storage exige el
-      // header apikey además del Bearer; con JWT legacy es redundante pero válido.
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      ...(init.headers as Record<string, string> | undefined),
+  const res = await fetch(
+    `${SUPABASE_URL}/storage/v1${path.replace("{bucket}", bucket)}`,
+    {
+      ...init,
+      // Crítico en Next.js: sin esto, el Data Cache de la app cachea las
+      // descargas GET y serviría bytes obsoletos tras un reemplazo del objeto.
+      cache: "no-store",
+      headers: {
+        // Con las claves nuevas (sb_secret_/sb_publishable_) Storage exige el
+        // header apikey además del Bearer; con JWT legacy es redundante pero válido.
+        apikey: SERVICE_KEY,
+        Authorization: `Bearer ${SERVICE_KEY}`,
+        ...(init.headers as Record<string, string> | undefined),
+      },
     },
-  });
+  );
   return res;
 }
 
@@ -60,24 +67,28 @@ export async function uploadObject(
   key: string,
   bytes: Uint8Array,
   contentType = "application/pdf",
-  bucket = BUCKET
+  bucket = BUCKET,
 ): Promise<StoredObject> {
-  const res = await storageFetch(`/object/{bucket}/${key}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": contentType,
-      "x-upsert": "true",
-      // Sin caché CDN: la integridad (sha256) se verifica contra los bytes
-      // vivos; un objeto cacheado haría la verificación no confiable.
-      "cache-control": "no-store",
+  const res = await storageFetch(
+    `/object/{bucket}/${key}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": contentType,
+        "x-upsert": "true",
+        // Sin caché CDN: la integridad (sha256) se verifica contra los bytes
+        // vivos; un objeto cacheado haría la verificación no confiable.
+        "cache-control": "no-store",
+      },
+      body: bytes as unknown as BodyInit,
     },
-    body: bytes as unknown as BodyInit,
-  }, bucket);
+    bucket,
+  );
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new StorageError(
       `Storage upload falló (${res.status}): ${detail.slice(0, 300)}`,
-      res.status
+      res.status,
     );
   }
   const { sha256FromFile } = await import("./hash");
@@ -85,29 +96,90 @@ export async function uploadObject(
 }
 
 /** Elimina un objeto del bucket privado. No lanza si el objeto no existe. */
-export async function deleteObject(key: string, bucket = BUCKET): Promise<void> {
-  const res = await storageFetch(`/object/{bucket}/${key}`, {
-    method: "DELETE",
-  }, bucket);
+export async function deleteObject(
+  key: string,
+  bucket = BUCKET,
+): Promise<void> {
+  const res = await storageFetch(
+    `/object/{bucket}/${key}`,
+    {
+      method: "DELETE",
+    },
+    bucket,
+  );
   if (res.ok || res.status === 404) return;
   const detail = await res.text().catch(() => "");
   throw new StorageError(
     `Storage delete falló (${res.status}): ${detail.slice(0, 300)}`,
-    res.status
+    res.status,
   );
 }
 
 /** Descarga un objeto del bucket privado. Lanza StorageError si no existe. */
-export async function downloadObject(key: string, bucket = BUCKET): Promise<Uint8Array> {
-  const res = await storageFetch(`/object/{bucket}/${key}`, {
-    method: "GET",
-  }, bucket);
+export async function downloadObject(
+  key: string,
+  bucket = BUCKET,
+): Promise<Uint8Array> {
+  const res = await storageFetch(
+    `/object/{bucket}/${key}`,
+    {
+      method: "GET",
+    },
+    bucket,
+  );
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new StorageError(
       `Storage download falló (${res.status}): ${detail.slice(0, 300)}`,
-      res.status
+      res.status,
     );
   }
   return new Uint8Array(await res.arrayBuffer());
+}
+
+export async function createSignedObjectUrl(
+  key: string,
+  bucket: string,
+  expiresIn = 3600,
+): Promise<string> {
+  const res = await storageFetch(
+    `/object/sign/${encodeURIComponent(bucket)}/${key
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expiresIn }),
+    },
+    bucket,
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new StorageError(
+      `Storage signed URL falló (${res.status}): ${detail.slice(0, 300)}`,
+      res.status,
+    );
+  }
+  const result = (await res.json()) as { signedURL?: unknown };
+  if (typeof result.signedURL !== "string" || !result.signedURL) {
+    throw new StorageError("Storage no devolvió una URL firmada válida");
+  }
+  let signedUrl: URL;
+  try {
+    signedUrl = new URL(result.signedURL, `${SUPABASE_URL}/`);
+  } catch {
+    throw new StorageError("Storage devolvió una URL firmada no válida");
+  }
+  if (signedUrl.origin !== new URL(SUPABASE_URL).origin) {
+    throw new StorageError("Storage devolvió una URL de origen no esperado");
+  }
+  if (!signedUrl.pathname.startsWith("/storage/v1/")) {
+    if (!signedUrl.pathname.startsWith("/object/sign/")) {
+      throw new StorageError("Storage devolvió una ruta firmada no válida");
+    }
+    signedUrl.pathname = `/storage/v1${signedUrl.pathname}`;
+  }
+  signedUrl.hash = "";
+  return signedUrl.toString();
 }
