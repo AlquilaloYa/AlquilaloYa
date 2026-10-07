@@ -16,11 +16,11 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq } = await import("drizzle-orm");
+    const { and, eq, isNull } = await import("drizzle-orm");
     const rows = await db
       .select()
       .from(schema.clients)
-      .where(eq(schema.clients.activo, true))
+      .where(and(eq(schema.clients.activo, true), isNull(schema.clients.eliminadoEn)))
       .orderBy(schema.clients.nombres);
     return NextResponse.json(rows);
   } catch (error) {

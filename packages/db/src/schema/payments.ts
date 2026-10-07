@@ -45,6 +45,8 @@ export const payments = pgTable(
       .notNull()
       .default([])
       .$type<PaymentVoucher[]>(),
+    /** Borrado lógico en cascada desde un contacto (las analíticas siguen contándolo). */
+    eliminadoEn: timestamp("eliminado_en", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

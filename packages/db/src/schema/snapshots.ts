@@ -30,6 +30,8 @@ export const contractSnapshots = pgTable(
     anexos: jsonb("anexos").notNull().default([]),
     inmutable: boolean("inmutable").notNull().default(false),
     emitidoEn: timestamp("emitido_en", { withTimezone: true }),
+    /** Borrado lógico en cascada desde un contacto (contratos, contratos finales y adendas). */
+    eliminadoEn: timestamp("eliminado_en", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("contract_snapshots_codigo_idx").on(table.codigoContrato)]

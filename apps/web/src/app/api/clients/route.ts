@@ -17,12 +17,12 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq, and, inArray, desc } = await import("drizzle-orm");
+    const { eq, and, inArray, desc, isNull } = await import("drizzle-orm");
 
     const rows = await db
       .select()
       .from(schema.clients)
-      .where(eq(schema.clients.activo, true))
+      .where(and(eq(schema.clients.activo, true), isNull(schema.clients.eliminadoEn)))
       .orderBy(desc(schema.clients.createdAt));
 
     if (rows.length === 0) {
@@ -35,7 +35,12 @@ export async function GET(req: Request) {
     const contractsRows = await db
       .select()
       .from(schema.contracts)
-      .where(inArray(schema.contracts.clienteId, clientIds));
+      .where(
+        and(
+          inArray(schema.contracts.clienteId, clientIds),
+          isNull(schema.contracts.eliminadoEn)
+        )
+      );
 
     const ultimoPorCliente = new Map<
       string,

@@ -22,6 +22,8 @@ export const clients = pgTable("clients", {
   domicilio: varchar("domicilio", { length: 500 }),
   nacionalidad: varchar("nacionalidad", { length: 50 }),
   activo: boolean("activo").notNull().default(true),
+  /** Borrado lógico en cascada desde un contacto (analíticas lo sigue contando). */
+  eliminadoEn: timestamp("eliminado_en", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

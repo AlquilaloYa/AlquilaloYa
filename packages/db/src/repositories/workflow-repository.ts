@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { db, schema } from "../index";
 import {
   WorkflowQueue,
@@ -40,7 +40,8 @@ export class DrizzleWorkflowRepository implements WorkflowRepository {
       .leftJoin(
         schema.departments,
         eq(schema.departments.id, schema.contracts.departamentoId)
-      );
+      )
+      .where(isNull(schema.contracts.eliminadoEn));
 
     const pendienteEmision: WorkflowTask[] = [];
     const emitido: WorkflowTask[] = [];

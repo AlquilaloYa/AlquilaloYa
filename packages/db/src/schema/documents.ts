@@ -39,6 +39,8 @@ export const documents = pgTable(
       .default("REQUESTED"),
     idempotencyKey: varchar("idempotency_key", { length: 255 }).notNull(),
     error: text("error"),
+    /** Borrado lógico en cascada desde un contacto (PDFs de contrato final y adendas). */
+    eliminadoEn: timestamp("eliminado_en", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

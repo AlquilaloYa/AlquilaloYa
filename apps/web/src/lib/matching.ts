@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 type Db = typeof import("@contract/db").db;
 type Schema = typeof import("@contract/db").schema;
@@ -207,8 +207,16 @@ export async function inteligenciaLead(
     db
       .select({ departamentoId: schema.contracts.departamentoId })
       .from(schema.contracts)
-      .where(inArray(schema.contracts.estado, ["EMITIDO", "PENDIENTE_FIRMA", "FIRMADO", "NOTARIADO"])),
-    db.select({ departamentoId: schema.separations.departamentoId }).from(schema.separations),
+      .where(
+        and(
+          inArray(schema.contracts.estado, ["EMITIDO", "PENDIENTE_FIRMA", "FIRMADO", "NOTARIADO"]),
+          isNull(schema.contracts.eliminadoEn)
+        )
+      ),
+    db
+      .select({ departamentoId: schema.separations.departamentoId })
+      .from(schema.separations)
+      .where(isNull(schema.separations.eliminadoEn)),
     db
       .select({
         departamentoId: schema.contracts.departamentoId,
@@ -216,7 +224,12 @@ export async function inteligenciaLead(
         fechaFin: schema.contracts.fechaFin,
       })
       .from(schema.contracts)
-      .where(inArray(schema.contracts.estado, ["FIRMADO", "NOTARIADO"])),
+      .where(
+        and(
+          inArray(schema.contracts.estado, ["FIRMADO", "NOTARIADO"]),
+          isNull(schema.contracts.eliminadoEn)
+        )
+      ),
   ]);
 
   const hoy = new Date().toISOString().slice(0, 10);

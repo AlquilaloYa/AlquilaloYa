@@ -17,7 +17,7 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { inArray } = await import("drizzle-orm");
+    const { and, inArray, isNull } = await import("drizzle-orm");
     const rows = await db
       .select()
       .from(schema.departments)
@@ -36,7 +36,10 @@ export async function GET(req: Request) {
       })
       .from(schema.contracts)
       .where(
-        inArray(schema.contracts.estado, ["FIRMADO", "ACTIVO", "VIGENTE", "NOTARIADO"])
+        and(
+          inArray(schema.contracts.estado, ["FIRMADO", "ACTIVO", "VIGENTE", "NOTARIADO"]),
+          isNull(schema.contracts.eliminadoEn)
+        )
       );
 
     const clienteIds = [...new Set(ocupantes.map((c) => c.clienteId))];
@@ -49,7 +52,9 @@ export async function GET(req: Request) {
             telefono: schema.clients.telefono,
           })
           .from(schema.clients)
-          .where(inArray(schema.clients.id, clienteIds))
+          .where(
+            and(inArray(schema.clients.id, clienteIds), isNull(schema.clients.eliminadoEn))
+          )
       : [];
     const clientePorId = new Map(clientes.map((c) => [c.id, c]));
 

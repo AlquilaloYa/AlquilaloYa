@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 
@@ -77,7 +77,10 @@ export async function GET(req: Request) {
   try {
     const ctx = await dbAndSchema(Permission.DEPARTMENT_READ, req);
     if ("error" in ctx) return ctx.error;
-    const rows = await ctx.db.select().from(ctx.schema.separations);
+    const rows = await ctx.db
+      .select()
+      .from(ctx.schema.separations)
+      .where(isNull(ctx.schema.separations.eliminadoEn));
     return NextResponse.json(rows.map(toView));
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });

@@ -77,7 +77,7 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq, inArray, desc } = await import("drizzle-orm");
+    const { eq, and, inArray, desc, isNull } = await import("drizzle-orm");
 
     const rows = await db
       .select({
@@ -112,7 +112,12 @@ export async function GET(req: Request) {
         schema.contractSnapshots,
         eq(schema.documents.snapshotId, schema.contractSnapshots.id)
       )
-      .where(inArray(schema.documents.tipo, ["ADENDA", "ADENDA_EXTENSION"]))
+      .where(
+        and(
+          inArray(schema.documents.tipo, ["ADENDA", "ADENDA_EXTENSION"]),
+          isNull(schema.documents.eliminadoEn)
+        )
+      )
       .orderBy(desc(schema.documents.createdAt));
 
     return NextResponse.json({

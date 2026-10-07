@@ -59,6 +59,8 @@ export const contracts = pgTable(
     motivoResolucion: varchar("motivo_resolucion", { length: 500 }),
     resueltoEn: timestamp("resuelto_en", { withTimezone: true }),
     creadoPor: uuid("creado_por"),
+    /** Borrado lógico en cascada desde un contacto: oculto en listas, visible en analíticas. */
+    eliminadoEn: timestamp("eliminado_en", { withTimezone: true }),
     creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
     actualizadoEn: timestamp("actualizado_en", { withTimezone: true })
       .notNull()

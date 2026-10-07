@@ -325,6 +325,75 @@ function Miniatura({ archivo }: { archivo: ArchivoAdjunto }) {
   );
 }
 
+/**
+ * Ventana flotante de confirmación para borrar un contacto.
+ * En rojo con letras blancas: avisa que el borrado es en cascada
+ * (separación, contratos, contratos finales, adendas y cliente).
+ */
+function ConfirmarBorradoContacto(props: {
+  nombre: string;
+  ocupado: boolean;
+  onConfirmar: () => void;
+  onCancel: () => void;
+}) {
+  const { nombre, ocupado, onConfirmar, onCancel } = props;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !ocupado) onCancel();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onCancel, ocupado]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      onClick={ocupado ? undefined : onCancel}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="titulo-borrado-contacto"
+    >
+      <div className="absolute inset-0 bg-black/70" />
+      <div
+        className="relative z-10 w-full max-w-2xl rounded-xl bg-red-700 p-6 text-white shadow-2xl sm:p-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3
+          id="titulo-borrado-contacto"
+          className="text-2xl font-bold leading-tight text-white sm:text-3xl"
+        >
+          en verdad deseas eliminar el perfil de este contacto
+        </h3>
+        <p className="mt-4 text-sm italic leading-relaxed text-white sm:text-base">
+          recuerda que se eliminara toda la informacion, tanto contratos, adendas,
+          contratos finales, etc
+        </p>
+        <p className="mt-2 text-sm font-semibold text-white">
+          Contacto: {nombre}
+        </p>
+        <div className="mt-7 flex flex-wrap justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={ocupado}
+            className="rounded-md border-2 border-white px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onConfirmar}
+            disabled={ocupado}
+            className="rounded-md bg-white px-5 py-2.5 text-sm font-bold text-red-700 hover:bg-white/90 disabled:opacity-60"
+          >
+            {ocupado ? "Eliminando…" : "Confirmar eliminación"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VistaDocs(props: {
   titulo: string;
   archivos: ArchivoAdjunto[];
@@ -478,9 +547,9 @@ export default function ContactosPage() {
   const [pdfMensaje, setPdfMensaje] = useState<string | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
+  const [porEliminar, setPorEliminar] = useState<ContactView | null>(null);
 
-  async function eliminarContactoRow(c: ContactView) {
-    if (!window.confirm(`¿Eliminar a ${[c.nombre, c.apellido].filter(Boolean).join(" ") || "este contacto"}? Esta acción no se puede deshacer.`)) return;
+  async function eliminarContactoConfirmado(c: ContactView) {
     setEliminandoId(c.id);
     setError(null);
     try {
@@ -491,6 +560,7 @@ export default function ContactosPage() {
       setError(err instanceof Error ? err.message : "No se pudo eliminar el contacto.");
     } finally {
       setEliminandoId(null);
+      setPorEliminar(null);
     }
   }
 
@@ -1427,7 +1497,7 @@ export default function ContactosPage() {
                               size="sm"
                               variant="ghost"
                               disabled={eliminandoId === c.id}
-                              onClick={() => void eliminarContactoRow(c)}
+                              onClick={() => setPorEliminar(c)}
                               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                               title="Eliminar contacto"
                             >
@@ -1474,6 +1544,17 @@ export default function ContactosPage() {
           soloMarcados
           onToggle={() => undefined}
           onClose={() => setMascotasVista(null)}
+        />
+      ) : null}
+      {porEliminar ? (
+        <ConfirmarBorradoContacto
+          nombre={
+            [porEliminar.nombre, porEliminar.apellido].filter(Boolean).join(" ") ||
+            "este contacto"
+          }
+          ocupado={eliminandoId === porEliminar.id}
+          onConfirmar={() => void eliminarContactoConfirmado(porEliminar)}
+          onCancel={() => setPorEliminar(null)}
         />
       ) : null}
     </DashboardShell>

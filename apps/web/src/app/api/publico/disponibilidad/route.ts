@@ -36,7 +36,7 @@ export async function GET() {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq, inArray } = await import("drizzle-orm");
+    const { eq, and, inArray, isNull } = await import("drizzle-orm");
 
     const rows = await db
       .select()
@@ -55,7 +55,10 @@ export async function GET() {
       })
       .from(schema.contracts)
       .where(
-        inArray(schema.contracts.estado, ["FIRMADO", "ACTIVO", "VIGENTE", "NOTARIADO"])
+        and(
+          inArray(schema.contracts.estado, ["FIRMADO", "ACTIVO", "VIGENTE", "NOTARIADO"]),
+          isNull(schema.contracts.eliminadoEn)
+        )
       );
 
     const ultimoFinPorDepartamento = new Map<string, string>();

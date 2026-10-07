@@ -36,6 +36,8 @@ export const contacts = pgTable(
     copiaAntecedentes: jsonb("copia_antecedentes").notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Borrado lógico: el contacto desaparece de las pantallas pero se conserva en analíticas. */
+    eliminadoEn: timestamp("eliminado_en", { withTimezone: true }),
   },
   (table) => [
     index("contacts_dni_idx").on(table.dni),
@@ -68,6 +70,8 @@ export const separations = pgTable(
     estado: varchar("estado", { length: 30 }).notNull().default("SEPARADO"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Borrado lógico en cascada desde un contacto. */
+    eliminadoEn: timestamp("eliminado_en", { withTimezone: true }),
   },
   (table) => [
     unique("separations_departamento_unique").on(table.departamentoId),

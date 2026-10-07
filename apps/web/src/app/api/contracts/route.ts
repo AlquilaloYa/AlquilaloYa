@@ -21,7 +21,7 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { desc, eq } = await import("drizzle-orm");
+    const { desc, eq, isNull } = await import("drizzle-orm");
     const rows = await db
       .select({
         id: schema.contracts.id,
@@ -54,6 +54,7 @@ export async function GET(req: Request) {
         schema.departments,
         eq(schema.departments.id, schema.contracts.departamentoId)
       )
+      .where(isNull(schema.contracts.eliminadoEn))
       .orderBy(desc(schema.contracts.creadoEn));
 
     return NextResponse.json(
@@ -147,6 +148,12 @@ export async function POST(request: Request) {
             .set({ nacionalidad: body.cliente.nacionalidad.trim(), updatedAt: new Date() })
             .where(eq(schema.clients.id, existing.id));
         }
+        // Si el cliente existia pero estaba borrado (eliminado_en), se reactiva
+        // para que vuelva a aparecer en los selectores junto a su nuevo contrato.
+        await db
+          .update(schema.clients)
+          .set({ activo: true, eliminadoEn: null, updatedAt: new Date() })
+          .where(eq(schema.clients.id, existing.id));
       } else {
         const [createdClient] = await db
           .insert(schema.clients)
