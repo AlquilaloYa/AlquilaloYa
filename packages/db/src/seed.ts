@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import { env, supabaseUrl } from "@contract/config/env";
 import { db } from "./worker.js";
 import { clients } from "./schema/clients.js";
 import { departments } from "./schema/departments.js";
@@ -47,12 +49,70 @@ async function seedRolePermissions(permissionRows: { id: string; key: string }[]
   }
 }
 
+/**
+ * Crea la cuenta en Supabase Auth para cada usuario del ERP.
+ * Idempotente: si la credencial ya existe no toca la contraseña.
+ * Devuelve un estado legible para el log.
+ */
+async function ensureAuthUser(
+  url: string,
+  key: string,
+  authUsers: Array<{ email?: string }>,
+  email: string
+): Promise<string> {
+  if (authUsers.some((u) => (u.email ?? "").toLowerCase() === email.toLowerCase())) {
+    return "credencial ya existente";
+  }
+  const password = "Ss!" + randomBytes(9).toString("base64url");
+  const res = await fetch(`${url}/auth/v1/admin/users`, {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email, password, email_confirm: true }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    return `ERROR al crear credencial (HTTP ${res.status})`;
+  }
+  authUsers.push({ email });
+  return `credencial creada, password: ${password}`;
+}
+
 async function seedUsers() {
+  const url = supabaseUrl();
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const authUsers: Array<{ email?: string }> = [];
+  if (url && key) {
+    const res = await fetch(`${url}/auth/v1/admin/users?page=1&per_page=1000`, {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { users?: Array<{ email?: string }> };
+      authUsers.push(...(data.users ?? []));
+    }
+  }
+
   for (const u of APP_USERS) {
     await db
       .insert(users)
       .values({ ...u, active: true })
       .onConflictDoNothing();
+
+    // Toda cuenta creada en el ERP debe existir también en Supabase Auth.
+    const estado =
+      url && key
+        ? await ensureAuthUser(url, key, authUsers, u.email)
+        : "credencial NO creada: falta SUPABASE_SERVICE_ROLE_KEY";
+    console.log(`• ${u.email.padEnd(34)} ${estado}`);
   }
 }
 
