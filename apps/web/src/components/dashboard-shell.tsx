@@ -60,7 +60,7 @@ interface NavItem {
   phase?: string;
   permission?: Permission;
   external?: boolean;
-  group?: "contratos" | "marketing" | "google" | "rrhh" | "cronograma";
+  group?: "contratos" | "marketing" | "google" | "rrhh";
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -108,7 +108,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/work-123", label: "Work 123", icon: Kanban, section: "Work 123", permission: "contract.read" },
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "hr.read", group: "rrhh" },
-  { href: "/cronograma-asistencia", label: "Registro de asistencia", icon: AlarmClock, section: "Cronograma de asistencia", permission: "attendance.read", group: "cronograma" },
+  { href: "/cronograma-asistencia", label: "Registro de asistencia", icon: AlarmClock, section: "Recursos Humanos", permission: "attendance.read", group: "rrhh" },
   { href: "/operaciones", label: "Órdenes de trabajo", icon: ClipboardList, section: "Operaciones", permission: "work_order.read" },
   { href: "/google/gmail", label: "Gmail", icon: Mail, section: "Google SyS", group: "google" },
   { href: "/google/drive", label: "Google Drive", icon: HardDrive, section: "Google SyS", group: "google" },
@@ -271,7 +271,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [marketingOpen, setMarketingOpen] = useState(false);
   const [googleOpen, setGoogleOpen] = useState(false);
   const [rrhhOpen, setRrhhOpen] = useState(false);
-  const [cronogramaOpen, setCronogramaOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -374,13 +373,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 icon: Users,
                 open: rrhhOpen,
                 onToggle: () => setRrhhOpen((open) => !open),
-              },
-              {
-                key: "cronograma",
-                label: "Cronograma de asistencia",
-                icon: AlarmClock,
-                open: cronogramaOpen,
-                onToggle: () => setCronogramaOpen((open) => !open),
               },
             ];
             const renderedGroups = new Set<NonNullable<NavItem["group"]>>();
