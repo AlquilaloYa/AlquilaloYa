@@ -3,119 +3,59 @@ import { Permission as P } from "./permissions";
 import type { UserRole } from "./role";
 
 /**
- * Matriz RBAC de Fase 2. Cada rol declara los permisos que tiene.
+ * Matriz RBAC. Cada rol declara los permisos que tiene.
  *
  * Principios:
- * - ADMIN gestiona usuarios, roles y todo lo demás.
- * - OPERADOR opera el día a día pero NO administra usuarios/roles.
- * - AUDITOR solo lee (riesgo de auditoría/actividad), no crea ni edita.
- * - FIRMANTE firma contratos y consulta el workflow, no administra.
- * - SUPERVISOR supervisa la operación (lee todo lo operativo).
+ * - DEVELOPER: único rol con permiso para eliminar usuarios (USER_DELETE) y
+ *   aprobar las solicitudes de permiso de los roles de solo lectura.
+ * - ADMIN: controla y edita todo, pero NO puede eliminar usuarios.
+ * - RRHH: solo lectura sobre la operación (no crea, no edita, no elimina);
+ *   si quiere modificar algo pide permiso al Developer.
+ * - ASISTENTE_ADMINISTRATIVO: igual que RRHH, con acceso de lectura además a
+ *   Google SyS y Marketing.
+ * - MARKETING: solo lectura y solo del módulo de marketing (no crea, no edita).
  */
+
+const ALL_PERMISSIONS: Permission[] = Object.values(P);
+
+export const ADMIN_PERMISSIONS: ReadonlySet<Permission> = new Set(
+  ALL_PERMISSIONS.filter((perm) => perm !== P.USER_DELETE)
+);
+
+export const DEVELOPER_PERMISSIONS: ReadonlySet<Permission> = new Set(ALL_PERMISSIONS);
+
+/** Lectura abierta de la operación: RRHH y asistente administrativo. */
+const BASE_OPERATIVO: Permission[] = [
+  P.HR_READ,
+  P.HR_DIRECTORY_READ,
+  P.HR_REQUEST_CREATE,
+  P.ATTENDANCE_READ,
+  P.ATTENDANCE_CREATE,
+  P.CLIENT_READ,
+  P.DEPARTMENT_READ,
+  P.CONTRACT_READ,
+  P.DOCUMENT_READ,
+  P.TEMPLATE_READ,
+  P.WORK_ORDER_READ,
+  P.ACTIVITY_READ,
+];
+
 const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
-  ADMIN: new Set(PERMISSIONS_ALL()),
-  RRHH: new Set([
-    P.HR_READ,
-    P.HR_CREATE,
-    P.HR_UPDATE,
-    P.ATTENDANCE_READ,
-    P.ATTENDANCE_CREATE,
-    // RRHH también es un trabajador: necesita pedir sus propias vacaciones
-    // y ver el directorio mínimo, como el resto del personal.
-    P.HR_REQUEST_CREATE,
-    P.HR_DIRECTORY_READ,
-    P.ACTIVITY_READ,
-    P.WORK_ORDER_READ,
+  ADMIN: ADMIN_PERMISSIONS,
+  DEVELOPER: DEVELOPER_PERMISSIONS,
+  RRHH: new Set([...BASE_OPERATIVO, P.PERMISSION_REQUEST_CREATE]),
+  ASISTENTE_ADMINISTRATIVO: new Set([
+    ...BASE_OPERATIVO,
+    P.WEB_CONTENT_READ,
+    P.PERMISSION_REQUEST_CREATE,
   ]),
-  OPERADOR: new Set([
-    P.HR_DIRECTORY_READ,
-    P.HR_REQUEST_CREATE,
-    P.ATTENDANCE_READ,
-    P.ATTENDANCE_CREATE,
+  MARKETING: new Set([
     P.CLIENT_READ,
-    P.CLIENT_CREATE,
-    P.CLIENT_UPDATE,
-    P.DEPARTMENT_READ,
-    P.DEPARTMENT_CREATE,
-    P.DEPARTMENT_UPDATE,
     P.CONTRACT_READ,
-    P.CONTRACT_CREATE,
-    P.CONTRACT_UPDATE,
-    P.CONTRACT_EMIT,
-    P.CONTRACT_SIGN,
-    P.CONTRACT_CANCEL,
-    P.DOCUMENT_READ,
-    P.DOCUMENT_DOWNLOAD,
-    P.TEMPLATE_READ,
     P.ACTIVITY_READ,
     P.WEB_CONTENT_READ,
-    P.WEB_CONTENT_UPDATE,
-    P.WORK_ORDER_READ,
-    P.WORK_ORDER_CREATE,
-    P.WORK_ORDER_UPDATE,
-  ]),
-  SUPERVISOR: new Set([
-    P.HR_DIRECTORY_READ,
-    P.HR_REQUEST_CREATE,
-    P.ATTENDANCE_READ,
-    P.ATTENDANCE_CREATE,
-    P.CLIENT_READ,
-    P.CLIENT_CREATE,
-    P.CLIENT_UPDATE,
-    P.DEPARTMENT_READ,
-    P.DEPARTMENT_CREATE,
-    P.DEPARTMENT_UPDATE,
-    P.CONTRACT_READ,
-    P.CONTRACT_CREATE,
-    P.CONTRACT_UPDATE,
-    P.CONTRACT_EMIT,
-    P.CONTRACT_SIGN,
-    P.CONTRACT_CANCEL,
-    P.DOCUMENT_READ,
-    P.DOCUMENT_DOWNLOAD,
-    P.TEMPLATE_READ,
-    P.TEMPLATE_MANAGE,
-    P.ACTIVITY_READ,
-    P.USER_READ,
-    P.INTEGRATION_READ,
-    P.INTEGRATION_MANAGE,
-    P.WEB_CONTENT_READ,
-    P.WEB_CONTENT_UPDATE,
-    P.WORK_ORDER_READ,
-    P.WORK_ORDER_CREATE,
-    P.WORK_ORDER_UPDATE,
-  ]),
-  AUDITOR: new Set([
-    P.HR_READ,
-    P.ATTENDANCE_READ,
-    P.CLIENT_READ,
-    P.DEPARTMENT_READ,
-    P.CONTRACT_READ,
-    P.DOCUMENT_READ,
-    P.TEMPLATE_READ,
-    P.ACTIVITY_READ,
-    P.AUDIT_READ,
-    P.USER_READ,
-    P.INTEGRATION_READ,
-    P.WEB_CONTENT_READ,
-    P.WORK_ORDER_READ,
-  ]),
-  FIRMANTE: new Set([
-    P.CONTRACT_READ,
-    P.CONTRACT_SIGN,
-    P.DOCUMENT_READ,
-    P.ATTENDANCE_READ,
-    P.DOCUMENT_DOWNLOAD,
-    P.CLIENT_READ,
-    P.DEPARTMENT_READ,
-    P.ACTIVITY_READ,
-    P.WORK_ORDER_READ,
   ]),
 };
-
-function PERMISSIONS_ALL(): Permission[] {
-  return Object.values(P);
-}
 
 export function permissionsForRole(role: UserRole): Permission[] {
   return Array.from(ROLE_PERMISSION_MAP[role]);

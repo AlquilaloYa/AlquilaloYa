@@ -10,18 +10,17 @@ import {
 
 export const userRoleEnum = pgEnum("user_role", [
   "ADMIN",
+  "DEVELOPER",
   "RRHH",
-  "OPERADOR",
-  "SUPERVISOR",
-  "AUDITOR",
-  "FIRMANTE",
+  "ASISTENTE_ADMINISTRATIVO",
+  "MARKETING",
 ]);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
-  role: userRoleEnum("role").notNull().default("OPERADOR"),
+  role: userRoleEnum("role").notNull().default("RRHH"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

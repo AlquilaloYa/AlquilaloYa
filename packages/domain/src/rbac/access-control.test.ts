@@ -4,82 +4,75 @@ import { Permission as P } from "./permissions";
 import { permissionsForRole } from "./role-permissions";
 
 describe("AccessControl", () => {
-  it("RRHH gestiona personal sin permisos de usuarios, clientes ni contratos", () => {
+  it("RRHH es solo lectura: ve HR y la operación, no crea ni edita", () => {
     const ac = AccessControl.forRole("RRHH");
     expect(ac.can(P.HR_READ)).toBe(true);
-    expect(ac.can(P.HR_CREATE)).toBe(true);
-    expect(ac.can(P.HR_UPDATE)).toBe(true);
-    expect(ac.can(P.USER_MANAGE)).toBe(false);
-    expect(ac.can(P.CLIENT_READ)).toBe(false);
-    expect(ac.can(P.CONTRACT_READ)).toBe(false);
-  });
-
-  it("OPERADOR ve solo el directorio laboral mínimo y no expedientes", () => {
-    const ac = AccessControl.forRole("OPERADOR");
-    expect(ac.can(P.HR_DIRECTORY_READ)).toBe(true);
-    expect(ac.can(P.HR_READ)).toBe(false);
-    expect(ac.can(P.HR_UPDATE)).toBe(false);
-  });
-
-  it("OPERADOR no administra usuarios ni roles", () => {
-    const ac = AccessControl.forRole("OPERADOR");
-    expect(ac.can(P.USER_MANAGE)).toBe(false);
-    expect(ac.can(P.ROLE_MANAGE)).toBe(false);
-  });
-
-  it("OPERADOR gestiona clientes y departamentos", () => {
-    const ac = AccessControl.forRole("OPERADOR");
-    expect(ac.can(P.CLIENT_CREATE)).toBe(true);
-    expect(ac.can(P.DEPARTMENT_UPDATE)).toBe(true);
-  });
-
-  it("AUDITOR solo lee y no edita ni administra", () => {
-    const ac = AccessControl.forRole("AUDITOR");
-    expect(ac.can(P.AUDIT_READ)).toBe(true);
+    expect(ac.can(P.CLIENT_READ)).toBe(true);
+    expect(ac.can(P.CONTRACT_READ)).toBe(true);
     expect(ac.can(P.ACTIVITY_READ)).toBe(true);
+    expect(ac.can(P.HR_CREATE)).toBe(false);
+    expect(ac.can(P.HR_UPDATE)).toBe(false);
     expect(ac.can(P.CLIENT_CREATE)).toBe(false);
     expect(ac.can(P.CLIENT_UPDATE)).toBe(false);
+    expect(ac.can(P.WORK_ORDER_CREATE)).toBe(false);
     expect(ac.can(P.USER_MANAGE)).toBe(false);
+    expect(ac.can(P.USER_DELETE)).toBe(false);
+    expect(ac.can(P.PERMISSION_REQUEST_CREATE)).toBe(true);
   });
 
-  it("FIRMANTE firma contratos y no administra usuarios", () => {
-    const ac = AccessControl.forRole("FIRMANTE");
-    expect(ac.can(P.USER_MANAGE)).toBe(false);
+  it("ASISTENTE_ADMINISTRATIVO suma Google/Marketing en solo lectura", () => {
+    const ac = AccessControl.forRole("ASISTENTE_ADMINISTRATIVO");
+    expect(ac.can(P.DEPARTMENT_READ)).toBe(true);
+    expect(ac.can(P.WEB_CONTENT_READ)).toBe(true);
+    expect(ac.can(P.WEB_CONTENT_UPDATE)).toBe(false);
     expect(ac.can(P.CLIENT_CREATE)).toBe(false);
-    expect(ac.can(P.CONTRACT_READ)).toBe(true);
-    expect(ac.can(P.CONTRACT_SIGN)).toBe(true);
-    expect(ac.can(P.CONTRACT_EMIT)).toBe(false);
+    expect(ac.can(P.USER_MANAGE)).toBe(false);
+    expect(ac.can(P.PERMISSION_REQUEST_CREATE)).toBe(true);
   });
 
-  it("ADMIN lo puede todo", () => {
+  it("MARKETING solo lee marketing (ningún otro módulo)", () => {
+    const ac = AccessControl.forRole("MARKETING");
+    expect(ac.can(P.CLIENT_READ)).toBe(true);
+    expect(ac.can(P.WEB_CONTENT_READ)).toBe(true);
+    expect(ac.can(P.WEB_CONTENT_UPDATE)).toBe(false);
+    expect(ac.can(P.CLIENT_CREATE)).toBe(false);
+    expect(ac.can(P.HR_READ)).toBe(false);
+    expect(ac.can(P.USER_READ)).toBe(false);
+    expect(ac.can(P.CONTRACT_READ)).toBe(true);
+  });
+
+  it("DEVELOPER lo puede todo, incluido eliminar usuarios y aprobar solicitudes", () => {
+    const ac = AccessControl.forRole("DEVELOPER");
+    for (const permission of permissionsForRole("DEVELOPER")) {
+      expect(ac.can(permission)).toBe(true);
+    }
+    expect(ac.can(P.USER_DELETE)).toBe(true);
+    expect(ac.can(P.USER_MANAGE)).toBe(true);
+    expect(ac.can(P.ROLE_MANAGE)).toBe(true);
+    expect(ac.can(P.PERMISSION_REQUEST_APPROVE)).toBe(true);
+  });
+
+  it("ADMIN gestiona y edita todo, pero no puede eliminar usuarios", () => {
     const ac = AccessControl.forRole("ADMIN");
     for (const permission of permissionsForRole("ADMIN")) {
       expect(ac.can(permission)).toBe(true);
     }
+    expect(ac.can(P.USER_MANAGE)).toBe(true);
     expect(ac.can(P.ROLE_MANAGE)).toBe(true);
+    expect(ac.can(P.PERMISSION_REQUEST_APPROVE)).toBe(true);
+    expect(ac.can(P.USER_DELETE)).toBe(false);
   });
 
   it("require devuelve reason cuando no hay permiso", () => {
-    const ac = AccessControl.forRole("OPERADOR");
-    const decision = ac.require(P.ROLE_MANAGE);
+    const ac = AccessControl.forRole("RRHH");
+    const decision = ac.require(P.USER_DELETE);
     expect(decision.allowed).toBe(false);
-    expect(decision.reason).toContain(P.ROLE_MANAGE);
+    expect(decision.reason).toContain(P.USER_DELETE);
   });
 
   it("canAny respeta múltiples permisos", () => {
-    const ac = AccessControl.forRole("AUDITOR");
+    const ac = AccessControl.forRole("MARKETING");
     expect(ac.canAny([P.CLIENT_CREATE, P.CLIENT_READ])).toBe(true);
     expect(ac.canAny([P.CLIENT_CREATE, P.CONTRACT_EMIT])).toBe(false);
-  });
-
-  it("OPERADOR edita contenido web y AUDITOR solo lee", () => {
-    const operador = AccessControl.forRole("OPERADOR");
-    const auditor = AccessControl.forRole("AUDITOR");
-    const firmante = AccessControl.forRole("FIRMANTE");
-    expect(operador.can(P.WEB_CONTENT_READ)).toBe(true);
-    expect(operador.can(P.WEB_CONTENT_UPDATE)).toBe(true);
-    expect(auditor.can(P.WEB_CONTENT_READ)).toBe(true);
-    expect(auditor.can(P.WEB_CONTENT_UPDATE)).toBe(false);
-    expect(firmante.can(P.WEB_CONTENT_READ)).toBe(false);
   });
 });

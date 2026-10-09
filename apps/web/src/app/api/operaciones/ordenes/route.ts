@@ -59,7 +59,7 @@ export async function GET(req: Request) {
 
     const { db, schema } = dbModule;
     let employeeScope: string | null = null;
-    if (auth.user.role === "OPERADOR") {
+    if (auth.user.role === "ASISTENTE_ADMINISTRATIVO") {
       const [employee] = await db
         .select({ id: schema.hrEmployees.id })
         .from(schema.hrEmployees)

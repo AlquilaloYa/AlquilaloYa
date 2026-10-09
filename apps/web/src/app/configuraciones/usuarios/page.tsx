@@ -32,20 +32,18 @@ interface UserItem {
 
 const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: "Administrador",
+  DEVELOPER: "Developer",
   RRHH: "Recursos Humanos",
-  OPERADOR: "Operador",
-  SUPERVISOR: "Supervisor",
-  AUDITOR: "Auditor",
-  FIRMANTE: "Firmante",
+  ASISTENTE_ADMINISTRATIVO: "Asistente Administrativo",
+  MARKETING: "Marketing",
 };
 
 const ROLE_COLORS: Record<UserRole, string> = {
   ADMIN: "bg-primary-container text-primary-container-foreground",
+  DEVELOPER: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200",
   RRHH: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200",
-  SUPERVISOR: "bg-secondary-container text-secondary-container-foreground",
-  OPERADOR: "bg-surface-container-high text-on-surface",
-  AUDITOR: "bg-surface-container-high text-on-surface-variant",
-  FIRMANTE: "bg-surface-container-high text-on-surface-variant",
+  ASISTENTE_ADMINISTRATIVO: "bg-secondary-container text-secondary-container-foreground",
+  MARKETING: "bg-surface-container-high text-on-surface",
 };
 
 const inputCls =
@@ -73,7 +71,7 @@ export default function UsuariosConfiguracionPage() {
   const [form, setForm] = useState({
     name: "",
     email: "",
-    role: "OPERADOR" as UserRole,
+    role: "RRHH" as UserRole,
     active: true,
     password: "",
   });
@@ -110,8 +108,8 @@ export default function UsuariosConfiguracionPage() {
     [items]
   );
 
-  const resetForm = () => {
-    setForm({ name: "", email: "", role: "OPERADOR", active: true, password: "" });
+const resetForm = () => {
+    setForm({ name: "", email: "", role: "RRHH" as UserRole, active: true, password: "" });
     setEditId(null);
     setFormError(null);
   };
@@ -436,6 +434,8 @@ export default function UsuariosConfiguracionPage() {
                             >
                               <Pencil className="h-4 w-4" /> Editar
                             </button>
+                            {user && user.id === item.id ? null : null}
+                            {canManage && user && item.role === "DEVELOPER" ? null : null}
                             <button
                               onClick={() => toggleActive(item)}
                               disabled={busy}
@@ -444,12 +444,12 @@ export default function UsuariosConfiguracionPage() {
                             >
                               <KeyRound className="h-4 w-4" /> {item.active ? "Desactivar" : "Reactivar"}
                             </button>
-                            {item.active ? (
+                            {canManage && user && user.id !== item.id && item.role !== "DEVELOPER" ? (
                               <button
                                 onClick={() => deactivate(item)}
                                 disabled={busy}
                                 className="inline-flex items-center gap-1 rounded-md bg-error-container px-2 py-1.5 font-label-md text-error-container-foreground hover:opacity-90 disabled:opacity-40"
-                                title="Eliminar (desactivar)"
+                                title="Eliminar usuario"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>

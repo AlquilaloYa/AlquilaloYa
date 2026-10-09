@@ -21,3 +21,4 @@ export * from "./bots";
 export * from "./hr";
 export * from "./hr-onboarding";
 export * from "./attendance";
+export * from "./permission-requests";

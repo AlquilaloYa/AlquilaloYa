@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
@@ -119,7 +119,7 @@ export async function GET(
         { error: "Orden de trabajo no encontrada" },
         { status: 404 },
       );
-    if (auth.user.role === "OPERADOR") {
+    if (auth.user.role === "ASISTENTE_ADMINISTRATIVO") {
       const [employee] = await db
         .select({ id: schema.hrEmployees.id })
         .from(schema.hrEmployees)
@@ -249,7 +249,7 @@ export async function PATCH(
         { error: "Orden de trabajo no encontrada" },
         { status: 404 },
       );
-    if (auth.user.role === "OPERADOR") {
+    if (auth.user.role === "ASISTENTE_ADMINISTRATIVO") {
       const [employee] = await db
         .select({ id: schema.hrEmployees.id })
         .from(schema.hrEmployees)
