@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { Permission, USER_ROLES } from "@contract/domain/rbac";
 import type { UserRole } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
@@ -38,7 +39,7 @@ export async function GET(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.USER_READ);
+    const denied = requirePermission(auth.user, Permission.USER_READ);
     if (denied) return denied;
 
     const url = new URL(req.url);
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.USER_MANAGE);
+    const denied = requirePermission(auth.user, Permission.USER_MANAGE);
     if (denied) return denied;
 
     const body = (await req.json().catch(() => ({}))) as {
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
     };
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const name = typeof body.name === "string" ? body.name.trim() : "";
-    const role = String(body.role ?? "OPERADOR").toUpperCase() as UserRole;
+    const role = String(body.role ?? "RRHH").toUpperCase() as UserRole;
 
     if (!EMAIL_RE.test(email)) {
       return NextResponse.json({ error: "Email inválido" }, { status: 400 });
@@ -83,12 +84,25 @@ export async function POST(req: Request) {
     if (!USER_ROLES.includes(role)) {
       return NextResponse.json({ error: `Rol inválido: ${role}` }, { status: 400 });
     }
+    if (role === "DEVELOPER" && auth.user.role !== "DEVELOPER") {
+      return NextResponse.json({ error: "Solo el Developer puede asignar ese rol" }, { status: 403 });
+    }
     let password = typeof body.password === "string" ? body.password : "";
     if (password && password.length < 6) {
       return NextResponse.json({ error: "La contraseña debe tener al menos 6 caracteres" }, { status: 400 });
     }
 
     const repo = new dbModule.DrizzleUserRepository();
+    if (role === "DEVELOPER") {
+      const [developer] = await dbModule.db
+        .select({ id: dbModule.schema.users.id })
+        .from(dbModule.schema.users)
+        .where(eq(dbModule.schema.users.role, "DEVELOPER"))
+        .limit(1);
+      if (developer) {
+        return NextResponse.json({ error: "Ya existe un usuario Developer" }, { status: 409 });
+      }
+    }
     const existing = await repo.findByEmail(email);
     if (existing) {
       return NextResponse.json({ error: "Ya existe un usuario con ese email" }, { status: 409 });

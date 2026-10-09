@@ -12,7 +12,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.HR_UPDATE);
+    const denied = requirePermission(auth.user, Permission.HR_UPDATE);
     if (denied) return denied;
     const body = await req.json() as { estado?: string; respuesta?: string };
     if (body.estado !== "APROBADA" && body.estado !== "RECHAZADA") return NextResponse.json({ error: "La respuesta debe ser aprobar o rechazar" }, { status: 400 });

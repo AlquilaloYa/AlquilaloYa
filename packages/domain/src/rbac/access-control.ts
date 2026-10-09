@@ -2,25 +2,33 @@ import type { Permission } from "./permissions";
 import type { UserRole } from "./role";
 import {
   permissionsForRole,
-  roleHasAnyPermission,
   roleHasPermission,
 } from "./role-permissions";
 
 export type AccessDecision = { allowed: boolean; reason?: string };
 
 export class AccessControl {
-  constructor(private readonly role: UserRole) {}
+  constructor(
+    private readonly role: UserRole,
+    private readonly additionalPermissions: readonly Permission[] = []
+  ) {}
 
-  static forRole(role: UserRole): AccessControl {
-    return new AccessControl(role);
+  static forRole(
+    role: UserRole,
+    additionalPermissions: readonly Permission[] = []
+  ): AccessControl {
+    return new AccessControl(role, additionalPermissions);
   }
 
   can(permission: Permission): boolean {
-    return roleHasPermission(this.role, permission);
+    return (
+      roleHasPermission(this.role, permission) ||
+      this.additionalPermissions.includes(permission)
+    );
   }
 
   canAny(permissions: Permission[]): boolean {
-    return roleHasAnyPermission(this.role, permissions);
+    return permissions.some((permission) => this.can(permission));
   }
 
   require(permission: Permission): AccessDecision {
@@ -31,6 +39,8 @@ export class AccessControl {
   }
 
   permissions(): Permission[] {
-    return permissionsForRole(this.role);
+    return Array.from(
+      new Set([...permissionsForRole(this.role), ...this.additionalPermissions])
+    );
   }
 }

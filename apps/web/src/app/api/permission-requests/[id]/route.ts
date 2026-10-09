@@ -17,7 +17,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if ("error" in auth) return auth.error;
     const role = auth.user.role;
     if (role !== "DEVELOPER" && role !== "ADMIN") {
-      const denied = requirePermission(auth.user.role, Permission.PERMISSION_REQUEST_APPROVE);
+      const denied = requirePermission(auth.user, Permission.PERMISSION_REQUEST_APPROVE);
       if (denied) return denied;
     }
 

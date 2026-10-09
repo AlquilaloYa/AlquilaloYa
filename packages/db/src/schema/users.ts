@@ -43,7 +43,21 @@ export const rolePermissions = pgTable(
   (t) => [unique().on(t.role, t.permissionId)],
 );
 
+export const userPermissions = pgTable(
+  "user_permissions",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    permissionId: uuid("permission_id")
+      .notNull()
+      .references(() => permissions.id, { onDelete: "cascade" }),
+  },
+  (t) => [unique().on(t.userId, t.permissionId)],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
 export type PermissionRow = typeof permissions.$inferSelect;
 export type RolePermissionRow = typeof rolePermissions.$inferSelect;
+export type UserPermissionRow = typeof userPermissions.$inferSelect;

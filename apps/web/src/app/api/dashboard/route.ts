@@ -12,19 +12,16 @@ export async function GET(req: Request) {
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
 
-    const denied = requirePermission(auth.user.role, Permission.CONTRACT_READ);
+    const denied = requirePermission(auth.user, Permission.CONTRACT_READ);
     if (denied) return denied;
-    const deniedAct = requirePermission(auth.user.role, Permission.ACTIVITY_READ);
-    if (deniedAct) return deniedAct;
-
     const dashboard = new dbModule.DrizzleDashboardRepository();
-    const activity = new dbModule.DrizzleActivityRepository();
-
-    const [metrics, resumen, recent] = await Promise.all([
+    const [metrics, resumen] = await Promise.all([
       dashboard.getContractMetrics(),
       dashboard.getResumenPortafolio(),
-      activity.findRecent(12),
     ]);
+    const recent = requirePermission(auth.user, Permission.ACTIVITY_READ)
+      ? []
+      : await new dbModule.DrizzleActivityRepository().findRecent(12);
 
     return NextResponse.json({
       ...metrics,

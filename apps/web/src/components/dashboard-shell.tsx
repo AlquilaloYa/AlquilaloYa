@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import type { UserRole } from "@contract/domain/rbac";
 import { AccessControl } from "@contract/domain/rbac";
 import type { Permission } from "@contract/domain/rbac";
-import { TopBar, type SearchResult } from "@/components/top-bar";
+import { TopBar } from "@/components/top-bar";
 import { AppointmentReminders } from "@/components/appointment-reminders";
 import {
   LayoutDashboard,
@@ -65,17 +66,18 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "Dashboard" },
+  { href: "/solicitudes-permiso", label: "Solicitudes de cambio", icon: MessageSquare, section: "Solicitudes de cambio" },
   { href: "/disponibilidad", label: "Disponibilidad", icon: LayoutGrid, section: "Disponibilidad", permission: "department.read" },
   { href: "/contenido-web", label: "Panel Web", icon: Globe, section: "Panel Web", permission: "web_content.read" },
-  { href: "/pipeline", label: "Pipeline", icon: Filter, section: "Pipeline", permission: "client.read", group: "marketing" },
-  { href: "/mensajes", label: "Mensajes", icon: MessageSquare, section: "Mensajes", permission: "client.read", group: "marketing" },
-  { href: "/chat-clientes", label: "Chat con clientes", icon: Star, section: "Chat con clientes", permission: "client.read", group: "marketing" },
+  { href: "/pipeline", label: "Pipeline", icon: Filter, section: "Pipeline", permission: "marketing.read", group: "marketing" },
+  { href: "/mensajes", label: "Mensajes", icon: MessageSquare, section: "Mensajes", permission: "marketing.read", group: "marketing" },
+  { href: "/chat-clientes", label: "Chat con clientes", icon: Star, section: "Chat con clientes", permission: "marketing.read", group: "marketing" },
   {
     href: "/automatizaciones",
     label: "Automatizaciones",
     icon: Zap,
     section: "Automatizaciones",
-    permission: "client.read",
+    permission: "marketing.read",
     group: "marketing",
   },
   { href: "/directorio", label: "Directorio", icon: BookUser, section: "Directorio", permission: "hr.directory.read" },
@@ -129,15 +131,63 @@ const CONFIGURATION_ITEMS: NavItem[] = [
   { href: "/configuraciones/usuarios", label: "Usuarios", icon: UserCog, section: "Usuarios", permission: "user.read" },
 ];
 
-function visibleNav(role: import("@contract/domain/rbac").UserRole): NavItem[] {
-  if (!role) return [];
-  const ac = AccessControl.forRole(role);
-  return NAV_ITEMS.filter((n) => !n.permission || ac.can(n.permission));
+const ROLE_PAGES: Partial<Record<UserRole, ReadonlySet<string>>> = {
+  RRHH: new Set([
+    "/dashboard", "/directorio", "/separaciones", "/contactos", "/departamentos",
+    "/contratos", "/contrato-final", "/adendas", "/plantillas", "/clientes",
+    "/pagos", "/workflow", "/checklist", "/work-123", "/agenda", "/rrhh",
+    "/operaciones", "/solicitudes-permiso",
+  ]),
+  ASISTENTE_ADMINISTRATIVO: new Set([
+    "/dashboard", "/directorio", "/separaciones", "/contactos", "/departamentos",
+    "/contratos", "/contrato-final", "/adendas", "/plantillas", "/clientes",
+    "/pagos", "/workflow", "/checklist", "/work-123", "/agenda", "/rrhh",
+    "/operaciones", "/google/gmail", "/google/drive", "/google/sheets",
+    "/google/docs", "/google/tasks", "/pipeline", "/mensajes", "/chat-clientes",
+    "/automatizaciones", "/solicitudes-permiso",
+  ]),
+  MARKETING: new Set([
+    "/pipeline", "/mensajes", "/chat-clientes", "/automatizaciones",
+  ]),
+};
+
+function canAccessPage(
+  role: UserRole,
+  pathname: string,
+  additionalPermissions: readonly Permission[] = []
+): boolean {
+  const pages = ROLE_PAGES[role];
+  if (!pages || [...pages].some((page) => pathname === page || pathname.startsWith(`${page}/`))) {
+    return true;
+  }
+  const ac = AccessControl.forRole(role, additionalPermissions);
+  if (ac.can("permission_request.create") || ac.can("permission_request.read")) {
+    if (pathname === "/solicitudes-permiso") return true;
+  }
+  return [...NAV_ITEMS, ...CONFIGURATION_ITEMS].some(
+    (item) =>
+      item.permission &&
+      (pathname === item.href || pathname.startsWith(`${item.href}/`)) &&
+      ac.can(item.permission)
+  );
 }
 
-const SEARCH_RESULTS: SearchResult[] = [...NAV_ITEMS, ...CONFIGURATION_ITEMS]
-  .filter((n) => !n.external)
-  .map((n) => ({ href: n.href, label: n.label, section: n.section }));
+function visibleNav(user: {
+  role: UserRole;
+  additionalPermissions: readonly Permission[];
+}): NavItem[] {
+  if (!user.role) return [];
+  const ac = AccessControl.forRole(user.role, user.additionalPermissions);
+  return NAV_ITEMS.filter((n) => {
+    if (n.href === "/solicitudes-permiso") {
+      return ac.can("permission_request.create") || ac.can("permission_request.read");
+    }
+    return (
+      canAccessPage(user.role, n.href, user.additionalPermissions) &&
+      (!n.permission || ac.can(n.permission))
+    );
+  });
+}
 
 function GoogleLogoIcon({ className }: { className?: string }) {
   return (
@@ -264,6 +314,7 @@ function NavGroup({
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [configurationOpen, setConfigurationOpen] = useState(false);
@@ -277,6 +328,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       router.replace("/login");
     }
   }, [loading, user, router]);
+
+  useEffect(() => {
+    if (
+      user &&
+      !canAccessPage(user.role, pathname, user.additionalPermissions)
+    ) {
+      router.replace(user.role === "MARKETING" ? "/pipeline" : "/dashboard");
+    }
+  }, [pathname, router, user]);
 
   if (loading) {
     return (
@@ -338,7 +398,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         <nav className="scrollbar-invisible flex flex-1 flex-col gap-1 overflow-y-auto px-2">
           {(() => {
-            const items = visibleNav(user.role);
+            const items = visibleNav(user);
             const gruposNav: Array<{
               key: NonNullable<NavItem["group"]>;
               label: string;
@@ -406,8 +466,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <ul className="flex flex-col gap-1">
             {FOOTER_ITEMS.map((item) => {
               const Icon = item.icon;
-              const configurationAc = AccessControl.forRole(user.role);
-              const configurationItems = CONFIGURATION_ITEMS.filter((n) => !n.permission || configurationAc.can(n.permission));
+              const configurationAc = AccessControl.forRole(
+                user.role,
+                user.additionalPermissions
+              );
+              const configurationItems = CONFIGURATION_ITEMS.filter((n) =>
+                canAccessPage(user.role, n.href, user.additionalPermissions) &&
+                (!n.permission || configurationAc.can(n.permission))
+              );
               const isConfiguration = item.label === "Configuración";
               return (
                 <li key={item.label}>
@@ -444,7 +510,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className={`flex min-w-0 flex-1 flex-col ${collapsed ? "lg:ml-[68px]" : "lg:ml-64"}`}>
-        <TopBar results={SEARCH_RESULTS} onMenuClick={() => setMobileOpen(true)} />
+        <TopBar
+          results={[...visibleNav(user), ...CONFIGURATION_ITEMS.filter((item) =>
+            canAccessPage(user.role, item.href, user.additionalPermissions) &&
+            (!item.permission ||
+              AccessControl.forRole(user.role, user.additionalPermissions).can(item.permission))
+          )].filter((item) => !item.external).map(({ href, label, section }) => ({ href, label, section }))}
+          onMenuClick={() => setMobileOpen(true)}
+        />
         <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-container-padding">{children}</main>
       </div>
 

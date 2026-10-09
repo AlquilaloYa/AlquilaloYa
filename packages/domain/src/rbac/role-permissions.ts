@@ -19,25 +19,29 @@ import type { UserRole } from "./role";
 const ALL_PERMISSIONS: Permission[] = Object.values(P);
 
 export const ADMIN_PERMISSIONS: ReadonlySet<Permission> = new Set(
-  ALL_PERMISSIONS.filter((perm) => perm !== P.USER_DELETE)
+  ALL_PERMISSIONS.filter(
+    (perm) =>
+      perm !== P.USER_DELETE &&
+      perm !== P.PERMISSION_REQUEST_APPROVE &&
+      perm !== P.PERMISSION_REQUEST_CREATE
+  )
 );
 
-export const DEVELOPER_PERMISSIONS: ReadonlySet<Permission> = new Set(ALL_PERMISSIONS);
+export const DEVELOPER_PERMISSIONS: ReadonlySet<Permission> = new Set(
+  ALL_PERMISSIONS.filter((perm) => perm !== P.PERMISSION_REQUEST_CREATE)
+);
 
 /** Lectura abierta de la operación: RRHH y asistente administrativo. */
 const BASE_OPERATIVO: Permission[] = [
   P.HR_READ,
   P.HR_DIRECTORY_READ,
   P.HR_REQUEST_CREATE,
-  P.ATTENDANCE_READ,
-  P.ATTENDANCE_CREATE,
   P.CLIENT_READ,
   P.DEPARTMENT_READ,
   P.CONTRACT_READ,
   P.DOCUMENT_READ,
   P.TEMPLATE_READ,
   P.WORK_ORDER_READ,
-  P.ACTIVITY_READ,
 ];
 
 const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
@@ -46,14 +50,11 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
   RRHH: new Set([...BASE_OPERATIVO, P.PERMISSION_REQUEST_CREATE]),
   ASISTENTE_ADMINISTRATIVO: new Set([
     ...BASE_OPERATIVO,
-    P.WEB_CONTENT_READ,
+    P.MARKETING_READ,
     P.PERMISSION_REQUEST_CREATE,
   ]),
   MARKETING: new Set([
-    P.CLIENT_READ,
-    P.CONTRACT_READ,
-    P.ACTIVITY_READ,
-    P.WEB_CONTENT_READ,
+    P.MARKETING_READ,
   ]),
 };
 

@@ -11,8 +11,8 @@ export async function GET(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const hr = requirePermission(auth.user.role, Permission.HR_READ);
-    const self = requirePermission(auth.user.role, Permission.HR_REQUEST_CREATE);
+    const hr = requirePermission(auth.user, Permission.HR_READ);
+    const self = requirePermission(auth.user, Permission.HR_REQUEST_CREATE);
     if (hr && self) return hr;
     const { db, schema } = dbModule as { db: typeof import("@contract/db").db; schema: typeof import("@contract/db").schema };
     let employeeId: string | null = null;
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.HR_REQUEST_CREATE);
+    const denied = requirePermission(auth.user, Permission.HR_REQUEST_CREATE);
     if (denied) return denied;
     const { db, schema } = dbModule as { db: typeof import("@contract/db").db; schema: typeof import("@contract/db").schema };
     const [employee] = await db.select({ id: schema.hrEmployees.id, estado: schema.hrEmployees.estado })

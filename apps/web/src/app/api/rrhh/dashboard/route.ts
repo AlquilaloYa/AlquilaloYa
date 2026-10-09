@@ -20,7 +20,7 @@ export async function GET(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.HR_READ);
+    const denied = requirePermission(auth.user, Permission.HR_READ);
     if (denied) return denied;
     console.log(`[dashboard] auth ok +${Date.now() - t0}ms`);
     const { db, schema } = dbModule as { db: typeof import("@contract/db").db; schema: typeof import("@contract/db").schema };

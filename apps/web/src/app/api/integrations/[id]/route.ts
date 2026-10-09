@@ -44,7 +44,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.INTEGRATION_MANAGE);
+    const denied = requirePermission(auth.user, Permission.INTEGRATION_MANAGE);
     if (denied) return denied;
 
     const { id } = await params;
@@ -103,7 +103,7 @@ export async function DELETE(_req: Request, { params }: Params) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, _req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.INTEGRATION_MANAGE);
+    const denied = requirePermission(auth.user, Permission.INTEGRATION_MANAGE);
     if (denied) return denied;
 
     const { id } = await params;

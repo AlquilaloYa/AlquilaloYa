@@ -8,13 +8,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { UserRole } from "@contract/domain/rbac";
+import type { Permission, UserRole } from "@contract/domain/rbac";
 
 interface SessionUser {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  additionalPermissions: Permission[];
 }
 
 interface AuthContextValue {

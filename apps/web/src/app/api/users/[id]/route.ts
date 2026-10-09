@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { Permission, USER_ROLES } from "@contract/domain/rbac";
 import type { UserRole } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
@@ -38,7 +39,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.USER_MANAGE);
+    const denied = requirePermission(auth.user, Permission.USER_MANAGE);
     if (denied) return denied;
 
     const { id } = params;
@@ -85,9 +86,31 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       if (!USER_ROLES.includes(role)) {
         return NextResponse.json({ error: `Rol inválido: ${role}` }, { status: 400 });
       }
+      if (role === "DEVELOPER" && auth.user.role !== "DEVELOPER") {
+        return NextResponse.json({ error: "Solo el Developer puede asignar ese rol" }, { status: 403 });
+      }
+      if (role === "DEVELOPER" && current.role !== "DEVELOPER") {
+        const [developer] = await dbModule.db
+          .select({ id: dbModule.schema.users.id })
+          .from(dbModule.schema.users)
+          .where(eq(dbModule.schema.users.role, "DEVELOPER"))
+          .limit(1);
+        if (developer) {
+          return NextResponse.json({ error: "Ya existe un usuario Developer" }, { status: 409 });
+        }
+      }
       patch.role = role;
     }
     if (body.active !== undefined) {
+      if (typeof body.active !== "boolean") {
+        return NextResponse.json({ error: "El estado activo debe ser booleano" }, { status: 400 });
+      }
+      if (body.active === false && auth.user.role !== "DEVELOPER") {
+        return NextResponse.json({ error: "Solo el Developer puede eliminar usuarios" }, { status: 403 });
+      }
+      if (body.active === false && current.id === auth.user.id) {
+        return NextResponse.json({ error: "No puedes desactivar tu propia cuenta" }, { status: 400 });
+      }
       patch.active = body.active === true;
     }
     const password = typeof body.password === "string" ? body.password : "";
@@ -146,7 +169,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.USER_MANAGE);
+    const denied = requirePermission(auth.user, Permission.USER_DELETE);
     if (denied) return denied;
 
     const { id } = params;

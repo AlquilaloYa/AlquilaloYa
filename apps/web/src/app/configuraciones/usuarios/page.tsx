@@ -4,12 +4,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { AccessControl, Permission, USER_ROLES } from "@contract/domain/rbac";
+import {
+  AccessControl,
+  PERMISSIONS,
+  PERMISSION_DESCRIPTIONS,
+  Permission,
+  USER_ROLES,
+} from "@contract/domain/rbac";
 import type { UserRole } from "@contract/domain/rbac";
 import {
   AlertTriangle,
   Check,
   Copy,
+  Eye,
+  EyeOff,
   KeyRound,
   Pencil,
   Plus,
@@ -57,7 +65,9 @@ interface CreatedResult {
 
 export default function UsuariosConfiguracionPage() {
   const { user } = useAuth();
-  const canManage = !!user && AccessControl.forRole(user.role).can(Permission.USER_MANAGE);
+  const canManage = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.USER_MANAGE);
+  const canDelete = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.USER_DELETE);
+  const canAssignPermissions = user?.role === "DEVELOPER";
 
   const [items, setItems] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +77,11 @@ export default function UsuariosConfiguracionPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<CreatedResult | null>(null);
+  const [permissionsUser, setPermissionsUser] = useState<UserItem | null>(null);
+  const [assignedPermissions, setAssignedPermissions] = useState<Permission[]>([]);
+  const [permissionsBusy, setPermissionsBusy] = useState(false);
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
+  const [permissionsError, setPermissionsError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -77,6 +92,7 @@ export default function UsuariosConfiguracionPage() {
   });
 
   const [formError, setFormError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,10 +124,11 @@ export default function UsuariosConfiguracionPage() {
     [items]
   );
 
-const resetForm = () => {
+  const resetForm = () => {
     setForm({ name: "", email: "", role: "RRHH" as UserRole, active: true, password: "" });
     setEditId(null);
     setFormError(null);
+    setShowPassword(false);
   };
 
   const save = async () => {
@@ -209,6 +226,50 @@ const resetForm = () => {
     }
   };
 
+  const openPermissions = async (item: UserItem) => {
+    setPermissionsBusy(true);
+    setPermissionsLoaded(false);
+    setPermissionsError(null);
+    setPermissionsUser(item);
+    setAssignedPermissions([]);
+    try {
+      const res = await apiFetch(`/api/users/${item.id}/permissions`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`);
+      setAssignedPermissions(data.permissions as Permission[]);
+      setPermissionsLoaded(true);
+    } catch (e) {
+      setPermissionsError((e as Error).message);
+    } finally {
+      setPermissionsBusy(false);
+    }
+  };
+
+  const savePermissions = async () => {
+    if (!permissionsUser) return;
+    setPermissionsBusy(true);
+    setPermissionsError(null);
+    try {
+      const res = await apiFetch(`/api/users/${permissionsUser.id}/permissions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissions: assignedPermissions }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`);
+      setAssignedPermissions(data.permissions as Permission[]);
+      setCreated({
+        email: permissionsUser.email,
+        message: "Permisos adicionales actualizados.",
+      });
+      setPermissionsUser(null);
+    } catch (e) {
+      setPermissionsError((e as Error).message);
+    } finally {
+      setPermissionsBusy(false);
+    }
+  };
+
   return (
     <DashboardShell>
       <div className="mx-auto max-w-6xl space-y-6">
@@ -278,6 +339,89 @@ const resetForm = () => {
           </div>
         ) : null}
 
+        {permissionsUser && canAssignPermissions ? (
+          <section className="space-y-4 rounded-lg border border-outline-variant/50 bg-surface-container-lowest p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="font-headline-md text-on-surface">Permisos individuales</h3>
+                <p className="font-body-sm text-on-surface-variant">
+                  {permissionsUser.name} · {permissionsUser.role}. Estos permisos se suman a los
+                  que ya concede su rol.
+                </p>
+              </div>
+              <button
+                onClick={() => setPermissionsUser(null)}
+                className="rounded-md bg-surface-container-low px-3 py-2 font-label-md text-on-surface hover:bg-surface-variant"
+              >
+                Cerrar
+              </button>
+            </div>
+            {permissionsError ? (
+              <div className="flex items-center gap-2 rounded-lg bg-error-container p-3 font-body-sm text-error-container-foreground">
+                <AlertTriangle className="h-4 w-4" />
+                {permissionsError}
+              </div>
+            ) : null}
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {PERMISSIONS.map((permission) => {
+                const includedByRole = AccessControl.forRole(permissionsUser.role).can(permission);
+                const developerOnly =
+                  permission === Permission.USER_DELETE ||
+                  permission === Permission.PERMISSION_REQUEST_APPROVE;
+                const checked =
+                  includedByRole || assignedPermissions.includes(permission);
+                return (
+                  <label
+                    key={permission}
+                    className="flex items-start gap-2 rounded-md border border-outline-variant/40 p-3"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={
+                        permissionsBusy ||
+                        !permissionsLoaded ||
+                        includedByRole ||
+                        (developerOnly && permissionsUser.role !== "DEVELOPER")
+                      }
+                      onChange={(event) =>
+                        setAssignedPermissions((current) =>
+                          event.target.checked
+                            ? [...current, permission]
+                            : current.filter((item) => item !== permission)
+                        )
+                      }
+                      className="mt-1 h-4 w-4 accent-primary"
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-label-md text-on-surface">
+                        {PERMISSION_DESCRIPTIONS[permission]}
+                      </span>
+                      <span className="block break-all font-mono-label text-on-surface-variant">
+                        {permission}
+                        {includedByRole
+                          ? " · incluido por el rol"
+                          : developerOnly && permissionsUser.role !== "DEVELOPER"
+                            ? " · exclusivo del Developer"
+                            : ""}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={savePermissions}
+                disabled={permissionsBusy || !permissionsLoaded}
+                className="rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground disabled:opacity-40"
+              >
+                {permissionsBusy ? "Guardando…" : "Guardar permisos"}
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         {showForm && canManage ? (
           <div className="rounded-lg border border-outline-variant/50 bg-surface-container-lowest p-5">
             <div className="mb-4 flex items-center justify-between">
@@ -324,7 +468,11 @@ const resetForm = () => {
                   onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
                   className={inputCls}
                 >
-                  {USER_ROLES.map((r) => (
+                  {USER_ROLES.filter((r) =>
+                    r !== "DEVELOPER" ||
+                    form.role === "DEVELOPER" ||
+                    (user?.role === "DEVELOPER" && !items.some((item) => item.role === "DEVELOPER"))
+                  ).map((r) => (
                     <option key={r} value={r}>
                       {ROLE_LABELS[r]} ({r})
                     </option>
@@ -332,19 +480,35 @@ const resetForm = () => {
                 </select>
               </Field>
               <Field label={editId ? "Nueva contraseña (opcional)" : "Contraseña (déjala vacía para generar una)"}>
-                <input
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder={editId ? "Dejar vacío = no cambiar" : "Dejar vacío = auto-generar"}
-                  type="password"
-                  className={inputCls}
-                />
+                <div className="relative">
+                  <input
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder={editId ? "Dejar vacío = no cambiar" : "Dejar vacío = auto-generar"}
+                    type={showPassword ? "text" : "password"}
+                    className={`${inputCls} pr-10`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    title={showPassword ? "Ocultar" : "Ver"}
+                    aria-label={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-on-surface-variant hover:bg-surface-variant"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </Field>
               <label className="flex items-center gap-2 self-end pb-2">
                 <input
                   type="checkbox"
                   checked={form.active}
                   onChange={(e) => setForm({ ...form, active: e.target.checked })}
+                  disabled={
+                    !!user &&
+                    user.role !== "DEVELOPER" &&
+                    (form.active || (editId !== null && items.find((item) => item.id === editId)?.role === "DEVELOPER"))
+                  }
                   className="h-4 w-4 accent-primary"
                 />
                 <span className="font-label-md text-on-surface">Usuario activo</span>
@@ -434,17 +598,27 @@ const resetForm = () => {
                             >
                               <Pencil className="h-4 w-4" /> Editar
                             </button>
-                            {user && user.id === item.id ? null : null}
-                            {canManage && user && item.role === "DEVELOPER" ? null : null}
-                            <button
-                              onClick={() => toggleActive(item)}
-                              disabled={busy}
-                              className="inline-flex items-center gap-1 rounded-md bg-surface-container-low px-2 py-1.5 font-label-md text-on-surface hover:bg-surface-variant disabled:opacity-40"
-                              title={item.active ? "Desactivar" : "Reactivar"}
-                            >
-                              <KeyRound className="h-4 w-4" /> {item.active ? "Desactivar" : "Reactivar"}
-                            </button>
-                            {canManage && user && user.id !== item.id && item.role !== "DEVELOPER" ? (
+                            {canAssignPermissions ? (
+                              <button
+                                onClick={() => openPermissions(item)}
+                                disabled={busy || permissionsBusy}
+                                className="inline-flex items-center gap-1 rounded-md bg-surface-container-low px-2 py-1.5 font-label-md text-on-surface hover:bg-surface-variant disabled:opacity-40"
+                                title="Asignar permisos individuales"
+                              >
+                                <ShieldCheck className="h-4 w-4" /> Permisos
+                              </button>
+                            ) : null}
+                            {!item.active ? (
+                              <button
+                                onClick={() => toggleActive(item)}
+                                disabled={busy}
+                                className="inline-flex items-center gap-1 rounded-md bg-surface-container-low px-2 py-1.5 font-label-md text-on-surface hover:bg-surface-variant disabled:opacity-40"
+                                title={item.active ? "Eliminar usuario" : "Reactivar usuario"}
+                              >
+                                <KeyRound className="h-4 w-4" /> {item.active ? "Eliminar" : "Reactivar"}
+                              </button>
+                            ) : null}
+                            {canDelete && user && user.id !== item.id && item.active && item.role !== "DEVELOPER" ? (
                               <button
                                 onClick={() => deactivate(item)}
                                 disabled={busy}

@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.HR_READ);
+    const denied = requirePermission(auth.user, Permission.HR_READ);
     if (denied) return denied;
 
     const { db, schema } = dbModule;
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.HR_UPDATE);
+    const denied = requirePermission(auth.user, Permission.HR_UPDATE);
     if (denied) return denied;
 
     const body = (await req.json()) as Body;

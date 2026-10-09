@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { AccessControl, Permission } from "@contract/domain/rbac";
 import {
   Check,
   Clock,
@@ -98,6 +100,10 @@ function haceRato(iso: string | null): string {
 }
 
 export function MensajesInbox({ clientesOnly = false }: { clientesOnly?: boolean }) {
+  const { user } = useAuth();
+  const access = user ? AccessControl.forRole(user.role, user.additionalPermissions) : null;
+  const canWrite = access?.can(Permission.CLIENT_CREATE) ?? false;
+  const canManageTemplates = access?.can(Permission.TEMPLATE_MANAGE) ?? false;
   const [convs, setConvs] = useState<Conversacion[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
@@ -261,15 +267,15 @@ export function MensajesInbox({ clientesOnly = false }: { clientesOnly?: boolean
               <option key={k} value={k}>{v.label}</option>
             ))}
           </select>
-          <button
+          {canManageTemplates ? <button
             type="button"
             onClick={() => setGestionPlantillas(true)}
             className="flex h-8 items-center gap-1.5 rounded-lg border border-input px-2.5 text-sm hover:bg-accent"
             title="Administrar plantillas de mensajes"
           >
             <FileText className="h-4 w-4" /> Plantillas
-          </button>
-          {!clientesOnly ? (
+          </button> : null}
+          {!clientesOnly && canWrite ? (
             <button
               type="button"
               onClick={() => setNuevaConv(true)}
@@ -363,7 +369,7 @@ export function MensajesInbox({ clientesOnly = false }: { clientesOnly?: boolean
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ESTADO_CHIP[selected.estado] ?? ESTADO_CHIP.ABIERTA}`}>
                     {selected.estado === "ABIERTA" ? "Abierta" : selected.estado === "EN_ESPERA" ? "En espera" : "Cerrada"}
                   </span>
-                  <select
+                  {canWrite ? <select
                     className="h-7 rounded border border-input bg-background px-1 text-xs"
                     value={selected.estado}
                     onChange={(e) => void actualizar(selected.id, { estado: e.target.value })}
@@ -372,16 +378,16 @@ export function MensajesInbox({ clientesOnly = false }: { clientesOnly?: boolean
                     <option value="ABIERTA">Abierta</option>
                     <option value="EN_ESPERA">En espera</option>
                     <option value="CERRADA">Cerrada</option>
-                  </select>
-                  <input
+                  </select> : null}
+                  {canWrite ? <input
                     className="h-7 w-36 rounded border border-input bg-background px-2 text-xs"
                     placeholder="Asignado a…"
                     defaultValue={selected.asignadoA}
                     onBlur={(e) => {
                       if (e.target.value !== selected.asignadoA) void actualizar(selected.id, { asignadoA: e.target.value });
                     }}
-                  />
-                  {!clientesOnly ? <select
+                  /> : null}
+                  {!clientesOnly && canWrite ? <select
                     className="h-7 max-w-44 rounded border border-input bg-background px-1 text-xs"
                     value={selected.leadId ?? ""}
                     onChange={(e) => void actualizar(selected.id, { leadId: e.target.value || null })}
@@ -417,46 +423,50 @@ export function MensajesInbox({ clientesOnly = false }: { clientesOnly?: boolean
                   ))}
                   <div ref={finRef} />
                 </div>
-                <div className="border-t border-outline-variant/40 p-2.5 dark:border-white/10">
-                  <div className="mb-1.5 flex flex-wrap gap-1.5">
-                    {plantillas
-                      .filter((p) => p.activa && (p.canal === "TODOS" || p.canal === selected.canal))
-                      .map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => setTexto((t) => (t ? `${t}\n${p.cuerpo}` : p.cuerpo))}
-                          className="rounded-full border border-input px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary hover:text-primary"
-                          title={p.cuerpo}
-                        >
-                          {p.nombre}
-                        </button>
-                      ))}
+                {canWrite ? (
+                  <div className="border-t border-outline-variant/40 p-2.5 dark:border-white/10">
+                    <div className="mb-1.5 flex flex-wrap gap-1.5">
+                      {plantillas
+                        .filter((p) => p.activa && (p.canal === "TODOS" || p.canal === selected.canal))
+                        .map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => setTexto((t) => (t ? `${t}\n${p.cuerpo}` : p.cuerpo))}
+                            className="rounded-full border border-input px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary hover:text-primary"
+                            title={p.cuerpo}
+                          >
+                            {p.nombre}
+                          </button>
+                        ))}
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <textarea
+                        rows={2}
+                        value={texto}
+                        onChange={(e) => setTexto(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            void enviar();
+                          }
+                        }}
+                        placeholder={`Responder a ${clientesOnly ? selected.clienteNombre : selected.contactoNombre}… (Enter envía)`}
+                        className="flex-1 resize-none rounded-lg border border-input bg-background p-2 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void enviar()}
+                        disabled={enviando || !texto.trim()}
+                        className="flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+                      >
+                        <Send className="h-4 w-4" /> Enviar
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-end gap-2">
-                    <textarea
-                      rows={2}
-                      value={texto}
-                      onChange={(e) => setTexto(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          void enviar();
-                        }
-                      }}
-                      placeholder={`Responder a ${clientesOnly ? selected.clienteNombre : selected.contactoNombre}… (Enter envía)`}
-                      className="flex-1 resize-none rounded-lg border border-input bg-background p-2 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void enviar()}
-                      disabled={enviando || !texto.trim()}
-                      className="flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-                    >
-                      <Send className="h-4 w-4" /> Enviar
-                    </button>
-                  </div>
-                </div>
+                ) : (
+                  <p className="border-t border-outline-variant/40 p-3 text-sm text-muted-foreground">Vista de solo lectura.</p>
+                )}
               </>
             )}
           </div>
@@ -464,7 +474,7 @@ export function MensajesInbox({ clientesOnly = false }: { clientesOnly?: boolean
       </div>
 
       {/* Modal nueva conversación */}
-      {nuevaConv && (
+      {nuevaConv && canWrite && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setNuevaConv(false)}>
           <div className="w-full max-w-sm rounded-xl bg-background p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
@@ -488,7 +498,7 @@ export function MensajesInbox({ clientesOnly = false }: { clientesOnly?: boolean
         </div>
       )}
 
-      {gestionPlantillas && (
+      {gestionPlantillas && canManageTemplates && (
         <GestionPlantillas
           plantillas={plantillas}
           setPlantillas={setPlantillas}
@@ -525,6 +535,8 @@ function GestionPlantillas({
   setPlantillas: (p: Plantilla[]) => void;
   onCerrar: () => void;
 }) {
+  const { user } = useAuth();
+  const canManage = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.TEMPLATE_MANAGE);
   const [editando, setEditando] = useState<null | { id?: string; nombre: string; canal: string; cuerpo: string }>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -571,14 +583,14 @@ function GestionPlantillas({
                 <p className="font-semibold">{p.nombre} <span className="ml-1 rounded bg-accent px-1.5 text-[10px] text-muted-foreground">{p.canal}</span></p>
                 <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{p.cuerpo}</p>
               </div>
-              <div className="flex shrink-0 gap-1">
+              {canManage ? <div className="flex shrink-0 gap-1">
                 <button type="button" onClick={() => setEditando({ id: p.id, nombre: p.nombre, canal: p.canal, cuerpo: p.cuerpo })}><Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" /></button>
                 <button type="button" onClick={() => void eliminar(p)}><Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" /></button>
-              </div>
+              </div> : null}
             </div>
           ))}
         </div>
-        {editando ? (
+        {editando && canManage ? (
           <div className="mt-4 space-y-2 rounded-lg border border-primary/40 p-3 text-sm">
             <input className="h-9 w-full rounded-lg border border-input bg-background px-2" placeholder="Nombre de la plantilla" value={editando.nombre} onChange={(e) => setEditando({ ...editando, nombre: e.target.value })} />
             <select className="h-9 w-full rounded-lg border border-input bg-background px-2" value={editando.canal} onChange={(e) => setEditando({ ...editando, canal: e.target.value })}>
@@ -593,11 +605,11 @@ function GestionPlantillas({
               <button type="button" onClick={() => void guardar()} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">Guardar</button>
             </div>
           </div>
-        ) : (
+        ) : canManage ? (
           <button type="button" onClick={() => setEditando({ nombre: "", canal: "TODOS", cuerpo: "" })} className="mt-3 flex items-center gap-1 text-sm font-medium text-primary hover:underline">
             <Plus className="h-4 w-4" /> Nueva plantilla
           </button>
-        )}
+        ) : null}
       </div>
     </div>
   );

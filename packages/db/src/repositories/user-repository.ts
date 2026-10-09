@@ -14,6 +14,18 @@ export interface UserListOptions {
 
 /** Acceso de lectura a usuarios para resolver autorización y filtros. */
 export class DrizzleUserRepository {
+  async listAdditionalPermissions(userId: string): Promise<string[]> {
+    const rows = await db
+      .select({ key: schema.permissions.key })
+      .from(schema.userPermissions)
+      .innerJoin(
+        schema.permissions,
+        eq(schema.userPermissions.permissionId, schema.permissions.id)
+      )
+      .where(eq(schema.userPermissions.userId, userId));
+    return rows.map((row) => row.key);
+  }
+
   async findByEmail(email: string): Promise<UserRow | null> {
     const [row] = await db
       .select()

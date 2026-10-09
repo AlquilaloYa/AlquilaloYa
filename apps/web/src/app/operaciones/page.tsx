@@ -251,7 +251,7 @@ function humanizeEvent(event: WorkEvent): string {
 
 export default function OperacionesPage() {
   const { user } = useAuth();
-  const access = user ? AccessControl.forRole(user.role) : null;
+  const access = user ? AccessControl.forRole(user.role, user.additionalPermissions) : null;
   const canCreate = access?.can(Permission.WORK_ORDER_CREATE) ?? false;
   const canUpdate = access?.can(Permission.WORK_ORDER_UPDATE) ?? false;
   const [orders, setOrders] = useState<WorkOrder[]>([]);

@@ -15,7 +15,7 @@ export async function GET(req: Request, { params }: Ctx) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CONTRACT_READ);
+    const denied = requirePermission(auth.user, Permission.CONTRACT_READ);
     if (denied) return denied;
 
     const { contractRepository } = await buildContractServices();
@@ -37,7 +37,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, request);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CONTRACT_UPDATE);
+    const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
     if (denied) return denied;
 
     const body = (await request.json()) as UpdateDraftInput;
@@ -70,7 +70,7 @@ export async function DELETE(req: Request, { params }: Ctx) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CONTRACT_CANCEL);
+    const denied = requirePermission(auth.user, Permission.CONTRACT_CANCEL);
     if (denied) return denied;
 
     const { db, schema } = dbModule as {
@@ -131,13 +131,13 @@ export async function POST(request: Request, { params }: Ctx) {
 
     switch (body.action) {
       case "requestEmission": {
-        const denied = requirePermission(auth.user.role, Permission.CONTRACT_EMIT);
+        const denied = requirePermission(auth.user, Permission.CONTRACT_EMIT);
         if (denied) return denied;
         const c = await contractService.requestEmission(params.id);
         return NextResponse.json(c);
       }
       case "emit": {
-        const denied = requirePermission(auth.user.role, Permission.CONTRACT_EMIT);
+        const denied = requirePermission(auth.user, Permission.CONTRACT_EMIT);
         if (denied) return denied;
         const contract = await contractRepository.findWithRelations(params.id);
         if (!contract) {
@@ -172,19 +172,19 @@ export async function POST(request: Request, { params }: Ctx) {
         }
       }
       case "requestFirma": {
-        const denied = requirePermission(auth.user.role, Permission.CONTRACT_SIGN);
+        const denied = requirePermission(auth.user, Permission.CONTRACT_SIGN);
         if (denied) return denied;
         const c = await contractService.requestSignature(params.id);
         return NextResponse.json(c);
       }
       case "firmar": {
-        const denied = requirePermission(auth.user.role, Permission.CONTRACT_SIGN);
+        const denied = requirePermission(auth.user, Permission.CONTRACT_SIGN);
         if (denied) return denied;
         const c = await contractService.signContract(params.id);
         return NextResponse.json(c);
       }
       case "notariar": {
-        const denied = requirePermission(auth.user.role, Permission.CONTRACT_UPDATE);
+        const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
         if (denied) return denied;
         const { db, schema } = dbModule as {
           db: typeof import("@contract/db").db;
@@ -215,13 +215,13 @@ export async function POST(request: Request, { params }: Ctx) {
         return NextResponse.json(c);
       }
       case "cancelar": {
-        const denied = requirePermission(auth.user.role, Permission.CONTRACT_CANCEL);
+        const denied = requirePermission(auth.user, Permission.CONTRACT_CANCEL);
         if (denied) return denied;
         const c = await contractService.cancelContract(params.id);
         return NextResponse.json(c);
       }
       case "resolver": {
-        const denied = requirePermission(auth.user.role, Permission.CONTRACT_UPDATE);
+        const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
         if (denied) return denied;
         const data = body as { action: string; motivo?: string };
         const motivo = (data.motivo ?? "").trim();
@@ -247,7 +247,7 @@ export async function POST(request: Request, { params }: Ctx) {
         return NextResponse.json(resolved);
       }
       case "renovar": {
-        const denied = requirePermission(auth.user.role, Permission.CONTRACT_UPDATE);
+        const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
         if (denied) return denied;
         const data = body as {
           action: string;
@@ -267,7 +267,7 @@ export async function POST(request: Request, { params }: Ctx) {
         return NextResponse.json({ ...nuevo, esRenovacion: true });
       }
       case "renovacion": {
-        const denied = requirePermission(auth.user.role, Permission.CONTRACT_UPDATE);
+        const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
         if (denied) return denied;
         const data = body as {
           action: string;
@@ -296,7 +296,7 @@ export async function POST(request: Request, { params }: Ctx) {
         });
       }
       case "snapshot": {
-        const denied = requirePermission(auth.user.role, Permission.CONTRACT_READ);
+        const denied = requirePermission(auth.user, Permission.CONTRACT_READ);
         if (denied) return denied;
         const contract = await contractRepository.findWithRelations(params.id);
         if (!contract) {

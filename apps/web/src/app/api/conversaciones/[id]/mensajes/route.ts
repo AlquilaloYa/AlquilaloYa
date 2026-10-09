@@ -11,7 +11,7 @@ async function ctx(permission: Permission, req: Request) {
   const dbModule = await import("@contract/db");
   const auth = await requireUser(dbModule, req);
   if ("error" in auth) return { error: auth.error };
-  const denied = requirePermission(auth.user.role, permission);
+  const denied = requirePermission(auth.user, permission);
   if (denied) return { error: denied };
   const { db, schema } = dbModule as {
     db: typeof import("@contract/db").db;
@@ -23,10 +23,13 @@ async function ctx(permission: Permission, req: Request) {
 /** GET /api/conversaciones/[id]/mensajes?read=1 — histórico (y marcar leídos). */
 export async function GET(req: Request, { params }: Ctx) {
   try {
-    const c = await ctx(Permission.CLIENT_READ, req);
+    const c = await ctx(Permission.MARKETING_READ, req);
     if ("error" in c) return c.error;
     const url = new URL(req.url);
-    if (url.searchParams.get("read") === "1") {
+    if (
+      url.searchParams.get("read") === "1" &&
+      !requirePermission(c.user.role, Permission.CLIENT_UPDATE)
+    ) {
       await c.db
         .update(c.schema.conversations)
         .set({ noLeidos: 0, updatedAt: new Date() })

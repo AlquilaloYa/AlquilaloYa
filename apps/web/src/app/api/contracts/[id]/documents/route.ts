@@ -25,7 +25,7 @@ export async function POST(request: Request, { params }: Ctx) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, request);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CONTRACT_UPDATE);
+    const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
     if (denied) return denied;
 
     const formData = await request.formData();

@@ -10,8 +10,9 @@ export async function GET(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CLIENT_READ);
-    if (denied) return denied;
+    const clientReadDenied = requirePermission(auth.user, Permission.CLIENT_READ);
+    const marketingReadDenied = requirePermission(auth.user, Permission.MARKETING_READ);
+    if (clientReadDenied && marketingReadDenied) return clientReadDenied;
 
     const { db, schema } = dbModule as {
       db: typeof import("@contract/db").db;
@@ -138,7 +139,7 @@ export async function PATCH(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CLIENT_UPDATE);
+    const denied = requirePermission(auth.user, Permission.CLIENT_UPDATE);
     if (denied) return denied;
 
     const { id, ...patch } = await req.json();
@@ -184,7 +185,7 @@ export async function DELETE(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CLIENT_UPDATE);
+    const denied = requirePermission(auth.user, Permission.CLIENT_UPDATE);
     if (denied) return denied;
 
     const { id } = await req.json();
@@ -220,7 +221,7 @@ export async function POST(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CLIENT_CREATE);
+    const denied = requirePermission(auth.user, Permission.CLIENT_CREATE);
     if (denied) return denied;
 
     const body = await req.json();

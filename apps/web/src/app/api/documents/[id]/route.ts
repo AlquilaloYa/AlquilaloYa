@@ -15,7 +15,7 @@ export async function DELETE(
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.DOCUMENT_READ);
+    const denied = requirePermission(auth.user, Permission.DOCUMENT_READ);
     if (denied) return denied;
     if (auth.user.role !== "ADMIN") {
       return NextResponse.json(

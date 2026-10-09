@@ -4,7 +4,7 @@ import {
   applySessionCookies,
   clearSessionCookies,
 } from "@/lib/supabase-auth";
-import type { ResolvedUser } from "@/lib/session";
+import { Permission } from "@contract/domain/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -41,9 +41,21 @@ export async function POST(req: Request) {
       return clearSessionCookies(res);
     }
 
-    const u = appUser as unknown as ResolvedUser;
+    const permissionKeys = await new dbModule.DrizzleUserRepository()
+      .listAdditionalPermissions(appUser.id);
+    const additionalPermissions = Object.values(Permission).filter((permission) =>
+      permissionKeys.includes(permission)
+    );
     const res = NextResponse.json(
-      { user: { id: u.id, email: u.email, name: u.name, role: u.role } },
+      {
+        user: {
+          id: appUser.id,
+          email: appUser.email,
+          name: appUser.name,
+          role: appUser.role,
+          additionalPermissions,
+        },
+      },
       { status: 200 }
     );
     return applySessionCookies(res, {

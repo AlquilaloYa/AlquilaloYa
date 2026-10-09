@@ -1,6 +1,3 @@
--- Limpia las filas de la matriz de permisos de los roles eliminados.
-DELETE FROM "role_permissions" WHERE "role" IN ('OPERADOR', 'SUPERVISOR', 'AUDITOR', 'FIRMANTE');
-
 -- Solicitudes de permiso: la ven y aprueban el Developer y los Administradores.
 CREATE TABLE IF NOT EXISTS "permission_requests" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -11,11 +8,11 @@ CREATE TABLE IF NOT EXISTS "permission_requests" (
 	"detalle" text NOT NULL,
 	"estado" varchar(20) DEFAULT 'PENDIENTE' NOT NULL,
 	"comentario" text,
-	"resolved_by" uuid,
+	"resolved_by" uuid REFERENCES "users"("id") ON DELETE SET NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"resolved_at" timestamp with time zone
 );
 
 CREATE INDEX IF NOT EXISTS "permission_requests_user_idx" ON "permission_requests" ("user_id");
 CREATE INDEX IF NOT EXISTS "permission_requests_estado_idx" ON "permission_requests" ("estado");
-

@@ -46,7 +46,7 @@ export async function GET(req: Request) {
     const role = auth.user.role;
     const isDev = role === "DEVELOPER";
     const isAdmin = role === "ADMIN";
-    const denied = requirePermission(auth.user.role, isDev || isAdmin ? Permission.PERMISSION_REQUEST_READ : Permission.PERMISSION_REQUEST_CREATE);
+    const denied = requirePermission(auth.user, isDev || isAdmin ? Permission.PERMISSION_REQUEST_READ : Permission.PERMISSION_REQUEST_CREATE);
     if (denied) return denied;
 
     const { db, schema } = dbModule as {
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.PERMISSION_REQUEST_CREATE);
+    const denied = requirePermission(auth.user, Permission.PERMISSION_REQUEST_CREATE);
     if (denied) return denied;
 
     const body = (await req.json().catch(() => ({}))) as Body;

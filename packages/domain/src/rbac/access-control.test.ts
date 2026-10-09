@@ -9,7 +9,7 @@ describe("AccessControl", () => {
     expect(ac.can(P.HR_READ)).toBe(true);
     expect(ac.can(P.CLIENT_READ)).toBe(true);
     expect(ac.can(P.CONTRACT_READ)).toBe(true);
-    expect(ac.can(P.ACTIVITY_READ)).toBe(true);
+    expect(ac.can(P.ACTIVITY_READ)).toBe(false);
     expect(ac.can(P.HR_CREATE)).toBe(false);
     expect(ac.can(P.HR_UPDATE)).toBe(false);
     expect(ac.can(P.CLIENT_CREATE)).toBe(false);
@@ -18,27 +18,33 @@ describe("AccessControl", () => {
     expect(ac.can(P.USER_MANAGE)).toBe(false);
     expect(ac.can(P.USER_DELETE)).toBe(false);
     expect(ac.can(P.PERMISSION_REQUEST_CREATE)).toBe(true);
+    expect(ac.can(P.ATTENDANCE_CREATE)).toBe(false);
+    expect(ac.can(P.ATTENDANCE_READ)).toBe(false);
   });
 
   it("ASISTENTE_ADMINISTRATIVO suma Google/Marketing en solo lectura", () => {
     const ac = AccessControl.forRole("ASISTENTE_ADMINISTRATIVO");
     expect(ac.can(P.DEPARTMENT_READ)).toBe(true);
-    expect(ac.can(P.WEB_CONTENT_READ)).toBe(true);
+    expect(ac.can(P.WEB_CONTENT_READ)).toBe(false);
+    expect(ac.can(P.MARKETING_READ)).toBe(true);
     expect(ac.can(P.WEB_CONTENT_UPDATE)).toBe(false);
     expect(ac.can(P.CLIENT_CREATE)).toBe(false);
+    expect(ac.can(P.CLIENT_UPDATE)).toBe(false);
+    expect(ac.can(P.ATTENDANCE_READ)).toBe(false);
     expect(ac.can(P.USER_MANAGE)).toBe(false);
     expect(ac.can(P.PERMISSION_REQUEST_CREATE)).toBe(true);
   });
 
   it("MARKETING solo lee marketing (ningún otro módulo)", () => {
     const ac = AccessControl.forRole("MARKETING");
-    expect(ac.can(P.CLIENT_READ)).toBe(true);
-    expect(ac.can(P.WEB_CONTENT_READ)).toBe(true);
+    expect(ac.can(P.MARKETING_READ)).toBe(true);
+    expect(ac.can(P.CLIENT_READ)).toBe(false);
+    expect(ac.can(P.WEB_CONTENT_READ)).toBe(false);
     expect(ac.can(P.WEB_CONTENT_UPDATE)).toBe(false);
     expect(ac.can(P.CLIENT_CREATE)).toBe(false);
     expect(ac.can(P.HR_READ)).toBe(false);
     expect(ac.can(P.USER_READ)).toBe(false);
-    expect(ac.can(P.CONTRACT_READ)).toBe(true);
+    expect(ac.can(P.CONTRACT_READ)).toBe(false);
   });
 
   it("DEVELOPER lo puede todo, incluido eliminar usuarios y aprobar solicitudes", () => {
@@ -49,6 +55,7 @@ describe("AccessControl", () => {
     expect(ac.can(P.USER_DELETE)).toBe(true);
     expect(ac.can(P.USER_MANAGE)).toBe(true);
     expect(ac.can(P.ROLE_MANAGE)).toBe(true);
+    expect(ac.can(P.PERMISSION_REQUEST_READ)).toBe(true);
     expect(ac.can(P.PERMISSION_REQUEST_APPROVE)).toBe(true);
   });
 
@@ -59,7 +66,8 @@ describe("AccessControl", () => {
     }
     expect(ac.can(P.USER_MANAGE)).toBe(true);
     expect(ac.can(P.ROLE_MANAGE)).toBe(true);
-    expect(ac.can(P.PERMISSION_REQUEST_APPROVE)).toBe(true);
+    expect(ac.can(P.PERMISSION_REQUEST_READ)).toBe(true);
+    expect(ac.can(P.PERMISSION_REQUEST_APPROVE)).toBe(false);
     expect(ac.can(P.USER_DELETE)).toBe(false);
   });
 
@@ -72,7 +80,14 @@ describe("AccessControl", () => {
 
   it("canAny respeta múltiples permisos", () => {
     const ac = AccessControl.forRole("MARKETING");
-    expect(ac.canAny([P.CLIENT_CREATE, P.CLIENT_READ])).toBe(true);
+    expect(ac.canAny([P.CLIENT_CREATE, P.MARKETING_READ])).toBe(true);
     expect(ac.canAny([P.CLIENT_CREATE, P.CONTRACT_EMIT])).toBe(false);
+  });
+
+  it("permite añadir permisos individuales sin quitar los del rol", () => {
+    const ac = AccessControl.forRole("MARKETING", [P.CLIENT_CREATE]);
+    expect(ac.can(P.MARKETING_READ)).toBe(true);
+    expect(ac.can(P.CLIENT_CREATE)).toBe(true);
+    expect(ac.can(P.CLIENT_UPDATE)).toBe(false);
   });
 });

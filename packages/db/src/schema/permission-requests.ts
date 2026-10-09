@@ -17,7 +17,7 @@ export const permissionRequests = pgTable("permission_requests", {
   detalle: text("detalle").notNull(),
   estado: varchar("estado", { length: 20 }).notNull().default("PENDIENTE"),
   comentario: text("comentario"),
-  resolvedBy: uuid("resolved_by"),
+  resolvedBy: uuid("resolved_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),

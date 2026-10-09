@@ -63,3 +63,6 @@ packages/db/regen-*.txt
 prodcheck.env
 pull.txt
 *.local.env
+
+# Documentación local y descargas (instaladores, exports) — no versionar
+.md/

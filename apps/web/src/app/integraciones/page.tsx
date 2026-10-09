@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { AccessControl, Permission } from "@contract/domain/rbac";
 import { AlertTriangle, Plus, RefreshCw, Send, Plug, Power, Settings2, ShieldCheck, Trash2, X } from "lucide-react";
 
 interface Connector {
@@ -42,7 +43,7 @@ const CONNECTOR_TYPES = [
 
 export default function IntegracionesPage() {
   const { user } = useAuth();
-  const canManage = !!user && ["ADMIN", "SUPERVISOR"].includes(user.role);
+  const canManage = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.INTEGRATION_MANAGE);
 
   const [items, setItems] = useState<Connector[]>([]);
   const [total, setTotal] = useState(0);

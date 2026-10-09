@@ -22,7 +22,7 @@ async function ctx(permission: Permission, req: Request) {
   const dbModule = await import("@contract/db");
   const auth = await requireUser(dbModule, req);
   if ("error" in auth) return { error: auth.error };
-  const denied = requirePermission(auth.user.role, permission);
+  const denied = requirePermission(auth.user, permission);
   if (denied) return { error: denied };
   const { db, schema } = dbModule as {
     db: typeof import("@contract/db").db;
@@ -34,7 +34,7 @@ async function ctx(permission: Permission, req: Request) {
 /** GET /api/bots */
 export async function GET(req: Request) {
   try {
-    const c = await ctx(Permission.CLIENT_READ, req);
+    const c = await ctx(Permission.MARKETING_READ, req);
     if ("error" in c) return c.error;
     const rows = await c.db
       .select()

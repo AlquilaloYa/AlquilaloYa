@@ -24,7 +24,7 @@ export async function GET(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CLIENT_READ);
+    const denied = requirePermission(auth.user, Permission.CLIENT_READ);
     if (denied) return denied;
 
     if (!isGcalEnabled()) {
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CLIENT_CREATE);
+    const denied = requirePermission(auth.user, Permission.CLIENT_CREATE);
     if (denied) return denied;
 
     const body = (await req.json()) as {
@@ -96,7 +96,7 @@ export async function DELETE(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CLIENT_UPDATE);
+    const denied = requirePermission(auth.user, Permission.CLIENT_UPDATE);
     if (denied) return denied;
 
     const id = new URL(req.url).searchParams.get("id");

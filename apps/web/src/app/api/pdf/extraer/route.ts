@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CLIENT_UPDATE);
+    const denied = requirePermission(auth.user, Permission.CLIENT_UPDATE);
     if (denied) return denied;
 
     const formData = await req.formData();

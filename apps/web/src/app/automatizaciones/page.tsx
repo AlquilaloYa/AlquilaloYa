@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { AccessControl, Permission } from "@contract/domain/rbac";
 import { EVENTOS, EVENTO_DESC, PARAM_KEY, type EventoRegla } from "@/lib/automatizaciones-shared";
 import {
   Play,
@@ -41,6 +43,8 @@ function fmtHace(iso: string | null): string {
 }
 
 export default function AutomatizacionesPage() {
+  const { user } = useAuth();
+  const canWrite = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.CLIENT_CREATE);
   const [reglas, setReglas] = useState<Regla[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,7 +146,7 @@ export default function AutomatizacionesPage() {
             <p className="text-sm text-muted-foreground">Reglas automáticas: un evento del ERP crea tareas de seguimiento en Work 123.</p>
           </div>
           <div className="flex gap-2">
-            <button
+            {canWrite ? <button
               type="button"
               onClick={() => void ejecutarAhora()}
               disabled={busy}
@@ -150,14 +154,14 @@ export default function AutomatizacionesPage() {
               title="Evaluar todas las reglas activas ahora"
             >
               <Play className="h-4 w-4" /> Ejecutar ahora
-            </button>
-            <button
+            </button> : null}
+            {canWrite ? <button
               type="button"
               onClick={() => setModal({ nombre: "", evento: "CONV_SIN_RESPUESTA", valor: "8", asignadoA: "" })}
               className="flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:opacity-90"
             >
               <Plus className="h-4 w-4" /> Nueva regla
-            </button>
+            </button> : null}
           </div>
         </div>
 
@@ -193,17 +197,17 @@ export default function AutomatizacionesPage() {
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <button
+                      {canWrite ? <button
                         type="button"
                         onClick={() => void toggle(r)}
                         className={`relative h-6 w-11 rounded-full transition-colors ${r.activa ? "bg-green-500" : "bg-muted"}`}
                         aria-label="Activar/desactivar"
                       >
                         <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${r.activa ? "left-[22px]" : "left-0.5"}`} />
-                      </button>
-                      <button type="button" onClick={() => void eliminar(r)} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                      </button> : null}
+                      {canWrite ? <button type="button" onClick={() => void eliminar(r)} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
                         <Trash2 className="h-4 w-4" />
-                      </button>
+                      </button> : null}
                     </div>
                   </div>
                   {last ? (
@@ -236,7 +240,7 @@ export default function AutomatizacionesPage() {
         </section>
       </div>
 
-      {modal && (
+      {modal && canWrite && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setModal(null)}>
           <div className="w-full max-w-md rounded-xl bg-background p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
@@ -305,6 +309,8 @@ interface Plantilla {
 }
 
 function BotsYConexiones() {
+  const { user } = useAuth();
+  const canWrite = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.CLIENT_CREATE);
   const [bots, setBots] = useState<BotRegla[]>([]);
   const [plantillas, setPlantillas] = useState<Plantilla[]>([]);
   const [estado, setEstado] = useState<{ variables: Record<string, boolean>; webhooks: { meta: string; canonico: string } } | null>(null);
@@ -374,13 +380,13 @@ function BotsYConexiones() {
             <h3 className="font-headline-md font-bold text-primary">Bots de respuesta</h3>
             <p className="text-sm text-muted-foreground">Responden automáticamente con una plantilla cuando un mensaje entrante coincide con una palabra clave.</p>
           </div>
-          <button
+          {canWrite ? <button
             type="button"
             onClick={() => setModal({ nombre: "", canal: "WHATSAPP", keywords: "", plantillaId: "", cuerpo: "" })}
             className="flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:opacity-90"
           >
             <Plus className="h-4 w-4" /> Nuevo bot
-          </button>
+          </button> : null}
         </div>
         {bots.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sin bots. Crea uno para responder “precio”, “disponibilidad”, etc.</p>
@@ -395,12 +401,12 @@ function BotsYConexiones() {
                     {b.cuerpo || (plantillas.find((p) => p.id === b.plantillaId)?.cuerpo ?? "usa plantilla")}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                {canWrite ? <div className="flex shrink-0 items-center gap-2">
                   <button type="button" onClick={() => void toggle(b)} className={`relative h-6 w-11 rounded-full ${b.activa ? "bg-green-500" : "bg-muted"}`} aria-label="Activar">
                     <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${b.activa ? "left-[22px]" : "left-0.5"}`} />
                   </button>
                   <button type="button" onClick={() => void eliminar(b)} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
-                </div>
+                </div> : null}
               </div>
             ))}
           </div>
@@ -438,7 +444,7 @@ function BotsYConexiones() {
         )}
       </section>
 
-      {modal && (
+      {modal && canWrite && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setModal(null)}>
           <div className="w-full max-w-md rounded-xl bg-background p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">

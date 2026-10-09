@@ -8,6 +8,6 @@ export async function GET(req: Request) {
   const dbModule = await import("@contract/db");
   const auth = await requireUser(dbModule, req);
   if ("error" in auth) return auth.error;
-  const { id, email, name, role } = auth.user;
-  return NextResponse.json({ user: { id, email, name, role } });
+  const { id, email, name, role, additionalPermissions } = auth.user;
+  return NextResponse.json({ user: { id, email, name, role, additionalPermissions } });
 }

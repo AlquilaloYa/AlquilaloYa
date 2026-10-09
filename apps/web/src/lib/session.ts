@@ -1,5 +1,5 @@
-import { AccessControl } from "@contract/domain/rbac";
-import type { UserRole, Permission } from "@contract/domain/rbac";
+import { AccessControl, Permission } from "@contract/domain/rbac";
+import type { UserRole } from "@contract/domain/rbac";
 import { NextResponse } from "next/server";
 import { resolveSession } from "@/lib/supabase-auth";
 
@@ -14,6 +14,7 @@ export interface ResolvedUser {
   email: string;
   name: string;
   role: UserRole;
+  additionalPermissions: Permission[];
 }
 
 export type AuthResult =
@@ -22,7 +23,14 @@ export type AuthResult =
 
 export interface DbUserModule {
   DrizzleUserRepository: new () => {
-    findByEmail(email: string): Promise<(ResolvedUser & { active?: boolean }) | null>;
+    findByEmail(email: string): Promise<{
+      id: string;
+      email: string;
+      name: string;
+      role: UserRole;
+      active?: boolean;
+    } | null>;
+    listAdditionalPermissions(userId: string): Promise<string[]>;
   };
 }
 
@@ -49,15 +57,33 @@ export async function requireUser(
       ),
     };
   }
-  return { user };
+  const permissionKeys = await new dbModule.DrizzleUserRepository()
+    .listAdditionalPermissions(user.id);
+  const additionalPermissions = Object.values(Permission).filter((permission) =>
+    permissionKeys.includes(permission)
+  );
+  return { user: { ...user, additionalPermissions } };
 }
 
 /** Verifica permiso del usuario autenticado; 403 si no. */
 export function requirePermission(
-  role: UserRole,
+  principal: UserRole | Pick<ResolvedUser, "role" | "additionalPermissions">,
   permission: Permission
 ): NextResponse | null {
-  const decision = AccessControl.forRole(role).require(permission);
+  const role = typeof principal === "string" ? principal : principal.role;
+  const additionalPermissions =
+    typeof principal === "string" ? [] : principal.additionalPermissions;
+  if (
+    role !== "DEVELOPER" &&
+    (permission === Permission.USER_DELETE ||
+      permission === Permission.PERMISSION_REQUEST_APPROVE)
+  ) {
+    return NextResponse.json(
+      { error: "Este permiso está reservado al Developer" },
+      { status: 403 }
+    );
+  }
+  const decision = AccessControl.forRole(role, additionalPermissions).require(permission);
   if (!decision.allowed) {
     return NextResponse.json(
       { error: `Acceso denegado: ${decision.reason}` },

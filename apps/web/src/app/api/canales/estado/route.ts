@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CLIENT_READ);
+    const denied = requirePermission(auth.user, Permission.MARKETING_READ);
     if (denied) return denied;
 
     const base = (process.env.NEXT_PUBLIC_URL ?? req.headers.get("origin") ?? "").replace(/\/$/, "");

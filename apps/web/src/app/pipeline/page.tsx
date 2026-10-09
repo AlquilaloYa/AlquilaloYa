@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { AccessControl, Permission } from "@contract/domain/rbac";
 import {
   CheckSquare,
   Mail,
@@ -121,6 +123,8 @@ const FORM_VACIO: LeadForm = {
 };
 
 export default function PipelinePage() {
+  const { user } = useAuth();
+  const canWrite = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.CLIENT_CREATE);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -478,21 +482,21 @@ export default function PipelinePage() {
             <Sparkles className="h-4 w-4 text-amber-400" />
             AUTOMATIZA
           </Link>
-          <button
+          {canWrite ? <button
             type="button"
             onClick={openCrear}
             className="flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90"
           >
             <Plus className="h-4 w-4" />
             NUEVO LEAD
-          </button>
+          </button> : null}
         </div>
 
         {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
         {toast && <p className="rounded-lg bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-300">{toast}</p>}
 
         {/* Acciones masivas */}
-        {seleccionados.length > 0 && (
+        {canWrite && seleccionados.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
             <span className="text-sm font-semibold text-on-surface">{seleccionados.length} seleccionado(s)</span>
             <select
@@ -620,11 +624,13 @@ export default function PipelinePage() {
                 <div
                   key={col.value}
                   onDragOver={(e) => {
+                    if (!canWrite) return;
                     e.preventDefault();
                     setColHover(col.value);
                   }}
                   onDragLeave={() => setColHover((h) => (h === col.value ? null : h))}
                   onDrop={(e) => {
+                    if (!canWrite) return;
                     e.preventDefault();
                     setColHover(null);
                     const id = dragId ?? e.dataTransfer.getData("text/plain");
@@ -644,21 +650,21 @@ export default function PipelinePage() {
                       return (
                         <div
                           key={lead.id}
-                          draggable
+                          draggable={canWrite}
                           onDragStart={() => {
                             setDragId(lead.id);
                           }}
                           className={`group cursor-grab rounded-xl p-3 shadow-sm ring-1 active:cursor-grabbing dark:ring-white/10 ${selected.has(lead.id) ? "bg-primary/10 ring-primary/40" : "bg-surface-container-lowest ring-black/5"}`}
                         >
                           <div className="flex items-start gap-2.5">
-                            <input
+                            {canWrite ? <input
                               type="checkbox"
                               checked={selected.has(lead.id)}
                               onChange={() => toggleSeleccion(lead.id)}
                               onClick={(e) => e.stopPropagation()}
                               aria-label={`Seleccionar ${lead.nombre}`}
                               className="mt-1.5 h-4 w-4 shrink-0 rounded border-input accent-primary"
-                            />
+                            /> : null}
                             <div className="relative">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-xs font-bold text-on-surface-variant">
                                 {iniciales(lead.nombre, lead.apellido)}
@@ -676,13 +682,13 @@ export default function PipelinePage() {
                                   {lead.createdAt ? fmtFecha(lead.createdAt) : "—"}
                                 </span>
                               </div>
-                              <button
+                              {canWrite ? <button
                                 type="button"
                                 onClick={() => openEditar(lead)}
                                 className="block max-w-full truncate text-left text-sm text-primary hover:underline"
                               >
                                 {lead.servicio || "Sin servicio"}
-                              </button>
+                              </button> : <p className="truncate text-sm text-primary">{lead.servicio || "Sin servicio"}</p>}
                             </div>
                           </div>
                           <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-11">
@@ -697,7 +703,7 @@ export default function PipelinePage() {
                             ) : null}
                             <span className={`ml-auto text-[11px] font-semibold ${v.clase}`}>{v.texto}</span>
                           </div>
-                          <div className="mt-1 flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          {canWrite ? <div className="mt-1 flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                             <button type="button" title="Derivar conversación a Chat con clientes" onClick={() => void abrirDerivar(lead)} className="rounded p-1 text-muted-foreground hover:bg-primary/10 hover:text-primary">
                               <UserRoundCheck className="h-3.5 w-3.5" />
                             </button>
@@ -710,7 +716,7 @@ export default function PipelinePage() {
                             <button type="button" title="Eliminar lead" onClick={() => void eliminar(lead)} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
-                          </div>
+                          </div> : null}
                         </div>
                       );
                     })}
@@ -726,7 +732,7 @@ export default function PipelinePage() {
       </div>
 
       {/* Modal crear/editar */}
-      {modal && (
+      {modal && canWrite && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setModal(null)}>
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-background p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <h3 className="mb-4 font-headline-md text-lg font-bold text-primary">

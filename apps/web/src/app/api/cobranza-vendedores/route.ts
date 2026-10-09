@@ -65,7 +65,7 @@ export async function GET(req: Request) {
   try {
     const auth = await requireUser({ DrizzleUserRepository }, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.CONTRACT_READ);
+    const denied = requirePermission(auth.user, Permission.CONTRACT_READ);
     if (denied) return denied;
 
     const contratos = await db

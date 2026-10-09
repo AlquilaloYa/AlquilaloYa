@@ -15,9 +15,8 @@ import { permissionsForRole } from "@contract/domain/rbac";
 const PERMISSION_KEYS = Object.values(Permission) as string[];
 
 async function seedPermissions() {
-  const inserted: { id: string; key: string }[] = [];
   for (const key of PERMISSION_KEYS) {
-    const rows = await db
+    await db
       .insert(permissions)
       .values({
         key,
@@ -25,13 +24,8 @@ async function seedPermissions() {
       })
       .onConflictDoNothing()
       .returning();
-    inserted.push(...rows);
   }
-  if (inserted.length === 0) {
-    const existing = await db.select().from(permissions);
-    return existing;
-  }
-  return inserted;
+  return db.select().from(permissions);
 }
 
 async function seedRolePermissions(permissionRows: { id: string; key: string }[]) {

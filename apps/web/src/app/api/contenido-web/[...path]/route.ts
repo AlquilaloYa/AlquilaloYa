@@ -22,7 +22,7 @@ async function handler(req: Request, { params }: { params: { path: string[] } })
   const permission = WRITE_METHODS.has(req.method)
     ? Permission.WEB_CONTENT_UPDATE
     : Permission.WEB_CONTENT_READ;
-  const denied = requirePermission(auth.user.role, permission);
+  const denied = requirePermission(auth.user, permission);
   if (denied) return denied;
 
   const path = Array.isArray(params.path) ? params.path : [params.path];

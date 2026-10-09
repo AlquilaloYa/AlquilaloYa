@@ -122,7 +122,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.HR_READ);
+    const denied = requirePermission(auth.user, Permission.HR_READ);
     if (denied) return denied;
     const { db, schema } = dbModule as {
       db: typeof import("@contract/db").db;
@@ -143,7 +143,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.HR_UPDATE);
+    const denied = requirePermission(auth.user, Permission.HR_UPDATE);
     if (denied) return denied;
     const { db, schema } = dbModule as {
       db: typeof import("@contract/db").db;
@@ -236,7 +236,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user.role, Permission.HR_UPDATE);
+    const denied = requirePermission(auth.user, Permission.HR_UPDATE);
     if (denied) return denied;
     const { db, schema } = dbModule as {
       db: typeof import("@contract/db").db;
