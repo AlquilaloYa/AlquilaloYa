@@ -95,7 +95,7 @@ export default function SolicitudesPermisoPage() {
             <h2 className="mb-1 font-headline-lg text-primary">Solicitudes de cambio</h2>
             <p className="font-body-sm text-on-surface-variant">
               {canReview
-                ? "Bandeja privada para Developer y administradores. Solo el Developer puede aprobar cambios."
+                ? "Bandeja privada para Developer y administradores. Cada solicitud se aprueba o rechaza aquí."
                 : "Solicita autorización para un cambio. La aprobación cubre únicamente el cambio descrito."}
             </p>
           </div>

@@ -59,7 +59,7 @@ describe("AccessControl", () => {
     expect(ac.can(P.PERMISSION_REQUEST_APPROVE)).toBe(true);
   });
 
-  it("ADMIN gestiona y edita todo, pero no puede eliminar usuarios", () => {
+  it("ADMIN gestiona y edita todo, incluido eliminar usuarios y aprobar solicitudes", () => {
     const ac = AccessControl.forRole("ADMIN");
     for (const permission of permissionsForRole("ADMIN")) {
       expect(ac.can(permission)).toBe(true);
@@ -67,8 +67,8 @@ describe("AccessControl", () => {
     expect(ac.can(P.USER_MANAGE)).toBe(true);
     expect(ac.can(P.ROLE_MANAGE)).toBe(true);
     expect(ac.can(P.PERMISSION_REQUEST_READ)).toBe(true);
-    expect(ac.can(P.PERMISSION_REQUEST_APPROVE)).toBe(false);
-    expect(ac.can(P.USER_DELETE)).toBe(false);
+    expect(ac.can(P.PERMISSION_REQUEST_APPROVE)).toBe(true);
+    expect(ac.can(P.USER_DELETE)).toBe(true);
   });
 
   it("require devuelve reason cuando no hay permiso", () => {

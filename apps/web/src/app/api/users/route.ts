@@ -84,8 +84,15 @@ export async function POST(req: Request) {
     if (!USER_ROLES.includes(role)) {
       return NextResponse.json({ error: `Rol inválido: ${role}` }, { status: 400 });
     }
-    if (role === "DEVELOPER" && auth.user.role !== "DEVELOPER") {
-      return NextResponse.json({ error: "Solo el Developer puede asignar ese rol" }, { status: 403 });
+    if (
+      role === "DEVELOPER" &&
+      auth.user.role !== "DEVELOPER" &&
+      auth.user.role !== "ADMIN"
+    ) {
+      return NextResponse.json(
+        { error: "Solo el Developer y el Administrador pueden asignar ese rol" },
+        { status: 403 }
+      );
     }
     let password = typeof body.password === "string" ? body.password : "";
     if (password && password.length < 6) {

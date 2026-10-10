@@ -67,7 +67,7 @@ export default function UsuariosConfiguracionPage() {
   const { user } = useAuth();
   const canManage = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.USER_MANAGE);
   const canDelete = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.USER_DELETE);
-  const canAssignPermissions = user?.role === "DEVELOPER";
+  const canAssignPermissions = user?.role === "DEVELOPER" || user?.role === "ADMIN";
 
   const [items, setItems] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -365,9 +365,13 @@ export default function UsuariosConfiguracionPage() {
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {PERMISSIONS.map((permission) => {
                 const includedByRole = AccessControl.forRole(permissionsUser.role).can(permission);
-                const developerOnly =
+                const reserved =
                   permission === Permission.USER_DELETE ||
                   permission === Permission.PERMISSION_REQUEST_APPROVE;
+                const reservedGrantable =
+                  !reserved ||
+                  permissionsUser.role === "DEVELOPER" ||
+                  permissionsUser.role === "ADMIN";
                 const checked =
                   includedByRole || assignedPermissions.includes(permission);
                 return (
@@ -382,7 +386,7 @@ export default function UsuariosConfiguracionPage() {
                         permissionsBusy ||
                         !permissionsLoaded ||
                         includedByRole ||
-                        (developerOnly && permissionsUser.role !== "DEVELOPER")
+                        !reservedGrantable
                       }
                       onChange={(event) =>
                         setAssignedPermissions((current) =>
@@ -401,8 +405,8 @@ export default function UsuariosConfiguracionPage() {
                         {permission}
                         {includedByRole
                           ? " · incluido por el rol"
-                          : developerOnly && permissionsUser.role !== "DEVELOPER"
-                            ? " · exclusivo del Developer"
+                          : !reservedGrantable
+                            ? " · exclusivo del Developer o Administrador"
                             : ""}
                       </span>
                     </span>
@@ -471,7 +475,8 @@ export default function UsuariosConfiguracionPage() {
                   {USER_ROLES.filter((r) =>
                     r !== "DEVELOPER" ||
                     form.role === "DEVELOPER" ||
-                    (user?.role === "DEVELOPER" && !items.some((item) => item.role === "DEVELOPER"))
+                    ((user?.role === "DEVELOPER" || user?.role === "ADMIN") &&
+                      !items.some((item) => item.role === "DEVELOPER"))
                   ).map((r) => (
                     <option key={r} value={r}>
                       {ROLE_LABELS[r]} ({r})
@@ -507,6 +512,7 @@ export default function UsuariosConfiguracionPage() {
                   disabled={
                     !!user &&
                     user.role !== "DEVELOPER" &&
+                    user.role !== "ADMIN" &&
                     (form.active || (editId !== null && items.find((item) => item.id === editId)?.role === "DEVELOPER"))
                   }
                   className="h-4 w-4 accent-primary"
@@ -618,7 +624,7 @@ export default function UsuariosConfiguracionPage() {
                                 <KeyRound className="h-4 w-4" /> {item.active ? "Eliminar" : "Reactivar"}
                               </button>
                             ) : null}
-                            {canDelete && user && user.id !== item.id && item.active && item.role !== "DEVELOPER" ? (
+                            {canDelete && user && user.id !== item.id && item.active ? (
                               <button
                                 onClick={() => deactivate(item)}
                                 disabled={busy}

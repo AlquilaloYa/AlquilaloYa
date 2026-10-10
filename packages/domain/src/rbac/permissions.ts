@@ -78,7 +78,7 @@ export const PERMISSION_DESCRIPTIONS: Record<Permission, string> = {
   [Permission.USER_READ]: "Ver usuarios",
   [Permission.USER_MANAGE]: "Gestionar usuarios",
   [Permission.ROLE_MANAGE]: "Gestionar roles",
-  [Permission.USER_DELETE]: "Eliminar usuarios (solo Developer)",
+  [Permission.USER_DELETE]: "Eliminar usuarios (solo Developer o Administrador)",
   [Permission.PERMISSION_REQUEST_CREATE]: "Solicitar permiso al Developer",
   [Permission.PERMISSION_REQUEST_READ]: "Ver solicitudes de permiso",
   [Permission.PERMISSION_REQUEST_APPROVE]: "Aprobar o rechazar solicitudes de permiso",

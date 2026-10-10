@@ -6,9 +6,10 @@ import type { UserRole } from "./role";
  * Matriz RBAC. Cada rol declara los permisos que tiene.
  *
  * Principios:
- * - DEVELOPER: único rol con permiso para eliminar usuarios (USER_DELETE) y
- *   aprobar las solicitudes de permiso de los roles de solo lectura.
- * - ADMIN: controla y edita todo, pero NO puede eliminar usuarios.
+ * - DEVELOPER: gestiona permisos individuales y asigna el rol DEVELOPER.
+ * - ADMIN: controla y edita todo, incluido eliminar usuarios y aprobar
+ *   solicitudes de permiso. No puede solicitar permisos (no los necesita).
+ *   Solo el DEVELOPER puede asignar el rol DEVELOPER.
  * - RRHH: solo lectura sobre la operación (no crea, no edita, no elimina);
  *   si quiere modificar algo pide permiso al Developer.
  * - ASISTENTE_ADMINISTRATIVO: igual que RRHH, con acceso de lectura además a
@@ -19,12 +20,7 @@ import type { UserRole } from "./role";
 const ALL_PERMISSIONS: Permission[] = Object.values(P);
 
 export const ADMIN_PERMISSIONS: ReadonlySet<Permission> = new Set(
-  ALL_PERMISSIONS.filter(
-    (perm) =>
-      perm !== P.USER_DELETE &&
-      perm !== P.PERMISSION_REQUEST_APPROVE &&
-      perm !== P.PERMISSION_REQUEST_CREATE
-  )
+  ALL_PERMISSIONS.filter((perm) => perm !== P.PERMISSION_REQUEST_CREATE)
 );
 
 export const DEVELOPER_PERMISSIONS: ReadonlySet<Permission> = new Set(

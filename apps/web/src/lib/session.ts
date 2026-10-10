@@ -75,11 +75,12 @@ export function requirePermission(
     typeof principal === "string" ? [] : principal.additionalPermissions;
   if (
     role !== "DEVELOPER" &&
+    role !== "ADMIN" &&
     (permission === Permission.USER_DELETE ||
       permission === Permission.PERMISSION_REQUEST_APPROVE)
   ) {
     return NextResponse.json(
-      { error: "Este permiso está reservado al Developer" },
+      { error: "Este permiso está reservado al Developer y al Administrador" },
       { status: 403 }
     );
   }

@@ -86,8 +86,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       if (!USER_ROLES.includes(role)) {
         return NextResponse.json({ error: `Rol inválido: ${role}` }, { status: 400 });
       }
-      if (role === "DEVELOPER" && auth.user.role !== "DEVELOPER") {
-        return NextResponse.json({ error: "Solo el Developer puede asignar ese rol" }, { status: 403 });
+      if (
+        role === "DEVELOPER" &&
+        auth.user.role !== "DEVELOPER" &&
+        auth.user.role !== "ADMIN"
+      ) {
+        return NextResponse.json(
+          { error: "Solo el Developer y el Administrador pueden asignar ese rol" },
+          { status: 403 }
+        );
       }
       if (role === "DEVELOPER" && current.role !== "DEVELOPER") {
         const [developer] = await dbModule.db
@@ -105,8 +112,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       if (typeof body.active !== "boolean") {
         return NextResponse.json({ error: "El estado activo debe ser booleano" }, { status: 400 });
       }
-      if (body.active === false && auth.user.role !== "DEVELOPER") {
-        return NextResponse.json({ error: "Solo el Developer puede eliminar usuarios" }, { status: 403 });
+      if (
+        body.active === false &&
+        requirePermission(auth.user, Permission.USER_DELETE) !== null
+      ) {
+        return NextResponse.json({ error: "No tienes permiso para desactivar usuarios" }, { status: 403 });
       }
       if (body.active === false && current.id === auth.user.id) {
         return NextResponse.json({ error: "No puedes desactivar tu propia cuenta" }, { status: 400 });

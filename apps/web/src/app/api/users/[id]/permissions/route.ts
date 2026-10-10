@@ -5,10 +5,10 @@ import { requireUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-function requireDeveloper(role: string) {
-  if (role !== "DEVELOPER") {
+function requirePermissionManager(role: string) {
+  if (role !== "DEVELOPER" && role !== "ADMIN") {
     return NextResponse.json(
-      { error: "Solo el Developer puede asignar permisos individuales" },
+      { error: "Solo el Developer y el Administrador pueden asignar permisos individuales" },
       { status: 403 }
     );
   }
@@ -23,7 +23,7 @@ export async function GET(
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requireDeveloper(auth.user.role);
+    const denied = requirePermissionManager(auth.user.role);
     if (denied) return denied;
 
     const target = await new dbModule.DrizzleUserRepository().findById(params.id);
@@ -57,7 +57,7 @@ export async function PUT(
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requireDeveloper(auth.user.role);
+    const denied = requirePermissionManager(auth.user.role);
     if (denied) return denied;
 
     const target = await new dbModule.DrizzleUserRepository().findById(params.id);
@@ -81,6 +81,7 @@ export async function PUT(
     const requested = Array.from(new Set(body.permissions as Permission[]));
     if (
       target.role !== "DEVELOPER" &&
+      target.role !== "ADMIN" &&
       requested.some(
         (permission) =>
           permission === Permission.USER_DELETE ||
@@ -88,7 +89,7 @@ export async function PUT(
       )
     ) {
       return NextResponse.json(
-        { error: "Eliminar usuarios y aprobar solicitudes son permisos exclusivos del Developer" },
+        { error: "Eliminar usuarios y aprobar solicitudes son permisos exclusivos del Developer y el Administrador" },
         { status: 400 }
       );
     }

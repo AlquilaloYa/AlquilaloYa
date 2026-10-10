@@ -15,11 +15,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const role = auth.user.role;
-    if (role !== "DEVELOPER" && role !== "ADMIN") {
-      const denied = requirePermission(auth.user, Permission.PERMISSION_REQUEST_APPROVE);
-      if (denied) return denied;
-    }
+    const denied = requirePermission(auth.user, Permission.PERMISSION_REQUEST_APPROVE);
+    if (denied) return denied;
 
     const body = (await req.json().catch(() => ({}))) as Body;
     const action = String(body.action ?? "").toUpperCase();
