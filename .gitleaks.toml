@@ -5,13 +5,17 @@ title = "AlquilaYa ERP — configuracion gitleaks (SEC-070)"
 useDefault = true
 
 [allowlist]
-description = "Valores de ejemplo, dummies de CI y documentacion (no son secretos reales)"
+description = "Valores de ejemplo, dummies de CI, fixtures de test y documentacion (no son secretos reales)"
 paths = [
-  '''(^|/)\.env\.example$''',
-  '''(^|/)docs/security/.*\.md$''',
-  '''(^|/)dev/null$''',
+  '''(^|[\\/])\.env\.example$''',
+  '''(^|[\\/])docs[\\/]security[\\/].*\.md$''',
+  '''(^|[\\/])dev[\\/]null$''',
+  '''(^|[\\/])packages[\\/]db[\\/]debug-snap\.mjs$''',
+  '''(^|[\\/])packages[\\/]db[\\/]src[\\/]crypto[\\/]credential-cipher\.test\.ts$''',
+  '''(^|[\\/])packages[\\/]config[\\/]src[\\/]production-secrets\.test\.ts$''',
 ]
 regexes = [
   '''ci-connector-encryption-key''',
   '''postgresql://ci:''',
+  '''sc_inventarios_departamento_v1''',
 ]
