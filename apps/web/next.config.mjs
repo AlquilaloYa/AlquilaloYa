@@ -32,7 +32,16 @@ const securityHeaders = [
   },
   // La CSP estricta solo en producción: en dev bloquea el React Refresh
   // ('unsafe-eval') y rompería la hidratación (p. ej. login con GET nativo).
-  ...(isProd ? [{ key: "Content-Security-Policy", value: csp }] : []),
+  ...(isProd
+    ? [
+        { key: "Content-Security-Policy", value: csp },
+        // HSTS solo bajo HTTPS (producción).
+        {
+          key: "Strict-Transport-Security",
+          value: "max-age=63072000; includeSubDomains; preload",
+        },
+      ]
+    : []),
 ];
 
 const nextConfig = {

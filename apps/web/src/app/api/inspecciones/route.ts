@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
@@ -163,6 +164,17 @@ export async function POST(req: Request) {
     if (!row) {
       return NextResponse.json({ error: "No se pudo crear la inspección" }, { status: 500 });
     }
+    await recordAdminAction(dbModule, auth.user, {
+      action: "INSPECTION_CREATED",
+      module: "INSPECTIONS",
+      entityType: "INSPECTION",
+      entityId: row.id,
+      current: {
+        estado: row.estado,
+        departamentoId: row.departamentoId,
+        departamentoNombre: row.departamentoNombre,
+      },
+    });
     return NextResponse.json(toView(row), { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
@@ -242,6 +254,15 @@ export async function PUT(req: Request) {
     if (!row) {
       return NextResponse.json({ error: "Inspección no encontrada" }, { status: 404 });
     }
+    const completada = existing.estado !== "COMPLETADO" && row.estado === "COMPLETADO";
+    await recordAdminAction(dbModule, auth.user, {
+      action: completada ? "INSPECTION_COMPLETED" : "INSPECTION_UPDATED",
+      module: "INSPECTIONS",
+      entityType: "INSPECTION",
+      entityId: row.id,
+      previous: { estado: existing.estado },
+      current: { estado: row.estado, departamentoId: row.departamentoId },
+    });
     return NextResponse.json(toView(row));
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
@@ -272,6 +293,12 @@ export async function DELETE(req: Request) {
     if (!row) {
       return NextResponse.json({ error: "Inspeccion no encontrada" }, { status: 404 });
     }
+    await recordAdminAction(dbModule, auth.user, {
+      action: "INSPECTION_DELETED",
+      module: "INSPECTIONS",
+      entityType: "INSPECTION",
+      entityId: row.id,
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });

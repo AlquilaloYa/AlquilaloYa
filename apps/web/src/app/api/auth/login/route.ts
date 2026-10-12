@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
+import { mfaEnforce } from "@contract/config/env";
 import {
   loginWithPassword,
   applySessionCookies,
   clearSessionCookies,
+  applyMfaCookies,
+  clearMfaCookies,
 } from "@/lib/supabase-auth";
+import { decodeJwtPayload } from "@/lib/jwt";
+import { listVerifiedTotp } from "@/lib/mfa";
+import { isMfaPrivilegedRole } from "@/lib/mfa-policy";
 import { Permission } from "@contract/domain/rbac";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +44,20 @@ export async function POST(req: Request) {
         { error: "Usuario autenticado pero sin acceso al sistema" },
         { status: 403 }
       );
-      return clearSessionCookies(res);
+      return clearSessionCookies(clearMfaCookies(res));
+    }
+
+    // SEC-015: si el usuario ya tiene un factor TOTP verificado, exigir el
+    // segundo factor antes de emitir la sesión completa (AAL2).
+    const verifiedFactors = await listVerifiedTotp(session.access_token).catch(() => []);
+    const aal = decodeJwtPayload(session.access_token)?.aal;
+    if (verifiedFactors.length > 0 && aal !== "aal2") {
+      // Guardar la sesión AAL1 en cookies temporales; NO da acceso todavía.
+      const res = NextResponse.json({ mfaRequired: true }, { status: 200 });
+      return applyMfaCookies(clearSessionCookies(res), {
+        access_token: session.access_token,
+        ...(session.refresh_token ? { refresh_token: session.refresh_token } : {}),
+      });
     }
 
     const permissionKeys = await new dbModule.DrizzleUserRepository()
@@ -46,6 +65,12 @@ export async function POST(req: Request) {
     const additionalPermissions = Object.values(Permission).filter((permission) =>
       permissionKeys.includes(permission)
     );
+
+    // Aviso (no bloqueante) si el rol es privilegiado y MFA está exigido pero
+    // el usuario aún no enroló un factor.
+    const mfaEnrollRecommended =
+      mfaEnforce() && isMfaPrivilegedRole(appUser.role) && verifiedFactors.length === 0;
+
     const res = NextResponse.json(
       {
         user: {
@@ -55,10 +80,11 @@ export async function POST(req: Request) {
           role: appUser.role,
           additionalPermissions,
         },
+        ...(mfaEnrollRecommended ? { mfaEnrollRecommended: true } : {}),
       },
       { status: 200 }
     );
-    return applySessionCookies(res, {
+    return applySessionCookies(clearMfaCookies(res), {
       access_token: session.access_token,
       ...(session.refresh_token ? { refresh_token: session.refresh_token } : {}),
     });

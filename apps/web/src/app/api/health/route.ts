@@ -15,11 +15,16 @@ export async function GET() {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
+    // SEC-074: no exponer detalles internos (mensajes de driver, host, etc.).
+    // El detalle queda en logs del servidor; la respuesta es genérica.
+    console.error(
+      "[health] fallo de base de datos:",
+      error instanceof Error ? error.message : error
+    );
     return NextResponse.json(
       {
         status: "degraded",
         database: "error",
-        error: error instanceof Error ? error.message : "database unavailable",
         timestamp: new Date().toISOString(),
       },
       { status: 503 }

@@ -43,6 +43,7 @@ import {
   ScrollText,
   LayoutGrid,
   UserCog,
+  KeyRound,
   HardDrive,
   ListTodo,
   ClipboardList,
@@ -61,7 +62,7 @@ interface NavItem {
   phase?: string;
   permission?: Permission;
   external?: boolean;
-  group?: "contratos" | "marketing" | "google" | "rrhh";
+  group?: "contratos" | "marketing" | "google" | "rrhh" | "operatividad";
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -105,9 +106,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/clientes", label: "Clientes", icon: Star, section: "Clientes", permission: "client.read" },
   { href: "/pagos", label: "Cobranza", icon: Banknote, section: "Cobranza", permission: "contract.read" },
   { href: "/analiticas", label: "Analíticas", icon: BarChart3, section: "Analíticas", permission: "contract.read" },
-  { href: "/workflow", label: "Workflow", icon: Workflow, section: "Workflow", permission: "contract.read" },
-  { href: "/checklist", label: "Checklist", icon: ListChecks, section: "Checklist" },
-  { href: "/work-123", label: "Work 123", icon: Kanban, section: "Work 123", permission: "contract.read" },
+  { href: "/workflow", label: "Workflow", icon: Workflow, section: "Workflow", permission: "contract.read", group: "operatividad" },
+  { href: "/checklist", label: "Checklist", icon: ListChecks, section: "Checklist", group: "operatividad" },
+  { href: "/work-123", label: "Work 123", icon: Kanban, section: "Work 123", permission: "contract.read", group: "operatividad" },
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "hr.read", group: "rrhh" },
   { href: "/cronograma-asistencia", label: "Registro de asistencia", icon: AlarmClock, section: "Recursos Humanos", permission: "attendance.read", group: "rrhh" },
@@ -129,6 +130,7 @@ const CONFIGURATION_ITEMS: NavItem[] = [
   { href: "/actividad", label: "Actividad", icon: Activity, section: "Actividad", permission: "activity.read" },
   { href: "/integraciones", label: "Integraciones", icon: Plug, section: "Integraciones", permission: "integration.read" },
   { href: "/configuraciones/usuarios", label: "Usuarios", icon: UserCog, section: "Usuarios", permission: "user.read" },
+  { href: "/configuraciones/seguridad", label: "Seguridad", icon: KeyRound, section: "Seguridad" },
 ];
 
 const ROLE_PAGES: Partial<Record<UserRole, ReadonlySet<string>>> = {
@@ -156,6 +158,10 @@ function canAccessPage(
   pathname: string,
   additionalPermissions: readonly Permission[] = []
 ): boolean {
+  // MFA es por usuario: cualquier sesión puede gestionar su propia seguridad.
+  if (pathname === "/configuraciones/seguridad" || pathname.startsWith("/configuraciones/seguridad/")) {
+    return true;
+  }
   const pages = ROLE_PAGES[role];
   if (!pages || [...pages].some((page) => pathname === page || pathname.startsWith(`${page}/`))) {
     return true;
@@ -322,6 +328,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [marketingOpen, setMarketingOpen] = useState(false);
   const [googleOpen, setGoogleOpen] = useState(false);
   const [rrhhOpen, setRrhhOpen] = useState(false);
+  const [operatividadOpen, setOperatividadOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -419,6 +426,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 icon: Briefcase,
                 open: contractsOpen,
                 onToggle: () => setContractsOpen((open) => !open),
+              },
+              {
+                key: "operatividad",
+                label: "Operatividad",
+                icon: ClipboardList,
+                open: operatividadOpen,
+                onToggle: () => setOperatividadOpen((open) => !open),
               },
               {
                 key: "google",

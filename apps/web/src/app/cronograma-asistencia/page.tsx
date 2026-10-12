@@ -22,6 +22,8 @@ type Registro = {
   salidaAt: string | null;
   asistio: boolean;
   createdAt: string | null;
+  /** Marca autoritativa del servidor: el registro es la jornada de hoy (día Lima). */
+  esHoy?: boolean;
 };
 
 type Accion = "ENTRADA" | "REFRIGERIO_INICIO" | "REFRIGERIO_FIN" | "SALIDA";
@@ -69,7 +71,7 @@ export default function CronogramaAsistenciaPage() {
   }, []);
 
   const cargar = useCallback(async () => {
-    const res = await apiFetch("/api/asistencias");
+    const res = await apiFetch("/api/asistencias", { cache: "no-store" });
     if (res.ok) {
       const rows = (await res.json()) as Registro[];
       if (Array.isArray(rows)) setRegistros(rows);
@@ -82,7 +84,7 @@ export default function CronogramaAsistenciaPage() {
 
   const dniLimpio = dni.trim();
   const miRegistro = dniLimpio
-    ? registros.find((r) => r.dni === dniLimpio && esHoy(r.createdAt))
+    ? registros.find((r) => r.dni === dniLimpio && (r.esHoy ?? esHoy(r.createdAt)))
     : undefined;
 
   const datosListos = Boolean(nombre.trim()) && Boolean(dniLimpio);
@@ -274,6 +276,13 @@ export default function CronogramaAsistenciaPage() {
               </p>
             </div>
           </div>
+
+          {datosListos && !miRegistro ? (
+            <p className="mt-4 rounded-md border border-outline-variant bg-surface-container p-2 text-xs text-on-surface-variant">
+              Para habilitar el refrigerio y la salida, primero registrá la entrada de hoy
+              con &quot;Iniciar jornada&quot;.
+            </p>
+          ) : null}
         </div>
 
         <div className="rounded-xl bg-surface-container-lowest p-5 shadow-sm">

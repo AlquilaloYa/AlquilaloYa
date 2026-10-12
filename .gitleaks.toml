@@ -1,0 +1,17 @@
+title = "AlquilaYa ERP — configuracion gitleaks (SEC-070)"
+
+# Usar el conjunto de reglas por defecto + reglas propias.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Valores de ejemplo, dummies de CI y documentacion (no son secretos reales)"
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)docs/security/.*\.md$''',
+  '''(^|/)dev/null$''',
+]
+regexes = [
+  '''ci-connector-encryption-key''',
+  '''postgresql://ci:''',
+]

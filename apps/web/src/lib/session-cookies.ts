@@ -6,7 +6,12 @@ import { NextResponse } from "next/server";
  */
 export const ACCESS_COOKIE = "sb_at";
 export const REFRESH_COOKIE = "sb_rt";
+// Cookies temporales durante el reto MFA (SEC-015): contienen una sesión AAL1
+// que AÚN no da acceso; solo sirven para completar el segundo factor.
+export const MFA_ACCESS_COOKIE = "sb_mfa_at";
+export const MFA_REFRESH_COOKIE = "sb_mfa_rt";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 días
+const MFA_MAX_AGE = 10 * 60; // 10 minutos
 
 const isProd = () => process.env.NODE_ENV === "production";
 
@@ -36,6 +41,24 @@ export function clearSessionCookies(res: NextResponse): NextResponse {
   return res;
 }
 
+/** Guarda los tokens AAL1 en cookies temporales mientras se completa el MFA. */
+export function applyMfaCookies(
+  res: NextResponse,
+  tokens: { access_token: string; refresh_token?: string }
+): NextResponse {
+  res.headers.append("Set-Cookie", cookie(MFA_ACCESS_COOKIE, tokens.access_token, MFA_MAX_AGE));
+  if (tokens.refresh_token) {
+    res.headers.append("Set-Cookie", cookie(MFA_REFRESH_COOKIE, tokens.refresh_token, MFA_MAX_AGE));
+  }
+  return res;
+}
+
+export function clearMfaCookies(res: NextResponse): NextResponse {
+  res.headers.append("Set-Cookie", expired(MFA_ACCESS_COOKIE));
+  res.headers.append("Set-Cookie", expired(MFA_REFRESH_COOKIE));
+  return res;
+}
+
 function parseCookies(header: string | null): Record<string, string> {
   const out: Record<string, string> = {};
   if (!header) return out;
@@ -56,6 +79,20 @@ export function readSessionTokens(req: Request): {
   const out: { accessToken?: string; refreshToken?: string } = {};
   const at = c[ACCESS_COOKIE];
   const rt = c[REFRESH_COOKIE];
+  if (at) out.accessToken = at;
+  if (rt) out.refreshToken = rt;
+  return out;
+}
+
+/** Lee los tokens temporales del reto MFA (SEC-015). */
+export function readMfaTokens(req: Request): {
+  accessToken?: string;
+  refreshToken?: string;
+} {
+  const c = parseCookies(req.headers.get("cookie"));
+  const out: { accessToken?: string; refreshToken?: string } = {};
+  const at = c[MFA_ACCESS_COOKIE];
+  const rt = c[MFA_REFRESH_COOKIE];
   if (at) out.accessToken = at;
   if (rt) out.refreshToken = rt;
   return out;

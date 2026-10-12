@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import { recordAdminAction } from "@/lib/audit-log";
 import { buscarClienteNotariadoPorId } from "@/lib/client-phone-match";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,14 @@ export async function POST(req: Request) {
     if (updated.length === 0) {
       return NextResponse.json({ error: "Este lead no tiene conversaciones para derivar" }, { status: 404 });
     }
+
+    await recordAdminAction(dbModule, auth.user, {
+      action: "CONVERSATION_DERIVED",
+      module: "MESSAGING",
+      entityType: "CONVERSATION",
+      entityId: body.leadId,
+      current: { leadId: body.leadId, clientId: client.id, conversations: updated.length },
+    });
 
     return NextResponse.json({ ok: true, conversations: updated.length });
   } catch (error) {

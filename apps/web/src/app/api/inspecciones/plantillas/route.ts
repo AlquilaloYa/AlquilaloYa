@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,13 @@ export async function POST(req: Request) {
     if (!row) {
       return NextResponse.json({ error: "No se pudo crear la plantilla" }, { status: 500 });
     }
+    await recordAdminAction(dbModule, auth.user, {
+      action: "INSPECTION_TEMPLATE_CREATED",
+      module: "INSPECTIONS",
+      entityType: "INSPECTION_TEMPLATE",
+      entityId: row.id,
+      current: { nombre: row.nombre },
+    });
     return NextResponse.json(toView(row), { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
@@ -133,6 +141,13 @@ export async function PUT(req: Request) {
     if (!row) {
       return NextResponse.json({ error: "Plantilla no encontrada" }, { status: 404 });
     }
+    await recordAdminAction(dbModule, auth.user, {
+      action: "INSPECTION_TEMPLATE_UPDATED",
+      module: "INSPECTIONS",
+      entityType: "INSPECTION_TEMPLATE",
+      entityId: row.id,
+      current: { nombre: row.nombre },
+    });
     return NextResponse.json(toView(row));
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
@@ -163,6 +178,12 @@ export async function DELETE(req: Request) {
     if (!row) {
       return NextResponse.json({ error: "Plantilla no encontrada" }, { status: 404 });
     }
+    await recordAdminAction(dbModule, auth.user, {
+      action: "INSPECTION_TEMPLATE_DELETED",
+      module: "INSPECTIONS",
+      entityType: "INSPECTION_TEMPLATE",
+      entityId: row.id,
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });

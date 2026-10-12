@@ -1,10 +1,16 @@
 import { supabaseAnonKey, supabaseUrl } from "@contract/config/env";
+import { decodeJwtPayload } from "@/lib/jwt";
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
+  MFA_ACCESS_COOKIE,
+  MFA_REFRESH_COOKIE,
   applySessionCookies,
   clearSessionCookies,
+  applyMfaCookies,
+  clearMfaCookies,
   readSessionTokens,
+  readMfaTokens,
 } from "@/lib/session-cookies";
 
 /**
@@ -15,9 +21,14 @@ import {
 export {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
+  MFA_ACCESS_COOKIE,
+  MFA_REFRESH_COOKIE,
   applySessionCookies,
   clearSessionCookies,
+  applyMfaCookies,
+  clearMfaCookies,
   readSessionTokens,
+  readMfaTokens,
 };
 
 /** Cambia email+password por tokens (flujo de contraseña de Supabase). */
@@ -53,7 +64,7 @@ export async function loginWithPassword(
 /** Valida un access token contra Supabase. Devuelve email/id verificados o null. */
 export async function verifyAccessToken(
   accessToken: string | undefined
-): Promise<{ email: string; id: string } | null> {
+): Promise<{ email: string; id: string; aal?: string } | null> {
   if (!accessToken) return null;
   const url = supabaseUrl();
   const anon = supabaseAnonKey();
@@ -67,7 +78,9 @@ export async function verifyAccessToken(
     if (!res.ok) return null;
     const data = (await res.json()) as { email?: string; id?: string };
     if (!data.email || !data.id) return null;
-    return { email: data.email, id: data.id };
+    // SEC-015: el claim `aal` del access token indica si la sesión ya pasó MFA.
+    const aal = decodeJwtPayload(accessToken)?.aal;
+    return { email: data.email, id: data.id, ...(aal ? { aal } : {}) };
   } catch {
     return null;
   }
@@ -107,6 +120,7 @@ export async function refreshSession(
 export async function resolveSession(req: Request): Promise<{
   email: string;
   id: string;
+  aal?: string;
   refreshed?: { access_token: string; refresh_token?: string };
 } | null> {
   const { accessToken, refreshToken } = readSessionTokens(req);

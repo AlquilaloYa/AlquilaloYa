@@ -15,6 +15,9 @@
     "push": "drizzle-kit push",
     "seed": "tsx src/seed.ts",
     "users": "tsx scripts/create-app-users.ts",
+    "credentials:rotate": "tsx scripts/rotate-credentials.ts",
+    "rls:check": "tsx scripts/check-rls.ts",
+    "rls:check:rest": "tsx scripts/check-rls-rest.ts",
     "lint": "eslint src --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"

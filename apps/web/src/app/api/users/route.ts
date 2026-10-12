@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { Permission, USER_ROLES } from "@contract/domain/rbac";
 import type { UserRole } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import { recordAdminAction } from "@/lib/audit-log";
+import { isPasswordLongEnough, MIN_PASSWORD_MESSAGE } from "@/lib/password-policy";
 import {
   createAuthUser,
   generatePassword,
@@ -95,8 +97,8 @@ export async function POST(req: Request) {
       );
     }
     let password = typeof body.password === "string" ? body.password : "";
-    if (password && password.length < 6) {
-      return NextResponse.json({ error: "La contraseña debe tener al menos 6 caracteres" }, { status: 400 });
+    if (password && !isPasswordLongEnough(password)) {
+      return NextResponse.json({ error: MIN_PASSWORD_MESSAGE }, { status: 400 });
     }
 
     const repo = new dbModule.DrizzleUserRepository();
@@ -131,24 +133,18 @@ export async function POST(req: Request) {
       active: body.active === false ? false : true,
     });
 
-    try {
-      await dbModule.db.insert(dbModule.schema.activity_events).values({
-        userId: auth.user.id,
-        actorType: "user",
-        action: "USER_CREATED",
-        module: "USERS",
-        entityType: "USER",
-        entityId: created.id,
-        result: "SUCCESS",
-        metadata: {
-          email: created.email,
-          role: created.role,
-          authCreated: authResult.created,
-        },
-      });
-    } catch {
-      /* el registro de actividad no bloquea la creación */
-    }
+    await recordAdminAction(dbModule, auth.user, {
+      action: "USER_CREATED",
+      module: "USERS",
+      entityType: "USER",
+      entityId: created.id,
+      current: {
+        email: created.email,
+        role: created.role,
+        active: created.active,
+      },
+      metadata: { authCreated: authResult.created },
+    });
 
     return NextResponse.json(
       {

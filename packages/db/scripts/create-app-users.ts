@@ -28,8 +28,8 @@ if (!url || !serviceKey) {
 }
 
 const fixedPassword = process.env.SUPABASE_USERS_PASSWORD;
-if (fixedPassword && fixedPassword.length < 6) {
-  console.error("SUPABASE_USERS_PASSWORD debe tener >= 6 caracteres.");
+if (fixedPassword && fixedPassword.length < 12) {
+  console.error("SUPABASE_USERS_PASSWORD debe tener >= 12 caracteres (SEC-015).");
   process.exit(1);
 }
 

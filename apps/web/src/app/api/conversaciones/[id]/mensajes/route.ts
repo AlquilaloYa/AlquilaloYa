@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { asc, eq, sql } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ async function ctx(permission: Permission, req: Request) {
     db: typeof import("@contract/db").db;
     schema: typeof import("@contract/db").schema;
   };
-  return { db, schema, user: auth.user };
+  return { db, schema, dbModule, user: auth.user };
 }
 
 /** GET /api/conversaciones/[id]/mensajes?read=1 — histórico (y marcar leídos). */
@@ -129,9 +130,23 @@ export async function POST(req: Request, { params }: Ctx) {
           .where(eq(c.schema.messages.id, msg.id));
         messageView.estado = estadoFinal;
       }
+      await recordAdminAction(c.dbModule, c.user, {
+        action: "MESSAGE_SENT",
+        module: "MESSAGING",
+        entityType: "MESSAGE",
+        entityId: msg.id,
+        current: { conversationId: params.id, canal: conv.canal, estado: estadoFinal },
+      });
       return NextResponse.json({ ...messageView, despacho: r }, { status: 201 });
     }
 
+    await recordAdminAction(c.dbModule, c.user, {
+      action: "MESSAGE_RECEIVED",
+      module: "MESSAGING",
+      entityType: "MESSAGE",
+      entityId: msg.id,
+      current: { conversationId: params.id, canal: conv.canal },
+    });
     return NextResponse.json(messageView, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });

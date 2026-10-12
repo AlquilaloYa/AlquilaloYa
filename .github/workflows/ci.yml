@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, develop]
 
+# SEC-070: permisos mínimos por defecto (solo lectura del repositorio).
+permissions:
+  contents: read
+
 jobs:
   quality:
     name: Lint, Typecheck & Tests
@@ -14,6 +18,9 @@ jobs:
     # ejecutan modulos). Valor dummy: CI no toca una BD real aqui.
     env:
       DATABASE_URL: postgresql://ci:***@localhost:5432/ci
+      # packages/config/env.ts exige CONNECTOR_ENCRYPTION_KEY (SEC-041/SEC-076,
+      # sin valor por defecto). Dummy de CI: no cifra datos reales.
+      CONNECTOR_ENCRYPTION_KEY: ci-connector-encryption-key-0000000000
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +53,9 @@ jobs:
     needs: quality
     env:
       DATABASE_URL: postgresql://ci:***@localhost:5432/ci
+      # packages/config/env.ts exige CONNECTOR_ENCRYPTION_KEY (SEC-041/SEC-076,
+      # sin valor por defecto). Dummy de CI: no cifra datos reales.
+      CONNECTOR_ENCRYPTION_KEY: ci-connector-encryption-key-0000000000
     steps:
       - uses: actions/checkout@v4
 
@@ -65,6 +75,32 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  security:
+    name: Security scans
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Escaneo de secretos en el contenido del repo (SEC-070). Imagen fija para
+      # evitar dependencias de licencia; allowlist en .gitleaks.toml.
+      - name: Secret scan (gitleaks)
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/repo" \
+            zricethezav/gitleaks:v8.18.4 detect \
+            --source=/repo --config=/repo/.gitleaks.toml --redact --no-git --exit-code=1
+
+      # Revisión de dependencias en PRs (vulnerabilidades conocidas).
+      - name: Dependency review
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
 
   desktop:
     name: Desktop (${{ matrix.os }})

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ingresarMensaje, type MensajeCanonico } from "@/lib/messaging-gateway";
+import { safeEqual } from "@/lib/secure-compare";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
         { status: 503 }
       );
     }
-    if (req.headers.get("x-webhook-token") !== secret) {
+    if (!safeEqual(req.headers.get("x-webhook-token"), secret)) {
       return NextResponse.json({ error: "Token inválido" }, { status: 401 });
     }
 

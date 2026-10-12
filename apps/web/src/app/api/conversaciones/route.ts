@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import { recordAdminAction } from "@/lib/audit-log";
 import {
   buscarClienteNotariadoPorId,
   buscarClienteUnicoPorTelefono,
@@ -62,7 +63,7 @@ async function ctx(permission: Permission, req: Request) {
     db: typeof import("@contract/db").db;
     schema: typeof import("@contract/db").schema;
   };
-  return { db, schema };
+  return { db, schema, dbModule, user: auth.user };
 }
 
 /** GET /api/conversaciones */
@@ -144,6 +145,13 @@ export async function POST(req: Request) {
       })
       .returning();
     if (!row) return NextResponse.json({ error: "No se pudo crear la conversación" }, { status: 500 });
+    await recordAdminAction(c.dbModule, c.user, {
+      action: "CONVERSATION_CREATED",
+      module: "MESSAGING",
+      entityType: "CONVERSATION",
+      entityId: row.id,
+      current: { canal: row.canal, estado: row.estado, asignadoA: row.asignadoA },
+    });
     return NextResponse.json(toView(row), { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
@@ -166,12 +174,31 @@ export async function PUT(req: Request) {
     if (body.leadId !== undefined) set.leadId = body.leadId || null;
     if (body.contactoNombre !== undefined) set.contactoNombre = body.contactoNombre.trim();
     if (body.contactoTelefono !== undefined) set.contactoTelefono = body.contactoTelefono.trim();
+    const [existing] = await c.db
+      .select({
+        estado: c.schema.conversations.estado,
+        asignadoA: c.schema.conversations.asignadoA,
+        leadId: c.schema.conversations.leadId,
+      })
+      .from(c.schema.conversations)
+      .where(eq(c.schema.conversations.id, body.id))
+      .limit(1);
     const [row] = await c.db
       .update(c.schema.conversations)
       .set(set as never)
       .where(eq(c.schema.conversations.id, body.id))
       .returning();
     if (!row) return NextResponse.json({ error: "Conversación no encontrada" }, { status: 404 });
+    await recordAdminAction(c.dbModule, c.user, {
+      action: "CONVERSATION_UPDATED",
+      module: "MESSAGING",
+      entityType: "CONVERSATION",
+      entityId: row.id,
+      previous: existing
+        ? { estado: existing.estado, asignadoA: existing.asignadoA, leadId: existing.leadId }
+        : null,
+      current: { estado: row.estado, asignadoA: row.asignadoA, leadId: row.leadId },
+    });
     return NextResponse.json(toView(row));
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });

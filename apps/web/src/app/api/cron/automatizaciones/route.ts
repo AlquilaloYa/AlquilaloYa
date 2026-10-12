@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { evaluarReglas } from "@/lib/automatizaciones";
+import { safeEqual } from "@/lib/secure-compare";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -16,7 +17,7 @@ async function run(req: Request) {
       return NextResponse.json({ error: "Cron no configurado: define CRON_SECRET" }, { status: 503 });
     }
     const auth = req.headers.get("authorization") ?? "";
-    if (auth !== `Bearer ${secret}`) {
+    if (!safeEqual(auth, `Bearer ${secret}`)) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
     const resultados = await evaluarReglas("CRON");

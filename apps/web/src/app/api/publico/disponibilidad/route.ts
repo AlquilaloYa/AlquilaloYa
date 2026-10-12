@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ESTADOS_CONTRATO_OCUPANTES } from "@/lib/estado-contrato";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,7 @@ export async function GET() {
       .from(schema.contracts)
       .where(
         and(
-          inArray(schema.contracts.estado, ["FIRMADO", "ACTIVO", "VIGENTE", "NOTARIADO"]),
+          inArray(schema.contracts.estado, ESTADOS_CONTRATO_OCUPANTES),
           isNull(schema.contracts.eliminadoEn)
         )
       );

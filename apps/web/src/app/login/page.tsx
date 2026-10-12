@@ -11,7 +11,7 @@ import { SunIcon, MoonIcon } from "@contract/ui/components/theme-toggle";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 
 export default function LoginPage() {
-  const { user, login } = useAuth();
+  const { user, login, verifyMfa } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -19,6 +19,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [mfaStep, setMfaStep] = useState(false);
+  const [code, setCode] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -30,10 +32,27 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    const ok = await login(email, password);
+    const result = await login(email, password);
     setSubmitting(false);
-    if (!ok) {
+    if (result.status === "mfaRequired") {
+      setMfaStep(true);
+      return;
+    }
+    if (result.status === "error") {
       setError("Credenciales inválidas. Verifica tu correo y la contraseña del sistema.");
+      return;
+    }
+    router.replace("/dashboard");
+  }
+
+  async function handleMfaSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    const result = await verifyMfa(code);
+    setSubmitting(false);
+    if (result.status === "error") {
+      setError(result.message);
       return;
     }
     router.replace("/dashboard");
@@ -87,11 +106,55 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <h2 className="font-headline-lg text-primary">Acceso</h2>
+          <h2 className="font-headline-lg text-primary">
+            {mfaStep ? "Verificación en dos pasos" : "Acceso"}
+          </h2>
           <p className="mt-1 font-body-md text-on-surface-variant">
-            Inicia sesión para continuar.
+            {mfaStep
+              ? "Ingresa el código de tu aplicación de autenticación."
+              : "Inicia sesión para continuar."}
           </p>
 
+          {mfaStep ? (
+            <form onSubmit={handleMfaSubmit} className="mt-8 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="mfa-code" className="font-label-md text-on-surface-variant">
+                  Código de verificación
+                </Label>
+                <Input
+                  id="mfa-code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  className="border-outline-variant bg-surface-container-lowest text-center tracking-[0.5em]"
+                  placeholder="000000"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  autoFocus
+                  required
+                />
+              </div>
+              {error ? <p className="font-body-sm text-destructive">{error}</p> : null}
+              <Button
+                type="submit"
+                disabled={submitting || code.length < 6}
+                className="w-full border-outline-variant bg-primary text-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submitting ? "Verificando…" : "Verificar"}
+              </Button>
+              <button
+                type="button"
+                className="w-full text-center font-body-sm text-on-surface-variant hover:text-primary"
+                onClick={() => {
+                  setMfaStep(false);
+                  setCode("");
+                  setError(null);
+                }}
+              >
+                Volver al inicio de sesión
+              </button>
+            </form>
+          ) : (
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="email" className="font-label-md text-on-surface-variant">
@@ -147,6 +210,7 @@ export default function LoginPage() {
               {submitting ? "Verificando…" : "Iniciar sesión"}
             </Button>
           </form>
+          )}
         </div>
       </section>
     </div>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       })
       .where(eq(schema.permissionRequests.id, params.id))
       .returning();
+
+    await recordAdminAction(dbModule, auth.user, {
+      action: action === "APPROVE" ? "PERMISSION_REQUEST_APPROVED" : "PERMISSION_REQUEST_REJECTED",
+      module: "USERS",
+      entityType: "PERMISSION_REQUEST",
+      entityId: params.id,
+      previous: { estado: exist.estado },
+      current: { estado },
+      metadata: {
+        comentario: typeof body.comentario === "string" && body.comentario.trim()
+          ? body.comentario.trim()
+          : null,
+      },
+    });
+
     return NextResponse.json({ item: row });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });

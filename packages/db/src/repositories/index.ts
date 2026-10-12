@@ -10,6 +10,7 @@ export {
   DrizzleAuditRepository,
   createAuditSink,
   type AuditActor,
+  type AdminAuditInput,
 } from "./audit-repository";
 export { DrizzleActivityRepository } from "./activity-repository";
 export { DrizzleUserRepository } from "./user-repository";

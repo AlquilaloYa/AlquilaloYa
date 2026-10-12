@@ -93,6 +93,29 @@ export async function createAuthUser(
   return { created: true, ...(data.id ? { authUserId: data.id } : {}) };
 }
 
+/**
+ * Banea/desbanea la credencial en Supabase Auth (SEC-015/SEC-077).
+ *
+ * Banear impide nuevos inicios de sesión y **bloquea el refresco de tokens**,
+ * de modo que una sesión existente muere al expirar su access token (corta
+ * duración). Es el mecanismo de revocación disponible en la Admin API de
+ * Supabase Auth; desbanear rehabilita el acceso.
+ */
+export async function setAuthUserBanned(email: string, banned: boolean): Promise<void> {
+  const id = await findAuthUserId(email);
+  if (!id) return;
+  const res = await fetch(`${supabaseUrl()}/auth/v1/admin/users/${id}`, {
+    method: "PUT",
+    headers: adminHeaders(),
+    // "none" retira el ban; una duración amplia (~100 años) lo aplica.
+    body: JSON.stringify({ ban_duration: banned ? "876000h" : "none" }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`ban auth user ${res.status}: ${await res.text()}`);
+  }
+}
+
 /** Actualiza la contraseña en Supabase Auth (si el usuario existe). */
 export async function updateAuthPassword(email: string, password: string): Promise<void> {
   const id = await findAuthUserId(email);

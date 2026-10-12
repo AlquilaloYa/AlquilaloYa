@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import { recordAdminAction } from "@/lib/audit-log";
 import { INVENTARIO_MUEBLERIA } from "@/lib/catalogos";
 
 export const dynamic = "force-dynamic";
@@ -72,6 +74,13 @@ export async function POST(req: Request) {
       .onConflictDoNothing()
       .returning();
     if (fila) {
+      await recordAdminAction(dbModule, auth.user, {
+        action: "INVENTORY_CATALOG_ITEM_CREATED",
+        module: "INVENTORY",
+        entityType: "INVENTORY_CATALOG_ITEM",
+        entityId: fila.id,
+        current: { categoria: fila.categoria, etiqueta: fila.etiqueta },
+      });
       return NextResponse.json({ ok: true, id: fila.id, etiqueta: fila.etiqueta });
     }
     const exist = await db.select().from(schema.inventarioCatalogo);
@@ -104,6 +113,11 @@ export async function PUT(req: Request) {
     const items = Array.isArray(body.items)
       ? body.items.filter((i) => typeof i === "string")
       : [];
+    const [existing] = await db
+      .select({ items: schema.departmentInventories.items })
+      .from(schema.departmentInventories)
+      .where(eq(schema.departmentInventories.departamentoId, body.departamentoId))
+      .limit(1);
     await db
       .insert(schema.departmentInventories)
       .values({ departamentoId: body.departamentoId, items })
@@ -111,6 +125,16 @@ export async function PUT(req: Request) {
         target: schema.departmentInventories.departamentoId,
         set: { items, updatedAt: new Date() },
       });
+    await recordAdminAction(dbModule, auth.user, {
+      action: "INVENTORY_UPDATED",
+      module: "INVENTORY",
+      entityType: "DEPARTMENT_INVENTORY",
+      entityId: body.departamentoId,
+      previous: existing
+        ? { items: Array.isArray(existing.items) ? existing.items.length : 0 }
+        : { items: 0 },
+      current: { items: items.length },
+    });
     return NextResponse.json({ ok: true, departamentoId: body.departamentoId, items });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });

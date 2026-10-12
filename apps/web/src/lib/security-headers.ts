@@ -29,12 +29,18 @@ export const CONTENT_SECURITY_POLICY = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "connect-src 'self' https:",
-  "object-src 'self' blob: data:",
+  // Sin <object>/<embed> en la app (la vista previa de PDF usa iframe/frame-src),
+  // por eso 'none'. Debe coincidir con next.config.mjs (defensa en profundidad).
+  "object-src 'none'",
   "frame-src 'self' blob: data:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
 ].join("; ");
+
+/** HSTS: solo bajo HTTPS (producción). 2 años + subdominios + preload. */
+export const STRICT_TRANSPORT_SECURITY =
+  "max-age=63072000; includeSubDomains; preload";
 
 /** Solo debe enviarse CSP estricta en producción; en dev rompe el HMR/React Refresh. */
 export function isProduction(): boolean {
@@ -43,12 +49,13 @@ export function isProduction(): boolean {
 
 /**
  * Construye las cabeceras de seguridad para una respuesta.
+ * - HSTS solo en producción (requiere HTTPS; en dev rompería el acceso por http).
  * - `csp` por defecto: solo en producción. En desarrollo se omite la CSP para no
  *   bloquear el script de React Refresh (que requiere 'unsafe-eval'), lo que de
  *   otro modo impediría hidratar la app (p. ej. el login haría GET nativo a /login).
  */
 export function securityHeaders(csp = isProduction()): Record<string, string> {
-  return csp
-    ? { ...SECURITY_HEADERS, "Content-Security-Policy": CONTENT_SECURITY_POLICY }
-    : { ...SECURITY_HEADERS };
+  const base: Record<string, string> = { ...SECURITY_HEADERS };
+  if (isProduction()) base["Strict-Transport-Security"] = STRICT_TRANSPORT_SECURITY;
+  return csp ? { ...base, "Content-Security-Policy": CONTENT_SECURITY_POLICY } : base;
 }

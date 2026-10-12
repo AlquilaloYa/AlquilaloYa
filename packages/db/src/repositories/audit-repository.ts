@@ -12,6 +12,20 @@ export interface AuditActor {
   name?: string | null;
 }
 
+export interface AdminAuditInput {
+  actor: AuditActor;
+  /** Acción en mayúsculas, p. ej. USER_ROLE_CHANGED. */
+  action: string;
+  /** Módulo lógico, p. ej. USERS, PAYMENTS, INTEGRATIONS, HR. */
+  module: string;
+  entityType: string;
+  entityId?: string | null;
+  result?: "SUCCESS" | "FAILURE";
+  previous?: Record<string, unknown> | null;
+  current?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+}
+
 /**
  * Persiste los eventos de dominio de contratos en activity_events/audit_events
  * como trazabilidad para la auditoría.
@@ -56,6 +70,49 @@ export class DrizzleAuditRepository {
       metadataSegura: {
         contractId: event.contractId,
         snapshotId: event.snapshotId,
+      } as Record<string, unknown>,
+    });
+  }
+
+  /**
+   * Registra una acción administrativa o sensible en las DOS tablas:
+   * - activity_events: trazabilidad funcional (quién hizo qué en la app).
+   * - audit_events: registro de seguridad (SEC-050/SEC-079).
+   * Nunca persiste secretos en `metadata`/`metadataSegura`.
+   */
+  async recordAdminEvent(input: AdminAuditInput): Promise<void> {
+    const usuario = input.actor?.name?.trim() || "system";
+    const userId = input.actor?.userId ?? null;
+    const actorType = userId ? "user" : "system";
+    const result = input.result ?? "SUCCESS";
+
+    await db.insert(schema.activity_events).values({
+      userId,
+      actorType,
+      action: input.action,
+      module: input.module,
+      entityType: input.entityType,
+      entityId: input.entityId ?? null,
+      result,
+      metadata: {
+        ...(input.metadata ?? {}),
+        ...(input.previous ? { estadoAnterior: input.previous } : {}),
+        ...(input.current ? { estadoNuevo: input.current } : {}),
+      } as Record<string, unknown>,
+    });
+
+    await db.insert(schema.audit_events).values({
+      usuario,
+      accion: input.action,
+      entidad: input.entityType,
+      estadoAnterior: (input.previous ?? null) as Record<string, unknown> | null,
+      estadoNuevo: (input.current ?? null) as Record<string, unknown> | null,
+      resultado: result,
+      metadataSegura: {
+        module: input.module,
+        entityId: input.entityId ?? null,
+        actorUserId: userId,
+        ...(input.metadata ?? {}),
       } as Record<string, unknown>,
     });
   }

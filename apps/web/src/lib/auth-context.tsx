@@ -18,11 +18,20 @@ interface SessionUser {
   additionalPermissions: Permission[];
 }
 
+export type LoginResult =
+  | { status: "ok" }
+  | { status: "mfaRequired" }
+  | { status: "error" };
+
+export type VerifyMfaResult = { status: "ok" } | { status: "error"; message: string };
+
 interface AuthContextValue {
   user: SessionUser | null;
   loading: boolean;
   /** Autentica en el servidor y activa la cookie httpOnly de sesión. */
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<LoginResult>;
+  /** Completa el reto MFA (SEC-015) tras un login que lo requiera. */
+  verifyMfa: (code: string) => Promise<VerifyMfaResult>;
   logout: () => Promise<void>;
 }
 
@@ -71,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -79,16 +88,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         credentials: "same-origin",
         body: JSON.stringify({ email, password }),
       });
+      const data = (await res.json().catch(() => ({}))) as {
+        user?: SessionUser;
+        mfaRequired?: boolean;
+      };
       if (!res.ok) {
         setUser(null);
-        return false;
+        return { status: "error" };
       }
-      const data = (await res.json()) as { user?: SessionUser };
+      if (data.mfaRequired) {
+        setUser(null);
+        return { status: "mfaRequired" };
+      }
       setUser(data.user ?? null);
-      return true;
+      return { status: "ok" };
     } catch {
       setUser(null);
-      return false;
+      return { status: "error" };
+    }
+  }, []);
+
+  const verifyMfa = useCallback(async (code: string): Promise<VerifyMfaResult> => {
+    try {
+      const res = await fetch("/api/auth/mfa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ code }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        user?: SessionUser;
+        error?: string;
+      };
+      if (!res.ok || !data.user) {
+        return { status: "error", message: data.error ?? "Código inválido" };
+      }
+      setUser(data.user);
+      return { status: "ok" };
+    } catch {
+      return { status: "error", message: "No se pudo verificar el código" };
     }
   }, []);
 
@@ -102,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyMfa, logout }}>
       {children}
     </AuthContext.Provider>
   );

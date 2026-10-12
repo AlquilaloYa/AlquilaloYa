@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { ingresarMensaje } from "@/lib/messaging-gateway";
+import { safeEqual } from "@/lib/secure-compare";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,7 @@ export async function GET(req: Request) {
   const token = url.searchParams.get("hub.verify_token");
   const challenge = url.searchParams.get("hub.challenge");
   const esperado = process.env.META_VERIFY_TOKEN;
-  if (mode === "subscribe" && esperado && token === esperado && challenge) {
+  if (mode === "subscribe" && esperado && safeEqual(token, esperado) && challenge) {
     return new NextResponse(challenge, { status: 200, headers: { "content-type": "text/plain" } });
   }
   return new NextResponse("forbidden", { status: 403 });

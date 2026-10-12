@@ -3,10 +3,13 @@ import { eq } from "drizzle-orm";
 import { Permission, USER_ROLES } from "@contract/domain/rbac";
 import type { UserRole } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import { recordAdminAction } from "@/lib/audit-log";
+import { isPasswordLongEnough, MIN_PASSWORD_MESSAGE } from "@/lib/password-policy";
 import {
   updateAuthEmail,
   updateAuthPassword,
   isUsersAdminConfigured,
+  setAuthUserBanned,
 } from "@/lib/users-admin";
 
 export const dynamic = "force-dynamic";
@@ -128,8 +131,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (Object.keys(patch).length === 0 && !password) {
       return NextResponse.json({ error: "No hay cambios que aplicar" }, { status: 400 });
     }
-    if (password && password.length < 6) {
-      return NextResponse.json({ error: "La contraseña debe tener al menos 6 caracteres" }, { status: 400 });
+    if (password && !isPasswordLongEnough(password)) {
+      return NextResponse.json({ error: MIN_PASSWORD_MESSAGE }, { status: 400 });
     }
 
     const syncAuth = password || newEmail;
@@ -147,25 +150,48 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       ? await repo.update(id, patch)
       : current;
 
-    try {
-      await dbModule.db.insert(dbModule.schema.activity_events).values({
-        userId: auth.user.id,
-        actorType: "user",
-        action: "USER_UPDATED",
-        module: "USERS",
-        entityType: "USER",
-        entityId: updated?.id ?? id,
-        result: "SUCCESS",
-        metadata: {
-          email: updated?.email ?? null,
-          role: updated?.role ?? null,
-          active: updated?.active ?? null,
-          passwordReset: Boolean(password),
-        },
-      });
-    } catch {
-      /* no bloquea el update */
+    // SEC-077: al desactivar/reactivar, sincronizar el acceso en Supabase Auth
+    // (banear bloquea login y refresco de tokens). Best-effort: la app ya niega
+    // acceso con active=false, no rompemos la operación si Supabase falla.
+    let sessionsRevoked = false;
+    if (patch.active === false && current.active !== false && isUsersAdminConfigured()) {
+      try {
+        await setAuthUserBanned(current.email, true);
+        sessionsRevoked = true;
+      } catch (e) {
+        console.error("[users] no se pudo banear en Supabase Auth:", (e as Error).message);
+      }
+    } else if (patch.active === true && current.active === false && isUsersAdminConfigured()) {
+      try {
+        await setAuthUserBanned(newEmail ?? current.email, false);
+      } catch (e) {
+        console.error("[users] no se pudo desbanear en Supabase Auth:", (e as Error).message);
+      }
     }
+
+    await recordAdminAction(dbModule, auth.user, {
+      action: "USER_UPDATED",
+      module: "USERS",
+      entityType: "USER",
+      entityId: updated?.id ?? id,
+      previous: {
+        email: current.email,
+        role: current.role,
+        active: current.active,
+      },
+      current: {
+        email: updated?.email ?? null,
+        role: updated?.role ?? null,
+        active: updated?.active ?? null,
+      },
+      metadata: {
+        roleChanged: patch.role !== undefined && patch.role !== current.role,
+        emailChanged: Boolean(newEmail),
+        activeChanged: patch.active !== undefined && patch.active !== current.active,
+        passwordReset: Boolean(password),
+        sessionsRevoked,
+      },
+    });
 
     return NextResponse.json({ user: userJson(updated!), passwordReset: Boolean(password) });
   } catch (error) {
@@ -194,22 +220,28 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
     const updated = await repo.update(id, { active: false });
 
-    try {
-      await dbModule.db.insert(dbModule.schema.activity_events).values({
-        userId: auth.user.id,
-        actorType: "user",
-        action: "USER_UPDATED",
-        module: "USERS",
-        entityType: "USER",
-        entityId: id,
-        result: "SUCCESS",
-        metadata: { email: current.email, active: false },
-      });
-    } catch {
-      /* no bloquea */
+    // SEC-077: revocar acceso en Supabase Auth (best-effort, ver PATCH).
+    let sessionsRevoked = false;
+    if (isUsersAdminConfigured()) {
+      try {
+        await setAuthUserBanned(current.email, true);
+        sessionsRevoked = true;
+      } catch (e) {
+        console.error("[users] no se pudo banear en Supabase Auth:", (e as Error).message);
+      }
     }
 
-    return NextResponse.json({ user: userJson(updated!) });
+    await recordAdminAction(dbModule, auth.user, {
+      action: "USER_DEACTIVATED",
+      module: "USERS",
+      entityType: "USER",
+      entityId: id,
+      previous: { email: current.email, active: current.active },
+      current: { email: current.email, active: false },
+      metadata: { sessionsRevoked },
+    });
+
+    return NextResponse.json({ user: userJson(updated!), sessionsRevoked });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

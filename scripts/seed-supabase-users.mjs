@@ -36,8 +36,8 @@ if (!url || !key) {
   console.error("Faltan SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY");
   process.exit(1);
 }
-if (!password || password.length < 6) {
-  console.error("Define SUPABASE_USERS_PASSWORD (>=6 chars) con la contraseña inicial común.");
+if (!password || password.length < 12) {
+  console.error("Define SUPABASE_USERS_PASSWORD (>=12 chars) con la contraseña inicial común.");
   process.exit(1);
 }
 

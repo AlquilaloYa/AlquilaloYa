@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { and, desc, eq, gte } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
+import { inicioDiaLima, esJornadaDeHoy } from "@/lib/attendance-day";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +14,6 @@ type Body = {
 
 const ACCIONES = ["ENTRADA", "REFRIGERIO_INICIO", "REFRIGERIO_FIN", "SALIDA"] as const;
 type Accion = (typeof ACCIONES)[number];
-
-/** Lima no aplica horario de verano: siempre UTC-5. */
-function inicioDiaLima(): Date {
-  const lima = new Date(Date.now() - 5 * 3600 * 1000);
-  const dia = Date.UTC(lima.getUTCFullYear(), lima.getUTCMonth(), lima.getUTCDate());
-  return new Date(dia + 5 * 3600 * 1000);
-}
 
 type RegistroRow = {
   id: string;
@@ -62,7 +56,10 @@ export async function GET(req: Request) {
       .from(schema.attendance)
       .orderBy(desc(schema.attendance.createdAt))
       .limit(500);
-    return NextResponse.json(rows.map(toView));
+    const ahora = Date.now();
+    return NextResponse.json(
+      rows.map((row) => ({ ...toView(row), esHoy: esJornadaDeHoy(row.createdAt, ahora) }))
+    );
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

@@ -1,7 +1,9 @@
 import { AccessControl, Permission } from "@contract/domain/rbac";
 import type { UserRole } from "@contract/domain/rbac";
+import { mfaEnforce } from "@contract/config/env";
 import { NextResponse } from "next/server";
 import { resolveSession } from "@/lib/supabase-auth";
+import { isMfaPrivilegedRole } from "@/lib/mfa-policy";
 
 /**
  * Cabecera legada que el cliente aún envía (apiFetch). SE IGNOREA para autorizar:
@@ -53,6 +55,18 @@ export async function requireUser(
     return {
       error: NextResponse.json(
         { error: "Usuario sin acceso al sistema" },
+        { status: 403 }
+      ),
+    };
+  }
+  // SEC-015: exigir MFA (AAL2) a roles privilegiados cuando está activado.
+  if (mfaEnforce() && isMfaPrivilegedRole(user.role) && identity.aal !== "aal2") {
+    return {
+      error: NextResponse.json(
+        {
+          error: "Se requiere autenticación de dos factores (MFA) para este rol",
+          code: "MFA_REQUIRED",
+        },
         { status: 403 }
       ),
     };

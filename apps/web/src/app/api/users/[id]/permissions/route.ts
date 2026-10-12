@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq, inArray } from "drizzle-orm";
 import { PERMISSIONS, Permission } from "@contract/domain/rbac";
 import { requireUser } from "@/lib/session";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +110,19 @@ export async function PUT(
       );
     }
 
+    const previousRows = await dbModule.db
+      .select({ key: dbModule.schema.permissions.key })
+      .from(dbModule.schema.userPermissions)
+      .innerJoin(
+        dbModule.schema.permissions,
+        eq(
+          dbModule.schema.userPermissions.permissionId,
+          dbModule.schema.permissions.id
+        )
+      )
+      .where(eq(dbModule.schema.userPermissions.userId, params.id));
+    const previousPermissions = previousRows.map((row) => row.key);
+
     await dbModule.db.transaction(async (tx) => {
       await tx
         .delete(dbModule.schema.userPermissions)
@@ -123,20 +137,15 @@ export async function PUT(
       }
     });
 
-    try {
-      await dbModule.db.insert(dbModule.schema.activity_events).values({
-        userId: auth.user.id,
-        actorType: "user",
-        action: "USER_PERMISSIONS_UPDATED",
-        module: "USERS",
-        entityType: "USER",
-        entityId: params.id,
-        result: "SUCCESS",
-        metadata: { permissions: requested },
-      });
-    } catch {
-      /* el registro de actividad no bloquea el cambio de permisos */
-    }
+    await recordAdminAction(dbModule, auth.user, {
+      action: "USER_PERMISSIONS_UPDATED",
+      module: "USERS",
+      entityType: "USER",
+      entityId: params.id,
+      previous: { permissions: previousPermissions },
+      current: { permissions: requested },
+      metadata: { targetRole: target.role },
+    });
 
     return NextResponse.json({ permissions: requested });
   } catch (error) {

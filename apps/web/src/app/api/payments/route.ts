@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
@@ -182,6 +183,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No se pudo registrar el pago" }, { status: 500 });
     }
 
+    await recordAdminAction(dbModule, auth.user, {
+      action: "PAYMENT_REGISTERED",
+      module: "PAYMENTS",
+      entityType: "PAYMENT",
+      entityId: row.id,
+      current: {
+        contractId: row.contractId,
+        periodo: toDateStr(row.periodo),
+        estado: row.estado,
+        monto: row.monto,
+        penalidad: row.penalidad,
+      },
+    });
+
     return NextResponse.json(
       { ...row, periodo: toDateStr(row.periodo), fechaPago: row.fechaPago ? toDateStr(row.fechaPago) : null },
       { status: 201 }
@@ -286,6 +301,20 @@ export async function PATCH(req: Request) {
     if (!row) {
       return NextResponse.json({ error: "Pago no encontrado" }, { status: 404 });
     }
+
+    await recordAdminAction(dbModule, auth.user, {
+      action: "PAYMENT_UPDATED",
+      module: "PAYMENTS",
+      entityType: "PAYMENT",
+      entityId: row.id,
+      current: {
+        contractId: row.contractId,
+        periodo: toDateStr(row.periodo),
+        estado: row.estado,
+        monto: row.monto,
+        penalidad: row.penalidad,
+      },
+    });
 
     return NextResponse.json({
       ...row,
