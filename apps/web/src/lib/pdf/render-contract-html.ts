@@ -18,6 +18,28 @@ function escapeHtml(value: string): string {
 }
 
 /**
+ * Normaliza un nombre a formato Título: la primera letra de cada palabra en
+ * mayúscula y el resto en minúscula (p. ej. "ERNA ISABEL" -> "Erna Isabel").
+ * Funciona con tildes y con apellidos separados por guion o apóstrofo.
+ */
+function capitalizarNombre(value: string): string {
+  const lower = value.toLocaleLowerCase("es");
+  let resultado = "";
+  let inicioPalabra = true;
+  for (const ch of lower) {
+    const esLetra = ch.toLocaleUpperCase("es") !== ch.toLocaleLowerCase("es");
+    if (esLetra) {
+      resultado += inicioPalabra ? ch.toLocaleUpperCase("es") : ch;
+      inicioPalabra = false;
+    } else {
+      resultado += ch;
+      inicioPalabra = ch === " " || ch === "\t" || ch === "-" || ch === "'" || ch === "’";
+    }
+  }
+  return resultado;
+}
+
+/**
  * Regresa solo el segmento final del codigo del departamento (despues del
  * ultimo guion). Ej: "BEN2195-18" -> "18", "ANG170-8C" -> "8C". Si no hay
  * guion, devuelve el codigo tal cual.
@@ -152,8 +174,10 @@ function buildDatosArrendatarioSheet(
   const contrato = snapshot.datosContrato as Record<string, unknown>;
   const ficha = datosArrendatarioFicha(snapshot);
 
-  const nombres = field(ficha, ["nombre"]) || field(cliente, ["nombres", "nombreCompleto", "razonSocial", "nomCliente"]);
-  const apellidos = field(ficha, ["apellido"]) || field(cliente, ["apellidos"]);
+  const nombres = capitalizarNombre(
+    field(ficha, ["nombre"]) || field(cliente, ["nombres", "nombreCompleto", "razonSocial", "nomCliente"])
+  );
+  const apellidos = capitalizarNombre(field(ficha, ["apellido"]) || field(cliente, ["apellidos"]));
   const documento = field(ficha, ["documentoIdentidad"]) || field(cliente, ["documentoIdentidad", "documento", "ruc"]);
   const ruc = field(ficha, ["ruc"]) || field(cliente, ["ruc"]);
   const domicilio = field(ficha, ["domicilio"]) || field(cliente, ["domicilio"]);
@@ -288,7 +312,9 @@ export function renderContractHtml(
   const clienteNombre = field(cliente, ["nombres", "nombreCompleto", "razonSocial", "nomCliente"]);
   const clienteApellidos = field(cliente, ["apellidos"]);
   const clienteDocumento = field(cliente, ["documentoIdentidad", "documento", "ruc"]);
-  const clienteNombreCompleto = [clienteNombre, clienteApellidos].filter(Boolean).join(" ");
+  const clienteNombreCompleto = capitalizarNombre(
+    [clienteNombre, clienteApellidos].filter(Boolean).join(" ")
+  );
   const nacionalidadCliente = field(cliente, ["nacionalidad"]) || "Peruano(a)";
 
   const monto = field(contrato, ["montoCanonMensual"]);

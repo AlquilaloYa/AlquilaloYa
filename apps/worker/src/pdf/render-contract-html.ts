@@ -26,6 +26,28 @@ function escapeHtml(value: string): string {
 }
 
 /**
+ * Normaliza un nombre a formato Título: la primera letra de cada palabra en
+ * mayúscula y el resto en minúscula (p. ej. "ERNA ISABEL" -> "Erna Isabel").
+ * Funciona con tildes y con apellidos separados por guion o apóstrofo.
+ */
+function capitalizarNombre(value: string): string {
+  const lower = value.toLocaleLowerCase("es");
+  let resultado = "";
+  let inicioPalabra = true;
+  for (const ch of lower) {
+    const esLetra = ch.toLocaleUpperCase("es") !== ch.toLocaleLowerCase("es");
+    if (esLetra) {
+      resultado += inicioPalabra ? ch.toLocaleUpperCase("es") : ch;
+      inicioPalabra = false;
+    } else {
+      resultado += ch;
+      inicioPalabra = ch === " " || ch === "\t" || ch === "-" || ch === "'" || ch === "’";
+    }
+  }
+  return resultado;
+}
+
+/**
  * Renderiza el HTML del contrato a partir del snapshot congelado.
  * ÚNICAMENTE usa datos del snapshot: garantiza reproducción histórica e inmutabilidad.
  */
@@ -38,8 +60,10 @@ function buildDatosArrendatarioSheet(snapshot: ContractSnapshot): string {
       ? (contrato.datosArrendatario as Record<string, unknown>)
       : {};
 
-  const nombre = field(ficha, ["nombre"]) || field(cliente, ["nombres", "nombreCompleto", "razonSocial", "nomCliente"]);
-  const apellido = field(ficha, ["apellido"]) || field(cliente, ["apellidos"]);
+  const nombre = capitalizarNombre(
+    field(ficha, ["nombre"]) || field(cliente, ["nombres", "nombreCompleto", "razonSocial", "nomCliente"])
+  );
+  const apellido = capitalizarNombre(field(ficha, ["apellido"]) || field(cliente, ["apellidos"]));
   const documentoIdentidad = field(ficha, ["documentoIdentidad"]) || field(cliente, ["documentoIdentidad", "documento", "ruc"]);
   const ruc = field(ficha, ["ruc"]) || field(cliente, ["ruc"]);
   const email = field(ficha, ["email"]) || field(cliente, ["email"]);
@@ -163,7 +187,7 @@ export function renderContractHtml(snapshot: ContractSnapshot): string {
 
   ${sectionTitle("Cliente")}
   <table>
-    ${richRow("Nombre", [clienteNombre, clienteApellidos].filter(Boolean).join(" "))}
+    ${richRow("Nombre", capitalizarNombre([clienteNombre, clienteApellidos].filter(Boolean).join(" ")))}
     ${richRow("Documento", clienteDocumento)}
     ${richRow("Email", clienteEmail)}
     ${richRow("Teléfono", clienteTelefono)}

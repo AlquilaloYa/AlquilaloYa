@@ -17,6 +17,28 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * Normaliza un nombre a formato Título: la primera letra de cada palabra en
+ * mayúscula y el resto en minúscula (p. ej. "ERNA ISABEL" -> "Erna Isabel").
+ * Funciona con tildes y con apellidos separados por guion o apóstrofo.
+ */
+function capitalizarNombre(value: string): string {
+  const lower = value.toLocaleLowerCase("es");
+  let resultado = "";
+  let inicioPalabra = true;
+  for (const ch of lower) {
+    const esLetra = ch.toLocaleUpperCase("es") !== ch.toLocaleLowerCase("es");
+    if (esLetra) {
+      resultado += inicioPalabra ? ch.toLocaleUpperCase("es") : ch;
+      inicioPalabra = false;
+    } else {
+      resultado += ch;
+      inicioPalabra = ch === " " || ch === "\t" || ch === "-" || ch === "'" || ch === "’";
+    }
+  }
+  return resultado;
+}
+
 function richRow(label: string, value: string): string {
   return `<tr><td class="label">${escapeHtml(label)}</td><td>${escapeHtml(value || "—")}</td></tr>`;
 }
@@ -104,6 +126,43 @@ async function pisoVigenteDepartamento(
   }
 }
 
+/**
+ * Resuelve el CONTACTO/CLIENTE VIGENTE de la base de datos. El snapshot
+ * congela los datos del cliente con los que se emitió el contrato; si luego se
+ * corrige el contacto (por ejemplo el nombre), la adenda debe salir con el dato
+ * actual. Usa el id del cliente (o su documento) y cae al congelado si no hay
+ * coincidencia. El import de @contract/db es perezoso para no abrir el pool en
+ * build-time.
+ */
+async function clienteVigente(
+  cliente: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  try {
+    const id = String(field(cliente, ["id"]) ?? "").trim();
+    const documento = String(
+      field(cliente, ["documentoIdentidad", "documento", "ruc"]) ?? ""
+    ).trim();
+    if (!id && !documento) return cliente;
+    const dbModule = (await import("@contract/db")) as typeof import("@contract/db");
+    const { db, schema } = dbModule;
+    const { eq } = await import("drizzle-orm");
+    const filas = await db
+      .select()
+      .from(schema.clients)
+      .where(
+        id
+          ? eq(schema.clients.id, id)
+          : eq(schema.clients.documentoIdentidad, documento)
+      )
+      .limit(1);
+    const row = filas[0];
+    if (!row) return cliente;
+    return { ...cliente, ...row };
+  } catch {
+    return cliente;
+  }
+}
+
 function direccionInmueble(
   departamento: Record<string, unknown>,
   pisoVigente?: number | null
@@ -167,18 +226,28 @@ function datosCuenta(departamento: Record<string, unknown>): string {
  * la plantilla formal (modelo Benavides) con el nuevo plazo de la adenda.
  */
 export async function renderAdendaHtml(snapshot: ContractSnapshot): Promise<string> {
-  const contrato = snapshot.datosContrato as Record<string, unknown>;
+  // La adenda sale con el contacto/cliente actual: si se corrigió el nombre u
+  // otros datos del cliente, se reflejan aquí aunque el contrato los tenga
+  // congelados en su snapshot.
+  const datosClienteVigente = await clienteVigente(
+    (snapshot.datosCliente ?? {}) as Record<string, unknown>
+  );
+  const snapshotActual: ContractSnapshot = {
+    ...snapshot,
+    datosCliente: datosClienteVigente,
+  };
+  const contrato = snapshotActual.datosContrato as Record<string, unknown>;
   if (contrato.tipoDocumento === "ADENDA_EXTENSION") {
-    return renderExtensionAdendaHtml(snapshot);
+    return renderExtensionAdendaHtml(snapshotActual);
   }
   if (contrato.fechaInicioAdenda && contrato.fechaFinAdenda) {
     const piso = await pisoVigenteDepartamento(
-      (snapshot.datosDepartamento ?? {}) as Record<string, unknown>
+      (snapshotActual.datosDepartamento ?? {}) as Record<string, unknown>
     );
-    return renderAdendaPlantillaHtml(snapshot, piso);
+    return renderAdendaPlantillaHtml(snapshotActual, piso);
   }
-  const cliente = snapshot.datosCliente as Record<string, unknown>;
-  const departamento = snapshot.datosDepartamento as Record<string, unknown>;
+  const cliente = snapshotActual.datosCliente as Record<string, unknown>;
+  const departamento = snapshotActual.datosDepartamento as Record<string, unknown>;
 
   const clienteNombre = field(cliente, ["nombres", "nombreCompleto", "razonSocial", "nomCliente"]);
   const clienteApellidos = field(cliente, ["apellidos"]);
@@ -234,7 +303,7 @@ export async function renderAdendaHtml(snapshot: ContractSnapshot): Promise<stri
 
   <h2>Comparecientes</h2>
   <table>
-    ${richRow("Arrendatario", [clienteNombre, clienteApellidos].filter(Boolean).join(" "))}
+    ${richRow("Arrendatario", capitalizarNombre([clienteNombre, clienteApellidos].filter(Boolean).join(" ")))}
     ${richRow("Documento", clienteDocumento)}
     ${richRow("Inmueble", field(departamento, ["nombre", "nomDepartamento"]))}
     ${richRow("Código del departamento", field(departamento, ["codigo"]))}
@@ -276,7 +345,8 @@ export function renderAdendaPlantillaHtml(
 
   const deptoNumero = field(departamento, ["numero"]) || codigoCorto(field(departamento, ["codigo"]));
   const arrendador = datosArrendador(departamento);
-  const nombreCompleto = [clienteNombre, clienteApellidos].filter(Boolean).join(" ") || "________________";
+  const nombreCompleto =
+    capitalizarNombre([clienteNombre, clienteApellidos].filter(Boolean).join(" ")) || "________________";
   const domicilio = field(cliente, ["domicilio"]) || "________________";
 
   const nacimiento = field(cliente, ["nacionalidad"]) || "Peruano(a)";
@@ -453,7 +523,7 @@ export function renderAdendaPlantillaHtml(
         </div>
         <div class="signature-block">
             <div class="signature-line"></div>
-            <div class="signature-name">${escapeHtml(nombreCompleto.toUpperCase())}</div>
+            <div class="signature-name" style="text-transform:none;">${escapeHtml(nombreCompleto)}</div>
             <div class="signature-dni">DNI / C.E. / PASAPORTE N° ${escapeHtml(clienteDocumento || "________________")}</div>
         </div>
     </div>
@@ -531,7 +601,7 @@ export function renderExtensionAdendaHtml(snapshot: ContractSnapshot): string {
 
   <h2>Comparecientes</h2>
   <table>
-    ${richRow("Arrendatario", [clienteNombre, clienteApellidos].filter(Boolean).join(" "))}
+    ${richRow("Arrendatario", capitalizarNombre([clienteNombre, clienteApellidos].filter(Boolean).join(" ")))}
     ${richRow("Documento", clienteDocumento)}
     ${richRow("Inmueble", field(departamento, ["nombre", "nomDepartamento"]))}
     ${richRow("Código del departamento", field(departamento, ["codigo"]))}

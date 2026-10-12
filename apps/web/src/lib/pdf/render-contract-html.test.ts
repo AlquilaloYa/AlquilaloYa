@@ -126,6 +126,18 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     expect(html).not.toContain("[DETALLE GARANTIA");
   });
 
+  it("normaliza el nombre del cliente a formato Título (primera letra en mayúscula)", () => {
+    const snp = snapshot({
+      datosCliente: { nombres: "erna isabel", apellidos: "domenack lentzkow" },
+    });
+    const html = renderContractHtml(
+      snp,
+      "<h1>Contrato</h1><p>[NOMBRE DEL ARRENDATARIO]</p>"
+    );
+    expect(html).toContain("Erna Isabel Domenack Lentzkow");
+    expect(html).not.toContain("ERNA ISABEL DOMENACK LENTZKOW");
+  });
+
   it("anexa la copia de DNI al final si la plantilla no usa [DNI]", () => {
     const templateSinDni =
       "<h1>Contrato</h1><p>[NOMBRE DEL ARRENDATARIO]</p></body>";
