@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, FileText, Loader2, Plus, Wifi, Zap } from "lucide-react";
+import { Download, Edit, FileText, Loader2, Plus, RefreshCw, Trash2, Wifi, Zap } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import { AccessControl, Permission } from "@contract/domain/rbac";
 
 type ClienteOpt = {
   id: string;
@@ -73,11 +75,19 @@ export function ServiciosExtrasPanel({
   clienteNombre: string;
   fechaInicio: string;
 }) {
+  const { user } = useAuth();
+  const puedeGestionar = user
+    ? AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.CONTRACT_UPDATE)
+    : false;
+
   const [servicios, setServicios] = useState<ServicioExtra[]>([]);
   const [clientes, setClientes] = useState<ClienteOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [editando, setEditando] = useState<ServicioExtra | null>(null);
+  const [regenerandoId, setRegenerandoId] = useState<string | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
 
   const [clienteSel, setClienteSel] = useState(clienteId);
   const [internet, setInternet] = useState(false);
@@ -129,7 +139,24 @@ export function ServiciosExtrasPanel({
     [internet, carga],
   );
 
+  function cerrarForm() {
+    setMostrarForm(false);
+    setEditando(null);
+    setFormError(null);
+  }
+
+  function abrirEdicion(s: ServicioExtra) {
+    setEditando(s);
+    setInternet(s.incluyeInternet);
+    setCarga(s.incluyeCargaElectrica);
+    setFechaOpcion((s.fechaOpcion ?? hoy()).slice(0, 10));
+    setFechaPago((s.fechaPago ?? hoy()).slice(0, 10));
+    setFormError(null);
+    setMostrarForm(true);
+  }
+
   async function generar() {
+    const esEdicion = Boolean(editando);
     setFormError(null);
     if (!internet && !carga) {
       setFormError("Selecciona al menos un servicio (Internet o carga eléctrica).");
@@ -137,31 +164,99 @@ export function ServiciosExtrasPanel({
     }
     setGuardando(true);
     try {
-      const res = await fetch("/api/servicios-extras", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contractId,
-          clienteId: clienteSel,
-          incluyeInternet: internet,
-          incluyeCargaElectrica: carga,
-          fechaOpcion,
-          fechaPago,
-        }),
-      });
+      const res = await fetch(
+        esEdicion ? `/api/servicios-extras/${editando?.id}` : "/api/servicios-extras",
+        {
+          method: esEdicion ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            esEdicion
+              ? {
+                  incluyeInternet: internet,
+                  incluyeCargaElectrica: carga,
+                  fechaOpcion,
+                  fechaPago,
+                }
+              : {
+                  contractId,
+                  clienteId: clienteSel,
+                  incluyeInternet: internet,
+                  incluyeCargaElectrica: carga,
+                  fechaOpcion,
+                  fechaPago,
+                },
+          ),
+        },
+      );
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? "No se pudo generar el documento");
-      setMostrarForm(false);
+      if (!res.ok) throw new Error(body.error ?? "No se pudo guardar el servicio extra");
+      const eraCreacion = !esEdicion;
+      cerrarForm();
       setInternet(false);
       setCarga(false);
       setFechaOpcion(hoy());
       await load();
       const creado = body as ServicioExtra;
-      if (creado?.id) void descargar(creado.id, creado.filename ?? "servicios-extras.pdf");
+      if (eraCreacion && creado?.id) {
+        void descargar(creado.id, creado.filename ?? "servicios-extras.pdf");
+      }
     } catch (e) {
       setFormError((e as Error).message);
     } finally {
       setGuardando(false);
+    }
+  }
+
+  async function regenerar(s: ServicioExtra) {
+    setRegenerandoId(s.id);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/servicios-extras/${encodeURIComponent(s.id)}/download?regenerate=1`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = s.filename ?? "servicios-extras.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRegenerandoId(null);
+    }
+  }
+
+  async function eliminar(s: ServicioExtra) {
+    if (
+      !confirm(
+        `¿Eliminar el servicio extra de "${s.clienteNombre ?? "el cliente"}"? Se borrará el PDF y el registro.`,
+      )
+    ) {
+      return;
+    }
+    setEliminandoId(s.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/servicios-extras/${encodeURIComponent(s.id)}`, {
+        method: "DELETE",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "No se pudo eliminar el servicio extra");
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setEliminandoId(null);
     }
   }
 
@@ -196,7 +291,7 @@ export function ServiciosExtrasPanel({
           Servicios Extras
         </h3>
         <button
-          onClick={() => setMostrarForm((v) => !v)}
+          onClick={() => (mostrarForm ? cerrarForm() : setMostrarForm(true))}
           className="inline-flex shrink-0 items-center gap-2 rounded bg-primary px-4 py-2 font-label-md text-on-primary"
         >
           <Plus className="h-4 w-4" />
@@ -214,6 +309,10 @@ export function ServiciosExtrasPanel({
 
       {mostrarForm ? (
         <div className="mb-6 space-y-4 rounded-lg border border-outline-variant bg-surface-container-low/40 p-4 dark:border-transparent">
+          <p className="font-label-md text-primary">
+            {editando ? "Editar servicio extra" : "Nuevo servicio extra"}
+          </p>
+          {!editando ? (
           <div>
             <label className="mb-1 block font-label-md text-on-surface-variant">
               Asignar a cliente
@@ -237,6 +336,7 @@ export function ServiciosExtrasPanel({
               Por defecto se usa el cliente del contrato; puedes reasignarlo.
             </p>
           </div>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-outline-variant bg-surface-container-lowest p-3 dark:border-transparent">
@@ -308,7 +408,7 @@ export function ServiciosExtrasPanel({
               className="inline-flex items-center gap-2 rounded bg-primary px-4 py-2 font-label-md text-on-primary disabled:cursor-not-allowed disabled:opacity-40"
             >
               {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-              {guardando ? "Generando…" : "Generar documento"}
+              {guardando ? "Guardando…" : editando ? "Guardar cambios" : "Generar documento"}
             </button>
           </div>
           {formError ? (
@@ -340,6 +440,7 @@ export function ServiciosExtrasPanel({
                 <th className="px-3 py-2 font-medium">Día de pago</th>
                 <th className="px-3 py-2 font-medium">Monto</th>
                 <th className="px-3 py-2 font-medium">Documento</th>
+                <th className="px-3 py-2 font-medium">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -378,6 +479,43 @@ export function ServiciosExtrasPanel({
                       <Download className="h-4 w-4" />
                       PDF
                     </button>
+                  </td>
+                  <td className="px-3 py-2">
+                    {puedeGestionar ? (
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void regenerar(s)}
+                          disabled={regenerandoId === s.id}
+                          className="inline-flex items-center gap-1 text-on-surface-variant hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                          title="Re-renderizar el PDF con los datos actuales"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${regenerandoId === s.id ? "animate-spin" : ""}`} />
+                          {regenerandoId === s.id ? "…" : "Regenerar"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => abrirEdicion(s)}
+                          className="inline-flex items-center gap-1 text-on-surface-variant hover:text-primary"
+                          title="Editar opciones y fechas"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void eliminar(s)}
+                          disabled={eliminandoId === s.id}
+                          className="inline-flex items-center gap-1 text-destructive hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                          title="Eliminar el servicio extra y su PDF"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {eliminandoId === s.id ? "…" : "Eliminar"}
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

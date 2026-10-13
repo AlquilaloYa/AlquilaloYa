@@ -1,5 +1,14 @@
 type Registro = Record<string, unknown>;
 
+function field(obj: Registro | undefined, keys: string[]): string {
+  if (!obj) return "";
+  for (const key of keys) {
+    const v = obj[key];
+    if (v !== undefined && v !== null && v !== "") return String(v);
+  }
+  return "";
+}
+
 function escapeHtml(value: string | null | undefined): string {
   return (value ?? "")
     .replace(/&/g, "&amp;")
@@ -63,196 +72,263 @@ function fmtFechaEs(iso: string | null | undefined): string {
   return `${d} de ${MESES[m - 1] ?? ""} del ${parts[0] ?? ""}`;
 }
 
+function codigoCorto(codigo: string): string {
+  const s = (codigo ?? "").trim();
+  if (!s) return s;
+  const idx = s.lastIndexOf("-");
+  if (idx < 0) return s;
+  return s.slice(idx + 1).trim() || s;
+}
+
+interface DatosArrendador {
+  trat: string;
+  nombres: string;
+  apellidos: string;
+  dni: string;
+}
+
+/**
+ * Resuelve el/la arrendador(a) según el campo personaPago del departamento,
+ * igual que las adendas. En el edificio Angamos hay 3 dueños distintos
+ * (Emely, Linda Evelyn y Miguel); en Benavides siempre es Emely.
+ */
+function datosArrendador(departamento: Registro): DatosArrendador {
+  const persona = (field(departamento, ["personaPago"]) ?? "").trim().toLowerCase();
+  if (persona.startsWith("miguel")) {
+    return { trat: "el Sr.", nombres: "Miguel Anthony", apellidos: "Carpio Pinto", dni: "76373624" };
+  }
+  if (persona.startsWith("evel") || persona.startsWith("linda")) {
+    return { trat: "la Sra.", nombres: "Linda Evelyn", apellidos: "Carpio Pinto", dni: "74768652" };
+  }
+  return { trat: "la Srta.", nombres: "Emely Alexandra", apellidos: "Carpio Pinto", dni: "76373620" };
+}
+
+/** Dirección del inmueble según el código del departamento (ANG -> Angamos). */
+function direccionInmueble(departamento: Registro): string {
+  const codigo = (field(departamento, ["codigo"]) || "").toUpperCase();
+  const piso = field(departamento, ["piso"]) || "____";
+  if (codigo.startsWith("ANG")) {
+    return `Av. Angamos Este 170, Miraflores, Piso ${piso}, Lima Metropolitana, Lima`;
+  }
+  return `Av. Alfredo Benavides N° 2195 D, Miraflores, Piso ${piso}, provincia y departamento de Lima`;
+}
+
+const ORDINALES = ["PRIMERO", "SEGUNDO", "TERCERO"] as const;
+
+/**
+ * Renderiza el HTML de "PAGOS EXTRAS POR CONEXIÓN Y MEDIO DE CARGA" con el
+ * mismo formato formal de las adendas (plantilla Benavides): encabezado
+ * centrado subrayado, párrafos justificados, secciones numeradas, bloques de
+ * firma con nombre/DNI y pie de página.
+ */
 export async function renderServiciosExtrasHtml(
   servicio: Registro,
   contract?: Registro,
   cliente?: Registro,
   departamento?: Registro,
 ): Promise<string> {
-  const nombreCliente = capitalizarNombre(
-    String(
-      servicio.clienteNombre ??
-        cliente?.nombres ??
-        cliente?.nombre ??
-        "",
-    ),
+  const dep = departamento ?? {};
+  const cli = cliente ?? {};
+  const con = contract ?? {};
+
+  const nombreBase =
+    String(servicio.clienteNombre ?? "").trim() ||
+    [field(cli, ["nombres", "nombreCompleto", "razonSocial"]), field(cli, ["apellidos"])]
+      .filter(Boolean)
+      .join(" ");
+  const nombreCompleto = capitalizarNombre(nombreBase) || "________________";
+  const clienteDocumento =
+    String(servicio.clienteDocumento ?? "").trim() ||
+    field(cli, ["documentoIdentidad", "documento", "ruc"]) ||
+    "________________";
+  const nacimiento = field(cli, ["nacionalidad"]) || "Peruano(a)";
+  const domicilio = field(cli, ["domicilio"]) || "________________";
+
+  const deptoNumero =
+    String(servicio.departamentoNumero ?? "").trim() ||
+    field(dep, ["numero"]) ||
+    codigoCorto(field(dep, ["codigo"])) ||
+    field(dep, ["codigo"]) ||
+    field(dep, ["nombre"]) ||
+    "________________";
+
+  const codigoContrato = escapeHtml(
+    String(servicio.codigoContrato ?? con.codigoContrato ?? "Sin código"),
   );
-  const dniCliente = String(
-    servicio.clienteDocumento ??
-      cliente?.documentoIdentidad ??
-      cliente?.ruc ??
-      "[DNI]",
-  );
-  const depto = String(
-    servicio.departamentoNumero ??
-      departamento?.codigo ??
-      departamento?.nombre ??
-      contract?.departamentoNumero ??
-      "[N°DEPARTAMENTO]",
-  );
+
+  const arrendador = datosArrendador(dep);
+  const esAngamos = (field(dep, ["codigo"]) || "").toUpperCase().startsWith("ANG");
+  const domicilioArrendador = esAngamos
+    ? "Av. Angamos Este 170, distrito de Miraflores, Departamento y Provincia de Lima"
+    : "Av. Alfredo Benavides 2195, distrito de Miraflores, Departamento y Provincia de Lima";
+
   const fechaOpcion = fmtFechaEs(
-    String(servicio.fechaOpcion ?? contract?.fechaInicio ?? new Date().toISOString()),
+    String(servicio.fechaOpcion ?? con.fechaInicio ?? new Date().toISOString()),
   );
   const fechaPago = fmtFechaEs(
-    String(servicio.fechaPago ?? contract?.fechaInicio ?? new Date().toISOString()),
-  );
-  const codigoContrato = escapeHtml(
-    String(servicio.codigoContrato ?? contract?.codigoContrato ?? "Sin código"),
+    String(servicio.fechaPago ?? con.fechaInicio ?? new Date().toISOString()),
   );
 
   const incluyeInternet = Boolean(servicio.incluyeInternet);
   const incluyeCarga = Boolean(servicio.incluyeCargaElectrica);
-  const secciones: string[] = [];
+
+  const bloques: string[] = [];
+  const siguienteOrdinal = (): string => ORDINALES[bloques.length] ?? "ADEMÁS";
 
   if (incluyeInternet) {
-    secciones.push(`
-      <div class="seccion">
-        <p><strong>Yo, ${escapeHtml(nombreCliente)}, identificado(a), con DNI / Pasaporte / C.E. N° ${escapeHtml(dniCliente)}, en mi condición de arrendatario(a) del departamento ${escapeHtml(depto)}, dispongo de la opción de contratar el servicio extra de internet; El Arrendador ya explicó las posibles falencias de conexión.</strong></p>
-        <p><strong>Detalles de internet:</strong></p>
-        <ol>
-          <li>Pago de S/. 39 soles.</li>
-          <li>Conexión de alta latencia.</li>
-          <li>Baja conectividad por actividad masiva.</li>
-        </ol>
-      </div>
+    bloques.push(`
+      <div class="section-title">${siguienteOrdinal()}: SERVICIO EXTRA DE INTERNET</div>
+      <p>EL ARRENDATARIO dispone de la opción de contratar el servicio extra de internet; EL ARRENDADOR ya explicó las posibles falencias de conexión. Detalles del servicio:</p>
+      <ol>
+        <li>Pago de S/. 39 soles.</li>
+        <li>Conexión de alta latencia.</li>
+        <li>Baja conectividad por actividad masiva.</li>
+      </ol>
     `);
   }
 
   if (incluyeCarga) {
-    secciones.push(`
-      <div class="seccion">
-        <p><strong>Yo, ${escapeHtml(nombreCliente)}, identificado(a), con DNI / Pasaporte / C.E. N° ${escapeHtml(dniCliente)}, en mi condición de arrendatario(a) del departamento ${escapeHtml(depto)}, dispongo de la opción de contratar el servicio de carga de patinete el cual El Arrendador determinó en este contrato.</strong></p>
-        <p><strong>Detalles del cargo extra por carga eléctrica:</strong></p>
-        <ol>
-          <li>Pago de S/. 60 soles.</li>
-          <li>Patines pequeños / medianos.</li>
-          <li>No debe comprometer ninguna conexión eléctrica; si el dispositivo del cliente genera algún problema con la infraestructura eléctrica de la vivienda, este deberá correr con los gastos de la reparación.</li>
-          <li>Evitar la sobrecarga del monopatín/bicicleta eléctrica.</li>
-        </ol>
-        <p class="recomendacion">Recomendación: si desea emplear este servicio, lo mejor es comprar un transformador eléctrico para evitar cortos circuitos o tener el cargador oficial; recuerde que cualquier imprevisto eléctrico fuera de los regulares puede representar un peligro para usted y los habitantes del inmueble. Gracias.</p>
-      </div>
+    bloques.push(`
+      <div class="section-title">${siguienteOrdinal()}: CARGA ELÉCTRICA</div>
+      <p>EL ARRENDATARIO dispone de la opción de contratar el servicio de carga de patinete, el cual EL ARRENDADOR determinó en este contrato. Detalles del cargo extra por carga eléctrica:</p>
+      <ol>
+        <li>Pago de S/. 60 soles.</li>
+        <li>Patines pequeños / medianos.</li>
+        <li>No debe comprometer ninguna conexión eléctrica; si el dispositivo del cliente genera algún problema con la infraestructura eléctrica de la vivienda, este deberá correr con los gastos de la reparación.</li>
+        <li>Evitar la sobrecarga del monopatín/bicicleta eléctrica.</li>
+      </ol>
+      <p class="recomendacion">Recomendación: si desea emplear este servicio, lo mejor es comprar un transformador eléctrico para evitar cortos circuitos o tener el cargador oficial; recuerde que cualquier imprevisto eléctrico fuera de los regulares puede representar un peligro para usted y los habitantes del inmueble. Gracias.</p>
     `);
   }
 
-  const contenido =
-    secciones.length > 0
-      ? secciones.join("\n")
-      : `
-    <div class="seccion">
-      <p><strong>El cliente no eligió servicios extras adicionales en este contrato.</strong></p>
-    </div>
-  `;
-
-  const opcionTomada =
-    incluyeInternet && incluyeCarga
-      ? "Internet + carga eléctrica"
-      : incluyeInternet
-        ? "Internet"
-        : incluyeCarga
-          ? "Carga eléctrica"
-          : "Sin servicio extra";
+  if (bloques.length === 0) {
+    bloques.push(`
+      <div class="section-title">PRIMERO: SIN SERVICIOS EXTRAS</div>
+      <p>El cliente no eligió servicios extras adicionales en este contrato.</p>
+    `);
+  }
 
   return `<!DOCTYPE html>
 <html lang="es">
-  <head>
-    <meta charset="utf-8" />
+<head>
+    <meta charset="UTF-8">
+    <title>Pagos extras por conexión y medio de carga</title>
     <style>
-      @page { size: A4; margin: 24mm 20mm; }
-      * { box-sizing: border-box; }
-      body {
-        font-family: "Segoe UI", Arial, sans-serif;
-        color: #1f2937;
-        margin: 0;
-        line-height: 1.6;
-      }
-      .header {
-        border-bottom: 3px solid #3f6212;
-        padding-bottom: 16px;
-        margin-bottom: 24px;
-      }
-      h1 {
-        font-size: 20px;
-        margin: 0 0 8px;
-        color: #111827;
-        text-align: center;
-      }
-      .meta {
-        font-size: 12px;
-        color: #6b7280;
-        margin-top: 8px;
-        text-align: center;
-      }
-      .seccion {
-        margin: 24px 0;
-        padding: 20px;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        background: #fafafa;
-        page-break-inside: avoid;
-      }
-      .seccion p {
-        margin: 12px 0;
-        font-size: 13px;
-      }
-      .recomendacion {
-        font-style: italic;
-        color: #4b5563;
-      }
-      ol {
-        margin: 12px 0;
-        padding-left: 24px;
-        font-size: 13px;
-      }
-      li { margin: 6px 0; }
-      .linea-firma {
-        display: flex;
-        align-items: flex-end;
-        margin-top: 40px;
-      }
-      .espacio {
-        flex: 1;
-        border-bottom: 1px solid #6b7280;
-      }
-      .texto {
-        padding: 0 16px;
-        font-size: 12px;
-        color: #4b5563;
-      }
-      .footer-info {
-        margin-top: 40px;
-        font-size: 12px;
-        color: #6b7280;
-      }
+        @page { size: A4; margin: 20mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #111111;
+            background-color: #ffffff;
+            line-height: 1.6;
+        }
+        h1 {
+            text-align: center;
+            font-size: 15px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+            text-decoration: underline;
+        }
+        p {
+            font-size: 13px;
+            line-height: 1.34;
+            text-align: justify;
+            margin-bottom: 6px;
+        }
+        .section-title {
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-top: 8px;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+        ol {
+            font-size: 13px;
+            line-height: 1.34;
+            margin: 4px 0 8px 20px;
+            padding-left: 18px;
+        }
+        ol li {
+            margin-bottom: 3px;
+            text-align: justify;
+        }
+        .recomendacion {
+            font-style: italic;
+        }
+        .date-line {
+            margin-top: 10px;
+            margin-bottom: 70px;
+            text-align: left;
+        }
+        .signatures-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-top: 0;
+            padding: 0 6px;
+        }
+        .signature-block {
+            width: 42%;
+            text-align: center;
+        }
+        .signature-line {
+            border-top: 1px solid #000000;
+            margin-bottom: 6px;
+        }
+        .signature-name {
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        .signature-dni {
+            font-size: 12px;
+            margin-top: 3px;
+        }
+        .footer-page {
+            margin-top: 10px;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 5px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #6b7280;
+        }
     </style>
-  </head>
-  <body>
-    <div class="header">
-      <h1>PAGOS EXTRAS POR CONEXIÓN Y MEDIO DE CARGA</h1>
-      <div class="meta">Contrato: ${codigoContrato}</div>
-      <div class="meta">Fecha de opción tomada: ${fechaOpcion}</div>
-      <div class="meta">Día de pago (según contrato): ${fechaPago}</div>
+</head>
+<body>
+
+    <h1>PAGOS EXTRAS POR CONEXIÓN Y MEDIO DE CARGA</h1>
+
+    <p>Conste por el presente documento el acuerdo de <strong>PAGOS EXTRAS POR CONEXIÓN Y MEDIO DE CARGA</strong> correspondiente al contrato <strong>${codigoContrato}</strong>, que celebran de una parte ${arrendador.trat} <strong>${arrendador.nombres} ${arrendador.apellidos.toUpperCase()}</strong>, identificado con DNI N° <strong>${arrendador.dni}</strong>, domiciliado en <strong>${escapeHtml(domicilioArrendador)}</strong>, a quien en adelante se le denominará <strong>LA ARRENDADOR(A)</strong> y, de la otra parte, el Sr.(a) <strong>${escapeHtml(nombreCompleto)}</strong>, identificado con DNI / C.E. / Pasaporte N° <strong>${escapeHtml(clienteDocumento)}</strong>, de nacionalidad <strong>${escapeHtml(nacimiento)}</strong>, domiciliado en <strong>${escapeHtml(domicilio)}</strong>, a quien en adelante se denominará <strong>EL ARRENDATARIO</strong>, respecto del mini departamento N° <strong>${escapeHtml(deptoNumero)}</strong> ubicado en <strong>${escapeHtml(direccionInmueble(dep))}</strong>, en los términos y bajo las condiciones siguientes:</p>
+
+    <p>EL ARRENDATARIO tomó la opción indicada con fecha <strong>${fechaOpcion}</strong> y el día de pago será el mismo del contrato de arrendamiento: <strong>${fechaPago}</strong>.</p>
+
+    ${bloques.join("\n")}
+
+    <p>En señal de conformidad, ambas partes suscriben el presente documento en dos ejemplares de igual tenor y validez, en esta ciudad.</p>
+
+    <p class="date-line">Miraflores, <strong>${fechaOpcion}</strong>.</p>
+
+    <div class="signatures-container">
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-name">${arrendador.nombres} ${arrendador.apellidos}</div>
+            <div class="signature-dni">DNI N° ${arrendador.dni}</div>
+        </div>
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-name" style="text-transform:none;">${escapeHtml(nombreCompleto)}</div>
+            <div class="signature-dni">DNI / C.E. / PASAPORTE N° ${escapeHtml(clienteDocumento)}</div>
+        </div>
     </div>
 
-    ${contenido}
-
-    <div class="linea-firma">
-      <div class="espacio"></div>
-      <div class="texto">Firma del arrendador(a)</div>
-      <div class="espacio"></div>
+    <div class="footer-page">
+        <span>Pagos extras por conexión y medio de carga</span>
+        <span>Página 1</span>
     </div>
 
-    <div class="linea-firma">
-      <div class="espacio"></div>
-      <div class="texto">Firma del arrendatario</div>
-      <div class="espacio"></div>
-    </div>
-
-    <div class="footer-info">
-      <p>Nombre del arrendatario: ${escapeHtml(nombreCliente || "[Nombre del arrendatario]")}</p>
-      <p>Documento: ${escapeHtml(dniCliente)}</p>
-      <p>Departamento: ${escapeHtml(depto)}</p>
-      <p>Opción tomada: ${opcionTomada}</p>
-    </div>
-  </body>
+</body>
 </html>`;
 }

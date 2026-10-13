@@ -2,18 +2,27 @@
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 import { generateServiciosExtrasPdf } from "@/lib/pdf/generate-servicios-extras-pdf";
+import { regenerarPdfServicioExtra } from "@/lib/servicios-extras-service";
 import { downloadObject } from "@/lib/storage";
 import { sha256Hex } from "@/lib/hash";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+/**
+ * GET /api/servicios-extras/:id/download
+ * ?regenerate=1 re-renderiza el PDF con los datos vigentes, reemplaza la copia
+ * almacenada y devuelve el archivo regenerado.
+ */
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
+    const url = new URL(req.url);
+    const regenerate = url.searchParams.get("regenerate") === "1";
+
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
@@ -36,6 +45,12 @@ export async function GET(
         { error: "Registro no encontrado" },
         { status: 404 },
       );
+    }
+
+    // Regeneración explícita: re-renderiza, reemplaza la copia y devuelve.
+    if (regenerate) {
+      const { bytes, filename } = await regenerarPdfServicioExtra(db, schema, row);
+      return pdfResponse(bytes, filename);
     }
 
     // 1) Copia almacenada: se sirve verificando su integridad (sha256).

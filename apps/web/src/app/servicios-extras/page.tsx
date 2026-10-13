@@ -6,7 +6,9 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
-import { Download, FileText, Loader2, Plus, Wifi, X, Zap } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import { AccessControl, Permission } from "@contract/domain/rbac";
+import { Download, Edit, FileText, Loader2, Plus, RefreshCw, Trash2, Wifi, X, Zap } from "lucide-react";
 
 type ServicioExtra = {
   id: string;
@@ -62,12 +64,30 @@ function fechaLegible(value: string | null | undefined): string {
   return `${d}/${m}/${y}`;
 }
 
+function guardarBlob(blob: Blob, nombre: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombre;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export default function ServiciosExtrasPage() {
+  const { user } = useAuth();
+  const puedeGestionar = user
+    ? AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.CONTRACT_UPDATE)
+    : false;
+
   const [servicios, setServicios] = useState<ServicioExtra[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [regenerandoId, setRegenerandoId] = useState<string | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerContratos, setPickerContratos] = useState<ContractPick[]>([]);
@@ -75,6 +95,7 @@ export default function ServiciosExtrasPage() {
   const [pickerBusqueda, setPickerBusqueda] = useState("");
 
   const [selected, setSelected] = useState<ContractPick | null>(null);
+  const [editando, setEditando] = useState<ServicioExtra | null>(null);
   const [internet, setInternet] = useState(false);
   const [carga, setCarga] = useState(false);
   const [fechaOpcion, setFechaOpcion] = useState(hoy());
@@ -159,6 +180,7 @@ export default function ServiciosExtrasPage() {
 
   function elegirContrato(c: ContractPick) {
     setPickerOpen(false);
+    setEditando(null);
     setSelected(c);
     setInternet(false);
     setCarga(false);
@@ -167,8 +189,25 @@ export default function ServiciosExtrasPage() {
     setFormError(null);
   }
 
-  async function generar() {
-    if (!selected) return;
+  function abrirEdicion(s: ServicioExtra) {
+    setSelected(null);
+    setEditando(s);
+    setInternet(s.incluyeInternet);
+    setCarga(s.incluyeCargaElectrica);
+    setFechaOpcion((s.fechaOpcion ?? hoy()).slice(0, 10));
+    setFechaPago((s.fechaPago ?? hoy()).slice(0, 10));
+    setFormError(null);
+  }
+
+  function cerrarForm() {
+    setSelected(null);
+    setEditando(null);
+    setFormError(null);
+  }
+
+  async function guardar() {
+    const esEdicion = Boolean(editando);
+    if (!esEdicion && !selected) return;
     setFormError(null);
     if (!internet && !carga) {
       setFormError("Selecciona al menos un servicio (Internet o carga eléctrica).");
@@ -176,23 +215,31 @@ export default function ServiciosExtrasPage() {
     }
     setGuardando(true);
     try {
-      const res = await apiFetch("/api/servicios-extras", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contractId: selected.id,
-          incluyeInternet: internet,
-          incluyeCargaElectrica: carga,
-          fechaOpcion,
-          fechaPago,
-        }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? "No se pudo generar el documento");
-      setSelected(null);
+      const body: Record<string, unknown> = {
+        incluyeInternet: internet,
+        incluyeCargaElectrica: carga,
+        fechaOpcion,
+        fechaPago,
+      };
+      if (esEdicion) {
+        body.contractId = editando?.contractId;
+      } else {
+        body.contractId = selected?.id;
+      }
+      const res = await apiFetch(
+        esEdicion ? `/api/servicios-extras/${editando?.id}` : "/api/servicios-extras",
+        {
+          method: esEdicion ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "No se pudo guardar el servicio extra");
+      cerrarForm();
       await load();
-      const creado = body as ServicioExtra;
-      if (creado?.id) {
+      const creado = data as ServicioExtra;
+      if (!esEdicion && creado?.id) {
         void descargar(creado.id, creado.filename ?? "servicios-extras.pdf");
       }
     } catch (e) {
@@ -211,21 +258,66 @@ export default function ServiciosExtrasPage() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? `Error ${res.status}`);
       }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = nombre;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      guardarBlob(await res.blob(), nombre);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setDownloadingId(null);
     }
   }
+
+  async function regenerar(s: ServicioExtra) {
+    setRegenerandoId(s.id);
+    setError(null);
+    try {
+      const res = await apiFetch(
+        `/api/servicios-extras/${encodeURIComponent(s.id)}/download?regenerate=1`,
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      guardarBlob(
+        await res.blob(),
+        s.filename ?? `servicios-extras-${s.codigoContrato ?? s.id}.pdf`,
+      );
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRegenerandoId(null);
+    }
+  }
+
+  async function eliminar(s: ServicioExtra) {
+    if (
+      !confirm(
+        `¿Eliminar el servicio extra de "${s.clienteNombre ?? s.codigoContrato ?? "el cliente"}"? Se borrará el PDF y el registro. Esta acción no se puede deshacer.`,
+      )
+    ) {
+      return;
+    }
+    setEliminandoId(s.id);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/servicios-extras/${encodeURIComponent(s.id)}`, {
+        method: "DELETE",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "No se pudo eliminar el servicio extra");
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setEliminandoId(null);
+    }
+  }
+
+  const formAbierto = Boolean(selected || editando);
+  const refCodigo = editando?.codigoContrato ?? selected?.codigoContrato ?? "";
+  const refCliente = editando
+    ? editando.clienteNombre ?? ""
+    : [selected?.clienteNombre, selected?.apellidoCliente].filter(Boolean).join(" ");
 
   return (
     <DashboardShell>
@@ -278,7 +370,7 @@ export default function ServiciosExtrasPage() {
         {!loading && servicios.length > 0 ? (
           <TableScroll className="w-full rounded-md border">
             <div className="max-h-[40rem] overflow-y-auto">
-              <table className="w-full min-w-[900px] text-sm">
+              <table className="w-full min-w-[1000px] text-sm">
                 <thead className="sticky top-0 z-10 bg-[#151a24] text-left text-xs text-white/80">
                   <tr>
                     <th className="px-3 py-2 font-medium">Contrato</th>
@@ -289,6 +381,7 @@ export default function ServiciosExtrasPage() {
                     <th className="px-3 py-2 font-medium">Monto</th>
                     <th className="px-3 py-2 font-medium">Estado</th>
                     <th className="px-3 py-2 font-medium">Documento</th>
+                    <th className="px-3 py-2 font-medium">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -341,6 +434,43 @@ export default function ServiciosExtrasPage() {
                           <Download className="h-4 w-4" />
                           {downloadingId === s.id ? "…" : "PDF"}
                         </button>
+                      </td>
+                      <td className="px-3 py-2">
+                        {puedeGestionar ? (
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => void regenerar(s)}
+                              disabled={regenerandoId === s.id}
+                              className="inline-flex items-center gap-1 text-on-surface-variant hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Re-renderizar el PDF con los datos actuales"
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 ${regenerandoId === s.id ? "animate-spin" : ""}`} />
+                              {regenerandoId === s.id ? "…" : "Regenerar"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => abrirEdicion(s)}
+                              className="inline-flex items-center gap-1 text-on-surface-variant hover:text-primary"
+                              title="Editar opciones y fechas"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void eliminar(s)}
+                              disabled={eliminandoId === s.id}
+                              className="inline-flex items-center gap-1 text-destructive hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Eliminar el servicio extra y su PDF"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              {eliminandoId === s.id ? "…" : "Eliminar"}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -410,19 +540,21 @@ export default function ServiciosExtrasPage() {
         </div>
       ) : null}
 
-      {selected ? (
+      {formAbierto ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-xl bg-surface-container-lowest p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h3 className="font-headline-md text-on-surface">Nuevo servicio extra</h3>
+                <h3 className="font-headline-md text-on-surface">
+                  {editando ? "Editar servicio extra" : "Nuevo servicio extra"}
+                </h3>
                 <p className="font-body-sm text-on-surface-variant">
-                  {selected.codigoContrato} ·{" "}
-                  {[selected.clienteNombre, selected.apellidoCliente].filter(Boolean).join(" ")}
+                  {refCodigo}
+                  {refCliente ? ` · ${refCliente}` : ""}
                 </p>
               </div>
               <button
-                onClick={() => setSelected(null)}
+                onClick={cerrarForm}
                 className="rounded p-1 text-on-surface-variant hover:bg-surface-container"
                 aria-label="Cerrar"
               >
@@ -500,7 +632,7 @@ export default function ServiciosExtrasPage() {
                   Total: <strong>{moneda(montoPreview)}</strong>
                 </span>
                 <button
-                  onClick={() => void generar()}
+                  onClick={() => void guardar()}
                   disabled={guardando || (!internet && !carga)}
                   className="inline-flex items-center gap-2 rounded bg-primary px-4 py-2 font-label-md text-on-primary disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -509,7 +641,11 @@ export default function ServiciosExtrasPage() {
                   ) : (
                     <FileText className="h-4 w-4" />
                   )}
-                  {guardando ? "Generando…" : "Generar documento"}
+                  {guardando
+                    ? "Guardando…"
+                    : editando
+                      ? "Guardar cambios"
+                      : "Generar documento"}
                 </button>
               </div>
             </div>
