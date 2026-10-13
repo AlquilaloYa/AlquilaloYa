@@ -11,6 +11,7 @@ import {
   clearMfaCookies,
   readSessionTokens,
   readMfaTokens,
+  isNativeMobileRequest,
 } from "@/lib/session-cookies";
 
 /**
@@ -29,6 +30,7 @@ export {
   clearMfaCookies,
   readSessionTokens,
   readMfaTokens,
+  isNativeMobileRequest,
 };
 
 /** Cambia email+password por tokens (flujo de contraseña de Supabase). */

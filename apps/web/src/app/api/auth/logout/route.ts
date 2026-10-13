@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { supabaseAnonKey, supabaseUrl } from "@contract/config/env";
-import { readSessionTokens, clearSessionCookies } from "@/lib/supabase-auth";
+import {
+  readSessionTokens,
+  clearSessionCookies,
+  clearMfaCookies,
+  isNativeMobileRequest,
+} from "@/lib/supabase-auth";
 
 export const dynamic = "force-dynamic";
 
 /** POST /api/auth/logout — cierra la sesión en Supabase (mejor esfuerzo) y limpia cookies. */
 export async function POST(req: Request) {
+  const native = isNativeMobileRequest(req);
   try {
     const { accessToken } = readSessionTokens(req);
     const url = supabaseUrl();
@@ -23,5 +29,8 @@ export async function POST(req: Request) {
   } catch {
     /* best-effort */
   }
-  return clearSessionCookies(NextResponse.json({ ok: true }, { status: 200 }));
+  return clearMfaCookies(
+    clearSessionCookies(NextResponse.json({ ok: true }, { status: 200 }), native),
+    native,
+  );
 }

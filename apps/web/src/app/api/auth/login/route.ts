@@ -6,6 +6,7 @@ import {
   clearSessionCookies,
   applyMfaCookies,
   clearMfaCookies,
+  isNativeMobileRequest,
 } from "@/lib/supabase-auth";
 import { decodeJwtPayload } from "@/lib/jwt";
 import { listVerifiedTotp } from "@/lib/mfa";
@@ -22,6 +23,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request) {
   try {
+    const native = isNativeMobileRequest(req);
     const dbModule = await import("@contract/db");
     const body = (await req.json().catch(() => ({}))) as {
       email?: unknown;
@@ -44,7 +46,7 @@ export async function POST(req: Request) {
         { error: "Usuario autenticado pero sin acceso al sistema" },
         { status: 403 }
       );
-      return clearSessionCookies(clearMfaCookies(res));
+      return clearSessionCookies(clearMfaCookies(res, native), native);
     }
 
     // SEC-015: si el usuario ya tiene un factor TOTP verificado, exigir el
@@ -54,10 +56,14 @@ export async function POST(req: Request) {
     if (verifiedFactors.length > 0 && aal !== "aal2") {
       // Guardar la sesión AAL1 en cookies temporales; NO da acceso todavía.
       const res = NextResponse.json({ mfaRequired: true }, { status: 200 });
-      return applyMfaCookies(clearSessionCookies(res), {
-        access_token: session.access_token,
-        ...(session.refresh_token ? { refresh_token: session.refresh_token } : {}),
-      });
+      return applyMfaCookies(
+        clearSessionCookies(res, native),
+        {
+          access_token: session.access_token,
+          ...(session.refresh_token ? { refresh_token: session.refresh_token } : {}),
+        },
+        native,
+      );
     }
 
     const permissionKeys = await new dbModule.DrizzleUserRepository()
@@ -84,10 +90,14 @@ export async function POST(req: Request) {
       },
       { status: 200 }
     );
-    return applySessionCookies(clearMfaCookies(res), {
-      access_token: session.access_token,
-      ...(session.refresh_token ? { refresh_token: session.refresh_token } : {}),
-    });
+    return applySessionCookies(
+      clearMfaCookies(res, native),
+      {
+        access_token: session.access_token,
+        ...(session.refresh_token ? { refresh_token: session.refresh_token } : {}),
+      },
+      native,
+    );
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

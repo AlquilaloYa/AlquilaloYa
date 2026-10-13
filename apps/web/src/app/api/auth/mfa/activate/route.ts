@@ -3,6 +3,7 @@ import {
   applySessionCookies,
   readSessionTokens,
   verifyAccessToken,
+  isNativeMobileRequest,
 } from "@/lib/supabase-auth";
 import { completeTotp } from "@/lib/mfa";
 import { buildSessionUser } from "@/lib/app-user";
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request) {
   try {
+    const native = isNativeMobileRequest(req);
     const { accessToken } = readSessionTokens(req);
     const identity = await verifyAccessToken(accessToken);
     if (!identity || !accessToken) {
@@ -57,7 +59,7 @@ export async function POST(req: Request) {
     return applySessionCookies(res, {
       access_token: tokens.access_token,
       ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
-    });
+    }, native);
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

@@ -17,6 +17,21 @@ function withSecurityHeaders(
   return res;
 }
 
+function withAndroidAppCors(res: NextResponse, req: NextRequest): NextResponse {
+  const origin = req.headers.get("origin");
+  const allowedOrigin =
+    process.env.FIELDOPS_ANDROID_ORIGIN?.replace(/\/+$/, "") ||
+    "https://localhost";
+  if (req.nextUrl.pathname.startsWith("/api") && origin === allowedOrigin) {
+    res.headers.set("Access-Control-Allow-Origin", allowedOrigin);
+    res.headers.set("Access-Control-Allow-Credentials", "true");
+    res.headers.set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+    res.headers.set("Access-Control-Allow-Headers", "Content-Type, X-FieldOps-Client");
+    res.headers.set("Vary", "Origin");
+  }
+  return res;
+}
+
 /**
  * Middleware (edge) - Fase 7 + 8: seguridad + observabilidad + guard de sesión.
  * - Cabeceras de seguridad en todas las respuestas.
@@ -32,6 +47,21 @@ export async function middleware(req: NextRequest) {
 
   // Rate limiting solo para API de negocio.
   const isApi = pathname.startsWith("/api");
+  if (isApi && req.method === "OPTIONS") {
+    const allowedOrigin =
+      process.env.FIELDOPS_ANDROID_ORIGIN?.replace(/\/+$/, "") ||
+      "https://localhost";
+    if (req.headers.get("origin") !== allowedOrigin) {
+      return withSecurityHeaders(
+        NextResponse.json({ error: "Origen de la app no permitido" }, { status: 403 }),
+        requestId,
+      );
+    }
+    return withAndroidAppCors(
+      withSecurityHeaders(new NextResponse(null, { status: 204 }), requestId),
+      req,
+    );
+  }
   const skipLimit = pathname.startsWith("/api/health") || pathname.startsWith("/api/metrics");
   if (isApi && !skipLimit) {
     const ip = clientIp(req.headers);
@@ -46,7 +76,7 @@ export async function middleware(req: NextRequest) {
       res.headers.set("Retry-After", String(rl.resetIn));
       res.headers.set("X-RateLimit-Limit", String(rl.limit));
       res.headers.set("X-RateLimit-Remaining", String(rl.remaining));
-      return withSecurityHeaders(res, requestId);
+      return withAndroidAppCors(withSecurityHeaders(res, requestId), req);
     }
   }
 
@@ -55,14 +85,17 @@ export async function middleware(req: NextRequest) {
   if (!isApi && !PUBLIC_PATHS.has(pathname)) {
     if (!req.cookies.get(ACCESS_COOKIE)?.value) {
       const loginUrl = new URL("/login", req.nextUrl.origin);
-      return withSecurityHeaders(NextResponse.redirect(loginUrl), requestId);
+      return withAndroidAppCors(
+        withSecurityHeaders(NextResponse.redirect(loginUrl), requestId),
+        req,
+      );
     }
   }
 
   metrics.recordRequest(pathname, 200);
   log.debug("request", { ip: clientIp(req.headers) });
 
-  return withSecurityHeaders(NextResponse.next(), requestId);
+  return withAndroidAppCors(withSecurityHeaders(NextResponse.next(), requestId), req);
 }
 
 export const config = {

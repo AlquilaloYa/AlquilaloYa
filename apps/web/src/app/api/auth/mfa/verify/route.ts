@@ -4,6 +4,7 @@ import {
   clearMfaCookies,
   readMfaTokens,
   verifyAccessToken,
+  isNativeMobileRequest,
 } from "@/lib/supabase-auth";
 import { listVerifiedTotp, completeTotp } from "@/lib/mfa";
 import { buildSessionUser } from "@/lib/app-user";
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request) {
   try {
+    const native = isNativeMobileRequest(req);
     const body = (await req.json().catch(() => ({}))) as { code?: unknown };
     const code = typeof body.code === "string" ? body.code.trim() : "";
     if (!code) {
@@ -37,7 +39,7 @@ export async function POST(req: Request) {
         { error: "No hay un factor MFA verificado para este usuario" },
         { status: 400 }
       );
-      return clearMfaCookies(res);
+      return clearMfaCookies(res, native);
     }
 
     let tokens;
@@ -62,14 +64,18 @@ export async function POST(req: Request) {
         { error: "Usuario sin acceso al sistema" },
         { status: 403 }
       );
-      return clearMfaCookies(res);
+      return clearMfaCookies(res, native);
     }
 
     const res = NextResponse.json({ user }, { status: 200 });
-    return applySessionCookies(clearMfaCookies(res), {
-      access_token: tokens.access_token,
-      ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
-    });
+    return applySessionCookies(
+      clearMfaCookies(res, native),
+      {
+        access_token: tokens.access_token,
+        ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
+      },
+      native,
+    );
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
