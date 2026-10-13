@@ -102,6 +102,7 @@ const NAV_ITEMS: NavItem[] = [
     group: "contratos",
   },
   { href: "/adendas", label: "Adendas", icon: ScrollText, section: "Adendas", permission: "contract.read", group: "contratos" },
+  { href: "/servicios-extras", label: "Servicios Extras", icon: Zap, section: "Servicios Extras", permission: "contract.read", group: "contratos" },
   { href: "/plantillas", label: "Plantillas", icon: FilePlus2, section: "Plantillas", permission: "template.read", group: "contratos" },
   { href: "/clientes", label: "Clientes", icon: Star, section: "Clientes", permission: "client.read" },
   { href: "/pagos", label: "Cobranza", icon: Banknote, section: "Cobranza", permission: "contract.read" },
@@ -136,13 +137,13 @@ const CONFIGURATION_ITEMS: NavItem[] = [
 const ROLE_PAGES: Partial<Record<UserRole, ReadonlySet<string>>> = {
   RRHH: new Set([
     "/dashboard", "/directorio", "/separaciones", "/contactos", "/departamentos",
-    "/contratos", "/contrato-final", "/adendas", "/plantillas", "/clientes",
+    "/contratos", "/contrato-final", "/adendas", "/servicios-extras", "/plantillas", "/clientes",
     "/pagos", "/workflow", "/checklist", "/work-123", "/agenda", "/rrhh",
     "/operaciones", "/solicitudes-permiso",
   ]),
   ASISTENTE_ADMINISTRATIVO: new Set([
     "/dashboard", "/directorio", "/separaciones", "/contactos", "/departamentos",
-    "/contratos", "/contrato-final", "/adendas", "/plantillas", "/clientes",
+    "/contratos", "/contrato-final", "/adendas", "/servicios-extras", "/plantillas", "/clientes",
     "/pagos", "/workflow", "/checklist", "/work-123", "/agenda", "/rrhh",
     "/operaciones", "/google/gmail", "/google/drive", "/google/sheets",
     "/google/docs", "/google/tasks", "/pipeline", "/mensajes", "/chat-clientes",
