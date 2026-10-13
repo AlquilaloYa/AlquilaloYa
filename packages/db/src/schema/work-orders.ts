@@ -150,6 +150,40 @@ export const workOrderVisits = pgTable(
   ],
 );
 
+export const workOrderMaterials = pgTable(
+  "work_order_materials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workOrderId: uuid("work_order_id")
+      .notNull()
+      .references(() => workOrders.id, { onDelete: "cascade" }),
+    material: varchar("material", { length: 255 }).notNull(),
+    quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
+    unit: varchar("unit", { length: 40 }).notNull(),
+    unitCost: numeric("unit_cost", { precision: 12, scale: 2 }).notNull(),
+    totalCost: numeric("total_cost", { precision: 14, scale: 2 }).notNull(),
+    observations: text("observations").notNull().default(""),
+    recordedBy: uuid("recorded_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check("work_order_materials_quantity_check", sql`${table.quantity} > 0`),
+    check("work_order_materials_unit_cost_check", sql`${table.unitCost} >= 0`),
+    check(
+      "work_order_materials_total_cost_check",
+      sql`${table.totalCost} >= 0`,
+    ),
+    index("work_order_materials_order_idx").on(
+      table.workOrderId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const workOrderEvents = pgTable(
   "work_order_events",
   {

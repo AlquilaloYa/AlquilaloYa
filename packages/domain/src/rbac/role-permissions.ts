@@ -20,14 +20,14 @@ import type { UserRole } from "./role";
 const ALL_PERMISSIONS: Permission[] = Object.values(P);
 
 export const ADMIN_PERMISSIONS: ReadonlySet<Permission> = new Set(
-  ALL_PERMISSIONS.filter((perm) => perm !== P.PERMISSION_REQUEST_CREATE)
+  ALL_PERMISSIONS.filter((perm) => perm !== P.PERMISSION_REQUEST_CREATE),
 );
 
 export const DEVELOPER_PERMISSIONS: ReadonlySet<Permission> = new Set(
-  ALL_PERMISSIONS.filter((perm) => perm !== P.PERMISSION_REQUEST_CREATE)
+  ALL_PERMISSIONS.filter((perm) => perm !== P.PERMISSION_REQUEST_CREATE),
 );
 
-/** Lectura abierta de la operación: RRHH y asistente administrativo. */
+/** Lectura operativa; el asistente puede registrar materiales en sus órdenes. */
 const BASE_OPERATIVO: Permission[] = [
   P.HR_READ,
   P.HR_DIRECTORY_READ,
@@ -48,17 +48,19 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     ...BASE_OPERATIVO,
     P.MARKETING_READ,
     P.PERMISSION_REQUEST_CREATE,
+    P.WORK_ORDER_MATERIAL_RECORD,
   ]),
-  MARKETING: new Set([
-    P.MARKETING_READ,
-  ]),
+  MARKETING: new Set([P.MARKETING_READ]),
 };
 
 export function permissionsForRole(role: UserRole): Permission[] {
   return Array.from(ROLE_PERMISSION_MAP[role]);
 }
 
-export function roleHasPermission(role: UserRole, permission: Permission): boolean {
+export function roleHasPermission(
+  role: UserRole,
+  permission: Permission,
+): boolean {
   return ROLE_PERMISSION_MAP[role].has(permission);
 }
 

@@ -39,6 +39,7 @@ export const Permission = {
   WORK_ORDER_READ: "work_order.read",
   WORK_ORDER_CREATE: "work_order.create",
   WORK_ORDER_UPDATE: "work_order.update",
+  WORK_ORDER_MATERIAL_RECORD: "work_order.material.record",
 } as const;
 
 export type Permission = (typeof Permission)[keyof typeof Permission];
@@ -78,12 +79,16 @@ export const PERMISSION_DESCRIPTIONS: Record<Permission, string> = {
   [Permission.USER_READ]: "Ver usuarios",
   [Permission.USER_MANAGE]: "Gestionar usuarios",
   [Permission.ROLE_MANAGE]: "Gestionar roles",
-  [Permission.USER_DELETE]: "Eliminar usuarios (solo Developer o Administrador)",
+  [Permission.USER_DELETE]:
+    "Eliminar usuarios (solo Developer o Administrador)",
   [Permission.PERMISSION_REQUEST_CREATE]: "Solicitar permiso al Developer",
   [Permission.PERMISSION_REQUEST_READ]: "Ver solicitudes de permiso",
-  [Permission.PERMISSION_REQUEST_APPROVE]: "Aprobar o rechazar solicitudes de permiso",
+  [Permission.PERMISSION_REQUEST_APPROVE]:
+    "Aprobar o rechazar solicitudes de permiso",
   [Permission.MARKETING_READ]: "Ver los módulos de Marketing",
   [Permission.WORK_ORDER_READ]: "Ver órdenes de trabajo",
   [Permission.WORK_ORDER_CREATE]: "Crear órdenes de trabajo",
   [Permission.WORK_ORDER_UPDATE]: "Asignar y actualizar órdenes de trabajo",
+  [Permission.WORK_ORDER_MATERIAL_RECORD]:
+    "Registrar materiales en órdenes de trabajo asignadas",
 };

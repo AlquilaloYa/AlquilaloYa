@@ -7,6 +7,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { AlertTriangle, ArrowLeft, CalendarPlus, Download, File, FileText, Pencil, ShieldCheck, Upload } from "lucide-react";
 import { AdendaModal, EditAdendaModal, ExtensionModal, type EditableAdenda } from "@/components/adenda-modals";
+import { ServiciosExtrasPanel } from "@/components/servicios-extras";
 
 type SnapshotCliente = {
   id: string;
@@ -134,7 +135,7 @@ export default function ContratoDetailPage() {
   >({});
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"ficha" | "adendas">("ficha");
+  const [activeTab, setActiveTab] = useState<"ficha" | "adendas" | "servicios-extras">("ficha");
 
   async function descargarPdf() {
     setDescargando(true);
@@ -457,7 +458,7 @@ export default function ContratoDetailPage() {
               </div>
             </div>
 
-            {/* ── Tab bar: Ficha / Adendas ── */}
+            {/* ── Tab bar: Ficha / Adendas / Servicios Extras ── */}
             <div className="flex gap-1 rounded-lg bg-surface-container p-1">
               <button
                 onClick={() => setActiveTab("ficha")}
@@ -475,6 +476,12 @@ export default function ContratoDetailPage() {
                     {adendas.length}
                   </span>
                 )}
+              </button>
+              <button
+                onClick={() => setActiveTab("servicios-extras")}
+                className={`flex-1 rounded-md px-4 py-2 font-label-md transition-colors ${activeTab === "servicios-extras" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container-high"}`}
+              >
+                Servicios Extras
               </button>
             </div>
 
@@ -641,7 +648,7 @@ export default function ContratoDetailPage() {
                 </div>
               </div>
             </div>
-            ) : (
+            ) : activeTab === "adendas" ? (
               /* ── Pestaña Adendas ── */
               <div className="rounded-lg bg-surface-container-lowest p-5 shadow-sm">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -730,6 +737,15 @@ export default function ContratoDetailPage() {
                 </ul>
               )}
             </div>
+            ) : (
+              /* ── Pestaña Servicios Extras ── */
+              <ServiciosExtrasPanel
+                contractId={contract.id}
+                codigoContrato={contract.codigoContrato}
+                clienteId={contract.clienteId}
+                clienteNombre={`${contract.cliente.nombres} ${contract.cliente.apellidos ?? ""}`.trim()}
+                fechaInicio={contract.fechaInicio}
+              />
             )}
 
             {contract.snapshot ? (

@@ -55,6 +55,7 @@ type UpdateBody = {
   status?: unknown;
   assignedEmployeeId?: unknown;
   scheduledAt?: unknown;
+  rescheduleVisit?: unknown;
   diagnosis?: unknown;
   resolution?: unknown;
   estimatedCost?: unknown;
@@ -249,6 +250,15 @@ export async function PATCH(
         { error: "Orden de trabajo no encontrada" },
         { status: 404 },
       );
+    if (current.status === "COMPLETED") {
+      return NextResponse.json(
+        {
+          error:
+            "La orden está finalizada y no admite cambios; registra una corrección auditada",
+        },
+        { status: 409 },
+      );
+    }
     if (auth.user.role === "ASISTENTE_ADMINISTRATIVO") {
       const [employee] = await db
         .select({ id: schema.hrEmployees.id })
@@ -270,6 +280,16 @@ export async function PATCH(
     }
 
     const scheduledAt = parseDate(body.scheduledAt);
+    if (
+      body.rescheduleVisit !== undefined &&
+      typeof body.rescheduleVisit !== "boolean"
+    ) {
+      return NextResponse.json(
+        { error: "La opción de reprogramación no es válida" },
+        { status: 400 },
+      );
+    }
+    const isReschedulingVisit = body.rescheduleVisit === true;
     const estimatedCost = parseMetric(body.estimatedCost);
     const estimatedMinutes = parseMetric(body.estimatedMinutes, true);
     const actualCost = parseMetric(body.actualCost);
@@ -314,6 +334,65 @@ export async function PATCH(
       return NextResponse.json(
         { error: "El diagnóstico o la resolución supera el límite permitido" },
         { status: 400 },
+      );
+    }
+    if (isReschedulingVisit && (!scheduledAt || !note)) {
+      return NextResponse.json(
+        { error: "Indica la nueva fecha, hora y motivo de la reprogramación" },
+        { status: 400 },
+      );
+    }
+    if (
+      isReschedulingVisit &&
+      !["VISIT_SCHEDULED", "RESCHEDULED"].includes(current.status)
+    ) {
+      return NextResponse.json(
+        { error: "Solo se puede reprogramar una visita que aún no inició" },
+        { status: 409 },
+      );
+    }
+    if (
+      isReschedulingVisit &&
+      body.status !== undefined &&
+      body.status !== "RESCHEDULED"
+    ) {
+      return NextResponse.json(
+        { error: "La reprogramación debe conservar el estado RESCHEDULED" },
+        { status: 400 },
+      );
+    }
+    if (body.status === "RESCHEDULED" && !isReschedulingVisit) {
+      return NextResponse.json(
+        { error: "Usa la acción de reprogramación para cambiar este estado" },
+        { status: 400 },
+      );
+    }
+    if (
+      scheduledAt &&
+      !isReschedulingVisit &&
+      current.status === "ACCEPTED" &&
+      (!current.targetAt ||
+        current.targetAt.getTime() !== scheduledAt.getTime())
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "La visita inicial debe conservar la fecha y hora definidas en la orden",
+        },
+        { status: 409 },
+      );
+    }
+    if (
+      scheduledAt &&
+      !isReschedulingVisit &&
+      ["VISIT_SCHEDULED", "RESCHEDULED"].includes(current.status)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "La visita programada no se puede reemplazar; usa la acción de reprogramación",
+        },
+        { status: 409 },
       );
     }
 
@@ -405,7 +484,7 @@ export async function PATCH(
         : current.status;
     }
     if (scheduledAt && body.status === undefined)
-      nextStatus = "VISIT_SCHEDULED";
+      nextStatus = isReschedulingVisit ? "RESCHEDULED" : "VISIT_SCHEDULED";
     if (
       body.status !== undefined &&
       (typeof body.status !== "string" ||
@@ -497,7 +576,42 @@ export async function PATCH(
         });
       }
 
-      if (scheduledAt) {
+      if (isReschedulingVisit && scheduledAt) {
+        const [visit] = await tx
+          .select()
+          .from(schema.workOrderVisits)
+          .where(eq(schema.workOrderVisits.workOrderId, params.id))
+          .orderBy(desc(schema.workOrderVisits.visitNumber))
+          .limit(1);
+        if (!visit || visit.arrivedAt || visit.completedAt) {
+          throw new Error(
+            "Solo se puede reprogramar una visita pendiente de llegada",
+          );
+        }
+        if (visit.scheduledAt.getTime() === scheduledAt.getTime()) {
+          throw new Error("La nueva fecha debe ser distinta a la programada");
+        }
+        await tx
+          .update(schema.workOrderVisits)
+          .set({ scheduledAt })
+          .where(eq(schema.workOrderVisits.id, visit.id));
+        await tx.insert(schema.workOrderEvents).values({
+          workOrderId: params.id,
+          actorId: auth.user.id,
+          actorName: auth.user.name,
+          eventType: "VISIT_RESCHEDULED",
+          fromStatus: current.status,
+          toStatus: nextStatus,
+          details: {
+            visitId: visit.id,
+            visitNumber: Number(visit.visitNumber),
+            previousScheduledAt: visit.scheduledAt.toISOString(),
+            scheduledAt: scheduledAt.toISOString(),
+            reason: note,
+          },
+          createdAt: now,
+        });
+      } else if (scheduledAt) {
         const [lastVisit] = await tx
           .select({ visitNumber: schema.workOrderVisits.visitNumber })
           .from(schema.workOrderVisits)
@@ -539,6 +653,7 @@ export async function PATCH(
         assignedEmployeeId,
         updatedAt: now,
       };
+      if (scheduledAt) update.targetAt = scheduledAt;
       if (diagnosis !== undefined) update.diagnosis = diagnosis;
       if (resolution !== undefined) update.resolution = resolution;
       if (estimatedCost !== null) update.estimatedCost = estimatedCost;
@@ -590,7 +705,7 @@ export async function PATCH(
         }
       }
 
-      if (nextStatus !== current.status) {
+      if (nextStatus !== current.status && !isReschedulingVisit) {
         await tx.insert(schema.workOrderEvents).values({
           workOrderId: params.id,
           actorId: auth.user.id,
@@ -621,6 +736,13 @@ export async function PATCH(
       {
         status:
           message === "Programa una visita antes de confirmar la llegada" ||
+          message ===
+            "Solo se puede reprogramar una visita pendiente de llegada" ||
+          message === "La nueva fecha debe ser distinta a la programada" ||
+          message ===
+            "Solo se puede reprogramar una visita que aún no inició" ||
+          message ===
+            "La visita programada no se puede reemplazar; usa la acción de reprogramación" ||
           message ===
             "La orden cambió mientras la actualizabas. Recarga e inténtalo de nuevo."
             ? 409

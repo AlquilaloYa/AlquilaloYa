@@ -6,6 +6,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { CobranzaVendedores } from "@/components/cobranza-vendedores";
+import { CobranzaServiciosExtras } from "@/components/cobranza-servicios-extras";
 import { apiFetch } from "@/lib/api";
 import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
 
@@ -61,6 +62,7 @@ const FILTERS = [
   { key: "PENDIENTE", label: "Pendientes" },
   { key: "VENCIDO", label: "Vencidos" },
   { key: "PAGADO", label: "Pagados" },
+  { key: "SERVICIOS_EXTRAS", label: "Servicios extras" },
 ] as const;
 
 function InputIndulgencia({
@@ -363,7 +365,9 @@ export default function PagosPage() {
           <BusquedaInput value={busqueda} onChange={setBusqueda} placeholder="Buscar cuota…" className="w-72" />
         </div>
 
-        {loading ? (
+        {filter === "SERVICIOS_EXTRAS" ? (
+          <CobranzaServiciosExtras />
+        ) : loading ? (
           <p className="text-on-surface-variant">Cargando cobranza…</p>
         ) : (
           <TableScroll

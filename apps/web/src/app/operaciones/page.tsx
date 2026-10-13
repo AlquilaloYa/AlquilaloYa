@@ -11,8 +11,10 @@ import {
   AlertCircle,
   ArrowDownUp,
   ArrowLeft,
+  Bell,
   CalendarClock,
   Camera,
+  Check,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
@@ -247,6 +249,312 @@ function humanizeEvent(event: WorkEvent): string {
     return `Cambió el estado: ${STATUS_LABEL[event.fromStatus as WorkStatus] ?? event.fromStatus} → ${STATUS_LABEL[event.toStatus as WorkStatus] ?? event.toStatus}`;
   }
   return "Actualizó la orden";
+}
+
+function FieldOpsMobilePreview() {
+  const cards = [
+    { label: "Urgente", value: 2, tone: "bg-[#f8d7d7] text-[#cc3a3a]" },
+    { label: "Alta", value: 3, tone: "bg-[#dfeafc] text-[#2b4f9d]" },
+    { label: "Curso", value: 5, tone: "bg-[#e9ebf0] text-[#4b5563]" },
+  ];
+
+  return (
+    <section className="mb-7 rounded-[24px] border border-slate-200 bg-[#f3f5f7] p-3 shadow-[0_8px_24px_rgba(15,23,42,0.08)] sm:hidden">
+      <div className="mx-auto max-w-[420px] rounded-[26px] border border-slate-200 bg-[#f5f6f8] p-0 shadow-[0_12px_32px_rgba(15,23,42,0.08)]">
+        <div className="border-b border-slate-200 bg-[#f5f6f8] px-4 pb-3 pt-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                aria-label="Volver"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                FIELDOPS
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                aria-label="Notificaciones"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm"
+              >
+                <Bell className="h-4 w-4" />
+              </button>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#7bb7ff] via-[#f1d0b3] to-[#7ad0a9] text-xs font-bold text-slate-900 shadow-sm">
+                PR
+              </div>
+            </div>
+          </div>
+          <h2 className="mt-4 text-[2rem] font-black leading-none tracking-[-0.04em] text-slate-900">
+            Mis Tareas
+          </h2>
+        </div>
+
+        <div className="bg-[#f5f6f8] px-4 pb-4 pt-3">
+          <div className="flex items-center justify-between">
+            <div className="text-[1.05rem] font-semibold text-slate-900">
+              Hola, <span className="font-black">Pedro Rodríguez</span>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#d7f6e8] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-[#0e8b5c]">
+              <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+              TURNO ACTIVO · EN LÍNEA
+            </div>
+          </div>
+          <p className="mt-2 text-sm text-slate-600">
+            Técnico Principal · Electromecánico
+          </p>
+
+          <div className="mt-4 grid grid-cols-3 gap-2.5">
+            {cards.map((card) => (
+              <div
+                key={card.label}
+                className={`rounded-2xl border border-slate-200 px-3 py-3 ${card.tone}`}
+              >
+                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-current/80">
+                  {card.label}
+                </div>
+                <div className="mt-2 text-[2.05rem] font-black leading-none tracking-[-0.05em]">
+                  {card.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex gap-2 overflow-hidden rounded-full bg-slate-200 p-1 text-[11px] font-bold uppercase tracking-[0.04em]">
+            {[
+              { label: "Todas (11)", active: false },
+              { label: "Urgentes (2)", active: true },
+              { label: "Prioridad Alta (3)", active: false },
+            ].map((filter) => (
+              <button
+                key={filter.label}
+                type="button"
+                className={`flex-1 rounded-full px-2 py-2 transition ${filter.active ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-[18px] border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                <span className="font-mono text-[#eb4d4d]">OT-000125</span>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#ffebeb] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#d63b3b]">
+                <span className="h-2 w-2 rounded-full bg-[#ef4444]" />
+                URGENTE
+              </span>
+            </div>
+
+            <h3 className="mt-4 text-[1.1rem] font-black leading-[1.2] tracking-[-0.04em] text-slate-900">
+              Fuga de agua departamento 302
+            </h3>
+
+            <div className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                <MapPin className="h-3 w-3" />
+              </span>
+              Torre B · Depto 302 (Residente: Juan Pérez)
+            </div>
+
+            <div className="mt-4 flex gap-3 text-xs text-slate-500">
+              <div className="flex items-center gap-2 rounded-md border border-slate-200 px-2 py-1.5">
+                <Camera className="h-3.5 w-3.5" />
+                3 fotos
+              </div>
+              <div className="flex items-center gap-2 rounded-md border border-slate-200 px-2 py-1.5">
+                <CalendarClock className="h-3.5 w-3.5" />
+                1 video
+              </div>
+            </div>
+
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#d9f7e8] px-3 py-2 text-[11px] font-black uppercase tracking-[0.06em] text-[#0d8b53]">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e]" />
+              VISITA PROGRAMADA
+            </div>
+
+            <button
+              type="button"
+              className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0f5fd7] text-sm font-black text-white shadow-[0_8px_18px_rgba(37,99,235,0.28)]"
+            >
+              Iniciar Tarea & Abrir Chat Operativo
+            </button>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-slate-200 bg-[#eff4ff] p-3 text-sm leading-6 text-slate-700">
+            <div className="flex items-start gap-2">
+              <span className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#dfeafe] text-[#2563eb]">
+                <AlertCircle className="h-3 w-3" />
+              </span>
+              <span>
+                Canal temporal directo con Despacho que se paga/archiva al finalizar la tarea.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-200 bg-[#f5f6f8] px-4 py-4">
+          <div className="mb-3 flex items-center gap-3">
+            <button
+              type="button"
+              aria-label="Volver"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              FIELDOPS
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                #OT-000125
+              </span>
+              <span className="rounded-full bg-[#dfeafc] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#2d5bc9]">
+                ALTA / CRÍTICA
+              </span>
+            </div>
+
+            <h3 className="mt-4 text-[2.25rem] font-black leading-[1.05] tracking-[-0.06em] text-slate-900">
+              Fuga de agua departamento 302
+            </h3>
+
+            <div className="mt-4 flex items-center gap-2 text-[15px] text-slate-600">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#e5ecff] text-[#2563eb]">
+                <CalendarClock className="h-3.5 w-3.5" />
+              </span>
+              Programada para hoy: 10:30 AM (en 15 min)
+            </div>
+
+            <div className="mt-5 rounded-[20px] border border-slate-200 bg-[#f5f7fb] p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#d9f7e8] text-[#1b8d63]">
+                    <Check className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-[15px] font-bold text-slate-900">
+                      Confirmación Operativa
+                    </div>
+                    <div className="mt-1 text-sm text-slate-600">
+                      Protocolo en Terreno · Sección 10
+                    </div>
+                  </div>
+                </div>
+                <span className="rounded-full bg-[#bfe7d5] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-[#0b7b4b]">
+                  GPS · LISTO
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="mt-5 flex h-[58px] w-full items-center justify-center rounded-2xl bg-[#0f5fd7] text-[1.1rem] font-black uppercase tracking-[-0.02em] text-white shadow-[0_12px_24px_rgba(15,80,210,0.28)]"
+            >
+              ESTOY AQUÍ · REGISTRAR LLEGADA
+            </button>
+
+            <div className="mt-4 rounded-xl bg-slate-100 p-3 text-[15px] leading-6 text-slate-700">
+              <div className="flex items-center gap-2 text-slate-800">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-[#2563eb]">
+                  <Check className="h-3.5 w-3.5" />
+                </span>
+                Estampa fecha y hora exacta del servidor en tiempo real. Próximo estado del flujo: ON_SITE (En Sitio).
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-200 bg-[#f5f6f8] px-4 py-4">
+          <div className="mb-3 flex items-center gap-3">
+            <button
+              type="button"
+              aria-label="Volver"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              FIELDOPS
+            </div>
+          </div>
+
+          <div className="rounded-[20px] border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                <span className="font-mono">#OT-000125</span>
+              </div>
+              <span className="rounded-full bg-[#dfeafc] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#2d5bc9]">
+                Cierre técnico
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
+              <div className="rounded-xl bg-[#edf3f8] p-2.5">
+                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                  Inicio en sitio
+                </div>
+                <div className="mt-2 text-[1.1rem] font-black text-slate-900">10:34 AM</div>
+              </div>
+              <div className="rounded-xl bg-[#edf3f8] p-2.5">
+                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                  Duración real
+                </div>
+                <div className="mt-2 text-[1.1rem] font-black text-slate-900">2h 28m</div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-[16px] border border-slate-200 bg-[#f4f7f9] p-3">
+              <div className="flex items-center gap-2 text-[15px] font-black text-slate-900">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#dfeafe] text-[#3b82f6]">
+                  <Wrench className="h-3.5 w-3.5" />
+                </span>
+                Resolución Técnica
+              </div>
+              <p className="mt-3 text-[15px] leading-6 text-slate-700">
+                Se retiró tramo dañado de 2 metros de tubería de 2&quot;, se instalaron nuevos codos y unión con sellador industrial. Se ejecutó prueba de flujo continuo y presión durante 15 minutos sin caída de presión.
+              </p>
+            </div>
+
+            <div className="mt-4 rounded-[16px] border border-[#d1f7e4] bg-[#ebfff5] p-3 text-[15px] leading-6 text-slate-800">
+              <div className="flex items-center gap-2 font-black text-slate-900">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#d8fbe8] text-[#0e8b5c]">
+                  <Check className="h-3.5 w-3.5" />
+                </span>
+                Prueba de estanqueidad y presión satisfactoria
+              </div>
+              <p className="mt-2">
+                15 min en régimen continuo a 4.2 bar sin caída de presión.
+              </p>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between rounded-[16px] border border-slate-200 bg-white p-3">
+              <div className="flex items-center gap-2 text-[15px] font-black text-slate-900">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#dfeafe] text-[#2563eb]">
+                  <Camera className="h-3.5 w-3.5" />
+                </span>
+                Evidencia Final en Sitio
+              </div>
+              <div className="text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">
+                2/2 requeridas
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div className="h-24 rounded-xl bg-[linear-gradient(135deg,#cbcfda,#bcc5d1)]" />
+              <div className="h-24 rounded-xl bg-[linear-gradient(135deg,#c0cbd3,#adb9c1)]" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export default function OperacionesPage() {
@@ -606,6 +914,8 @@ export default function OperacionesPage() {
               </button>
             </div>
           )}
+
+          <FieldOpsMobilePreview />
 
           <section
             aria-label="Resumen de órdenes"

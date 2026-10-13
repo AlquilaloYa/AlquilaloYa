@@ -103,12 +103,18 @@ Agrupados como aparecen en la barra lateral (`apps/web/src/components/dashboard-
 - `/contrato-final` y `/contrato-final/[id]` — emisión, firma y cierre.
 - `/adendas` — adendas con documento propio `{código}-ADD-{n}`.
   API: `GET/POST /api/adendas`, `GET/PATCH /api/adendas/[id]`.
+- Servicios extras (pestaña en `/contratos/[id]` y opción en `/pagos`) —
+  opciones independientes de internet (S/ 39) y/o recargo por carga eléctrica
+  (S/ 60); genera el documento "Pagos extras por conexión y medio de carga" con
+  firmas del arrendatario y el arrendador, y registra el día de pago según el
+  contrato. API: `GET/POST /api/servicios-extras`,
+  `GET /api/servicios-extras/[id]`, `GET /api/servicios-extras/[id]/download`.
 - `/plantillas` — plantillas de contrato versionadas. API: `GET/POST /api/plantillas`,
   `GET/POST /api/templates`, `.../versions`, `.../versions/[versionId]/html`,
   `.../versions/[versionId]/pdf`.
 - Tablas: `contracts`, `contract_snapshots`, `contract_clauses`, `contract_annexes`,
   `templates`, `template_versions`, `template_departments`,
-  `clauses`, `clause_versions`, `annexes`, `annex_versions`.
+  `clauses`, `clause_versions`, `annexes`, `annex_versions`, `servicios_extras`.
 
 Características del núcleo contractual:
 - Máquina de estados borrador → emisión → firma → renovación / resolución.
@@ -170,11 +176,15 @@ Características del núcleo contractual:
   Mantenimiento, adjunta evidencias fotográficas y consulta estado/historial.
   API: `GET/POST /api/operaciones/ordenes`,
   `GET/PATCH /api/operaciones/ordenes/[id]`,
+  `GET/POST /api/operaciones/ordenes/[id]/materiales`,
   `POST /api/operaciones/ordenes/[id]/evidencias`,
   `GET /api/operaciones/empleados`, `GET /api/operaciones/catalogos`.
 - Evidencias en bucket privado `work-order-evidence`.
 - Tablas: `work_orders`, `work_order_assignments`, `work_order_visits`,
-  `work_order_events`, `work_order_attachments`.
+  `work_order_materials`, `work_order_events`, `work_order_attachments`.
+- Los materiales guardan cantidad, unidad, costo unitario/total y
+  observaciones; cada registro genera un evento auditable. La vinculación con
+  reservas y salidas de inventario aún está pendiente.
 - (La aceptación de tareas por el trabajador y la app móvil Expo son fases futuras.)
 
 ### 3.16 Google SyS (grupo)

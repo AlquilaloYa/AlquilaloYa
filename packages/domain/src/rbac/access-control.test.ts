@@ -33,6 +33,8 @@ describe("AccessControl", () => {
     expect(ac.can(P.ATTENDANCE_READ)).toBe(false);
     expect(ac.can(P.USER_MANAGE)).toBe(false);
     expect(ac.can(P.PERMISSION_REQUEST_CREATE)).toBe(true);
+    expect(ac.can(P.WORK_ORDER_MATERIAL_RECORD)).toBe(true);
+    expect(ac.can(P.WORK_ORDER_UPDATE)).toBe(false);
   });
 
   it("MARKETING solo lee marketing (ningún otro módulo)", () => {
