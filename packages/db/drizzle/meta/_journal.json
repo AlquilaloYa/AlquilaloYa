@@ -113,6 +113,13 @@
       "when": 1792000800000,
       "tag": "0017_servicios_extras",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792087200000,
+      "tag": "0018_pago_parcial",
+      "breakpoints": true
     }
   ]
 }

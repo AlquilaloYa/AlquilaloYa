@@ -13,13 +13,16 @@ import {
 } from "drizzle-orm/pg-core";
 import { contracts } from "./contracts";
 
-export type PaymentVoucher = { nombre: string; url: string };
+export type PaymentVoucher = { nombre: string; url: string; monto?: number };
 
 /**
  * Registro de pagos mensuales de un contrato (Fase 3 - pagos).
  * - Un registro por contract_id + periodo (fecha de vencimiento de la cuota).
  * - voucher_url guarda el baucher (dataURL base64) subido por el operador.
- * - vouchers permite adjuntar uno o varios bauchers por pago.
+ * - vouchers permite adjuntar uno o varios bauchers por pago; cada voucher
+ *   puede llevar el monto abonado para soportar pagos parciales.
+ * - monto_pagado acumula lo abonado; el estado pasa a PARCIAL hasta cubrir el
+ *   total del mes y luego a PAGADO.
  */
 export const payments = pgTable(
   "payments",
@@ -34,6 +37,9 @@ export const payments = pgTable(
       .notNull()
       .default("50"),
     penalidad: numeric("penalidad", { precision: 15, scale: 2 })
+      .notNull()
+      .default("0"),
+    montoPagado: numeric("monto_pagado", { precision: 15, scale: 2 })
       .notNull()
       .default("0"),
     diasIndulgencia: integer("dias_indulgencia").notNull().default(0),

@@ -22,23 +22,53 @@ function sumarDias(iso: string, dias: number): string {
 function normalizarVouchers(input: unknown): {
   nombre: string;
   url: string;
+  monto?: number;
 }[] {
   if (!Array.isArray(input)) return [];
-  const out: { nombre: string; url: string }[] = [];
+  const out: { nombre: string; url: string; monto?: number }[] = [];
   for (const item of input) {
     if (!item || typeof item !== "object") continue;
     const nombre = (item as Record<string, unknown>).nombre;
     const url = (item as Record<string, unknown>).url;
+    const montoRaw = (item as Record<string, unknown>).monto;
     if (
       typeof nombre === "string" &&
       /\.(jpe?g)$/i.test(nombre) &&
       typeof url === "string" &&
       url.startsWith("data:image/jpeg")
     ) {
-      out.push({ nombre, url });
+      const voucher: { nombre: string; url: string; monto?: number } = {
+        nombre,
+        url,
+      };
+      const monto = Number(montoRaw);
+      if (Number.isFinite(monto) && monto >= 0) voucher.monto = monto;
+      out.push(voucher);
     }
   }
   return out;
+}
+
+/** Total del mes que debe cubrir un pago (canon + mantenimiento). */
+function totalDelMes(monto: unknown, mantenimiento: unknown): number {
+  return Number(monto ?? 0) + Number(mantenimiento ?? 50);
+}
+
+/**
+ * Deriva el monto abonado y el estado de un pago a partir de los montos de sus
+ * vouchers. Si ningún voucher trae monto, se respeta `estadoFallback`.
+ */
+function derivarPago(
+  vouchers: { monto?: number }[],
+  total: number,
+  estadoFallback: string,
+): { montoPagado: number; estado: string } {
+  const tieneMontos = vouchers.some((v) => typeof v.monto === "number");
+  if (!tieneMontos) return { montoPagado: 0, estado: estadoFallback };
+  const montoPagado = vouchers.reduce((s, v) => s + (Number(v.monto) || 0), 0);
+  if (montoPagado <= 0) return { montoPagado, estado: "PENDIENTE" };
+  if (montoPagado + 0.001 >= total) return { montoPagado, estado: "PAGADO" };
+  return { montoPagado, estado: "PARCIAL" };
 }
 
 export async function GET(req: Request) {
@@ -109,7 +139,7 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    const vouchersFinal =
+    const vouchersFinal: { nombre: string; url: string; monto?: number }[] =
       vouchers.length > 0
         ? vouchers
         : typeof body.voucherUrl === "string" && typeof body.voucherNombre === "string"
@@ -140,10 +170,17 @@ export async function POST(req: Request) {
     const indulgencia = Number(
       body.diasIndulgencia ?? existente?.diasIndulgencia ?? 0
     );
+
+    const total = totalDelMes(body.monto, body.mantenimiento);
+    const { montoPagado, estado } = derivarPago(vouchersFinal, total, estadoIn);
+    const fechaPago: string | null =
+      estado === "PAGADO"
+        ? typeof body.fechaPago === "string"
+          ? body.fechaPago
+          : new Date().toISOString().slice(0, 10)
+        : body.fechaPago ?? null;
     const penalidadEfectiva =
-      estadoIn === "PAGADO" &&
-      typeof body.fechaPago === "string" &&
-      body.fechaPago > sumarDias(per, indulgencia)
+      estado === "PAGADO" && fechaPago && fechaPago > sumarDias(per, indulgencia)
         ? "70.00"
         : "0";
 
@@ -155,9 +192,10 @@ export async function POST(req: Request) {
         monto: body.monto ?? "0",
         mantenimiento: body.mantenimiento ?? "50",
         penalidad: penalidadEfectiva,
+        montoPagado: montoPagado.toFixed(2),
         diasIndulgencia: indulgencia,
-        estado: body.estado ?? "PENDIENTE",
-        fechaPago: body.fechaPago ?? null,
+        estado,
+        fechaPago,
         vouchers: vouchersFinal,
         voucherNombre: vouchersFinal[0]?.nombre ?? body.voucherNombre ?? null,
         voucherUrl: vouchersFinal[0]?.url ?? body.voucherUrl ?? null,
@@ -168,9 +206,10 @@ export async function POST(req: Request) {
           monto: body.monto ?? "0",
           mantenimiento: body.mantenimiento ?? "50",
           penalidad: penalidadEfectiva,
+          montoPagado: montoPagado.toFixed(2),
           diasIndulgencia: indulgencia,
-          estado: body.estado ?? "PENDIENTE",
-          fechaPago: body.fechaPago ?? null,
+          estado,
+          fechaPago,
           vouchers: vouchersFinal,
           voucherNombre: vouchersFinal[0]?.nombre ?? body.voucherNombre ?? null,
           voucherUrl: vouchersFinal[0]?.url ?? body.voucherUrl ?? null,
@@ -237,15 +276,26 @@ export async function PATCH(req: Request) {
     if ("monto" in patch) values.monto = patch.monto;
     if ("mantenimiento" in patch) values.mantenimiento = patch.mantenimiento;
     if ("penalidad" in patch) values.penalidad = patch.penalidad;
+    if ("montoPagado" in patch) values.montoPagado = patch.montoPagado;
     if ("diasIndulgencia" in patch)
       values.diasIndulgencia = Math.max(0, Math.floor(Number(patch.diasIndulgencia) || 0));
 
-    if (values.estado === "PAGADO") {
+    const tocaPago =
+      "vouchers" in patch ||
+      "estado" in patch ||
+      "monto" in patch ||
+      "mantenimiento" in patch ||
+      "montoPagado" in patch;
+
+    if (tocaPago) {
       const [existente] = await db
         .select({
           voucherUrl: schema.payments.voucherUrl,
           voucherNombre: schema.payments.voucherNombre,
           vouchers: schema.payments.vouchers,
+          monto: schema.payments.monto,
+          mantenimiento: schema.payments.mantenimiento,
+          estado: schema.payments.estado,
           periodo: schema.payments.periodo,
           fechaPago: schema.payments.fechaPago,
           diasIndulgencia: schema.payments.diasIndulgencia,
@@ -253,43 +303,69 @@ export async function PATCH(req: Request) {
         .from(schema.payments)
         .where(sql`id = ${id}`)
         .limit(1);
-      const vouchers =
+
+      const vouchers: { nombre: string; url: string; monto?: number }[] =
         Array.isArray(values.vouchers) && values.vouchers.length > 0
-          ? (values.vouchers as { nombre: string; url: string }[])
+          ? (values.vouchers as { nombre: string; url: string; monto?: number }[])
           : typeof patch.voucherUrl === "string" &&
               typeof patch.voucherNombre === "string"
             ? normalizarVouchers([
                 { nombre: patch.voucherNombre, url: patch.voucherUrl },
               ])
-            : Array.isArray(existente?.vouchers) &&
-                existente.vouchers.length > 0
+            : Array.isArray(existente?.vouchers) && existente.vouchers.length > 0
               ? existente.vouchers
               : existente?.voucherUrl
                 ? normalizarVouchers([
                     { nombre: existente.voucherNombre ?? "", url: existente.voucherUrl },
                   ])
                 : [];
-      if (vouchers.length === 0) {
+
+      const total = totalDelMes(
+        "monto" in patch ? patch.monto : existente?.monto,
+        "mantenimiento" in patch ? patch.mantenimiento : existente?.mantenimiento,
+      );
+      const estadoFallback =
+        typeof values.estado === "string"
+          ? values.estado
+          : existente?.estado ?? "PENDIENTE";
+      const { montoPagado, estado } = derivarPago(vouchers, total, estadoFallback);
+
+      if ((estado === "PARCIAL" || estado === "PAGADO") && vouchers.length === 0) {
         return NextResponse.json(
           { error: "El pago solo se confirma con al menos un baucher en imagen JPEG" },
           { status: 400 }
         );
       }
-      values.vouchers = vouchers;
-      values.voucherUrl = vouchers[0]?.url ?? null;
-      values.voucherNombre = vouchers[0]?.nombre ?? null;
-      const fp =
-        typeof patch.fechaPago === "string"
-          ? patch.fechaPago
-          : existente?.fechaPago
-            ? toDateStr(existente.fechaPago)
-            : "";
-      const per = existente ? toDateStr(existente.periodo) : "";
-      const ind =
-        "diasIndulgencia" in patch
-          ? Math.max(0, Math.floor(Number(patch.diasIndulgencia) || 0))
-          : Number(existente?.diasIndulgencia ?? 0);
-      values.penalidad = fp && per && fp > sumarDias(per, ind) ? "70.00" : "0";
+
+      values.estado = estado;
+      const tieneMontos = vouchers.some((v) => typeof v.monto === "number");
+      if (tieneMontos) {
+        values.montoPagado = montoPagado.toFixed(2);
+      } else if ("montoPagado" in patch) {
+        values.montoPagado = Math.max(0, Number(patch.montoPagado) || 0).toFixed(2);
+      }
+
+      if (vouchers.length > 0) {
+        values.vouchers = vouchers;
+        values.voucherUrl = vouchers[0]?.url ?? null;
+        values.voucherNombre = vouchers[0]?.nombre ?? null;
+      }
+
+      if (estado === "PAGADO") {
+        const fp =
+          typeof patch.fechaPago === "string"
+            ? patch.fechaPago
+            : existente?.fechaPago
+              ? toDateStr(existente.fechaPago)
+              : new Date().toISOString().slice(0, 10);
+        const per = existente ? toDateStr(existente.periodo) : "";
+        const ind =
+          "diasIndulgencia" in patch
+            ? Math.max(0, Math.floor(Number(patch.diasIndulgencia) || 0))
+            : Number(existente?.diasIndulgencia ?? 0);
+        values.fechaPago = fp;
+        values.penalidad = fp && per && fp > sumarDias(per, ind) ? "70.00" : "0";
+      }
     }
 
     const [row] = await db

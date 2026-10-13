@@ -10,6 +10,8 @@ import { CobranzaServiciosExtras } from "@/components/cobranza-servicios-extras"
 import { apiFetch } from "@/lib/api";
 import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
 
+type PaymentVoucher = { nombre: string; url: string; monto?: number };
+
 type PaymentRow = {
   id: string;
   contractId: string;
@@ -17,10 +19,12 @@ type PaymentRow = {
   monto: string;
   mantenimiento: string;
   penalidad?: string;
+  montoPagado?: string;
   diasIndulgencia?: number;
   estado: string;
   fechaPago: string | null;
   voucherNombre: string | null;
+  vouchers?: PaymentVoucher[];
 };
 
 type ContractRow = {
@@ -37,12 +41,25 @@ type ContractRow = {
   estado: string;
 };
 
+type ServicioExtraRow = {
+  contractId: string;
+  incluyeInternet: boolean;
+  incluyeCargaElectrica: boolean;
+  montoInternet: string;
+  montoCargaElectrica: string;
+};
+
 type CuotaFila = {
   contrato: ContractRow;
   periodo: string;
   periodoFecha: Date;
   total: number;
-  estadoPago: "PAGADO" | "PENDIENTE" | "VENCIDO" | "FINALIZADO";
+  internet: number;
+  luzEx: number;
+  extras: number;
+  montoPagado: number;
+  saldo: number;
+  estadoPago: "PAGADO" | "PARCIAL" | "PENDIENTE" | "VENCIDO" | "FINALIZADO";
   diasMora: number;
   penalidad: number;
   indulgencia: number;
@@ -60,10 +77,15 @@ const penalidadPorDias = (diasMora: number, penalidadGuardada?: string | null) =
 const FILTERS = [
   { key: "all", label: "Todos" },
   { key: "PENDIENTE", label: "Pendientes" },
+  { key: "PARCIAL", label: "Parciales" },
   { key: "VENCIDO", label: "Vencidos" },
   { key: "PAGADO", label: "Pagados" },
   { key: "SERVICIOS_EXTRAS", label: "Servicios extras" },
 ] as const;
+
+function esJpeg(nombre: string, dataUrl: string): boolean {
+  return /\.(jpe?g)$/i.test(nombre) || dataUrl.startsWith("data:image/jpeg");
+}
 
 function InputIndulgencia({
   value,
@@ -102,24 +124,206 @@ function InputIndulgencia({
   );
 }
 
+const moneda = (n: number) =>
+  n.toLocaleString("es-PE", { style: "currency", currency: "PEN" });
+
+type AbonoModo = "PARCIAL" | "TOTAL";
+
+function AbonoModal({
+  fila,
+  modo,
+  onClose,
+  onSaved,
+}: {
+  fila: CuotaFila;
+  modo: AbonoModo;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [monto, setMonto] = useState(fila.saldo > 0 ? fila.saldo.toFixed(2) : "");
+  const [voucher, setVoucher] = useState<{ nombre: string; dataUrl: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  const montoNum = modo === "TOTAL" ? fila.saldo : Number(monto);
+
+  function leerArchivo(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    if (!esJpeg(file.name, `data:${file.type}`) && !file.name.toLowerCase().endsWith(".jpg")) {
+      setError("El baucher debe ser una imagen JPEG (.jpg).");
+      return;
+    }
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = () => setVoucher({ nombre: file.name, dataUrl: String(reader.result) });
+    reader.readAsDataURL(file);
+  }
+
+  async function confirmar() {
+    if (!voucher) {
+      setError("Adjunta el baucher del pago (imagen JPEG).");
+      return;
+    }
+    if (!Number.isFinite(montoNum) || montoNum <= 0) {
+      setError("Ingresa el monto abonado en el baucher.");
+      return;
+    }
+    if (montoNum > fila.saldo + 0.001) {
+      setError(`El monto no puede superar el saldo pendiente (${moneda(fila.saldo)}).`);
+      return;
+    }
+    setGuardando(true);
+    setError(null);
+    try {
+      const existentes: PaymentVoucher[] = (fila.pago?.vouchers ?? []).map((v) => ({
+        nombre: v.nombre,
+        url: v.url,
+        ...(typeof v.monto === "number" ? { monto: v.monto } : {}),
+      }));
+      const vouchers = [...existentes, { nombre: voucher.nombre, url: voucher.dataUrl, monto: montoNum }];
+      const payload = {
+        id: fila.pago?.id,
+        contractId: fila.contrato.id,
+        periodo: fila.periodo,
+        monto: fila.contrato.montoCanonMensual,
+        mantenimiento: fila.contrato.mantenimiento ?? "50",
+        vouchers,
+      };
+      const res = fila.pago
+        ? await apiFetch("/api/payments", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+        : await apiFetch("/api/payments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error((b as { error?: string }).error ?? `Error ${res.status}`);
+      }
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-xl border border-outline-variant bg-surface-container-lowest p-5 shadow-xl">
+        <h3 className="font-headline-md text-on-surface">
+          {modo === "TOTAL" ? "Pago total" : "Pago parcial"}
+        </h3>
+        <p className="mt-1 text-sm text-on-surface-variant">
+          {fila.contrato.codigoContrato} · {fila.periodoFecha.toLocaleDateString("es-PE")}
+        </p>
+
+        <dl className="mt-4 grid grid-cols-3 gap-2 text-sm">
+          <div>
+            <dt className="text-xs uppercase tracking-wider text-on-surface-variant">Total mes</dt>
+            <dd className="font-semibold">{moneda(fila.total)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wider text-on-surface-variant">Abonado</dt>
+            <dd className="font-semibold">{moneda(fila.montoPagado)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wider text-on-surface-variant">Saldo</dt>
+            <dd className="font-semibold text-destructive">{moneda(fila.saldo)}</dd>
+          </div>
+        </dl>
+
+        <label className="mt-4 block text-sm">
+          <span className="text-on-surface-variant">Monto abonado (S/)</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="0.01"
+            value={modo === "TOTAL" ? fila.saldo.toFixed(2) : monto}
+            disabled={modo === "TOTAL"}
+            onChange={(e) => setMonto(e.target.value)}
+            className="mt-1 w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none disabled:bg-surface-container disabled:text-on-surface-variant"
+          />
+          {modo === "TOTAL" ? (
+            <span className="mt-1 block text-xs text-on-surface-variant">
+              Se abonará el saldo pendiente: el pago queda cancelado o completa el parcial.
+            </span>
+          ) : null}
+        </label>
+
+        <label className="mt-3 block text-sm">
+          <span className="text-on-surface-variant">Baucher (JPEG)</span>
+          <input
+            type="file"
+            accept="image/jpeg"
+            onChange={(e) => {
+              leerArchivo(e.target.files);
+              e.target.value = "";
+            }}
+            className="mt-1 block w-full text-sm text-on-surface-variant file:mr-3 file:rounded file:border file:border-outline-variant file:bg-surface-container file:px-3 file:py-1.5 file:text-sm file:text-on-surface"
+          />
+          {voucher ? (
+            <span className="mt-1 block text-xs text-on-surface-variant">{voucher.nombre}</span>
+          ) : null}
+        </label>
+
+        {error ? (
+          <p role="alert" className="mt-3 rounded-md bg-destructive/10 p-2 text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={guardando}
+            className="rounded border border-outline-variant px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => void confirmar()}
+            disabled={guardando}
+            className="rounded bg-primary px-3 py-1.5 text-sm text-on-primary hover:opacity-90 disabled:opacity-50"
+          >
+            {guardando ? "Guardando…" : "Guardar abono"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PagosPage() {
   const [contracts, setContracts] = useState<ContractRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [serviciosExtras, setServiciosExtras] = useState<ServicioExtraRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
   const [busqueda, setBusqueda] = useState("");
-  const [sortKey, setSortKey] = useState<"cuota" | "contrato" | "cliente" | "departamento" | "total" | "estado" | "morosidad" | "penalidad" | null>(null);
+  const [abono, setAbono] = useState<{ fila: CuotaFila; modo: AbonoModo } | null>(null);
+  const [sortKey, setSortKey] = useState<"cuota" | "contrato" | "cliente" | "departamento" | "total" | "internet" | "luzEx" | "extras" | "estado" | "morosidad" | "penalidad" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [cs, ps] = await Promise.all([
+      const [cs, ps, ss] = await Promise.all([
         apiFetch("/api/contracts").then((r) => (r.ok ? r.json() : [])),
         apiFetch("/api/payments").then((r) => (r.ok ? r.json() : [])),
+        apiFetch("/api/servicios-extras").then((r) => (r.ok ? r.json() : [])),
       ]);
       setContracts(cs as ContractRow[]);
       setPayments(ps as PaymentRow[]);
+      setServiciosExtras(ss as ServicioExtraRow[]);
     } finally {
       setLoading(false);
     }
@@ -171,12 +375,25 @@ export default function PagosPage() {
     [load]
   );
 
+  const serviciosPorContrato = useMemo(() => {
+    const map = new Map<string, ServicioExtraRow>();
+    for (const s of serviciosExtras) {
+      if (!map.has(s.contractId)) map.set(s.contractId, s);
+    }
+    return map;
+  }, [serviciosExtras]);
+
   const filas = useMemo<CuotaFila[]>(() => {
     const hoy = new Date();
     const inicioDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime();
     const out: CuotaFila[] = [];
     for (const c of contracts) {
       if (c.estado === "CANCELADO" || c.estado === "RESUELTO") continue;
+      const servicio = serviciosPorContrato.get(c.id);
+      const internet = servicio?.incluyeInternet ? Number(servicio.montoInternet ?? 0) : 0;
+      const luzEx = servicio?.incluyeCargaElectrica
+        ? Number(servicio.montoCargaElectrica ?? 0)
+        : 0;
       const ini = parseLocalDate(c.fechaInicio);
       const fin = parseLocalDate(c.fechaFin);
       const k =
@@ -189,6 +406,11 @@ export default function PagosPage() {
           periodo: localDateStr(fin),
           periodoFecha: fin,
           total: 0,
+          internet,
+          luzEx,
+          extras: internet + luzEx,
+          montoPagado: 0,
+          saldo: 0,
           estadoPago: "FINALIZADO",
           diasMora: 0,
           penalidad: 0,
@@ -207,6 +429,9 @@ export default function PagosPage() {
       const pagado = pago?.estado === "PAGADO";
       const total =
         Number(c.montoCanonMensual ?? 0) + Number(c.mantenimiento ?? 50);
+      const montoPagado = Math.max(0, Number(pago?.montoPagado ?? 0) || 0);
+      const saldo = Math.max(0, total - montoPagado);
+      const parcialActivo = !pagado && montoPagado > 0 && saldo > 0.001;
       const diasMora = pagado
         ? pago?.fechaPago && pago.fechaPago > localDateStr(vencimiento)
           ? Math.floor(
@@ -219,14 +444,21 @@ export default function PagosPage() {
           : 0;
       const estadoPago = pagado
         ? "PAGADO"
-        : vencimiento.getTime() < inicioDia
-          ? "VENCIDO"
-          : "PENDIENTE";
+        : parcialActivo
+          ? "PARCIAL"
+          : vencimiento.getTime() < inicioDia
+            ? "VENCIDO"
+            : "PENDIENTE";
       out.push({
         contrato: c,
         periodo: pStr,
         periodoFecha: cuota,
         total,
+        internet,
+        luzEx,
+        extras: internet + luzEx,
+        montoPagado,
+        saldo,
         estadoPago,
         diasMora,
         penalidad: penalidadPorDias(diasMora, pago?.penalidad),
@@ -235,10 +467,11 @@ export default function PagosPage() {
       });
     }
     return out.sort((a, b) => b.diasMora - a.diasMora || a.periodo.localeCompare(b.periodo));
-  }, [contracts, payments]);
+  }, [contracts, payments, serviciosPorContrato]);
 
   const ESTADO_META_LOCAL: Record<string, string> = {
     PAGADO: "Pagado",
+    PARCIAL: "Parcial",
     PENDIENTE: "Pendiente",
     VENCIDO: "Vencido",
     FINALIZADO: "Finalizado",
@@ -260,6 +493,9 @@ export default function PagosPage() {
       cliente: (f) => [f.contrato.clienteNombre, f.contrato.apellidoCliente].filter(Boolean).join(" "),
       departamento: (f) => f.contrato.departamentoNombre,
       total: (f) => f.total,
+      internet: (f) => f.internet,
+      luzEx: (f) => f.luzEx,
+      extras: (f) => f.extras,
       estado: (f) => f.estadoPago,
       morosidad: (f) => f.diasMora,
       penalidad: (f) => f.penalidad,
@@ -293,11 +529,9 @@ export default function PagosPage() {
     return { recaudado, vencido, penalidades, morosos };
   }, [filas, payments]);
 
-  const moneda = (n: number) =>
-    n.toLocaleString("es-PE", { style: "currency", currency: "PEN" });
-
   const ESTADO_META: Record<string, { label: string; cls: string }> = {
     PAGADO: { label: "Pagado", cls: "bg-emerald-600" },
+    PARCIAL: { label: "Parcial", cls: "bg-amber-500" },
     PENDIENTE: { label: "Pendiente", cls: "bg-outline" },
     VENCIDO: { label: "Vencido", cls: "bg-destructive" },
     FINALIZADO: { label: "Finalizado", cls: "bg-muted-foreground" },
@@ -374,7 +608,7 @@ export default function PagosPage() {
             className="w-full rounded-lg border border-outline-variant"
             contentClassName="max-h-[32rem]"
           >
-            <table className="w-full min-w-[1000px] text-left text-sm">
+            <table className="w-full min-w-[1180px] text-left text-sm">
               <thead className="sticky top-0 z-10 bg-surface-container-low text-xs text-on-surface-variant">
                 <tr>
                   <th onClick={() => cambiarOrden("cuota")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "cuota" ? "font-semibold text-on-surface" : "")}>
@@ -391,6 +625,15 @@ export default function PagosPage() {
                   </th>
                   <th onClick={() => cambiarOrden("total")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "total" ? "font-semibold text-on-surface" : "")}>
                     Total mes{sortKey === "total" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("internet")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "internet" ? "font-semibold text-on-surface" : "")}>
+                    Internet{sortKey === "internet" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("luzEx")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "luzEx" ? "font-semibold text-on-surface" : "")}>
+                    Luz-Ex{sortKey === "luzEx" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                  <th onClick={() => cambiarOrden("extras")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "extras" ? "font-semibold text-on-surface" : "")}>
+                    Servicios extras{sortKey === "extras" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                   </th>
                   <th onClick={() => cambiarOrden("estado")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "estado" ? "font-semibold text-on-surface" : "")}>
                     Estado{sortKey === "estado" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
@@ -445,6 +688,15 @@ export default function PagosPage() {
                       <td className="whitespace-nowrap px-3 py-2">
                         {moneda(f.total)}
                       </td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        {f.internet > 0 ? moneda(f.internet) : "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        {f.luzEx > 0 ? moneda(f.luzEx) : "—"}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 font-medium">
+                        {f.extras > 0 ? moneda(f.extras) : "—"}
+                      </td>
                       <td className="px-3 py-2">
                         <span className="inline-flex items-center gap-1.5 font-label-md">
                           <span className={`h-1.5 w-1.5 rounded-full ${meta.cls}`} />
@@ -475,12 +727,31 @@ export default function PagosPage() {
                             {f.pago?.fechaPago ?? "—"}
                           </span>
                         ) : (
-                          <Link
-                            href={`/contratos/clientes/${f.contrato.clienteId}`}
-                            className="rounded bg-primary px-2 py-1 text-xs text-on-primary hover:opacity-90"
-                          >
-                            Registrar pago
-                          </Link>
+                          <div className="flex flex-col items-start gap-1.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setAbono({ fila: f, modo: "PARCIAL" })}
+                                disabled={f.total <= 0}
+                                className="rounded border border-outline-variant px-2 py-1 text-xs text-primary hover:bg-surface-container disabled:opacity-40"
+                              >
+                                Pago parcial
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setAbono({ fila: f, modo: "TOTAL" })}
+                                disabled={f.total <= 0}
+                                className="rounded bg-primary px-2 py-1 text-xs text-on-primary hover:opacity-90 disabled:opacity-40"
+                              >
+                                Pago total
+                              </button>
+                            </div>
+                            {f.montoPagado > 0 ? (
+                              <span className="text-xs text-on-surface-variant">
+                                Abonado {moneda(f.montoPagado)} · saldo {moneda(f.saldo)}
+                              </span>
+                            ) : null}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -488,7 +759,7 @@ export default function PagosPage() {
                 })}
                 {!loading && visibles.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-on-surface-variant">
+                    <td colSpan={13} className="p-8 text-center text-on-surface-variant">
                       No hay cuotas con este filtro.
                     </td>
                   </tr>
@@ -497,6 +768,18 @@ export default function PagosPage() {
             </table>
           </TableScroll>
         )}
+
+        {abono ? (
+          <AbonoModal
+            fila={abono.fila}
+            modo={abono.modo}
+            onClose={() => setAbono(null)}
+            onSaved={() => {
+              setAbono(null);
+              void load();
+            }}
+          />
+        ) : null}
       </div>
     </DashboardShell>
   );
