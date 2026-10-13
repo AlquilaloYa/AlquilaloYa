@@ -8,7 +8,10 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self' https:",
+  // La vista previa de PDF descarga la URL blob:/data: con fetch() para
+  // renderizarla con pdf.js. connect-src es la directiva que gobierna fetch()
+  // y blob:/data: NO casan con 'self' ni '*': hay que nombrarlos.
+  "connect-src 'self' https: blob: data:",
   "object-src 'none'",
   // El visor de PDF de la vista previa va en un iframe con URL blob:/data:.
   // Sin frame-src, el navegador cae a default-src 'self' y lo bloquea.

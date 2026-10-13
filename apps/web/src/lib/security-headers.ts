@@ -28,7 +28,10 @@ export const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self' https:",
+  // La vista previa de PDF descarga la URL blob:/data: con fetch() para
+  // renderizarla con pdf.js. blob:/data: no casan con 'self' ni '*', por eso
+  // se nombran explícitamente aquí (connect-src gobierna fetch()).
+  "connect-src 'self' https: blob: data:",
   // Sin <object>/<embed> en la app (la vista previa de PDF usa iframe/frame-src),
   // por eso 'none'. Debe coincidir con next.config.mjs (defensa en profundidad).
   "object-src 'none'",

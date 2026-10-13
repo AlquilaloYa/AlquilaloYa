@@ -17,6 +17,10 @@ describe("securityHeaders", () => {
     expect(headers["Strict-Transport-Security"]).toBe(STRICT_TRANSPORT_SECURITY);
     expect(headers["Content-Security-Policy"]).toContain("object-src 'none'");
     expect(headers["Content-Security-Policy"]).not.toContain("unsafe-eval");
+    // La vista previa de PDF hace fetch() de blob:/data:; deben estar en connect-src.
+    expect(headers["Content-Security-Policy"]).toContain(
+      "connect-src 'self' https: blob: data:",
+    );
     expect(headers["X-Frame-Options"]).toBe("DENY");
   });
 
