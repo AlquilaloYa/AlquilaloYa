@@ -191,7 +191,9 @@ export class GcalNotConnected extends Error {}
  * Access token valido para el usuario, renovandolo si esta cerca de expirar.
  * Lanza GcalNotConnected si el usuario no vinculo su cuenta.
  */
-export async function getValidAccessToken(email: string): Promise<{ token: string; calendarId: string }> {
+export async function getValidAccessToken(
+  email: string
+): Promise<{ token: string; calendarId: string; scopes: string }> {
   const cfg = gcalConfig();
   if (!cfg) throw new Error("Google Calendar no esta configurado (faltan GOOGLE_CLIENT_ID/SECRET).");
   const stored = await getToken(email);
@@ -201,9 +203,19 @@ export async function getValidAccessToken(email: string): Promise<{ token: strin
   if (nearExpiry && stored.refreshToken) {
     const fresh = await refreshAccessToken(cfg, stored.refreshToken);
     await saveToken(email, fresh, stored.calendarId);
-    return { token: fresh.access_token, calendarId: stored.calendarId };
+    return {
+      token: fresh.access_token,
+      calendarId: stored.calendarId,
+      scopes: fresh.scope ?? stored.scopes,
+    };
   }
-  return { token: stored.accessToken, calendarId: stored.calendarId };
+  return { token: stored.accessToken, calendarId: stored.calendarId, scopes: stored.scopes };
+}
+
+/** True si los scopes concedidos por Google incluyen el permiso requerido. */
+export function tieneScopeConcedido(scopes: string, requerido: string | undefined): boolean {
+  if (!requerido) return true;
+  return scopes.split(/\s+/).filter(Boolean).includes(requerido);
 }
 
 export type GEvent = {

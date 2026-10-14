@@ -1,4 +1,5 @@
-import { getValidAccessToken } from "@/lib/google-calendar";
+import { env } from "@contract/config/env";
+import { getValidAccessToken, tieneScopeConcedido } from "@/lib/google-calendar";
 
 const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
 const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
@@ -9,6 +10,24 @@ export interface DriveUploadResult {
   id: string;
   name: string;
   webViewLink: string;
+}
+
+/** El usuario conectó Google pero sin otorgar el permiso de Google Drive. */
+export class DrivePermisoInsuficiente extends Error {}
+
+const MENSAJE_RECONECTAR =
+  "Tu cuenta de Google no tiene autorizado Google Drive. " +
+  "Vuelve a conectar Google en /agenda para otorgar el permiso de Drive y reintenta la exportación.";
+
+/** Detecta el 403 de Google por scopes insuficientes y lanza un error claro. */
+function revisarRespuesta(res: Response, detalle: string, contexto: string): void {
+  const sinScope =
+    res.status === 403 &&
+    /insufficient authentication scopes|insufficient permission|insufficientpermissions/i.test(detalle);
+  if (sinScope) throw new DrivePermisoInsuficiente(MENSAJE_RECONECTAR);
+  if (!res.ok) {
+    throw new Error(`Drive: no se pudo ${contexto} (${res.status}): ${detalle.slice(0, 300)}`);
+  }
 }
 
 /** Busca (y crea si falta) la carpeta raíz "AlquilaYa ERP" del usuario. */
@@ -38,7 +57,7 @@ async function garantizarCarpeta(token: string): Promise<string> {
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`Drive: no se pudo crear la carpeta (${res.status}): ${detail.slice(0, 200)}`);
+    revisarRespuesta(res, detail, "crear la carpeta");
   }
   const body = (await res.json()) as { id?: string };
   if (!body.id) throw new Error("Drive: la API no devolvió id de carpeta");
@@ -55,7 +74,10 @@ export async function subirArchivoADrive(input: {
   mimeType?: string;
   bytes: Uint8Array;
 }): Promise<DriveUploadResult> {
-  const { token } = await getValidAccessToken(input.userEmail);
+  const { token, scopes } = await getValidAccessToken(input.userEmail);
+  if (!tieneScopeConcedido(scopes, env.GOOGLE_DRIVE_SCOPE)) {
+    throw new DrivePermisoInsuficiente(MENSAJE_RECONECTAR);
+  }
   const parentId = await garantizarCarpeta(token);
 
   const form = new FormData();
@@ -83,7 +105,7 @@ export async function subirArchivoADrive(input: {
   );
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`Drive: no se pudo subir el archivo (${res.status}): ${detail.slice(0, 300)}`);
+    revisarRespuesta(res, detail, "subir el archivo");
   }
   const body = (await res.json()) as DriveUploadResult;
   if (!body.id) throw new Error("Drive: la API no devolvió id del archivo");

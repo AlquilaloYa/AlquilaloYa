@@ -4,7 +4,7 @@ import { requireUser, requirePermission } from "@/lib/session";
 import { findDocumentById } from "@/lib/documents";
 import { downloadObject } from "@/lib/storage";
 import { GcalNotConnected } from "@/lib/google-calendar";
-import { nombreDeStorageKey, subirArchivoADrive } from "@/lib/google-drive";
+import { DrivePermisoInsuficiente, nombreDeStorageKey, subirArchivoADrive } from "@/lib/google-drive";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +61,9 @@ export async function POST(
         { error: "No hay cuenta de Google conectada. Conéctala en /agenda." },
         { status: 409 }
       );
+    }
+    if (error instanceof DrivePermisoInsuficiente) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
     return NextResponse.json(
       { error: (error as Error).message },
