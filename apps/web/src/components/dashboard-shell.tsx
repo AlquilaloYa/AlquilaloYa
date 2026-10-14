@@ -81,7 +81,7 @@ const NAV_ITEMS: NavItem[] = [
     permission: "marketing.read",
     group: "marketing",
   },
-  { href: "/directorio", label: "Directorio", icon: BookUser, section: "Directorio", permission: "hr.directory.read" },
+  { href: "/directorio", label: "Directorio", icon: BookUser, section: "Directorio", permission: "client.read" },
   { href: "/separaciones", label: "Separación", icon: Receipt, section: "Separación", permission: "contract.read" },
   { href: "/contactos", label: "Contactos", icon: Contact, section: "Contactos", group: "contratos" },
   {

@@ -67,6 +67,63 @@ telefono: r.telefono ?? "",
   };
 }
 
+type DbModule = typeof import("@contract/db");
+
+/**
+ * Replica los datos del contacto en los clientes ligados por DNI/RUC, para que
+ * un cambio en Contactos se refleje de inmediato en Clientes.
+ */
+async function sincronizarClientesDesdeContacto(
+  db: DbModule["db"],
+  schema: DbModule["schema"],
+  claves: (string | null | undefined)[],
+  datos: {
+    dni: string;
+    ruc: string | null;
+    nombre: string;
+    apellido: string;
+    tipoPersona: string;
+    email: string;
+    telefono: string | null;
+    codigoPais: string;
+    domicilio: string | null;
+    nacionalidad: string | null;
+  }
+): Promise<number> {
+  const limpios = claves
+    .map((clave) => (clave ?? "").trim())
+    .filter((clave, indice, arreglo) => clave.length > 0 && arreglo.indexOf(clave) === indice);
+  if (limpios.length === 0) return 0;
+
+  const { inArray } = await import("drizzle-orm");
+  const ligados = await db
+    .select({ id: schema.clients.id })
+    .from(schema.clients)
+    .where(inArray(schema.clients.documentoIdentidad, limpios));
+  if (ligados.length === 0) return 0;
+
+  const valores: Record<string, unknown> = {
+    nombres: datos.nombre,
+    apellidos: datos.apellido,
+    ruc: datos.ruc || null,
+    tipoPersona: datos.tipoPersona,
+    email: datos.email,
+    telefono: datos.telefono || null,
+    codigoPais: datos.codigoPais || "51",
+    domicilio: datos.domicilio || null,
+    nacionalidad: datos.nacionalidad || null,
+    updatedAt: new Date(),
+  };
+  if (datos.dni.trim()) valores.documentoIdentidad = datos.dni.trim();
+
+  await db
+    .update(schema.clients)
+    .set(valores)
+    .where(inArray(schema.clients.id, ligados.map((cliente) => cliente.id)));
+
+  return ligados.length;
+}
+
 /** GET /api/contactos â€” listado (?dni= filtra por documento). */
 export async function GET(req: Request) {
   try {
@@ -134,6 +191,18 @@ ruc: body.ruc || null,
     if (!row) {
       return NextResponse.json({ error: "No se pudo crear el contacto" }, { status: 500 });
     }
+    await sincronizarClientesDesdeContacto(db, schema, [row.dni, row.ruc], {
+      dni: row.dni,
+      ruc: row.ruc,
+      nombre: row.nombre,
+      apellido: row.apellido,
+      tipoPersona: row.tipoPersona,
+      email: row.email,
+      telefono: row.telefono,
+      codigoPais: row.codigoPais ?? "51",
+      domicilio: row.domicilio,
+      nacionalidad: row.nacionalidad,
+    });
     return NextResponse.json(toView(row), { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
@@ -157,6 +226,11 @@ export async function PUT(req: Request) {
     if (!body.id) {
       return NextResponse.json({ error: "Falta id" }, { status: 400 });
     }
+    const [previo] = await db
+      .select({ dni: schema.contacts.dni, ruc: schema.contacts.ruc })
+      .from(schema.contacts)
+      .where(eq(schema.contacts.id, body.id))
+      .limit(1);
     const [row] = await db
       .update(schema.contacts)
       .set({
@@ -183,6 +257,18 @@ ruc: body.ruc || null,
     if (!row) {
       return NextResponse.json({ error: "Contacto no encontrado" }, { status: 404 });
     }
+    await sincronizarClientesDesdeContacto(db, schema, [previo?.dni, previo?.ruc], {
+      dni: row.dni,
+      ruc: row.ruc,
+      nombre: row.nombre,
+      apellido: row.apellido,
+      tipoPersona: row.tipoPersona,
+      email: row.email,
+      telefono: row.telefono,
+      codigoPais: row.codigoPais ?? "51",
+      domicilio: row.domicilio,
+      nacionalidad: row.nacionalidad,
+    });
     return NextResponse.json(toView(row));
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
