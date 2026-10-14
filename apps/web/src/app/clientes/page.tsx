@@ -35,21 +35,6 @@ function fmtFecha(iso?: string | null): string {
   return `${d}/${m}/${y}`;
 }
 
-const PAISES_CODIGO = [
-  { codigo: "51", pais: "Perú (+51)" },
-  { codigo: "56", pais: "Chile (+56)" },
-  { codigo: "57", pais: "Colombia (+57)" },
-  { codigo: "52", pais: "México (+52)" },
-  { codigo: "58", pais: "Venezuela (+58)" },
-  { codigo: "593", pais: "Ecuador (+593)" },
-  { codigo: "591", pais: "Bolivia (+591)" },
-  { codigo: "595", pais: "Paraguay (+595)" },
-  { codigo: "598", pais: "Uruguay (+598)" },
-  { codigo: "54", pais: "Argentina (+54)" },
-  { codigo: "34", pais: "España (+34)" },
-  { codigo: "1", pais: "EE. UU. (+1)" },
-];
-
 function numeroWhatsApp(
   telefono?: string | null,
   codigoPais: string | null | undefined = "51"
@@ -155,26 +140,6 @@ export default function ClientesPage() {
     }
     cargar();
   }, []);
-
-  async function cambiarCodigoPais(cliente: ClientView, codigoPais: string) {
-    if (codigoPais === (cliente.codigoPais ?? "51")) return;
-    try {
-      const res = await apiFetch("/api/clients", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: cliente.id, codigoPais }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? "No se pudo actualizar el código de país");
-      }
-      setClients((lista) =>
-        lista.map((c) => (c.id === cliente.id ? { ...c, codigoPais } : c))
-      );
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
 
   async function eliminarCliente(cliente: ClientView) {
     const nombre = [cliente.nombres, cliente.apellidos].filter(Boolean).join(" ");
@@ -285,21 +250,7 @@ export default function ClientesPage() {
                           </td>
                           <td className="px-3 py-2">{c.documentoIdentidad}</td>
                           <td className="px-3 py-2 text-muted-foreground">
-                            <div className="flex items-center gap-2">
-                              <select
-                                value={c.codigoPais ?? "51"}
-                                onChange={(e) => void cambiarCodigoPais(c, e.target.value)}
-                                className="h-8 rounded-md border border-input bg-background px-1 text-xs text-foreground"
-                                title="Código de país del teléfono (usado por WhatsApp)"
-                              >
-                                {PAISES_CODIGO.map(({ codigo }) => (
-                                  <option key={codigo} value={codigo}>
-                                    +{codigo}
-                                  </option>
-                                ))}
-                              </select>
-                              <span className="whitespace-nowrap">{c.telefono ?? "—"}</span>
-                            </div>
+                            <span className="whitespace-nowrap">{c.telefono ?? "—"}</span>
                           </td>
                           <td className="px-3 py-2">{fmtFecha(c.fechaFinContrato)}</td>
                           <td className="px-3 py-2">{fmtFecha(c.fechaInicioAdenda)}</td>
