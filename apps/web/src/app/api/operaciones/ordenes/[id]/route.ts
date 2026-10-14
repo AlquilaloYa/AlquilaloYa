@@ -2,7 +2,7 @@
 import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
-import { createSignedObjectUrl } from "@/lib/storage";
+import { createSignedObjectUrl, deleteObject } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -748,6 +748,70 @@ export async function PATCH(
             ? 409
             : 500,
       },
+    );
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { id: string } },
+) {
+  try {
+    const dbModule = await import("@contract/db");
+    const auth = await requireUser(dbModule, req);
+    if ("error" in auth) return auth.error;
+    if (auth.user.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Solo un administrador puede eliminar órdenes de trabajo" },
+        { status: 403 },
+      );
+    }
+
+    const { db, schema } = dbModule;
+    if (!UUID_PATTERN.test(params.id)) {
+      return NextResponse.json(
+        { error: "Identificador de orden no válido" },
+        { status: 400 },
+      );
+    }
+    const [order] = await db
+      .select({ id: schema.workOrders.id })
+      .from(schema.workOrders)
+      .where(eq(schema.workOrders.id, params.id))
+      .limit(1);
+    if (!order)
+      return NextResponse.json(
+        { error: "Orden de trabajo no encontrada" },
+        { status: 404 },
+      );
+
+    const attachments = await db
+      .select({ storageKey: schema.workOrderAttachments.storageKey })
+      .from(schema.workOrderAttachments)
+      .where(eq(schema.workOrderAttachments.workOrderId, params.id));
+
+    await db
+      .delete(schema.workOrders)
+      .where(eq(schema.workOrders.id, params.id));
+
+    await Promise.all(
+      attachments.map((attachment) =>
+        deleteObject(attachment.storageKey, "work-order-evidence").catch(
+          () => undefined,
+        ),
+      ),
+    );
+
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "No se pudo eliminar la orden",
+      },
+      { status: 500 },
     );
   }
 }

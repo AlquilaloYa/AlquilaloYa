@@ -23,6 +23,7 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  Trash2,
   UserRound,
   Users,
   Wrench,
@@ -582,6 +583,8 @@ export default function OperacionesPage() {
   const [creating, setCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const isAdmin = user?.role === "ADMIN";
 
   const loadData = useCallback(async (quiet = false) => {
     if (quiet) setRefreshing(true);
@@ -793,6 +796,38 @@ export default function OperacionesPage() {
 
   async function assignOrder(employeeId: string) {
     await updateOrder({ assignedEmployeeId: employeeId || null });
+  }
+
+  async function deleteOrder(order: WorkOrder) {
+    if (
+      !window.confirm(
+        `¿Eliminar definitivamente la orden ${order.code}? Se borrarán sus visitas, materiales y fotos. Esta acción no se puede deshacer.`,
+      )
+    )
+      return;
+    setDeletingId(order.id);
+    setError("");
+    try {
+      const response = await apiFetch(`/api/operaciones/ordenes/${order.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(payload.error ?? "No se pudo eliminar la orden");
+      }
+      if (selectedOrder?.id === order.id) setSelectedOrder(null);
+      setOrders((prev) => prev.filter((item) => item.id !== order.id));
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "No se pudo eliminar la orden",
+      );
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   function openCreateForm() {
@@ -1033,67 +1068,84 @@ export default function OperacionesPage() {
             ) : (
               <div className="divide-y divide-slate-100">
                 {visibleOrders.map((order) => (
-                  <button
-                    key={order.id}
-                    type="button"
-                    onClick={() => void openOrder(order)}
-                    className="group grid w-full grid-cols-1 gap-3 px-4 py-4 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5 lg:grid-cols-[minmax(220px,1.4fr)_minmax(130px,0.8fr)_minmax(110px,0.75fr)_minmax(150px,0.8fr)_auto] lg:items-center lg:gap-5"
-                  >
-                    <div className="min-w-0">
-                      <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs font-bold tracking-wide text-slate-500">
-                          {order.code}
-                        </span>
-                        <PriorityPill priority={order.priority} />
-                      </div>
-                      <div className="truncate font-semibold text-slate-900 group-hover:text-blue-700">
-                        {order.title}
-                      </div>
-                      <div className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
-                        <MapPin className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">
-                          {order.site} · {order.departmentCode}
-                        </span>
-                      </div>
-                      {order.contactName && (
-                        <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-                          <UserRound className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">{order.contactName}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-slate-600">
-                      <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
-                      <span className="truncate">
-                        {order.assigneeName || "Sin asignar"}
-                      </span>
-                    </div>
-                    <div>
-                      <StatusPill status={order.status} />
-                    </div>
-                    <div
-                      className={`flex min-w-0 flex-wrap items-center gap-2 text-sm ${isOverdue(order) ? "font-semibold text-red-700" : "text-slate-500"}`}
+                  <div key={order.id} className="group flex items-stretch">
+                    <button
+                      type="button"
+                      onClick={() => void openOrder(order)}
+                      className="grid w-full flex-1 grid-cols-1 gap-3 px-4 py-4 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5 lg:grid-cols-[minmax(220px,1.4fr)_minmax(130px,0.8fr)_minmax(110px,0.75fr)_minmax(150px,0.8fr)_auto] lg:items-center lg:gap-5"
                     >
-                      <CalendarClock className="h-4 w-4 shrink-0" />
-                      <span className="min-w-0 break-words">
-                        {order.targetAt
-                          ? formatDate(order.targetAt, {
-                              day: "numeric",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hourCycle: "h23",
-                            })
-                          : "Sin fecha límite"}
-                      </span>
-                      {isOverdue(order) && (
-                        <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase">
-                          Vencida
+                      <div className="min-w-0">
+                        <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-xs font-bold tracking-wide text-slate-500">
+                            {order.code}
+                          </span>
+                          <PriorityPill priority={order.priority} />
+                        </div>
+                        <div className="truncate font-semibold text-slate-900 group-hover:text-blue-700">
+                          {order.title}
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
+                          <MapPin className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">
+                            {order.site} · {order.departmentCode}
+                          </span>
+                        </div>
+                        {order.contactName && (
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                            <UserRound className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">
+                              {order.contactName}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                        <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
+                        <span className="truncate">
+                          {order.assigneeName || "Sin asignar"}
                         </span>
-                      )}
-                    </div>
-                    <ChevronRight className="hidden h-5 w-5 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-blue-600 lg:block" />
-                  </button>
+                      </div>
+                      <div>
+                        <StatusPill status={order.status} />
+                      </div>
+                      <div
+                        className={`flex min-w-0 flex-wrap items-center gap-2 text-sm ${isOverdue(order) ? "font-semibold text-red-700" : "text-slate-500"}`}
+                      >
+                        <CalendarClock className="h-4 w-4 shrink-0" />
+                        <span className="min-w-0 break-words">
+                          {order.targetAt
+                            ? formatDate(order.targetAt, {
+                                day: "numeric",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hourCycle: "h23",
+                              })
+                            : "Sin fecha límite"}
+                        </span>
+                        {isOverdue(order) && (
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase">
+                            Vencida
+                          </span>
+                        )}
+                      </div>
+                      <ChevronRight className="hidden h-5 w-5 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-blue-600 lg:block" />
+                    </button>
+                    {isAdmin && (
+                      <div className="flex items-center pr-3 sm:pr-5">
+                        <button
+                          type="button"
+                          onClick={() => void deleteOrder(order)}
+                          disabled={deletingId === order.id}
+                          aria-label={`Eliminar orden ${order.code}`}
+                          title="Eliminar orden"
+                          className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
@@ -1377,6 +1429,8 @@ export default function OperacionesPage() {
             onUploadEvidence={uploadEvidence}
             onClose={() => setSelectedOrder(null)}
             onAssign={assignOrder}
+            canDelete={isAdmin}
+            onDelete={deleteOrder}
           />
         )}
       </main>
@@ -1563,17 +1617,21 @@ function OrderDrawer({
   employees,
   saving,
   canUpdate,
+  canDelete,
   onUploadEvidence,
   onClose,
   onAssign,
+  onDelete,
 }: {
   order: OrderDetails;
   employees: Employee[];
   saving: boolean;
   canUpdate: boolean;
+  canDelete: boolean;
   onUploadEvidence: (orderId: string, files: File[]) => Promise<void>;
   onClose: () => void;
   onAssign: (employeeId: string) => Promise<void>;
+  onDelete: (order: WorkOrder) => Promise<void>;
 }) {
   const [assignee, setAssignee] = useState(order.assignedEmployeeId ?? "");
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
@@ -1784,6 +1842,20 @@ function OrderDrawer({
               <CheckCircle2 className="h-4 w-4" /> Orden finalizada{" "}
               {formatDate(order.completedAt)}
             </span>
+          </footer>
+        )}
+
+        {canDelete && (
+          <footer className="border-t border-slate-200 bg-white px-5 py-4 sm:px-7">
+            <button
+              type="button"
+              onClick={() => void onDelete(order)}
+              disabled={saving}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" />
+              Eliminar orden
+            </button>
           </footer>
         )}
       </aside>

@@ -113,7 +113,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "hr.read", group: "rrhh" },
   { href: "/cronograma-asistencia", label: "Registro de asistencia", icon: AlarmClock, section: "Recursos Humanos", permission: "attendance.read", group: "rrhh" },
-  { href: "/operaciones", label: "Órdenes de trabajo", icon: ClipboardList, section: "Operaciones", permission: "work_order.read" },
+  { href: "/operaciones", label: "Órdenes de trabajo", icon: ClipboardList, section: "Operaciones", permission: "work_order.read", group: "operatividad" },
   { href: "/google/gmail", label: "Gmail", icon: Mail, section: "Google SyS", group: "google" },
   { href: "/google/drive", label: "Google Drive", icon: HardDrive, section: "Google SyS", group: "google" },
   { href: "/google/sheets", label: "Google Sheets", icon: Table, section: "Google SyS", group: "google" },
