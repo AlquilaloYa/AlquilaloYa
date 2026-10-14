@@ -59,7 +59,7 @@ type ClientApi = {
   nacionalidad?: string | null;
 };
 
-type DepartmentApi = { id: string; nombre: string; codigo?: string | null; numero?: string | null; precio?: string | null; garantia?: string | null; mantenimiento?: string | null };
+type DepartmentApi = { id: string; nombre: string; codigo?: string | null; numero?: string | null; precio?: string | null; garantia?: string | null; mantenimiento?: string | null; personaPago?: string | null };
 type TemplateApi = { id: string; clave: string; nombre: string };
 
 type Depositante = ClientApi & {
@@ -1119,6 +1119,58 @@ function RenewContractModal({
   );
 }
 
+/** Normaliza a texto comparable (minúsculas y sin tildes). */
+function normalizarTexto(valor: string | null | undefined): string {
+  return (valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+/** Alias entre el nombre en persona_pago y el nombre en la plantilla. */
+const PERSONA_POR_TEXTO: Record<string, string> = {
+  emely: "emely",
+  emeli: "emely",
+  emily: "emely",
+  miguel: "miguel",
+  linda: "linda",
+  evelin: "linda",
+  evelyn: "linda",
+};
+
+/**
+ * Plantillas de contrato que corresponden a la persona de pago del departamento:
+ * la plantilla base (sin "madre") y su variante "extensión madre". Se descartan
+ * otras variantes con "madre" que no sean la extensión (p. ej. "Emely_ Angamos_madre").
+ * Si no se puede determinar la persona (o no hay coincidencias) se devuelven todas
+ * para no bloquear.
+ */
+function plantillasDePersonaPago(
+  templates: TemplateApi[],
+  departamento: DepartmentApi | undefined
+): TemplateApi[] {
+  if (!departamento) return templates;
+  const clavePersona = normalizarTexto(departamento.personaPago).split(/[\s_]+/)[0] ?? "";
+  const persona = PERSONA_POR_TEXTO[clavePersona];
+  if (!persona) return templates;
+  const codigo = normalizarTexto(departamento.codigo);
+  const edificio = codigo.startsWith("ang") ? "angamos" : codigo.startsWith("ben") ? "benavides" : null;
+  const filtradas = templates.filter((t) => {
+    const nombre = normalizarTexto(t.nombre);
+    if (!nombre.includes(persona) || (edificio && !nombre.includes(edificio))) return false;
+    const esBase = !nombre.includes("madre");
+    const esExtensionMadre = nombre.includes("extension") && nombre.includes("madre");
+    return esBase || esExtensionMadre;
+  });
+  if (filtradas.length === 0) return templates;
+  // La plantilla base primero y luego la extensión madre.
+  return filtradas.sort((a, b) => {
+    const aMadre = normalizarTexto(a.nombre).includes("extension") ? 1 : 0;
+    const bMadre = normalizarTexto(b.nombre).includes("extension") ? 1 : 0;
+    return aMadre - bMadre;
+  });
+}
+
 function CreateContractModal({
   clients,
   departments,
@@ -1150,6 +1202,31 @@ function CreateContractModal({
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const departamentoSeleccionado = useMemo(
+    () => departments.find((d) => d.id === form.departamentoId),
+    [departments, form.departamentoId]
+  );
+  const plantillasDisponibles = useMemo(
+    () => plantillasDePersonaPago(templates, departamentoSeleccionado),
+    [templates, departamentoSeleccionado]
+  );
+
+  useEffect(() => {
+    const disponibles = plantillasDisponibles
+      .map((t) => versions[t.id]?.id)
+      .filter((id): id is string => Boolean(id));
+    if (disponibles.length === 0) {
+      if (form.plantillaVersionId) setForm((f) => ({ ...f, plantillaVersionId: "" }));
+      return;
+    }
+    if (!form.plantillaVersionId || !disponibles.includes(form.plantillaVersionId)) {
+      setForm((f) => ({
+        ...f,
+        plantillaVersionId: disponibles.length === 1 ? disponibles[0]! : "",
+      }));
+    }
+  }, [plantillasDisponibles, versions, form.plantillaVersionId]);
 
   function infoDepositante(cli: Depositante) {
     const deptId = cli.departamentoId ?? "";
@@ -1349,7 +1426,7 @@ function CreateContractModal({
             <label className="mb-1 block font-label-md text-on-surface-variant">Plantilla</label>
             <select className="h-10 w-full rounded border border-outline-variant bg-transparent text-on-surface" value={form.plantillaVersionId} onChange={(e) => setForm({ ...form, plantillaVersionId: e.target.value })}>
               <option value="">Selecciona una plantilla</option>
-              {templates.map((t) => {
+              {plantillasDisponibles.map((t) => {
                 const v = versions[t.id];
                 return (
                   <option key={t.id} value={v?.id ?? ""} disabled={!v}>
@@ -1358,6 +1435,9 @@ function CreateContractModal({
                 );
               })}
             </select>
+            <p className="mt-1 text-xs text-on-surface-variant">
+              Solo se muestran las plantillas de la persona de pago del departamento.
+            </p>
           </div>
           <div>
             <label className="mb-1 block font-label-md text-on-surface-variant">Mensualidad (S/)</label>
