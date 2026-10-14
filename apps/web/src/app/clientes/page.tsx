@@ -92,7 +92,7 @@ export default function ClientesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
-  const [sortKey, setSortKey] = useState<"departamento" | "nombre" | "documento" | "finContrato" | "inicioAdenda" | "finAdenda" | "ruc" | "tipo" | "email" | "telefono" | null>(null);
+  const [sortKey, setSortKey] = useState<"departamento" | "nombre" | "documento" | "telefono" | "finContrato" | "inicioAdenda" | "finAdenda" | "tipo" | "ruc" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const clientesTabla = useMemo(() => {
@@ -115,13 +115,12 @@ export default function ClientesPage() {
       departamento: (c) => c.codigoDepartamento,
       nombre: (c) => [c.nombres, c.apellidos].filter(Boolean).join(" "),
       documento: (c) => c.documentoIdentidad,
+      telefono: (c) => c.telefono,
       finContrato: (c) => c.fechaFinContrato,
       inicioAdenda: (c) => c.fechaInicioAdenda,
       finAdenda: (c) => c.fechaFinAdenda,
-      ruc: (c) => c.ruc,
       tipo: (c) => (c.tipoPersona === PersonType.NATURAL ? "Natural" : "Jurídica"),
-      email: (c) => c.email,
-      telefono: (c) => c.telefono,
+      ruc: (c) => c.ruc,
     };
     if (sortKey) {
       filas = ordenarColumna(filas, sortKey, sortDir, valoradores[sortKey]!);
@@ -229,6 +228,7 @@ export default function ClientesPage() {
                   <table className="w-full min-w-[1080px] text-sm">
                     <thead className="sticky top-0 z-10 bg-[#151a24] text-left text-xs text-white/80">
                       <tr>
+                        <th className="px-3 py-2 font-medium">WhatsApp</th>
                         <th onClick={() => cambiarOrden("departamento")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "departamento" ? "text-white" : "")}>
                           ID departamento{sortKey === "departamento" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                         </th>
@@ -237,6 +237,9 @@ export default function ClientesPage() {
                         </th>
                         <th onClick={() => cambiarOrden("documento")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "documento" ? "text-white" : "")}>
                           Documento{sortKey === "documento" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th onClick={() => cambiarOrden("telefono")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "telefono" ? "text-white" : "")}>
+                          Teléfono{sortKey === "telefono" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                         </th>
                         <th onClick={() => cambiarOrden("finContrato")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "finContrato" ? "text-white" : "")}>
                           Fin contrato{sortKey === "finContrato" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
@@ -247,26 +250,22 @@ export default function ClientesPage() {
                         <th onClick={() => cambiarOrden("finAdenda")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "finAdenda" ? "text-white" : "")}>
                           Fin adenda{sortKey === "finAdenda" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                         </th>
-                        <th onClick={() => cambiarOrden("ruc")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "ruc" ? "text-white" : "")}>
-                          RUC{sortKey === "ruc" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-                        </th>
                         <th onClick={() => cambiarOrden("tipo")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "tipo" ? "text-white" : "")}>
                           Tipo{sortKey === "tipo" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                         </th>
-                        <th onClick={() => cambiarOrden("email")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "email" ? "text-white" : "")}>
-                          Email{sortKey === "email" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-                        </th>
-                        <th onClick={() => cambiarOrden("telefono")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "telefono" ? "text-white" : "")}>
-                          Teléfono{sortKey === "telefono" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
-                        </th>
                         <th className="px-3 py-2 font-medium">Nacionalidad</th>
-                        <th className="px-3 py-2 font-medium">WhatsApp</th>
-                        <th className="px-3 py-2 font-medium">Acciones</th>
+                        <th onClick={() => cambiarOrden("ruc")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "ruc" ? "text-white" : "")}>
+                          RUC{sortKey === "ruc" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th className="px-3 py-2 font-medium">Eliminar</th>
                       </tr>
                     </thead>
                     <tbody>
                       {clientesTabla.map((c) => (
                         <tr key={c.id} className="border-t">
+                          <td className="px-3 py-2">
+                            <WhatsAppButton telefono={c.telefono ?? null} codigoPais={c.codigoPais ?? null} />
+                          </td>
                           <td className="px-3 py-2 font-mono font-medium">
                             <Link
                               href={`/contratos/clientes/${c.id}`}
@@ -285,14 +284,6 @@ export default function ClientesPage() {
                             </Link>
                           </td>
                           <td className="px-3 py-2">{c.documentoIdentidad}</td>
-                          <td className="px-3 py-2">{fmtFecha(c.fechaFinContrato)}</td>
-                          <td className="px-3 py-2">{fmtFecha(c.fechaInicioAdenda)}</td>
-                          <td className="px-3 py-2">{fmtFecha(c.fechaFinAdenda)}</td>
-                          <td className="px-3 py-2">{c.ruc ?? "—"}</td>
-                          <td className="px-3 py-2">
-                            {c.tipoPersona === PersonType.NATURAL ? "Natural" : "Jurídica"}
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground">{c.email ?? "—"}</td>
                           <td className="px-3 py-2 text-muted-foreground">
                             <div className="flex items-center gap-2">
                               <select
@@ -310,12 +301,16 @@ export default function ClientesPage() {
                               <span className="whitespace-nowrap">{c.telefono ?? "—"}</span>
                             </div>
                           </td>
+                          <td className="px-3 py-2">{fmtFecha(c.fechaFinContrato)}</td>
+                          <td className="px-3 py-2">{fmtFecha(c.fechaInicioAdenda)}</td>
+                          <td className="px-3 py-2">{fmtFecha(c.fechaFinAdenda)}</td>
+                          <td className="px-3 py-2">
+                            {c.tipoPersona === PersonType.NATURAL ? "Natural" : "Jurídica"}
+                          </td>
                           <td className="px-3 py-2 text-muted-foreground" title={c.nacionalidad ?? undefined}>
                             {c.nacionalidad ?? "—"}
                           </td>
-                          <td className="px-3 py-2">
-                            <WhatsAppButton telefono={c.telefono ?? null} codigoPais={c.codigoPais ?? null} />
-                          </td>
+                          <td className="px-3 py-2">{c.ruc ?? "—"}</td>
                           <td className="px-3 py-2">
                             <button
                               type="button"
