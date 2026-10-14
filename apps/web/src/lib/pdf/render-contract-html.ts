@@ -234,7 +234,7 @@ function buildDatosArrendatarioSheet(
     '<div class="signature-line"></div>' +
     '<p><span class="bold">EL ARRENDATARIO(A)</span></p>' +
     `<p>${escapeHtml(nombreCompleto)}</p>` +
-    `<p>DNI: ${escapeHtml(documento || "________________")}</p>` +
+    `<p>DNI / C.E. / Pasaporte: ${escapeHtml(documento || "________________")}</p>` +
     "</td>" +
     "</tr>" +
     "</table>" +
@@ -428,7 +428,7 @@ export function renderContractHtml(
 <body>
   <h1>Contrato de Arrendamiento de Bien Inmueble a Plazo Determinado</h1>
 
-  <p>Conste el contrato de arrendamiento que celebran de una parte el Sr.(a) <span class="bold">EL ARRENDADOR(A)</span>, y de otra parte el Sr.(a) <span class="bold">${escapeHtml(clienteNombreCompleto || "________________")}</span>, identificado(a) con D.N.I. N° <span class="bold">${escapeHtml(clienteDocumento || "________________")}</span>, de nacionalidad <span class="bold">${escapeHtml(nacionalidadCliente)}</span>, domiciliado(a) en <span class="bold">${escapeHtml(field(cliente, ["domicilio"]) || "________________")}</span> y a quien en lo sucesivo se denominará <span class="bold">EL ARRENDATARIO (A)</span>; en los términos contenidos en las cláusulas siguientes:</p>
+  <p>Conste el contrato de arrendamiento que celebran de una parte el Sr.(a) <span class="bold">EL ARRENDADOR(A)</span>, y de otra parte el Sr.(a) <span class="bold">${escapeHtml(clienteNombreCompleto || "________________")}</span>, identificado(a) con DNI / C.E. / Pasaporte N° <span class="bold">${escapeHtml(clienteDocumento || "________________")}</span>, de nacionalidad <span class="bold">${escapeHtml(nacionalidadCliente)}</span>, domiciliado(a) en <span class="bold">${escapeHtml(field(cliente, ["domicilio"]) || "________________")}</span> y a quien en lo sucesivo se denominará <span class="bold">EL ARRENDATARIO (A)</span>; en los términos contenidos en las cláusulas siguientes:</p>
 
   <h2>Antecedentes</h2>
   <p><span class="bold">PRIMERA.-</span> EL ARRENDADOR(A) es propietario(a) y alquila el departamento N° <span class="bold">${escapeHtml(codigoDepto || "________________")}</span>${piso ? `, Piso ${escapeHtml(piso)}` : ""} ubicado en ${escapeHtml(field(departamento, ["personaPago"]) || "________________")}, al cual en adelante se le denominará EL INMUEBLE.</p>
