@@ -1,5 +1,5 @@
 ﻿import { NextResponse } from "next/server";
-import { and, desc, eq, ilike, isNotNull, isNull, or } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
 import { createSignedObjectUrl, deleteObject } from "@/lib/storage";
@@ -835,7 +835,10 @@ export async function PATCH(
         .where(
           and(
             eq(schema.workOrders.id, params.id),
-            eq(schema.workOrders.updatedAt, current.updatedAt),
+            eq(
+              sql`date_trunc('milliseconds', ${schema.workOrders.updatedAt})`,
+              current.updatedAt,
+            ),
           ),
         )
         .returning({ id: schema.workOrders.id });
