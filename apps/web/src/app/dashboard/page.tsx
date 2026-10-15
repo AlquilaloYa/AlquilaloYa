@@ -100,7 +100,8 @@ type DashboardPanel =
   | "finalizan"
   | "unidades"
   | "renovados"
-  | "noalquilar";
+  | "noalquilar"
+  | "incidencias";
 
 interface DetalleMorosidad {
   contrato: string;
@@ -150,6 +151,7 @@ interface Resumen {
   egresos: number;
   resultadosYTD: number;
   incidencias: number;
+  incidenciasPendientes: number;
   morosidad: number;
   clientesReportados: number;
   enProceso: number;
@@ -206,7 +208,7 @@ const stats: StatItem[] = [
   { label: "Disponibles", valueKey: "disponibles", tone: "red" },
   { label: "Tasa de ocupación", valueKey: "tasaOcupacion", format: "percent" },
   { label: "Mantenimiento", valueKey: "mantenimiento" },
-  { label: "Incidencias", valueKey: "incidencias" },
+  { label: "Incidencias", valueKey: "incidencias", tone: "red" },
   { label: "Ingresos YTD", valueKey: "ingresosYTD", tone: "blue", format: "moneyK" },
   { label: "Egresos YTD", valueKey: "egresos", tone: "yellow", format: "moneyK" },
   { label: "Resultados YTD", valueKey: "resultadosYTD", format: "moneyK" },
@@ -259,9 +261,11 @@ function StatCard({
   r: Resumen;
   onOpen: () => void;
 }) {
+  const parpadea = s.valueKey === "incidencias" && r.incidenciasPendientes > 0;
   const className =
     "col-span-12 flex flex-col justify-between rounded-lg p-4 text-left shadow-sm transition-shadow hover:shadow-md sm:col-span-6 md:col-span-4 lg:col-span-2 " +
-    (s.tone ? toneCardClass[s.tone] : toneCardClass.default);
+    (s.tone ? toneCardClass[s.tone] : toneCardClass.default) +
+    (parpadea ? " animate-parpadeo" : "");
   const contenido = (
     <>
       <div className="mb-2">
@@ -276,7 +280,7 @@ function StatCard({
       </div>
     </>
   );
-  if (["unidadesTotales", "morosidad", "ocupadas", "disponibles", "tasaOcupacion", "aPuntoDeFinalizar", "contratosRenovadosMes", "personasNoAlquilar"].includes(s.valueKey)) {
+  if (["unidadesTotales", "morosidad", "ocupadas", "disponibles", "tasaOcupacion", "aPuntoDeFinalizar", "contratosRenovadosMes", "personasNoAlquilar", "incidencias"].includes(s.valueKey)) {
     return (
       <button
         type="button"
@@ -1578,6 +1582,114 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
   );
 }
 
+interface IncidenciaOT {
+  id: string;
+  codigo: string;
+  incidencia: string;
+  tipo: string;
+  encargado: string | null;
+  prioridad: string;
+  departamento: string;
+  estado: string;
+  resuelta: boolean;
+  abierta: boolean;
+  creadaEn: string;
+  resueltaEn: string | null;
+}
+
+const prioridadClase: Record<string, string> = {
+  URGENTE: "bg-destructive text-destructive-foreground",
+  ALTA: "bg-orange-500 text-white",
+  MEDIA: "bg-amber-400 text-amber-900",
+  BAJA: "bg-surface-variant text-on-surface-variant",
+};
+
+const estadoClase: Record<string, string> = {
+  Resuelta: "bg-emerald-600 text-emerald-50",
+  Pendiente: "bg-destructive text-destructive-foreground",
+  Cancelada: "bg-surface-variant text-on-surface-variant",
+  Rechazada: "bg-surface-variant text-on-surface-variant",
+};
+
+function IncidenciasPopup({ onCerrar }: { onCerrar: () => void }) {
+  const { data, loading, error } = useDashboardJson<{
+    total: number;
+    pendientes: number;
+    incidencias: IncidenciaOT[];
+  }>("/api/dashboard/incidencias");
+  const lista = data?.incidencias ?? [];
+  const pendientes = data?.pendientes ?? 0;
+  return (
+    <DashboardPanel
+      titulo="Incidencias"
+      subtitulo={
+        loading
+          ? "Cargando…"
+          : `${lista.length} ${
+              lista.length === 1 ? "incidencia" : "incidencias"
+            } · ${pendientes} por resolver`
+      }
+      onCerrar={onCerrar}
+    >
+      <EstadoCarga loading={loading} error={error} />
+      {!loading && !error && (lista.length === 0 ? (
+        <p className="py-10 text-center text-sm text-on-surface-variant">
+          No hay incidencias registradas en órdenes de trabajo.
+        </p>
+      ) : (
+        <ul className="divide-y divide-outline-variant">
+          {lista.map((incidencia) => (
+            <li
+              key={incidencia.id}
+              className="flex flex-wrap items-start justify-between gap-3 py-3"
+            >
+              <div className="min-w-0">
+                <p className="font-label-lg text-on-surface">
+                  {incidencia.incidencia}
+                </p>
+                <p className="text-sm text-on-surface-variant">
+                  {incidencia.codigo}
+                  {incidencia.tipo ? ` · ${incidencia.tipo}` : ""}
+                  {incidencia.departamento
+                    ? ` · ${incidencia.departamento}`
+                    : ""}
+                </p>
+                <p className="text-sm text-on-surface-variant">
+                  Encargado: {incidencia.encargado ?? "Sin asignar"}
+                </p>
+                {incidencia.resueltaEn ? (
+                  <p className="text-xs text-on-surface-variant">
+                    Resuelta el{" "}
+                    {new Date(incidencia.resueltaEn).toLocaleDateString("es-PE")}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <span
+                  className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                    prioridadClase[incidencia.prioridad] ||
+                    prioridadClase.MEDIA
+                  }`}
+                  title="Nivel de urgencia"
+                >
+                  {incidencia.prioridad}
+                </span>
+                <span
+                  className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                    estadoClase[incidencia.estado] || ""
+                  }`}
+                >
+                  {incidencia.estado}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ))}
+    </DashboardPanel>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -1672,6 +1784,7 @@ return (
                     aPuntoDeFinalizar: "finalizan",
                     contratosRenovadosMes: "renovados",
                     personasNoAlquilar: "noalquilar",
+                    incidencias: "incidencias",
                   };
                   setPanelAbierto(paneles[s.valueKey] ?? null);
                 }}
@@ -1783,6 +1896,7 @@ return (
       {panelAbierto === "finalizan" ? <FinalizanPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "renovados" ? <RenovadosMesPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "noalquilar" ? <NoAlquilarPopup onCerrar={() => setPanelAbierto(null)} /> : null}
+      {panelAbierto === "incidencias" ? <IncidenciasPopup onCerrar={() => setPanelAbierto(null)} /> : null}
     </DashboardShell>
   );
 }

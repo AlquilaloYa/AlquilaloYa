@@ -48,6 +48,7 @@ export interface ResumenPortafolio {
   egresos: number;
   resultadosYTD: number;
   incidencias: number;
+  incidenciasPendientes: number;
   morosidad: number;
   clientesReportados: number;
   enProceso: number;
@@ -444,13 +445,16 @@ export class DrizzleDashboardRepository {
       clientesReportados = new Set(clientes.map((c) => c.clienteId)).size;
     }
 
-    const erroresGeneracion = await this.contarErroresGeneracion();
-    const [fallosActividad] = await db
-      .select({ value: count() })
-      .from(schema.activity_events)
-      .where(inArray(schema.activity_events.result, ["FAILURE", "DENIED"]));
-    const incidencias =
-      erroresGeneracion + (fallosActividad?.value ?? 0) + vencidos.length;
+    // Incidencias = órdenes de trabajo reales.
+    // Pendientes = incidencias no resueltas (ni canceladas/rechazadas).
+    const [incidenciasRow] = await db
+      .select({
+        total: count(),
+        pendientes: sql<number>`coalesce(sum(case when ${schema.workOrders.status} in ('RESOLVED','COMPLETED','CANCELLED','REJECTED') then 0 else 1 end), 0)`,
+      })
+      .from(schema.workOrders);
+    const incidencias = incidenciasRow?.total ?? 0;
+    const incidenciasPendientes = Number(incidenciasRow?.pendientes ?? 0);
 
     const vencenHoy = await db
       .select({
@@ -507,6 +511,7 @@ export class DrizzleDashboardRepository {
       egresos,
       resultadosYTD,
       incidencias,
+      incidenciasPendientes,
       morosidad,
       clientesReportados,
       enProceso,
