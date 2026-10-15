@@ -1,4 +1,4 @@
-import { and, count, eq, gte, inArray, lte, lt, ne, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNull, lte, lt, ne, sql } from "drizzle-orm";
 import { db, schema } from "../index";
 
 export type ContractEstados = {
@@ -55,6 +55,8 @@ export interface ResumenPortafolio {
   contratosRenovados: number;
   contratosVencidosPeriodo: number;
   tasaRenovacion: number;
+  contratosRenovadosMes: number;
+  personasNoAlquilar: number;
   duracionMediaContratoDias: number | null;
   duracionContratos: { label: string; cantidad: number }[];
   vacanciaMediaDias: number | null;
@@ -271,6 +273,23 @@ export class DrizzleDashboardRepository {
     const tasaRenovacion = contratosVencidosPeriodo
       ? Math.round((contratosRenovados / contratosVencidosPeriodo) * 100)
       : 0;
+
+    // Contratos que finalizaron en el mes en curso y fueron renovados (extendidos).
+    const inicioMes = toDateStr(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+    const finMes = toDateStr(new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0));
+    let contratosRenovadosMes = 0;
+    for (const fechas of renovacionesPorContrato.values()) {
+      for (const fecha of fechas) {
+        if (fecha >= inicioMes && fecha <= finMes) contratosRenovadosMes++;
+      }
+    }
+
+    // Personas que nunca se debe alquilar (lista negra manual).
+    const [personasRow] = await db
+      .select({ value: count() })
+      .from(schema.personasNoAlquilar)
+      .where(isNull(schema.personasNoAlquilar.eliminadoEn));
+    const personasNoAlquilar = personasRow?.value ?? 0;
 
     const duracionContratos = [
       { label: "Menos de 3 meses", maxDias: 90, cantidad: 0 },
@@ -495,6 +514,8 @@ export class DrizzleDashboardRepository {
       contratosRenovados,
       contratosVencidosPeriodo,
       tasaRenovacion,
+      contratosRenovadosMes,
+      personasNoAlquilar,
       duracionMediaContratoDias,
       duracionContratos: duracionContratos.map(({ label, cantidad }) => ({ label, cantidad })),
       vacanciaMediaDias,

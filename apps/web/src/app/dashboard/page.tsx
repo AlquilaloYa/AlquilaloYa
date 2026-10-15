@@ -5,7 +5,7 @@ import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { AlertTriangle, ChevronDown, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Trash2, X } from "lucide-react";
 import { DonutChart } from "@/components/donut-chart";
 import { CobranzaVendedores } from "@/components/cobranza-vendedores";
 import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
@@ -92,7 +92,15 @@ interface AdendaDashboard {
   departamentoNombre: string;
 }
 
-type DashboardPanel = "morosidad" | "ocupadas" | "disponibles" | "ocupacion" | "finalizan" | "unidades";
+type DashboardPanel =
+  | "morosidad"
+  | "ocupadas"
+  | "disponibles"
+  | "ocupacion"
+  | "finalizan"
+  | "unidades"
+  | "renovados"
+  | "noalquilar";
 
 interface DetalleMorosidad {
   contrato: string;
@@ -149,6 +157,8 @@ interface Resumen {
   contratosRenovados: number;
   contratosVencidosPeriodo: number;
   tasaRenovacion: number;
+  contratosRenovadosMes: number;
+  personasNoAlquilar: number;
   duracionMediaContratoDias: number | null;
   duracionContratos: { label: string; cantidad: number }[];
   vacanciaMediaDias: number | null;
@@ -202,7 +212,9 @@ const stats: StatItem[] = [
   { label: "Resultados YTD", valueKey: "resultadosYTD", format: "moneyK" },
   { label: "Morosidad", valueKey: "morosidad", tone: "black", format: "percent" },
   { label: "A punto de finalizar", valueKey: "aPuntoDeFinalizar", tone: "red" },
+  { label: "Renovados este mes", valueKey: "contratosRenovadosMes", tone: "green" },
   { label: "Clientes reportados", valueKey: "clientesReportados", tone: "red" },
+  { label: "No alquilar", valueKey: "personasNoAlquilar", tone: "black" },
 ];
 
 function moneyCompact(n: number): string {
@@ -264,7 +276,7 @@ function StatCard({
       </div>
     </>
   );
-  if (["unidadesTotales", "morosidad", "ocupadas", "disponibles", "tasaOcupacion", "aPuntoDeFinalizar"].includes(s.valueKey)) {
+  if (["unidadesTotales", "morosidad", "ocupadas", "disponibles", "tasaOcupacion", "aPuntoDeFinalizar", "contratosRenovadosMes", "personasNoAlquilar"].includes(s.valueKey)) {
     return (
       <button
         type="button"
@@ -1303,6 +1315,269 @@ function MorosidadPopup({ onCerrar }: { onCerrar: () => void }) {
   );
 }
 
+interface ContratoRenovadoMes {
+  id: string;
+  codigoContrato: string;
+  cliente: string;
+  documento: string;
+  telefono: string | null;
+  departamento: string | null;
+  fechaFinAnterior: string;
+  fechaFinNueva: string | null;
+}
+
+function RenovadosMesPopup({ onCerrar }: { onCerrar: () => void }) {
+  const { data, loading, error } = useDashboardJson<{
+    mes: string;
+    contratos: ContratoRenovadoMes[];
+  }>("/api/dashboard/contratos-renovados");
+  const contratos = data?.contratos ?? [];
+  return (
+    <DashboardPanel
+      titulo="Contratos renovados este mes"
+      subtitulo={
+        loading
+          ? "Cargando…"
+          : `${contratos.length} ${
+              contratos.length === 1
+                ? "contrato finalizado"
+                : "contratos finalizados"
+            } en el mes y renovados`
+      }
+      onCerrar={onCerrar}
+    >
+      <EstadoCarga loading={loading} error={error} />
+      {!loading && !error && (contratos.length === 0 ? (
+        <p className="py-10 text-center text-sm text-on-surface-variant">
+          Ningún contrato finalizó este mes y haya sido renovado.
+        </p>
+      ) : (
+        <ul className="divide-y divide-outline-variant">
+          {contratos.map((c) => (
+            <li
+              key={c.id}
+              className="flex flex-wrap items-center justify-between gap-3 py-3"
+            >
+              <div className="min-w-0">
+                <p className="font-label-lg text-on-surface">{c.cliente}</p>
+                <p className="text-sm text-on-surface-variant">
+                  {c.codigoContrato}
+                  {c.departamento ? ` · Depto ${c.departamento}` : ""}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-on-surface">
+                  Venció {fechaLegible(c.fechaFinAnterior)}
+                  {c.fechaFinNueva ? ` → ${fechaLegible(c.fechaFinNueva)}` : ""}
+                </p>
+                <p className="text-xs text-on-surface-variant">
+                  DNI {c.documento}
+                  {c.telefono ? ` · ${c.telefono}` : ""}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ))}
+    </DashboardPanel>
+  );
+}
+
+interface PersonaNoAlquilar {
+  id: string;
+  nombres: string;
+  documentoIdentidad: string;
+  telefono: string | null;
+  tieneFoto: boolean;
+  creadoPor: string | null;
+  createdAt: string;
+}
+
+const campoClase =
+  "w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-none";
+const botonClase =
+  "rounded bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-50";
+
+function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
+  const { data, loading, error, reload } = useDashboardJson<
+    PersonaNoAlquilar[]
+  >("/api/personas-no-alquilar");
+  const [nombres, setNombres] = useState("");
+  const [documento, setDocumento] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [foto, setFoto] = useState<File | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [eliminando, setEliminando] = useState<string | null>(null);
+  const [errorForm, setErrorForm] = useState<string | null>(null);
+  const personas = data ?? [];
+
+  async function agregar() {
+    setErrorForm(null);
+    if (!nombres.trim() || !documento.trim()) {
+      setErrorForm("Nombre y documento son obligatorios");
+      return;
+    }
+    setGuardando(true);
+    try {
+      const fd = new FormData();
+      fd.set("nombres", nombres.trim());
+      fd.set("documentoIdentidad", documento.trim());
+      fd.set("telefono", telefono.trim());
+      if (foto) fd.set("foto", foto);
+      const res = await apiFetch("/api/personas-no-alquilar", {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body.error ?? "No se pudo registrar");
+      }
+      setNombres("");
+      setDocumento("");
+      setTelefono("");
+      setFoto(null);
+      const input = document.getElementById("blacklist-foto") as HTMLInputElement | null;
+      if (input) input.value = "";
+      await reload();
+    } catch (reason) {
+      setErrorForm(reason instanceof Error ? reason.message : "No se pudo registrar");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function eliminar(id: string) {
+    setErrorForm(null);
+    setEliminando(id);
+    try {
+      const res = await apiFetch(`/api/personas-no-alquilar/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body.error ?? "No se pudo quitar");
+      }
+      await reload();
+    } catch (reason) {
+      setErrorForm(reason instanceof Error ? reason.message : "No se pudo quitar");
+    } finally {
+      setEliminando(null);
+    }
+  }
+
+  return (
+    <DashboardPanel
+      titulo="Personas a las que nunca alquilar"
+      subtitulo={`${personas.length} ${
+        personas.length === 1 ? "persona registrada" : "personas registradas"
+      }`}
+      onCerrar={onCerrar}
+    >
+      <EstadoCarga loading={loading} error={error} />
+      {!loading && !error && (
+        <div className="space-y-5">
+          <div className="rounded-lg border border-outline-variant/60 bg-surface-container-low p-4">
+            <p className="mb-3 font-label-lg text-on-surface">Agregar persona</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <input
+                className={campoClase}
+                placeholder="Nombre completo"
+                value={nombres}
+                onChange={(event) => setNombres(event.target.value)}
+              />
+              <input
+                className={campoClase}
+                placeholder="Documento (DNI)"
+                value={documento}
+                onChange={(event) => setDocumento(event.target.value)}
+              />
+              <input
+                className={campoClase}
+                placeholder="Teléfono"
+                value={telefono}
+                onChange={(event) => setTelefono(event.target.value)}
+              />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <input
+                id="blacklist-foto"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => setFoto(event.target.files?.[0] ?? null)}
+                className="text-sm text-on-surface-variant"
+              />
+              <button
+                type="button"
+                onClick={() => void agregar()}
+                disabled={guardando}
+                className={botonClase}
+              >
+                {guardando ? "Guardando…" : "Agregar"}
+              </button>
+            </div>
+            {errorForm ? (
+              <p className="mt-2 text-sm text-destructive">{errorForm}</p>
+            ) : null}
+          </div>
+
+          {personas.length === 0 ? (
+            <p className="py-10 text-center text-sm text-on-surface-variant">
+              No hay personas registradas.
+            </p>
+          ) : (
+            <ul className="divide-y divide-outline-variant">
+              {personas.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center justify-between gap-3 py-3"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="h-14 w-20 shrink-0 overflow-hidden rounded border border-outline-variant bg-surface-container">
+                      {p.tieneFoto ? (
+                        <img
+                          src={`/api/personas-no-alquilar/${p.id}/foto`}
+                          alt={`DNI de ${p.nombres}`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-[10px] text-on-surface-variant">
+                          Sin foto
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-label-lg text-on-surface">
+                        {p.nombres}
+                      </p>
+                      <p className="truncate text-sm text-on-surface-variant">
+                        DNI {p.documentoIdentidad}
+                        {p.telefono ? ` · ${p.telefono}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void eliminar(p.id)}
+                    disabled={eliminando === p.id}
+                    aria-label={`Quitar a ${p.nombres}`}
+                    className="rounded p-2 text-on-surface-variant transition hover:bg-surface-container-high hover:text-destructive disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </DashboardPanel>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -1395,6 +1670,8 @@ return (
                     disponibles: "disponibles",
                     tasaOcupacion: "ocupacion",
                     aPuntoDeFinalizar: "finalizan",
+                    contratosRenovadosMes: "renovados",
+                    personasNoAlquilar: "noalquilar",
                   };
                   setPanelAbierto(paneles[s.valueKey] ?? null);
                 }}
@@ -1504,6 +1781,8 @@ return (
       {panelAbierto === "disponibles" ? <DisponiblesPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "ocupacion" ? <OcupacionAnualPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "finalizan" ? <FinalizanPopup onCerrar={() => setPanelAbierto(null)} /> : null}
+      {panelAbierto === "renovados" ? <RenovadosMesPopup onCerrar={() => setPanelAbierto(null)} /> : null}
+      {panelAbierto === "noalquilar" ? <NoAlquilarPopup onCerrar={() => setPanelAbierto(null)} /> : null}
     </DashboardShell>
   );
 }
