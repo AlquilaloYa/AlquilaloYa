@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
+import { logger } from "@/lib/logger";
+import { sendUrgentWorkOrderPush } from "@/lib/fieldops-push";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +54,7 @@ export async function GET(req: Request) {
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(
-      auth.user.role,
+      auth.user,
       Permission.WORK_ORDER_READ,
     );
     if (denied) return denied;
@@ -157,7 +159,7 @@ export async function POST(req: Request) {
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(
-      auth.user.role,
+      auth.user,
       Permission.WORK_ORDER_CREATE,
     );
     if (denied) return denied;
@@ -418,6 +420,22 @@ export async function POST(req: Request) {
       });
       return [created];
     });
+
+    if (priority === "URGENTE" && assignee) {
+      try {
+        await sendUrgentWorkOrderPush(dbModule, {
+          employeeId: assignee.id,
+          workOrderId: order.id,
+          code: order.code,
+          title: order.title,
+        });
+      } catch (error) {
+        logger.error("Falló el envío push de una orden urgente", {
+          workOrderId: order.id,
+          error: error instanceof Error ? error.message : "Error desconocido",
+        });
+      }
+    }
 
     return NextResponse.json(order, { status: 201 });
   } catch (error) {

@@ -1,8 +1,10 @@
 ﻿import { NextResponse } from "next/server";
-import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, isNull, or } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
 import { createSignedObjectUrl, deleteObject } from "@/lib/storage";
+import { logger } from "@/lib/logger";
+import { sendUrgentWorkOrderPush } from "@/lib/fieldops-push";
 
 export const dynamic = "force-dynamic";
 
@@ -56,8 +58,14 @@ type UpdateBody = {
   assignedEmployeeId?: unknown;
   scheduledAt?: unknown;
   rescheduleVisit?: unknown;
+  customerAppointment?: unknown;
+  customerName?: unknown;
+  canResolveToday?: unknown;
+  materialsConfirmed?: unknown;
   diagnosis?: unknown;
+  cause?: unknown;
   resolution?: unknown;
+  observations?: unknown;
   estimatedCost?: unknown;
   estimatedMinutes?: unknown;
   actualCost?: unknown;
@@ -98,7 +106,7 @@ export async function GET(
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(
-      auth.user.role,
+      auth.user,
       Permission.WORK_ORDER_READ,
     );
     if (denied) return denied;
@@ -179,6 +187,8 @@ export async function GET(
         id: attachment.id,
         fileName: attachment.fileName,
         mimeType: attachment.mimeType,
+        kind: attachment.kind,
+        description: attachment.description,
         sizeBytes: Number(attachment.sizeBytes),
         createdAt: attachment.createdAt,
         url: await createSignedObjectUrl(
@@ -218,7 +228,7 @@ export async function PATCH(
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(
-      auth.user.role,
+      auth.user,
       Permission.WORK_ORDER_UPDATE,
     );
     if (denied) return denied;
@@ -290,6 +300,7 @@ export async function PATCH(
       );
     }
     const isReschedulingVisit = body.rescheduleVisit === true;
+    const isCustomerAppointment = body.customerAppointment === true;
     const estimatedCost = parseMetric(body.estimatedCost);
     const estimatedMinutes = parseMetric(body.estimatedMinutes, true);
     const actualCost = parseMetric(body.actualCost);
@@ -316,23 +327,67 @@ export async function PATCH(
 
     const diagnosis =
       typeof body.diagnosis === "string" ? body.diagnosis.trim() : undefined;
+    const cause =
+      typeof body.cause === "string" ? body.cause.trim() : undefined;
     const resolution =
       typeof body.resolution === "string" ? body.resolution.trim() : undefined;
+    const observations =
+      typeof body.observations === "string"
+        ? body.observations.trim()
+        : undefined;
+    const customerName =
+      typeof body.customerName === "string" ? body.customerName.trim() : "";
     const note =
       typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
     if (
       (body.diagnosis !== undefined && typeof body.diagnosis !== "string") ||
+      (body.cause !== undefined && typeof body.cause !== "string") ||
       (body.resolution !== undefined && typeof body.resolution !== "string") ||
-      (body.note !== undefined && typeof body.note !== "string")
+      (body.observations !== undefined &&
+        typeof body.observations !== "string") ||
+      (body.note !== undefined && typeof body.note !== "string") ||
+      (body.customerAppointment !== undefined &&
+        typeof body.customerAppointment !== "boolean") ||
+      (body.canResolveToday !== undefined &&
+        typeof body.canResolveToday !== "boolean") ||
+      (body.materialsConfirmed !== undefined &&
+        typeof body.materialsConfirmed !== "boolean")
     ) {
       return NextResponse.json(
-        { error: "El diagnóstico, la resolución y la nota deben ser texto" },
+        { error: "Los datos de la orden no tienen un formato válido" },
         { status: 400 },
       );
     }
-    if ((diagnosis?.length ?? 0) > 10000 || (resolution?.length ?? 0) > 10000) {
+    if (
+      (diagnosis?.length ?? 0) > 10000 ||
+      (cause?.length ?? 0) > 10000 ||
+      (resolution?.length ?? 0) > 10000 ||
+      (observations?.length ?? 0) > 10000
+    ) {
       return NextResponse.json(
-        { error: "El diagnóstico o la resolución supera el límite permitido" },
+        { error: "Un campo de texto supera el límite permitido" },
+        { status: 400 },
+      );
+    }
+    const materialsConfirmed =
+      typeof body.materialsConfirmed === "boolean"
+        ? body.materialsConfirmed
+        : undefined;
+    const canResolveToday =
+      typeof body.canResolveToday === "boolean"
+        ? body.canResolveToday
+        : undefined;
+    if (
+      isCustomerAppointment &&
+      (!scheduledAt ||
+        !customerName ||
+        customerName.length > 255 ||
+        (body.note !== undefined && typeof body.note !== "string") ||
+        note.length > 1000 ||
+        ["COMPLETED", "CANCELLED"].includes(current.status))
+    ) {
+      return NextResponse.json(
+        { error: "La cita requiere fecha, cliente y una orden activa" },
         { status: 400 },
       );
     }
@@ -370,6 +425,7 @@ export async function PATCH(
     if (
       scheduledAt &&
       !isReschedulingVisit &&
+      !isCustomerAppointment &&
       current.status === "ACCEPTED" &&
       (!current.targetAt ||
         current.targetAt.getTime() !== scheduledAt.getTime())
@@ -385,6 +441,7 @@ export async function PATCH(
     if (
       scheduledAt &&
       !isReschedulingVisit &&
+      !isCustomerAppointment &&
       ["VISIT_SCHEDULED", "RESCHEDULED"].includes(current.status)
     ) {
       return NextResponse.json(
@@ -483,7 +540,7 @@ export async function PATCH(
           : "ASSIGNED"
         : current.status;
     }
-    if (scheduledAt && body.status === undefined)
+    if (scheduledAt && body.status === undefined && !isCustomerAppointment)
       nextStatus = isReschedulingVisit ? "RESCHEDULED" : "VISIT_SCHEDULED";
     if (
       body.status !== undefined &&
@@ -538,6 +595,73 @@ export async function PATCH(
         { status: 400 },
       );
     }
+    if (nextStatus === "COMPLETED") {
+      const [finalEvidence, material, arrivedVisit] = await Promise.all([
+        db
+          .select({ id: schema.workOrderAttachments.id })
+          .from(schema.workOrderAttachments)
+          .where(
+            and(
+              eq(schema.workOrderAttachments.workOrderId, params.id),
+              eq(schema.workOrderAttachments.kind, "FOTO FINAL"),
+            ),
+          )
+          .limit(1),
+        db
+          .select({ id: schema.workOrderMaterials.id })
+          .from(schema.workOrderMaterials)
+          .where(eq(schema.workOrderMaterials.workOrderId, params.id))
+          .limit(1),
+        db
+          .select({ id: schema.workOrderVisits.id })
+          .from(schema.workOrderVisits)
+          .where(
+            and(
+              eq(schema.workOrderVisits.workOrderId, params.id),
+              eq(schema.workOrderVisits.isCustomerAppointment, false),
+              isNotNull(schema.workOrderVisits.arrivedAt),
+            ),
+          )
+          .limit(1),
+      ]);
+      const finalEstimatedMinutes =
+        estimatedMinutes ?? current.estimatedMinutes;
+      if (!diagnosis && !current.diagnosis) {
+        return NextResponse.json(
+          { error: "Registra el diagnóstico antes de cerrar la orden" },
+          { status: 400 },
+        );
+      }
+      if (
+        !material.length &&
+        !(materialsConfirmed ?? current.materialsConfirmed)
+      ) {
+        return NextResponse.json(
+          { error: "Confirma los materiales antes de cerrar la orden" },
+          { status: 400 },
+        );
+      }
+      if (!finalEstimatedMinutes || Number(finalEstimatedMinutes) <= 0) {
+        return NextResponse.json(
+          { error: "Registra el tiempo estimado antes de cerrar la orden" },
+          { status: 400 },
+        );
+      }
+      if (!finalEvidence.length) {
+        return NextResponse.json(
+          { error: "Adjunta una foto final antes de cerrar la orden" },
+          { status: 400 },
+        );
+      }
+      if (!arrivedVisit.length) {
+        return NextResponse.json(
+          {
+            error: "Confirma la llegada a una visita antes de cerrar la orden",
+          },
+          { status: 400 },
+        );
+      }
+    }
 
     const now = new Date();
     await db.transaction(async (tx) => {
@@ -580,7 +704,12 @@ export async function PATCH(
         const [visit] = await tx
           .select()
           .from(schema.workOrderVisits)
-          .where(eq(schema.workOrderVisits.workOrderId, params.id))
+          .where(
+            and(
+              eq(schema.workOrderVisits.workOrderId, params.id),
+              eq(schema.workOrderVisits.isCustomerAppointment, false),
+            ),
+          )
           .orderBy(desc(schema.workOrderVisits.visitNumber))
           .limit(1);
         if (!visit || visit.arrivedAt || visit.completedAt) {
@@ -593,7 +722,7 @@ export async function PATCH(
         }
         await tx
           .update(schema.workOrderVisits)
-          .set({ scheduledAt })
+          .set({ scheduledAt, note })
           .where(eq(schema.workOrderVisits.id, visit.id));
         await tx.insert(schema.workOrderEvents).values({
           workOrderId: params.id,
@@ -623,6 +752,9 @@ export async function PATCH(
           workOrderId: params.id,
           visitNumber: String(visitNumber),
           scheduledAt,
+          note,
+          isCustomerAppointment,
+          customerName: isCustomerAppointment ? customerName : "",
           createdBy: auth.user.id,
         });
       }
@@ -634,6 +766,7 @@ export async function PATCH(
           .where(
             and(
               eq(schema.workOrderVisits.workOrderId, params.id),
+              eq(schema.workOrderVisits.isCustomerAppointment, false),
               isNull(schema.workOrderVisits.arrivedAt),
               isNull(schema.workOrderVisits.completedAt),
             ),
@@ -653,13 +786,48 @@ export async function PATCH(
         assignedEmployeeId,
         updatedAt: now,
       };
-      if (scheduledAt) update.targetAt = scheduledAt;
+      if (scheduledAt && !isCustomerAppointment) update.targetAt = scheduledAt;
       if (diagnosis !== undefined) update.diagnosis = diagnosis;
+      if (cause !== undefined) update.cause = cause;
       if (resolution !== undefined) update.resolution = resolution;
+      if (observations !== undefined) update.observations = observations;
+      if (materialsConfirmed !== undefined)
+        update.materialsConfirmed = materialsConfirmed;
+      if (canResolveToday !== undefined)
+        update.canResolveToday = canResolveToday;
       if (estimatedCost !== null) update.estimatedCost = estimatedCost;
       if (estimatedMinutes !== null) update.estimatedMinutes = estimatedMinutes;
       if (actualCost !== null) update.actualCost = actualCost;
-      if (actualMinutes !== null) update.actualMinutes = actualMinutes;
+      if (nextStatus === "COMPLETED") {
+        const workVisits = await tx
+          .select({
+            arrivedAt: schema.workOrderVisits.arrivedAt,
+            completedAt: schema.workOrderVisits.completedAt,
+          })
+          .from(schema.workOrderVisits)
+          .where(
+            and(
+              eq(schema.workOrderVisits.workOrderId, params.id),
+              eq(schema.workOrderVisits.isCustomerAppointment, false),
+            ),
+          );
+        const elapsedMinutes = workVisits.reduce((total, visit) => {
+          if (!visit.arrivedAt) return total;
+          const endedAt = visit.completedAt ?? now;
+          return (
+            total +
+            Math.max(
+              0,
+              Math.round(
+                (endedAt.getTime() - visit.arrivedAt.getTime()) / 60000,
+              ),
+            )
+          );
+        }, 0);
+        update.actualMinutes = String(elapsedMinutes);
+      } else if (actualMinutes !== null) {
+        update.actualMinutes = actualMinutes;
+      }
       if (nextStatus === "COMPLETED") update.completedAt = now;
       const [saved] = await tx
         .update(schema.workOrders)
@@ -688,6 +856,7 @@ export async function PATCH(
           .where(
             and(
               eq(schema.workOrderVisits.workOrderId, params.id),
+              eq(schema.workOrderVisits.isCustomerAppointment, false),
               isNull(schema.workOrderVisits.completedAt),
             ),
           )
@@ -720,6 +889,36 @@ export async function PATCH(
           createdAt: now,
         });
       }
+      if (
+        cause !== undefined ||
+        observations !== undefined ||
+        body.materialsConfirmed !== undefined ||
+        body.canResolveToday !== undefined ||
+        isCustomerAppointment
+      ) {
+        await tx.insert(schema.workOrderEvents).values({
+          workOrderId: params.id,
+          actorId: auth.user.id,
+          actorName: auth.user.name,
+          eventType: isCustomerAppointment
+            ? "CUSTOMER_APPOINTMENT_SCHEDULED"
+            : "WORK_ORDER_DETAILS_UPDATED",
+          fromStatus: current.status,
+          toStatus: nextStatus,
+          details: {
+            causeUpdated: cause !== undefined,
+            observationsUpdated: observations !== undefined,
+            materialsConfirmed: body.materialsConfirmed ?? null,
+            canResolveToday: body.canResolveToday ?? null,
+            customerName: isCustomerAppointment ? customerName : null,
+            scheduledAt: isCustomerAppointment
+              ? (scheduledAt?.toISOString() ?? null)
+              : null,
+            note: isCustomerAppointment ? note : null,
+          },
+          createdAt: now,
+        });
+      }
     });
 
     const [updated] = await db
@@ -727,6 +926,27 @@ export async function PATCH(
       .from(schema.workOrders)
       .where(eq(schema.workOrders.id, params.id))
       .limit(1);
+
+    if (
+      hasAssigneeChange &&
+      assignedEmployeeId &&
+      current.priority === "URGENTE"
+    ) {
+      try {
+        await sendUrgentWorkOrderPush(dbModule, {
+          employeeId: assignedEmployeeId,
+          workOrderId: current.id,
+          code: current.code,
+          title: current.title,
+        });
+      } catch (error) {
+        logger.error("Falló el envío push al reasignar una orden urgente", {
+          workOrderId: current.id,
+          error: error instanceof Error ? error.message : "Error desconocido",
+        });
+      }
+    }
+
     return NextResponse.json(updated);
   } catch (error) {
     const message =

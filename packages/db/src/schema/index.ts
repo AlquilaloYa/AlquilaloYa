@@ -19,6 +19,7 @@ export * from "./messaging";
 export * from "./automatizaciones";
 export * from "./bots";
 export * from "./hr";
+export * from "./fieldops-push-tokens";
 export * from "./hr-onboarding";
 export * from "./attendance";
 export * from "./permission-requests";

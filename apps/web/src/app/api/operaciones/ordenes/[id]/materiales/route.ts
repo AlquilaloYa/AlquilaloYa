@@ -57,7 +57,7 @@ export async function GET(
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(
-      auth.user.role,
+      auth.user,
       Permission.WORK_ORDER_READ,
     );
     if (denied) return denied;
@@ -111,7 +111,7 @@ export async function POST(
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(
-      auth.user.role,
+      auth.user,
       Permission.WORK_ORDER_MATERIAL_RECORD,
     );
     if (denied) return denied;

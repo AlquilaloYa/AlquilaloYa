@@ -11,7 +11,7 @@ export async function GET(req: Request) {
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(
-      auth.user.role,
+      auth.user,
       Permission.WORK_ORDER_READ,
     );
     if (denied) return denied;

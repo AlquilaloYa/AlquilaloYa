@@ -14,6 +14,7 @@ const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_FILES = 5;
 const MAX_REQUEST_BYTES = 24 * 1024 * 1024;
 const BUCKET = "work-order-evidence";
+const EVIDENCE_KINDS = ["FOTO INICIAL", "FOTO DIAGNÓSTICO", "FOTO FINAL"] as const;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -51,7 +52,7 @@ export async function POST(
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(
-      auth.user.role,
+      auth.user,
       Permission.WORK_ORDER_UPDATE,
     );
     if (denied) return denied;
@@ -85,6 +86,12 @@ export async function POST(
         { error: "Orden de trabajo no encontrada" },
         { status: 404 },
       );
+    if (order.status === "COMPLETED") {
+      return NextResponse.json(
+        { error: "No se pueden agregar evidencias a una orden finalizada" },
+        { status: 409 },
+      );
+    }
     if (auth.user.role === "ASISTENTE_ADMINISTRATIVO") {
       const [employee] = await db
         .select({ id: schema.hrEmployees.id })
@@ -117,6 +124,20 @@ export async function POST(
     const files = form
       .getAll("files")
       .filter((entry): entry is File => entry instanceof File);
+    const kind = form.get("kind");
+    const description = form.get("description");
+    if (
+      typeof kind !== "string" ||
+      !EVIDENCE_KINDS.includes(kind as (typeof EVIDENCE_KINDS)[number]) ||
+      typeof description !== "string" ||
+      !description.trim() ||
+      description.length > 1000
+    ) {
+      return NextResponse.json(
+        { error: "Indica un tipo y una descripción válida para la evidencia" },
+        { status: 400 },
+      );
+    }
     if (files.length < 1 || files.length > MAX_FILES) {
       return NextResponse.json(
         { error: `Adjunta entre 1 y ${MAX_FILES} fotos por carga` },
@@ -130,6 +151,8 @@ export async function POST(
       storageKey: string;
       fileName: string;
       mimeType: string;
+      kind: string;
+      description: string;
       sizeBytes: string;
       uploadedBy: string;
     }> = [];
@@ -169,6 +192,8 @@ export async function POST(
               .trim()
               .slice(0, 255) || `evidencia.${extension}`,
           mimeType,
+          kind,
+          description: description.trim(),
           sizeBytes: String(bytes.byteLength),
           uploadedBy: auth.user.id,
         });
@@ -202,6 +227,8 @@ export async function POST(
           id: attachment.id,
           fileName: attachment.fileName,
           mimeType: attachment.mimeType,
+          kind: attachment.kind,
+          description: attachment.description,
           sizeBytes: Number(attachment.sizeBytes),
           createdAt: attachment.createdAt,
           url: await createSignedObjectUrl(attachment.storageKey, BUCKET),

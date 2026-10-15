@@ -120,6 +120,20 @@
       "when": 1792087200000,
       "tag": "0018_pago_parcial",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792087200001,
+      "tag": "0019_fieldops_mobile_workflow",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792087200002,
+      "tag": "0020_fieldops_push_tokens",
+      "breakpoints": true
     }
   ]
 }

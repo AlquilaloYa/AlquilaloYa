@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  boolean,
   index,
   jsonb,
   numeric,
@@ -45,7 +46,11 @@ export const workOrders = pgTable(
     ),
     targetAt: timestamp("target_at", { withTimezone: true }),
     diagnosis: text("diagnosis").notNull().default(""),
+    cause: text("cause").notNull().default(""),
     resolution: text("resolution").notNull().default(""),
+    observations: text("observations").notNull().default(""),
+    materialsConfirmed: boolean("materials_confirmed").notNull().default(false),
+    canResolveToday: boolean("can_resolve_today").notNull().default(true),
     estimatedCost: numeric("estimated_cost", { precision: 12, scale: 2 }),
     actualCost: numeric("actual_cost", { precision: 12, scale: 2 }),
     estimatedMinutes: numeric("estimated_minutes", { precision: 8, scale: 0 }),
@@ -128,6 +133,11 @@ export const workOrderVisits = pgTable(
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
     arrivedAt: timestamp("arrived_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    note: text("note").notNull().default(""),
+    isCustomerAppointment: boolean("is_customer_appointment")
+      .notNull()
+      .default(false),
+    customerName: varchar("customer_name", { length: 255 }).notNull().default(""),
     diagnosis: text("diagnosis").notNull().default(""),
     resolution: text("resolution").notNull().default(""),
     createdBy: uuid("created_by").references(() => users.id, {
@@ -218,6 +228,8 @@ export const workOrderAttachments = pgTable(
     storageKey: text("storage_key").notNull().unique(),
     fileName: varchar("file_name", { length: 255 }).notNull(),
     mimeType: varchar("mime_type", { length: 80 }).notNull(),
+    kind: varchar("kind", { length: 40 }).notNull().default("EVIDENCIA"),
+    description: text("description").notNull().default(""),
     sizeBytes: numeric("size_bytes", { precision: 12, scale: 0 }).notNull(),
     uploadedBy: uuid("uploaded_by").references(() => users.id, {
       onDelete: "set null",

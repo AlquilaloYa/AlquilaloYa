@@ -72,7 +72,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-> Las migraciones generadas por Drizzle se copian manualmente a `supabase/migrations/` cuando se aplican vía Supabase. En desarrollo local se aplican con `pnpm db:migrate`.
+> Las migraciones generadas por Drizzle se copian manualmente a `supabase/migrations/`, que es la fuente de verdad al aplicar en la base de datos gestionada por Supabase. Nota: `pnpm db:migrate` (drizzle-kit) está **fuera de uso** porque el historial `drizzle.__drizzle_migrations` quedó desincronizado; aplica las migraciones desde `supabase/migrations/`.
 
 ## Comandos útiles
 
