@@ -798,33 +798,47 @@ export async function PATCH(
       if (estimatedCost !== null) update.estimatedCost = estimatedCost;
       if (estimatedMinutes !== null) update.estimatedMinutes = estimatedMinutes;
       if (actualCost !== null) update.actualCost = actualCost;
+      if (nextStatus === "DIAGNOSIS" && !current.workStartedAt) {
+        update.workStartedAt = now;
+      }
       if (nextStatus === "COMPLETED") {
-        const workVisits = await tx
-          .select({
-            arrivedAt: schema.workOrderVisits.arrivedAt,
-            completedAt: schema.workOrderVisits.completedAt,
-          })
-          .from(schema.workOrderVisits)
-          .where(
-            and(
-              eq(schema.workOrderVisits.workOrderId, params.id),
-              eq(schema.workOrderVisits.isCustomerAppointment, false),
-            ),
-          );
-        const elapsedMinutes = workVisits.reduce((total, visit) => {
-          if (!visit.arrivedAt) return total;
-          const endedAt = visit.completedAt ?? now;
-          return (
-            total +
+        if (current.workStartedAt) {
+          update.actualMinutes = String(
             Math.max(
               0,
               Math.round(
-                (endedAt.getTime() - visit.arrivedAt.getTime()) / 60000,
+                (now.getTime() - current.workStartedAt.getTime()) / 60000,
               ),
-            )
+            ),
           );
-        }, 0);
-        update.actualMinutes = String(elapsedMinutes);
+        } else {
+          const workVisits = await tx
+            .select({
+              arrivedAt: schema.workOrderVisits.arrivedAt,
+              completedAt: schema.workOrderVisits.completedAt,
+            })
+            .from(schema.workOrderVisits)
+            .where(
+              and(
+                eq(schema.workOrderVisits.workOrderId, params.id),
+                eq(schema.workOrderVisits.isCustomerAppointment, false),
+              ),
+            );
+          const elapsedMinutes = workVisits.reduce((total, visit) => {
+            if (!visit.arrivedAt) return total;
+            const endedAt = visit.completedAt ?? now;
+            return (
+              total +
+              Math.max(
+                0,
+                Math.round(
+                  (endedAt.getTime() - visit.arrivedAt.getTime()) / 60000,
+                ),
+              )
+            );
+          }, 0);
+          update.actualMinutes = String(elapsedMinutes);
+        }
       } else if (actualMinutes !== null) {
         update.actualMinutes = actualMinutes;
       }

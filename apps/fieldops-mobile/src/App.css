@@ -684,6 +684,11 @@ body {
   color: #4b5563;
 }
 
+.chip-grey.ticker-over {
+  background: #fde8e8;
+  color: #b42318;
+}
+
 .schedule-row {
   display: flex;
   align-items: center;

@@ -98,6 +98,7 @@ function mapTask(order, materials = []) {
     assignedEmployeeId: order.assignedEmployeeId || '',
     targetAt: order.targetAt || '',
     updatedAt: order.updatedAt || '',
+    workStartedAt: order.workStartedAt || '',
     estimatedMinutes: Number(order.estimatedMinutes) || 0,
     actualMinutes: Number(order.actualMinutes) || 0,
     completedAt: order.completedAt || '',

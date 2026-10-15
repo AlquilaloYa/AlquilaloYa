@@ -71,6 +71,15 @@ function formatDateTime(value) {
   })
 }
 
+function formatClock(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  const pad = (value) => String(value).padStart(2, '0')
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`
+}
+
 function currentTimestamp() {
   const now = new Date()
   return {
@@ -164,11 +173,10 @@ function App() {
   const [diagnosisDraft, setDiagnosisDraft] = useState('')
   const [causeDraft, setCauseDraft] = useState('')
   const [canResolveToday, setCanResolveToday] = useState(true)
-  const [materialDraft, setMaterialDraft] = useState({ name: '', quantity: '', unit: 'und', unitCost: '' })
+  const [materialDraft, setMaterialDraft] = useState({ name: '', quantity: '' })
   const [materialsConfirmed, setMaterialsConfirmed] = useState(false)
-  const [estimatedCostDraft, setEstimatedCostDraft] = useState('')
-  const [actualCostDraft, setActualCostDraft] = useState('')
   const [estimatedMinutesDraft, setEstimatedMinutesDraft] = useState('')
+  const [clockNow, setClockNow] = useState(() => Date.now())
   const [resolutionDraft, setResolutionDraft] = useState('')
   const [observationsDraft, setObservationsDraft] = useState('')
   const [evidenceKind, setEvidenceKind] = useState('FOTO FINAL')
@@ -229,11 +237,28 @@ function App() {
     completedFlowStatuses.includes(selectedTask?.status),
     ['IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE', 'COMPLETED'].includes(selectedTask?.status),
   ]
+  const workStartedAtMs = selectedTask?.workStartedAt ? new Date(selectedTask.workStartedAt).getTime() : 0
+  const completedAtMs = selectedTask?.completedAt ? new Date(selectedTask.completedAt).getTime() : 0
+  const isWorkTimerRunning = Boolean(workStartedAtMs) && selectedTask?.status !== 'COMPLETED'
+  const workTimerEndMs = isWorkTimerRunning ? clockNow : completedAtMs || clockNow
+  const elapsedWorkMs = workStartedAtMs ? Math.max(0, workTimerEndMs - workStartedAtMs) : 0
+  const elapsedWorkLabel = workStartedAtMs ? formatClock(elapsedWorkMs) : ''
+  const estimatedWorkMs = (selectedTask?.estimatedMinutes || 0) * 60000
+  const isOverEstimate = estimatedWorkMs > 0 && elapsedWorkMs > estimatedWorkMs
   const actualElapsedMinutes = selectedTask?.actualMinutes
     ? `${Math.floor(selectedTask.actualMinutes / 60)}h ${selectedTask.actualMinutes % 60}m`
-    : currentVisit?.arrivedAt
-      ? 'En curso'
-      : 'Aún no iniciado'
+    : elapsedWorkLabel
+      ? elapsedWorkLabel
+      : currentVisit?.arrivedAt
+        ? 'En curso'
+        : 'Aún no iniciado'
+
+  useEffect(() => {
+    if (!selectedTask?.workStartedAt || selectedTask.status === 'COMPLETED') return undefined
+    setClockNow(Date.now())
+    const interval = setInterval(() => setClockNow(Date.now()), 1000)
+    return () => clearInterval(interval)
+  }, [selectedTask?.workStartedAt, selectedTask?.status])
 
   useEffect(() => {
     tasksRef.current = tasks
@@ -465,8 +490,6 @@ function App() {
     if (updatedTask.cause !== originalTask.cause) changes.cause = updatedTask.cause
     if (updatedTask.resolution !== originalTask.resolution) changes.resolution = updatedTask.resolution
     if (updatedTask.observations !== originalTask.observations) changes.observations = updatedTask.observations
-    if (updatedTask.estimatedCost !== originalTask.estimatedCost) changes.estimatedCost = updatedTask.estimatedCost
-    if (updatedTask.actualCost !== originalTask.actualCost) changes.actualCost = updatedTask.actualCost
     if (updatedTask.estimatedMinutes !== originalTask.estimatedMinutes) changes.estimatedMinutes = updatedTask.estimatedMinutes
     if (updatedTask.actualMinutes !== originalTask.actualMinutes) changes.actualMinutes = updatedTask.actualMinutes
     if (updatedTask.materialsConfirmed !== originalTask.materialsConfirmed) changes.materialsConfirmed = updatedTask.materialsConfirmed
@@ -546,8 +569,6 @@ function App() {
     setCauseDraft(task.cause)
     setCanResolveToday(task.canResolveToday)
     setMaterialsConfirmed(task.materialsConfirmed)
-    setEstimatedCostDraft(task.estimatedCost)
-    setActualCostDraft(task.actualCost)
     setEstimatedMinutesDraft(String(task.estimatedMinutes || ''))
     setResolutionDraft(task.resolution)
     setObservationsDraft(task.observations)
@@ -726,19 +747,19 @@ function App() {
 
   async function addMaterial(event) {
     event.preventDefault()
-    if (!materialDraft.name.trim() || !materialDraft.quantity || !materialDraft.unitCost) return
+    if (!materialDraft.name.trim() || !materialDraft.quantity) return
     const material = { ...materialDraft, name: materialDraft.name.trim() }
     setIsLoading(true)
     try {
       await fieldopsApi.addMaterial(selectedTask.id, {
         material: material.name,
         quantity: material.quantity,
-        unit: material.unit,
-        unitCost: material.unitCost,
+        unit: 'und',
+        unitCost: '0',
         observations: '',
       })
       await reloadOrders()
-      setMaterialDraft({ name: '', quantity: '', unit: 'und', unitCost: '' })
+      setMaterialDraft({ name: '', quantity: '' })
       setMaterialsConfirmed(true)
       setStorageWarning('')
     } catch (error) {
@@ -757,13 +778,11 @@ function App() {
 
   async function saveEstimate(event) {
     event.preventDefault()
-    if (!(selectedTask.materials.length || materialsConfirmed) || !estimatedCostDraft || !estimatedMinutesDraft || !['DIAGNOSIS', 'ESTIMATED', 'IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE'].includes(selectedTask.status)) return
+    if (!(selectedTask.materials.length || materialsConfirmed) || !estimatedMinutesDraft || !['DIAGNOSIS', 'ESTIMATED', 'IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE'].includes(selectedTask.status)) return
     const eventTime = currentTimeLabel()
     if (await updateTask(selectedTask.id, (task) =>
-      addEvent(task, 'Registró estimación de costo y tiempo', {
+      addEvent(task, 'Registró tiempo estimado', {
         status: ['IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE'].includes(task.status) ? task.status : 'ESTIMATED',
-        estimatedCost: estimatedCostDraft,
-        actualCost: actualCostDraft,
         estimatedMinutes: Number(estimatedMinutesDraft) || 0,
         materialsConfirmed,
       }, eventTime),
@@ -1038,9 +1057,9 @@ function App() {
           <div className="order-code">{selectedTask.code} · {selectedTask.priority}</div>
           <h1>{selectedTask.title}</h1>
           <p>{selectedTask.description}</p>
-          <div className="order-meta"><span>⌖ {selectedTask.location}</span><span>Residente: {selectedTask.resident}</span><span>Responsable actual: {selectedTask.responsible}</span><span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
+          <div className="order-meta"><span>⌖ {selectedTask.location}</span><span>Residente: {selectedTask.resident}</span><span>Responsable actual: {selectedTask.responsible}</span>{elapsedWorkLabel && <span className={`chip chip-grey${isOverEstimate ? ' ticker-over' : ''}`}>⏱ {elapsedWorkLabel}</span>}<span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
         </div>
-        {isCompleted && <section className="workflow-card closed-summary"><div className="complete-badge">✓ Tarea finalizada</div><p>Esta orden está bloqueada para edición tras el cierre. Cualquier cambio posterior deberá registrarse como corrección auditada.</p><div className="summary-box"><div><span>Diagnóstico</span><strong>{selectedTask.diagnosis}</strong></div><div><span>Resolución</span><strong>{selectedTask.resolution}</strong></div><div><span>Costo estimado</span><strong>S/ {selectedTask.estimatedCost || '—'}</strong></div><div><span>Costo real</span><strong>S/ {selectedTask.actualCost || '—'}</strong></div><div><span>Tiempo real</span><strong>{actualElapsedMinutes}</strong></div><div><span>Cierre</span><strong>{formatDateTime(selectedTask.completedAt)}</strong></div></div></section>}
+        {isCompleted && <section className="workflow-card closed-summary"><div className="complete-badge">✓ Tarea finalizada</div><p>Esta orden está bloqueada para edición tras el cierre. Cualquier cambio posterior deberá registrarse como corrección auditada.</p><div className="summary-box"><div><span>Diagnóstico</span><strong>{selectedTask.diagnosis}</strong></div><div><span>Resolución</span><strong>{selectedTask.resolution}</strong></div><div><span>Tiempo estimado</span><strong>{selectedTask.estimatedMinutes ? `${selectedTask.estimatedMinutes} min` : '—'}</strong></div><div><span>Tiempo real</span><strong>{actualElapsedMinutes}</strong></div><div><span>Cierre</span><strong>{formatDateTime(selectedTask.completedAt)}</strong></div></div></section>}
         {isHandedOff && <section className="workflow-card closed-summary"><div className="complete-badge">↗ Orden subasignada</div><p>La orden ahora está a cargo de {selectedTask.responsible}. Ya no aparece como editable para Pedro; el cambio y su motivo quedan en auditoría.</p></section>}
         <div className="workflow-strip">
           {workflowSteps.map((step, index) => <button key={step} type="button" disabled={!canOpenWorkflowStep[index]} className={`${index === workflowStep ? 'selected' : ''} ${index < workflowStep ? 'done' : ''}`} onClick={() => setWorkflowStep(index)}><span>{index < workflowStep ? '✓' : index + 1}</span>{step}</button>)}
@@ -1164,17 +1183,17 @@ function App() {
         )}
         {workflowStep === 4 && (
           <section className="workflow-card">
-            <div className="section-heading"><h2>Materiales, costos y tiempo</h2><span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
+            <div className="section-heading"><h2>Materiales y tiempo</h2><span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
             <form className="form-card" onSubmit={addMaterial}>
               <h3>Materiales requeridos</h3>
-              <div className="form-grid"><label>Material<input required value={materialDraft.name} onChange={(event) => setMaterialDraft({ ...materialDraft, name: event.target.value })} placeholder="Ej. Tubo PVC" /></label><label>Cantidad<input required value={materialDraft.quantity} onChange={(event) => setMaterialDraft({ ...materialDraft, quantity: event.target.value })} placeholder="2" /></label><label>Unidad<input value={materialDraft.unit} onChange={(event) => setMaterialDraft({ ...materialDraft, unit: event.target.value })} placeholder="m, und..." /></label><label>Costo unitario (S/)<input type="number" min="0" step="0.01" required value={materialDraft.unitCost} onChange={(event) => setMaterialDraft({ ...materialDraft, unitCost: event.target.value })} /></label></div>
+              <div className="form-grid"><label>Material<input required value={materialDraft.name} onChange={(event) => setMaterialDraft({ ...materialDraft, name: event.target.value })} placeholder="Ej. Tubo PVC" /></label><label>Cantidad<input required value={materialDraft.quantity} onChange={(event) => setMaterialDraft({ ...materialDraft, quantity: event.target.value })} placeholder="2" /></label></div>
               <button type="submit" className="ghost-btn">+ Agregar material</button>
             </form>
             {!selectedTask.materials.length && <label className="no-materials-control"><input type="checkbox" checked={materialsConfirmed} onChange={confirmNoMaterials} />No se requieren materiales para esta orden</label>}
-            {selectedTask.materials.map((material, index) => <div className="material-row" key={`${material.name}-${index}`}><span>{material.name} · {material.quantity} {material.unit}</span><strong>S/ {(Number(material.quantity) * Number(material.unitCost)).toFixed(2)}</strong></div>)}
+            {selectedTask.materials.map((material, index) => <div className="material-row" key={`${material.name}-${index}`}><span>{material.name}</span><strong>{material.quantity}</strong></div>)}
             <form className="form-card" onSubmit={saveEstimate}>
-              <div className="form-grid"><label>Costo estimado (S/)<input type="number" min="0" step="0.01" required value={estimatedCostDraft} onChange={(event) => setEstimatedCostDraft(event.target.value)} /></label><label>Costo real actual (S/)<input type="number" min="0" step="0.01" value={actualCostDraft} onChange={(event) => setActualCostDraft(event.target.value)} /></label><label>Tiempo estimado (min)<input type="number" min="1" required value={estimatedMinutesDraft} onChange={(event) => setEstimatedMinutesDraft(event.target.value)} /></label><div className="time-readout"><span>Tiempo real</span><strong>{actualElapsedMinutes}</strong><small>Se calcula desde los eventos de llegada y cierre.</small></div></div>
-              <p className="prototype-note">La estimación y el costo real se mantienen en campos separados.</p>
+              <div className="form-grid"><label>Tiempo estimado (min)<input type="number" min="1" required value={estimatedMinutesDraft} onChange={(event) => setEstimatedMinutesDraft(event.target.value)} /></label><div className="time-readout"><span>Tiempo real (cronómetro)</span><strong>{elapsedWorkLabel || (currentVisit?.arrivedAt ? 'En curso' : 'Se inicia en el diagnóstico')}</strong><small>{selectedTask.estimatedMinutes > 0 ? `Objetivo: ${selectedTask.estimatedMinutes} min${isOverEstimate ? ' · excedido' : ''}` : 'Define el tiempo estimado para comparar'}</small></div></div>
+              <p className="prototype-note">El cronómetro inicia automáticamente al registrar el diagnóstico y compara el tiempo real con el tiempo estimado.</p>
               <button type="submit" className="primary-btn" disabled={!(selectedTask.materials.length || materialsConfirmed)}>Guardar estimación</button>
               {!(selectedTask.materials.length || materialsConfirmed) && <p className="disabled-hint">Agrega materiales o confirma que no se requieren.</p>}
             </form>
