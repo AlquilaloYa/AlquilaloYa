@@ -835,10 +835,7 @@ export async function PATCH(
         .where(
           and(
             eq(schema.workOrders.id, params.id),
-            eq(
-              sql`date_trunc('milliseconds', ${schema.workOrders.updatedAt})`,
-              current.updatedAt,
-            ),
+            sql`date_trunc('milliseconds', ${schema.workOrders.updatedAt}) = ${current.updatedAt.toISOString()}::timestamptz`,
           ),
         )
         .returning({ id: schema.workOrders.id });
