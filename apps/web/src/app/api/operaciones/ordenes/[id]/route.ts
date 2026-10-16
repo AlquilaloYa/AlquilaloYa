@@ -1,5 +1,15 @@
 ﻿import { NextResponse } from "next/server";
-import { and, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
 import { createSignedObjectUrl, deleteObject } from "@/lib/storage";
@@ -153,40 +163,46 @@ export async function GET(
       }
     }
 
-    const [events, visits, assignments, attachments] = await Promise.all([
-      db
-        .select()
-        .from(schema.workOrderEvents)
-        .where(eq(schema.workOrderEvents.workOrderId, params.id))
-        .orderBy(desc(schema.workOrderEvents.createdAt)),
-      db
-        .select()
-        .from(schema.workOrderVisits)
-        .where(eq(schema.workOrderVisits.workOrderId, params.id))
-        .orderBy(desc(schema.workOrderVisits.visitNumber)),
-      db
-        .select({
-          id: schema.workOrderAssignments.id,
-          employeeId: schema.workOrderAssignments.employeeId,
-          assignedAt: schema.workOrderAssignments.assignedAt,
-          endedAt: schema.workOrderAssignments.endedAt,
-          note: schema.workOrderAssignments.note,
-          name: schema.hrEmployees.nombres,
-          surname: schema.hrEmployees.apellidos,
-        })
-        .from(schema.workOrderAssignments)
-        .leftJoin(
-          schema.hrEmployees,
-          eq(schema.workOrderAssignments.employeeId, schema.hrEmployees.id),
-        )
-        .where(eq(schema.workOrderAssignments.workOrderId, params.id))
-        .orderBy(desc(schema.workOrderAssignments.assignedAt)),
-      db
-        .select()
-        .from(schema.workOrderAttachments)
-        .where(eq(schema.workOrderAttachments.workOrderId, params.id))
-        .orderBy(desc(schema.workOrderAttachments.createdAt)),
-    ]);
+    const [events, visits, assignments, attachments, materials] =
+      await Promise.all([
+        db
+          .select()
+          .from(schema.workOrderEvents)
+          .where(eq(schema.workOrderEvents.workOrderId, params.id))
+          .orderBy(desc(schema.workOrderEvents.createdAt)),
+        db
+          .select()
+          .from(schema.workOrderVisits)
+          .where(eq(schema.workOrderVisits.workOrderId, params.id))
+          .orderBy(desc(schema.workOrderVisits.visitNumber)),
+        db
+          .select({
+            id: schema.workOrderAssignments.id,
+            employeeId: schema.workOrderAssignments.employeeId,
+            assignedAt: schema.workOrderAssignments.assignedAt,
+            endedAt: schema.workOrderAssignments.endedAt,
+            note: schema.workOrderAssignments.note,
+            name: schema.hrEmployees.nombres,
+            surname: schema.hrEmployees.apellidos,
+          })
+          .from(schema.workOrderAssignments)
+          .leftJoin(
+            schema.hrEmployees,
+            eq(schema.workOrderAssignments.employeeId, schema.hrEmployees.id),
+          )
+          .where(eq(schema.workOrderAssignments.workOrderId, params.id))
+          .orderBy(desc(schema.workOrderAssignments.assignedAt)),
+        db
+          .select()
+          .from(schema.workOrderAttachments)
+          .where(eq(schema.workOrderAttachments.workOrderId, params.id))
+          .orderBy(desc(schema.workOrderAttachments.createdAt)),
+        db
+          .select()
+          .from(schema.workOrderMaterials)
+          .where(eq(schema.workOrderMaterials.workOrderId, params.id))
+          .orderBy(asc(schema.workOrderMaterials.createdAt)),
+      ]);
     const evidence = await Promise.all(
       attachments.map(async (attachment) => ({
         id: attachment.id,
@@ -212,6 +228,7 @@ export async function GET(
         name: [assignment.name, assignment.surname].filter(Boolean).join(" "),
       })),
       attachments: evidence,
+      materials,
     });
   } catch (error) {
     return NextResponse.json(

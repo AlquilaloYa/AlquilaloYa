@@ -20,6 +20,7 @@ import {
   ClipboardList,
   Clock3,
   MapPin,
+  Package,
   Plus,
   Search,
   ShieldCheck,
@@ -76,6 +77,7 @@ interface WorkOrder {
   targetAt: string | null;
   diagnosis: string;
   resolution: string;
+  materialsConfirmed: boolean;
   estimatedCost: string | null;
   actualCost: string | null;
   estimatedMinutes: string | null;
@@ -144,10 +146,22 @@ interface Visit {
   completedAt: string | null;
 }
 
+interface WorkOrderMaterial {
+  id: string;
+  material: string;
+  quantity: string;
+  unit: string;
+  unitCost: string;
+  totalCost: string;
+  observations: string;
+  createdAt: string;
+}
+
 interface OrderDetails extends WorkOrder {
   events: WorkEvent[];
   visits: Visit[];
   attachments: Evidence[];
+  materials: WorkOrderMaterial[];
   assignments: Array<{
     id: string;
     employeeId: string;
@@ -1737,6 +1751,51 @@ function OrderDrawer({
             <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">
               {order.description || "Sin descripción adicional."}
             </p>
+          </section>
+
+          <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Package className="h-4 w-4 text-blue-600" />
+              <h3 className="text-sm font-bold text-slate-900">
+                Productos y materiales solicitados
+              </h3>
+              {order.materials.length > 0 && (
+                <span className="ml-auto rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                  {order.materials.length}
+                </span>
+              )}
+            </div>
+            {order.materials.length > 0 ? (
+              <ul className="divide-y divide-slate-100">
+                {order.materials.map((material) => (
+                  <li
+                    key={material.id}
+                    className="flex items-center justify-between gap-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-800">
+                        {material.material}
+                      </p>
+                      {material.observations && (
+                        <p className="truncate text-xs text-slate-500">
+                          {material.observations}
+                        </p>
+                      )}
+                    </div>
+                    <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                      {material.quantity}
+                      {material.unit ? ` ${material.unit}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-slate-500">
+                {order.materialsConfirmed
+                  ? "El técnico confirmó que no se requieren productos."
+                  : "Todavía no se registraron productos solicitados."}
+              </p>
+            )}
           </section>
 
           <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
