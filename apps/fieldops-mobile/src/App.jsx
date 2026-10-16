@@ -176,6 +176,25 @@ function MicIcon() {
   )
 }
 
+function CameraIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14.5 4h-5L8 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-4l-1.5-2Z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  )
+}
+
+function GalleryIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="9" cy="9" r="1.6" />
+      <path d="m4 18 5-5 4 4 3-3 4 4" />
+    </svg>
+  )
+}
+
 function DictateButton({ supported, active, onClick, label }) {
   if (!supported) return null
   return (
@@ -335,6 +354,54 @@ function useDictation() {
   return { supported, activeField, start, stop }
 }
 
+function PhotoField({ multiple = false, value = [], onChange, disabled = false }) {
+  const cameraRef = useRef(null)
+  const galleryRef = useRef(null)
+  const files = Array.isArray(value) ? value : value ? [value] : []
+
+  function handlePicked(event) {
+    const picked = Array.from(event.target.files ?? [])
+    event.target.value = ''
+    if (!picked.length) return
+    if (multiple) {
+      onChange([...files, ...picked])
+    } else {
+      onChange([picked[0]])
+    }
+  }
+
+  function removeAt(index) {
+    onChange(files.filter((_, itemIndex) => itemIndex !== index))
+  }
+
+  return (
+    <div className="photo-field">
+      <div className="photo-actions">
+        <button type="button" className="photo-btn" disabled={disabled} onClick={() => cameraRef.current?.click()}>
+          <CameraIcon />
+          <span>Tomar foto</span>
+        </button>
+        <button type="button" className="photo-btn" disabled={disabled} onClick={() => galleryRef.current?.click()}>
+          <GalleryIcon />
+          <span>Elegir de galería</span>
+        </button>
+      </div>
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple={multiple} hidden onChange={handlePicked} />
+      <input ref={galleryRef} type="file" accept="image/jpeg,image/png,image/webp" multiple={multiple} hidden onChange={handlePicked} />
+      {files.length > 0 && (
+        <ul className="photo-file-list">
+          {files.map((file, index) => (
+            <li className="photo-file-item" key={`${file.name}-${index}`}>
+              <span>{file.name}</span>
+              <button type="button" className="photo-file-remove" onClick={() => removeAt(index)} aria-label={`Quitar ${file.name}`}>×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function App() {
   const [tasks, setTasks] = useState([])
   const tasksRef = useRef(tasks)
@@ -391,6 +458,8 @@ function App() {
   const [evidenceKind, setEvidenceKind] = useState('FOTO FINAL')
   const [evidenceDescription, setEvidenceDescription] = useState('')
   const [diagnosisPhotoNote, setDiagnosisPhotoNote] = useState('')
+  const [diagnosisPhotoFiles, setDiagnosisPhotoFiles] = useState([])
+  const [evidenceFile, setEvidenceFile] = useState(null)
   const dictation = useDictation()
   const [reassignTo, setReassignTo] = useState('')
   const [reassignReason, setReassignReason] = useState('')
@@ -1060,7 +1129,7 @@ function App() {
 
   async function addEvidence(event) {
     event.preventDefault()
-    const file = event.currentTarget.elements.namedItem('evidence-file')?.files?.[0]
+    const file = evidenceFile
     if (!file || !evidenceDescription.trim()) return
     if (selectedTask.status === 'COMPLETED') return
     setIsLoading(true)
@@ -1077,23 +1146,22 @@ function App() {
     } finally {
       setIsLoading(false)
     }
-    event.currentTarget.reset()
+    setEvidenceFile(null)
     setEvidenceDescription('')
   }
 
   async function addDiagnosisPhoto(event) {
     event.preventDefault()
-    const form = event.currentTarget
-    const files = Array.from(form.elements.namedItem('diagnosis-photo')?.files ?? [])
-    if (!files.length || selectedTask.status === 'COMPLETED') return
+    if (!diagnosisPhotoFiles.length || selectedTask.status === 'COMPLETED') return
     setIsLoading(true)
     try {
       const description = diagnosisPhotoNote.trim() || 'Desperfecto detectado en el diagnóstico'
-      for (const file of files) {
+      for (const file of diagnosisPhotoFiles) {
         await fieldopsApi.uploadEvidence(selectedTask.id, file, 'FOTO DIAGNÓSTICO', description)
       }
       await reloadOrders()
       setDiagnosisPhotoNote('')
+      setDiagnosisPhotoFiles([])
       setStorageWarning('')
     } catch (error) {
       setStorageWarning(error.message)
@@ -1101,7 +1169,6 @@ function App() {
     } finally {
       setIsLoading(false)
     }
-    form.reset()
   }
 
   async function completeTask() {
@@ -1472,9 +1539,9 @@ function App() {
                 </div>
               )}
               <form className="form-card secondary-form" onSubmit={addDiagnosisPhoto}>
-                <div className="form-grid"><label>Fotos del desperfecto<input name="diagnosis-photo" type="file" accept="image/jpeg,image/png,image/webp" multiple required /></label></div>
+                <PhotoField multiple value={diagnosisPhotoFiles} onChange={setDiagnosisPhotoFiles} disabled={selectedTask.status === 'COMPLETED'} />
                 <label>Descripción (opcional)<input value={diagnosisPhotoNote} onChange={(event) => setDiagnosisPhotoNote(event.target.value)} placeholder="Ej. Fuga en la tubería, golpe en la puerta" /></label>
-                <button type="submit" className="ghost-btn" disabled={selectedTask.status === 'COMPLETED'}>Adjuntar foto</button>
+                <button type="submit" className="ghost-btn" disabled={selectedTask.status === 'COMPLETED' || diagnosisPhotoFiles.length === 0}>Adjuntar foto</button>
               </form>
             </div>
             {!canResolveToday && <form className="form-card secondary-form" onSubmit={scheduleFollowUpVisit}><h3>Programar visita de seguimiento</h3><div className="form-grid"><label>Fecha de la nueva visita<input type="date" required value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} /></label><label>Hora<input type="time" required value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} /></label></div><label>Duración estimada (minutos)<input type="number" min="1" value={visitDuration} onChange={(event) => setVisitDuration(event.target.value)} /></label><label>Indicaciones para la visita<textarea rows="2" value={scheduleNote} onChange={(event) => setScheduleNote(event.target.value)} placeholder="Acceso, coordinación o materiales necesarios" /></label><button type="submit" className="ghost-btn" disabled={!['RESCHEDULED', 'DIAGNOSIS'].includes(selectedTask.status) || !followUpDate || !followUpTime || selectedTask.visits.some((visit) => toLocalDateTime(visit.scheduledAt) === `${followUpDate}T${followUpTime}`)}>Guardar nueva visita</button></form>}
@@ -1504,15 +1571,25 @@ function App() {
           <section className="workflow-card">
             <div className="section-heading"><h2>Resolución, evidencia y cierre</h2><span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
             <form className="form-card" onSubmit={saveResolution}>
-              <label>Resolución técnica<textarea required rows="4" value={resolutionDraft} onChange={(event) => setResolutionDraft(event.target.value)} placeholder="Qué se hizo, cómo quedó el problema y qué pruebas se realizaron" /></label>
-              <label>Observaciones<textarea rows="2" value={observationsDraft} onChange={(event) => setObservationsDraft(event.target.value)} placeholder="Notas adicionales de la visita" /></label>
+              <div className="field-block">
+                <label>Resolución técnica<textarea required rows="4" value={resolutionDraft} onChange={(event) => setResolutionDraft(event.target.value)} placeholder="Qué se hizo, cómo quedó el problema y qué pruebas se realizaron" /></label>
+                <DictateButton supported={dictation.supported} active={dictation.activeField === 'resolution'} onClick={() => dictation.start('resolution', (text) => setResolutionDraft((current) => (current ? `${current} ${text}` : text)))} />
+              </div>
+              <div className="field-block">
+                <label>Observaciones<textarea rows="2" value={observationsDraft} onChange={(event) => setObservationsDraft(event.target.value)} placeholder="Notas adicionales de la visita" /></label>
+                <DictateButton supported={dictation.supported} active={dictation.activeField === 'observations'} onClick={() => dictation.start('observations', (text) => setObservationsDraft((current) => (current ? `${current} ${text}` : text)))} />
+              </div>
               <button type="submit" className="primary-btn">Guardar resolución</button>
             </form>
             <form className="form-card secondary-form" onSubmit={addEvidence}>
               <h3>Evidencia vinculada a esta orden y visita</h3>
-              <div className="form-grid"><label>Tipo<select value={evidenceKind} onChange={(event) => setEvidenceKind(event.target.value)}><option>FOTO INICIAL</option><option>FOTO DIAGNÓSTICO</option><option>FOTO FINAL</option></select></label><label>Archivo<input name="evidence-file" type="file" accept="image/jpeg,image/png,image/webp" required /></label></div>
-              <label>Descripción de la evidencia<input required value={evidenceDescription} onChange={(event) => setEvidenceDescription(event.target.value)} placeholder="Ej. Conexión reparada y sin fugas" /></label>
-              <button type="submit" className="ghost-btn">Adjuntar evidencia</button>
+              <div className="form-grid"><label>Tipo<select value={evidenceKind} onChange={(event) => setEvidenceKind(event.target.value)}><option>FOTO INICIAL</option><option>FOTO DIAGNÓSTICO</option><option>FOTO FINAL</option></select></label></div>
+              <PhotoField value={evidenceFile} onChange={(files) => setEvidenceFile(files[0] ?? null)} disabled={selectedTask.status === 'COMPLETED'} />
+              <div className="field-block">
+                <label>Descripción de la evidencia<input required value={evidenceDescription} onChange={(event) => setEvidenceDescription(event.target.value)} placeholder="Ej. Conexión reparada y sin fugas" /></label>
+                <DictateButton supported={dictation.supported} active={dictation.activeField === 'evidence'} onClick={() => dictation.start('evidence', (text) => setEvidenceDescription((current) => (current ? `${current} ${text}` : text)))} />
+              </div>
+              <button type="submit" className="ghost-btn" disabled={selectedTask.status === 'COMPLETED' || !evidenceFile || !evidenceDescription.trim()}>Adjuntar evidencia</button>
             </form>
             {selectedTask.attachments.map((attachment, index) => <div className="material-row" key={`${attachment.name}-${index}`}><span>{attachment.kind} · {attachment.name}<small>{attachment.description}</small></span><strong>Adjunta</strong></div>)}
             <div className="completion-requirements"><strong>Validación para finalizar</strong>{checklist.map(([label, done]) => <span className={done ? 'requirement-done' : ''} key={label}>{done ? '✓' : '○'} {label}</span>)}</div>
