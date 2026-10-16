@@ -47,6 +47,7 @@ export async function GET(req: Request) {
         clienteNombre: schema.clients.nombres,
         clienteApellido: schema.clients.apellidos,
         departamentoNombre: schema.departments.nombre,
+        personaPago: schema.departments.personaPago,
       })
       .from(schema.contracts)
       .leftJoin(schema.clients, eq(schema.clients.id, schema.contracts.clienteId))

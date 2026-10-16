@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { X } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
@@ -39,7 +40,15 @@ type ContractRow = {
   fechaInicio: string;
   fechaFin: string;
   estado: string;
+  personaPago?: string | null;
 };
+
+const COBRADORES = ["miguel", "emely", "evelin", "evelyn"] as const;
+
+function esCobrador(persona: string | null | undefined): boolean {
+  const valor = (persona ?? "").trim().toLowerCase();
+  return COBRADORES.some((nombre) => valor.startsWith(nombre));
+}
 
 type ServicioExtraRow = {
   contractId: string;
@@ -302,6 +311,94 @@ function AbonoModal({
   );
 }
 
+type MoraGrupo = {
+  clienteId: string;
+  nombre: string;
+  total: number;
+  diasMora: number;
+  contratos: { codigoContrato: string; departamento: string; total: number }[];
+};
+
+function MoraModal({
+  grupos,
+  onClose,
+}: {
+  grupos: MoraGrupo[];
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-outline-variant/50 p-4">
+          <div>
+            <h3 className="font-headline-md text-on-surface">Clientes en mora</h3>
+            <p className="text-sm text-on-surface-variant">
+              {grupos.length} {grupos.length === 1 ? "cliente" : "clientes"} · cuota del
+              mes vencida
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="rounded p-1 text-on-surface-variant hover:bg-surface-container"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {grupos.length === 0 ? (
+            <p className="p-8 text-center text-sm text-on-surface-variant">
+              No hay clientes en mora.
+            </p>
+          ) : (
+            <ul className="divide-y divide-outline-variant/50">
+              {grupos.map((grupo) => (
+                <li key={grupo.clienteId} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <Link
+                      href={`/contratos/clientes/${grupo.clienteId}`}
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      {grupo.nombre}
+                    </Link>
+                    <span className="shrink-0 font-semibold text-destructive">
+                      {moneda(grupo.total)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-on-surface-variant">
+                    {grupo.diasMora} {grupo.diasMora === 1 ? "día" : "días"} de mora
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {grupo.contratos.map((contrato) => (
+                      <li
+                        key={contrato.codigoContrato}
+                        className="flex justify-between gap-2 text-xs text-on-surface-variant"
+                      >
+                        <span>
+                          {contrato.codigoContrato}
+                          {contrato.departamento ? ` · ${contrato.departamento}` : ""}
+                        </span>
+                        <span>{moneda(contrato.total)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PagosPage() {
   const [contracts, setContracts] = useState<ContractRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
@@ -310,6 +407,7 @@ export default function PagosPage() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
   const [busqueda, setBusqueda] = useState("");
   const [abono, setAbono] = useState<{ fila: CuotaFila; modo: AbonoModo } | null>(null);
+  const [mora, setMora] = useState(false);
   const [sortKey, setSortKey] = useState<"cuota" | "contrato" | "cliente" | "departamento" | "total" | "internet" | "luzEx" | "extras" | "estado" | "morosidad" | "penalidad" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
@@ -529,6 +627,47 @@ export default function PagosPage() {
     return { recaudado, vencido, penalidades, morosos };
   }, [filas, payments]);
 
+  const gananciasEsperadas = useMemo(
+    () =>
+      filas
+        .filter(
+          (f) =>
+            f.estadoPago !== "FINALIZADO" &&
+            esCobrador(f.contrato.personaPago) &&
+            f.periodoFecha.getTime() >=
+              parseLocalDate(f.contrato.fechaInicio).getTime()
+        )
+        .reduce((s, f) => s + Number(f.contrato.montoCanonMensual ?? 0), 0),
+    [filas]
+  );
+
+  const moraGrupos = useMemo<MoraGrupo[]>(() => {
+    const map = new Map<string, MoraGrupo>();
+    for (const f of filas) {
+      if (f.estadoPago !== "VENCIDO") continue;
+      const clienteId = f.contrato.clienteId;
+      const grupo = map.get(clienteId) ?? {
+        clienteId,
+        nombre:
+          [f.contrato.clienteNombre, f.contrato.apellidoCliente]
+            .filter(Boolean)
+            .join(" ") || "Cliente sin nombre",
+        total: 0,
+        diasMora: 0,
+        contratos: [],
+      };
+      grupo.total += f.total;
+      grupo.diasMora = Math.max(grupo.diasMora, f.diasMora);
+      grupo.contratos.push({
+        codigoContrato: f.contrato.codigoContrato,
+        departamento: f.contrato.departamentoNombre,
+        total: f.total,
+      });
+      map.set(clienteId, grupo);
+    }
+    return [...map.values()].sort((a, b) => b.total - a.total);
+  }, [filas]);
+
   const ESTADO_META: Record<string, { label: string; cls: string }> = {
     PAGADO: { label: "Pagado", cls: "bg-emerald-600" },
     PARCIAL: { label: "Parcial", cls: "bg-amber-500" },
@@ -542,7 +681,7 @@ export default function PagosPage() {
       <div className="space-y-6">
         <h1 className="font-headline-lg text-on-surface">Cobranza</h1>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
             <div className="text-xs uppercase tracking-wider text-on-surface-variant">
               Recaudado del mes
@@ -567,12 +706,30 @@ export default function PagosPage() {
               {moneda(resumen.penalidades)}
             </div>
           </div>
-          <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
-            <div className="text-xs uppercase tracking-wider text-on-surface-variant">
-              Clientes en mora
+          <button
+            type="button"
+            onClick={() => setMora(true)}
+            className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4 text-left transition-colors hover:border-destructive/50 hover:bg-surface-container"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs uppercase tracking-wider text-on-surface-variant">
+                Clientes en mora
+              </span>
+              <span className="text-xs font-medium text-primary">Ver detalle</span>
             </div>
             <div className="mt-1 font-headline-md text-on-surface">
-              {resumen.morosos}
+              {moraGrupos.length}
+            </div>
+          </button>
+          <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
+            <div className="text-xs uppercase tracking-wider text-on-surface-variant">
+              Ganancias esperadas
+            </div>
+            <div className="mt-1 font-headline-md text-emerald-600">
+              {moneda(gananciasEsperadas)}
+            </div>
+            <div className="mt-0.5 text-xs text-on-surface-variant">
+              Canon del mes · Miguel, Emely y Evelyn
             </div>
           </div>
         </div>
@@ -779,6 +936,10 @@ export default function PagosPage() {
               void load();
             }}
           />
+        ) : null}
+
+        {mora ? (
+          <MoraModal grupos={moraGrupos} onClose={() => setMora(false)} />
         ) : null}
       </div>
     </DashboardShell>
