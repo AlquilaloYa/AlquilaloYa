@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
-import { Check, RefreshCw, X } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 
 interface DisponibilidadDepartment {
   id: string;
@@ -31,9 +31,11 @@ function TarjetaDisponible({ dept }: { dept: DisponibilidadDepartment }) {
     <Link
       href={`/disponibilidad/${encodeURIComponent(dept.codigo)}`}
       title="Ver propiedad"
-      className="flex items-center justify-center rounded-xl border border-green-600/20 bg-green-500/10 border-l-4 border-l-green-600 p-4 transition-colors hover:bg-green-500/15"
+      className="flex min-w-0 items-center justify-center rounded-xl border border-green-600/20 bg-green-500/10 border-l-4 border-l-green-600 p-2 transition-colors hover:bg-green-500/15 sm:p-4"
     >
-      <span className="font-mono-label text-base font-bold text-green-700 dark:text-green-500">{dept.codigo}</span>
+      <span className="break-words text-center font-mono-label text-sm font-bold text-green-700 sm:text-base dark:text-green-500">
+        {dept.codigo}
+      </span>
     </Link>
   );
 }
@@ -43,9 +45,11 @@ function TarjetaOcupada({ dept }: { dept: DisponibilidadDepartment }) {
     <Link
       href={`/disponibilidad/${encodeURIComponent(dept.codigo)}`}
       title="Ver propiedad"
-      className="flex items-center justify-center rounded-xl border border-red-600/20 bg-red-500/10 border-l-4 border-l-red-600 p-4 transition-colors hover:bg-red-500/15"
+      className="flex min-w-0 items-center justify-center rounded-xl border border-red-600/20 bg-red-500/10 border-l-4 border-l-red-600 p-2 transition-colors hover:bg-red-500/15 sm:p-4"
     >
-      <span className="font-mono-label text-base font-bold text-red-700 dark:text-red-500">{dept.codigo}</span>
+      <span className="break-words text-center font-mono-label text-sm font-bold text-red-700 sm:text-base dark:text-red-500">
+        {dept.codigo}
+      </span>
     </Link>
   );
 }
@@ -53,86 +57,41 @@ function TarjetaOcupada({ dept }: { dept: DisponibilidadDepartment }) {
 function TarjetaMantenimiento({
   dept,
   onOpen,
-  onDisponible,
-  guardando,
 }: {
   dept: DisponibilidadDepartment;
   onOpen: () => void;
-  onDisponible: () => void;
-  guardando: boolean;
 }) {
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={onOpen}
-        title="Cambiar estado"
-        className="flex w-full items-center justify-center rounded-xl border border-blue-600/20 bg-blue-500/10 border-l-4 border-l-blue-600 p-4 transition-colors hover:bg-blue-500/15"
-      >
-        <span className="font-mono-label text-base font-bold text-blue-700 dark:text-blue-500">{dept.codigo}</span>
-      </button>
-      <BotonDisponibleRapido
-        codigo={dept.codigo}
-        onClick={onDisponible}
-        guardando={guardando}
-        className="text-blue-700 dark:text-blue-500 hover:bg-blue-500/20"
-      />
-    </div>
+    <button
+      type="button"
+      onClick={onOpen}
+      title="Cambiar estado"
+      className="flex min-w-0 items-center justify-center rounded-xl border border-blue-600/20 bg-blue-500/10 border-l-4 border-l-blue-600 p-2 transition-colors hover:bg-blue-500/15 sm:p-4"
+    >
+      <span className="break-words text-center font-mono-label text-sm font-bold text-blue-700 sm:text-base dark:text-blue-500">
+        {dept.codigo}
+      </span>
+    </button>
   );
 }
 
 function TarjetaBloqueada({
   dept,
   onOpen,
-  onDisponible,
-  guardando,
 }: {
   dept: DisponibilidadDepartment;
   onOpen: () => void;
-  onDisponible: () => void;
-  guardando: boolean;
-}) {
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={onOpen}
-        title="Cambiar estado"
-        className="flex w-full items-center justify-center rounded-xl border border-black bg-black border-l-4 p-4 transition-colors hover:opacity-90"
-      >
-        <span className="font-mono-label text-base font-bold text-white">{dept.codigo}</span>
-      </button>
-      <BotonDisponibleRapido
-        codigo={dept.codigo}
-        onClick={onDisponible}
-        guardando={guardando}
-        className="text-white hover:bg-white/20"
-      />
-    </div>
-  );
-}
-
-function BotonDisponibleRapido({
-  codigo,
-  onClick,
-  guardando,
-  className,
-}: {
-  codigo: string;
-  onClick: () => void;
-  guardando: boolean;
-  className?: string;
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      disabled={guardando}
-      title={`Marcar ${codigo} como disponible`}
-      aria-label={`Marcar ${codigo} como disponible`}
-      className={`absolute bottom-1.5 right-1.5 flex size-7 items-center justify-center rounded-md border border-current/30 bg-white/20 text-xs transition-colors hover:bg-white/40 disabled:opacity-60 ${className ?? ""}`}
+      onClick={onOpen}
+      title="Cambiar estado"
+      className="flex min-w-0 items-center justify-center rounded-xl border border-black bg-black border-l-4 p-2 transition-colors hover:opacity-90 sm:p-4"
     >
-      <Check aria-hidden className="size-4" strokeWidth={3} />
+      <span className="break-words text-center font-mono-label text-sm font-bold text-white sm:text-base">
+        {dept.codigo}
+      </span>
     </button>
   );
 }
@@ -264,21 +223,15 @@ function GrupoDepartamentos({
   titulo,
   departamentos,
   onAbrirCambio,
-  onMarcarDisponible,
-  guardandoId,
 }: {
   titulo: string;
   departamentos: DisponibilidadDepartment[];
   onAbrirCambio: (dept: DisponibilidadDepartment) => void;
-  onMarcarDisponible: (dept: DisponibilidadDepartment) => void;
-  guardandoId: string | null;
 }) {
   const disponibles = departamentos.filter((d) => !d.disponibilidad && !d.enMantenimiento && !d.bloqueado);
   const mantenimiento = departamentos.filter((d) => !d.disponibilidad && d.enMantenimiento && !d.bloqueado);
   const bloqueados = departamentos.filter((d) => !d.disponibilidad && d.bloqueado);
   const ocupados = departamentos.filter((d) => d.disponibilidad);
-  const total = mantenimiento.length + disponibles.length + ocupados.length + bloqueados.length;
-  const columnas = Math.max(1, Math.ceil(total / 3));
 
   if (departamentos.length === 0) return null;
   return (
@@ -291,7 +244,7 @@ function GrupoDepartamentos({
           {bloqueados.length > 0 && ` · ${bloqueados.length} bloqueados`}
         </span>
       </h2>
-      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columnas}, minmax(0, 1fr))` }}>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2 sm:gap-3">
         {disponibles.map((dept) => (
           <TarjetaDisponible key={dept.id} dept={dept} />
         ))}
@@ -300,8 +253,6 @@ function GrupoDepartamentos({
             key={dept.id}
             dept={dept}
             onOpen={() => onAbrirCambio(dept)}
-            onDisponible={() => onMarcarDisponible(dept)}
-            guardando={guardandoId === dept.id}
           />
         ))}
         {bloqueados.map((dept) => (
@@ -309,8 +260,6 @@ function GrupoDepartamentos({
             key={dept.id}
             dept={dept}
             onOpen={() => onAbrirCambio(dept)}
-            onDisponible={() => onMarcarDisponible(dept)}
-            guardando={guardandoId === dept.id}
           />
         ))}
         {ocupados.map((dept) => (
@@ -326,8 +275,6 @@ export default function DisponibilidadPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [popupCambio, setPopupCambio] = useState<DisponibilidadDepartment | null>(null);
-  const [guardandoId, setGuardandoId] = useState<string | null>(null);
-  const [avisoRapido, setAvisoRapido] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -350,34 +297,6 @@ export default function DisponibilidadPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  // Atajo de las tarjetas de mantenimiento y bloqueados: marca la unidad como
-  // disponible sin abrir el popup. Requiere un estado manual explícito porque,
-  // si solo se limpiara el estado, el ERP volvería a inferir mantenimiento en
-  // los departamentos con contrato vencido.
-  const marcarDisponible = useCallback(
-    async (dept: DisponibilidadDepartment) => {
-      setGuardandoId(dept.id);
-      setAvisoRapido(null);
-      try {
-        const res = await apiFetch(`/api/departamentos/${dept.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ estadoManual: "DISPONIBLE" }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? `Error ${res.status}`);
-        }
-        await load();
-      } catch (e) {
-        setAvisoRapido(`${dept.codigo}: ${(e as Error).message}`);
-      } finally {
-        setGuardandoId(null);
-      }
-    },
-    [load]
-  );
 
   const { benavides, angamos } = useMemo(() => {
     const clave = (codigo: string): [number, string] => {
@@ -448,8 +367,6 @@ export default function DisponibilidadPage() {
 
         {error ? (
           <p className="text-sm text-red-600">{error}</p>
-        ) : avisoRapido ? (
-          <p className="text-sm text-red-600">{avisoRapido}</p>
         ) : loading ? (
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-surface-variant border-t-primary" />
@@ -461,15 +378,11 @@ export default function DisponibilidadPage() {
             titulo="Benavides 2195"
             departamentos={benavides}
             onAbrirCambio={setPopupCambio}
-            onMarcarDisponible={(dept) => void marcarDisponible(dept)}
-            guardandoId={guardandoId}
           />
           <GrupoDepartamentos
             titulo="Angamos 170"
             departamentos={angamos}
             onAbrirCambio={setPopupCambio}
-            onMarcarDisponible={(dept) => void marcarDisponible(dept)}
-            guardandoId={guardandoId}
           />
           </div>
         )}
