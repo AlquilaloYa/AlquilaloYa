@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
+import { LocalNotifications } from '@capacitor/local-notifications'
 import { PushNotifications } from '@capacitor/push-notifications'
 import { fieldopsApi } from './fieldops-api'
 import './App.css'
@@ -181,6 +182,7 @@ function App() {
   const [observationsDraft, setObservationsDraft] = useState('')
   const [evidenceKind, setEvidenceKind] = useState('FOTO FINAL')
   const [evidenceDescription, setEvidenceDescription] = useState('')
+  const [diagnosisPhotoNote, setDiagnosisPhotoNote] = useState('')
   const [reassignTo, setReassignTo] = useState('')
   const [reassignReason, setReassignReason] = useState('')
   const [showReassign, setShowReassign] = useState(false)
@@ -656,9 +658,33 @@ function App() {
       listeners.push(await PushNotifications.addListener('registrationError', handlePushError))
       listeners.push(await PushNotifications.addListener('pushNotificationReceived', (notification) => {
         void handleUrgentNotification(notification.data, false)
+        if (
+          notification.data?.type === 'urgent_work_order' &&
+          document.visibilityState === 'visible'
+        ) {
+          void LocalNotifications.schedule({
+            notifications: [
+              {
+                id: Math.floor(Date.now() % 2147483647),
+                title: notification.title || 'Nueva tarea urgente',
+                body: notification.body || 'Tienes una orden urgente asignada',
+                channelId: 'fieldops-urgent',
+                smallIcon: 'ic_stat_notify',
+                sound: 'default',
+                extra: {
+                  type: 'urgent_work_order',
+                  workOrderId: notification.data?.workOrderId,
+                },
+              },
+            ],
+          }).catch(handlePushError)
+        }
       }))
       listeners.push(await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
         void handleUrgentNotification(notification.data, true)
+      }))
+      listeners.push(await LocalNotifications.addListener('localNotificationActionPerformed', ({ notification }) => {
+        void handleUrgentNotification(notification.extra, true)
       }))
 
       await PushNotifications.createChannel({
@@ -678,6 +704,7 @@ function App() {
         throw new Error('Permite las notificaciones en Android para recibir tareas urgentes.')
       }
       await PushNotifications.register()
+      await LocalNotifications.requestPermissions().catch(() => undefined)
     }
 
     void setupPush().catch(handlePushError)
@@ -831,6 +858,26 @@ function App() {
     setEvidenceDescription('')
   }
 
+  async function addDiagnosisPhoto(event) {
+    event.preventDefault()
+    const form = event.currentTarget
+    const file = form.elements.namedItem('diagnosis-photo')?.files?.[0]
+    if (!file || selectedTask.status === 'COMPLETED') return
+    setIsLoading(true)
+    try {
+      await fieldopsApi.uploadEvidence(selectedTask.id, file, 'FOTO DIAGNÓSTICO', diagnosisPhotoNote.trim() || 'Desperfecto detectado en el diagnóstico')
+      await reloadOrders()
+      setDiagnosisPhotoNote('')
+      setStorageWarning('')
+    } catch (error) {
+      setStorageWarning(error.message)
+      return
+    } finally {
+      setIsLoading(false)
+    }
+    form.reset()
+  }
+
   async function completeTask() {
     if (!selectedTask || selectedTask.status !== 'PENDING_CLOSURE' || (customerAppointmentRequested && !(selectedTask.customerAppointments?.length)) || !selectedTask.diagnosis || !(selectedTask.materials.length || selectedTask.materialsConfirmed) || !selectedTask.estimatedMinutes || !selectedTask.resolution || !isFinalPhotoAttached) return
     if (await updateTask(selectedTask.id, (task) => addEvent(task, 'Tarea finalizada', {
@@ -900,7 +947,7 @@ function App() {
         </div>
         <div className="task-card-footer">
           <span className="chip chip-grey">{formatStatus(task.status)}</span>
-          <button className="text-button" type="button" onClick={() => openTask(task)}>Abrir orden →</button>
+          <button className="text-button open-order-btn" type="button" onClick={() => openTask(task)}>Abrir orden <span aria-hidden="true">→</span></button>
         </div>
       </article>
     )
@@ -1051,6 +1098,7 @@ function App() {
       ['Foto final adjunta', Boolean(isFinalPhotoAttached)],
     ]
     const isCompleted = selectedTask.status === 'COMPLETED'
+    const diagnosisPhotos = selectedTask.attachments.filter((item) => item.kind === 'FOTO DIAGNÓSTICO')
     return (
       <main className={`order-detail-body ${isCompleted || isHandedOff ? 'read-only-order' : ''}`}>
         <div className="order-detail-heading">
@@ -1178,6 +1226,25 @@ function App() {
                 <button type="submit" className="primary-btn">Guardar diagnóstico</button>
               </form>
             )}
+            <div className="diagnosis-photos">
+              <h3>Fotos de los desperfectos</h3>
+              <p className="prototype-note">Adjunta fotos de los daños o desperfectos que observes durante el diagnóstico.</p>
+              {diagnosisPhotos.length > 0 && (
+                <div className="evidence-gallery" aria-label="Fotos de desperfectos del diagnóstico">
+                  {diagnosisPhotos.map((attachment) => (
+                    <button className="evidence-thumbnail" key={attachment.id} type="button" onClick={() => setPreviewAttachment(attachment)} aria-label={`Ver ${attachment.kind}: ${attachment.name}`}>
+                      <img src={attachment.url} alt={attachment.description || attachment.name} loading="lazy" />
+                      <span>{attachment.kind}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <form className="form-card secondary-form" onSubmit={addDiagnosisPhoto}>
+                <div className="form-grid"><label>Foto del desperfecto<input name="diagnosis-photo" type="file" accept="image/jpeg,image/png,image/webp" required /></label></div>
+                <label>Descripción (opcional)<input value={diagnosisPhotoNote} onChange={(event) => setDiagnosisPhotoNote(event.target.value)} placeholder="Ej. Fuga en la tubería, golpe en la puerta" /></label>
+                <button type="submit" className="ghost-btn" disabled={selectedTask.status === 'COMPLETED'}>Adjuntar foto</button>
+              </form>
+            </div>
             {!canResolveToday && <form className="form-card secondary-form" onSubmit={scheduleFollowUpVisit}><h3>Programar visita de seguimiento</h3><div className="form-grid"><label>Fecha de la nueva visita<input type="date" required value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} /></label><label>Hora<input type="time" required value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} /></label></div><label>Duración estimada (minutos)<input type="number" min="1" value={visitDuration} onChange={(event) => setVisitDuration(event.target.value)} /></label><label>Indicaciones para la visita<textarea rows="2" value={scheduleNote} onChange={(event) => setScheduleNote(event.target.value)} placeholder="Acceso, coordinación o materiales necesarios" /></label><button type="submit" className="ghost-btn" disabled={!['RESCHEDULED', 'DIAGNOSIS'].includes(selectedTask.status) || !followUpDate || !followUpTime || selectedTask.visits.some((visit) => toLocalDateTime(visit.scheduledAt) === `${followUpDate}T${followUpTime}`)}>Guardar nueva visita</button></form>}
           </section>
         )}
@@ -1267,7 +1334,7 @@ function App() {
           <div className="auth-orb" aria-hidden="true" />
           <header className="auth-brand"><img className="brand-logo" src="/logo-brand-cropped.png" alt="AlquilaYa" /></header>
           <main className="auth-content">
-            <p className="auth-eyebrow">{checkingSession ? 'FIELD OPERATIONS' : mfaRequired ? 'VERIFICACIÓN DE SEGURIDAD' : 'FIELD OPERATIONS'}</p>
+            <p className="auth-eyebrow">{checkingSession ? 'ALQUILAYA REPAIR' : mfaRequired ? 'VERIFICACIÓN DE SEGURIDAD' : 'ALQUILAYA REPAIR'}</p>
             <h1>{checkingSession ? 'Conectando' : mfaRequired ? 'Verifica tu identidad' : 'Iniciar sesión'}</h1>
             <p className="auth-subtitle">{checkingSession ? 'Conectando con tu cuenta del ERP…' : mfaRequired ? 'Ingresa el código de autenticación de tu cuenta.' : 'Accede con las credenciales de tu cuenta del ERP.'}</p>
             {!checkingSession && storageWarning && <div className="storage-warning auth-warning" role="alert">{storageWarning}</div>}

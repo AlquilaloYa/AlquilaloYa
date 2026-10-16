@@ -61,6 +61,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 14px;
   padding: 10px 18px;
   background: #ffffff;
   border-bottom: 1px solid rgba(13, 91, 61, 0.08);
@@ -82,6 +83,10 @@ body {
 
 .brand-block.compact {
   gap: 8px;
+}
+
+.brand-block.compact .brand-logo {
+  width: 88px;
 }
 
 .brand-logo {
@@ -243,6 +248,7 @@ body {
   height: 26px;
   border: 1px solid rgba(255, 255, 255, 0.65);
   border-radius: 50%;
+  color: #ffffff;
   font-size: 1.2rem;
   line-height: 1;
 }
@@ -298,10 +304,10 @@ body {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: linear-gradient(180deg, #ffffff, #f2f7f3);
-  color: #1f2937;
-  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, var(--brand-green-600), var(--brand-green-800));
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(19, 104, 69, 0.28);
   font-size: 22px;
   line-height: 1;
   cursor: pointer;
@@ -1516,6 +1522,31 @@ body {
   cursor: pointer;
 }
 
+.text-button.open-order-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--brand-green-600), var(--brand-green-800));
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(19, 104, 69, 0.22);
+}
+
+.diagnosis-photos {
+  margin-top: 20px;
+}
+
+.diagnosis-photos h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  color: #111827;
+}
+
+.diagnosis-photos .evidence-gallery {
+  margin: 12px 0;
+}
+
 .task-filters {
   justify-content: flex-start;
   overflow-x: auto;
@@ -1680,11 +1711,19 @@ body {
 }
 
 .calendar-title button {
+  width: 32px;
+  height: 32px;
+  justify-self: center;
+  display: grid;
+  place-items: center;
   border: none;
-  background: none;
-  color: #475569;
-  font-size: 1.4rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-green-600), var(--brand-green-800));
+  color: #ffffff;
+  font-size: 1.15rem;
+  line-height: 1;
   cursor: pointer;
+  box-shadow: 0 4px 10px rgba(19, 104, 69, 0.22);
 }
 
 .calendar-week {

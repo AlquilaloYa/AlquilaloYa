@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.alquilaya.fieldops',
-  appName: 'AlquilaYa FieldOps',
+  appName: 'AlquilaYa Repair',
   webDir: 'dist',
   android: {
     allowMixedContent: false,
