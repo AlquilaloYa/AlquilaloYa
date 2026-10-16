@@ -66,6 +66,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       direccion: row.direccion,
       notas: row.notas,
       documentos: toDocs(row.documentos),
+      userId: row.userId,
       creadoPor: row.creadoPor,
       createdAt: row.createdAt?.toISOString() ?? null,
       updatedAt: row.updatedAt?.toISOString() ?? null,

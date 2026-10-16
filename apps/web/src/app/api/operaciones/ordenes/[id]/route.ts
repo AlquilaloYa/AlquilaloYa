@@ -130,7 +130,10 @@ export async function GET(
         { error: "Orden de trabajo no encontrada" },
         { status: 404 },
       );
-    if (auth.user.role === "ASISTENTE_ADMINISTRATIVO") {
+    if (
+      auth.user.role === "ASISTENTE_ADMINISTRATIVO" ||
+      auth.user.role === "MANTENIMIENTO"
+    ) {
       const [employee] = await db
         .select({ id: schema.hrEmployees.id })
         .from(schema.hrEmployees)
@@ -271,7 +274,10 @@ export async function PATCH(
         { status: 409 },
       );
     }
-    if (auth.user.role === "ASISTENTE_ADMINISTRATIVO") {
+    if (
+      auth.user.role === "ASISTENTE_ADMINISTRATIVO" ||
+      auth.user.role === "MANTENIMIENTO"
+    ) {
       const [employee] = await db
         .select({ id: schema.hrEmployees.id })
         .from(schema.hrEmployees)

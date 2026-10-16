@@ -24,7 +24,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      router.replace("/dashboard");
+      router.replace(user.role === "MANTENIMIENTO" ? "/acceso-app" : "/dashboard");
     }
   }, [user, router]);
 
@@ -42,7 +42,6 @@ export default function LoginPage() {
       setError("Credenciales inválidas. Verifica tu correo y la contraseña del sistema.");
       return;
     }
-    router.replace("/dashboard");
   }
 
   async function handleMfaSubmit(e: FormEvent) {
@@ -55,7 +54,6 @@ export default function LoginPage() {
       setError(result.message);
       return;
     }
-    router.replace("/dashboard");
   }
 
   return (

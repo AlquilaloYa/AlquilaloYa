@@ -119,7 +119,12 @@ interface Evidence {
   sizeBytes: number;
   createdAt: string;
   url: string;
+  kind?: string;
+  description?: string;
 }
+
+const EVIDENCE_KINDS = ["FOTO INICIAL", "FOTO DIAGNÓSTICO", "FOTO FINAL"] as const;
+type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
 
 interface WorkEvent {
   id: string;
@@ -723,6 +728,12 @@ export default function OperacionesPage() {
       if (files.length) {
         const upload = new FormData();
         files.forEach((file) => upload.append("files", file));
+        upload.append("kind", "FOTO INICIAL");
+        upload.append(
+          "description",
+          String(data.description ?? "").trim() ||
+            `Fotos iniciales de la orden ${payload.code}`,
+        );
         const evidenceResponse = await apiFetch(
           `/api/operaciones/ordenes/${payload.id}/evidencias`,
           { method: "POST", body: upload },
@@ -855,9 +866,16 @@ export default function OperacionesPage() {
     setCreationPhotos(files);
   }
 
-  async function uploadEvidence(orderId: string, files: File[]) {
+  async function uploadEvidence(
+    orderId: string,
+    files: File[],
+    kind: EvidenceKind,
+    description: string,
+  ): Promise<boolean> {
     const data = new FormData();
     files.forEach((file) => data.append("files", file));
+    data.append("kind", kind);
+    data.append("description", description.trim());
     setSaving(true);
     setError("");
     try {
@@ -878,12 +896,14 @@ export default function OperacionesPage() {
           detailPayload.error ?? "No se pudo actualizar la orden",
         );
       setSelectedOrder(detailPayload as OrderDetails);
+      return true;
     } catch (uploadError) {
       setError(
         uploadError instanceof Error
           ? uploadError.message
           : "No se pudieron adjuntar las fotos",
       );
+      return false;
     } finally {
       setSaving(false);
     }
@@ -1628,13 +1648,20 @@ function OrderDrawer({
   saving: boolean;
   canUpdate: boolean;
   canDelete: boolean;
-  onUploadEvidence: (orderId: string, files: File[]) => Promise<void>;
+  onUploadEvidence: (
+    orderId: string,
+    files: File[],
+    kind: EvidenceKind,
+    description: string,
+  ) => Promise<boolean>;
   onClose: () => void;
   onAssign: (employeeId: string) => Promise<void>;
   onDelete: (order: WorkOrder) => Promise<void>;
 }) {
   const [assignee, setAssignee] = useState(order.assignedEmployeeId ?? "");
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+  const [evidenceKind, setEvidenceKind] = useState<EvidenceKind>("FOTO FINAL");
+  const [evidenceDescription, setEvidenceDescription] = useState("");
   return (
     <div
       className="fixed inset-0 z-[70] flex justify-end bg-slate-950/40"
@@ -1735,6 +1762,7 @@ function OrderDrawer({
                       className="h-28 w-full object-cover"
                     />
                     <span className="block truncate px-2 py-1.5 text-xs text-slate-600">
+                      {attachment.kind ? `${attachment.kind} · ` : ""}
                       {attachment.fileName}
                     </span>
                   </a>
@@ -1747,22 +1775,74 @@ function OrderDrawer({
             )}
             {canUpdate && (
               <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+                      Tipo de evidencia
+                    </span>
+                    <select
+                      value={evidenceKind}
+                      onChange={(event) =>
+                        setEvidenceKind(event.target.value as EvidenceKind)
+                      }
+                      className="field"
+                    >
+                      {EVIDENCE_KINDS.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {kind}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+                      Descripción
+                    </span>
+                    <input
+                      value={evidenceDescription}
+                      onChange={(event) =>
+                        setEvidenceDescription(event.target.value)
+                      }
+                      maxLength={1000}
+                      placeholder="Ej. Conexión reparada y sin fugas"
+                      className="field"
+                    />
+                  </label>
+                </div>
                 <PhotoPicker
                   files={evidenceFiles}
                   onChange={setEvidenceFiles}
                 />
                 <button
                   type="button"
-                  disabled={saving || evidenceFiles.length === 0}
+                  disabled={
+                    saving ||
+                    evidenceFiles.length === 0 ||
+                    !evidenceDescription.trim()
+                  }
                   onClick={() => {
-                    void onUploadEvidence(order.id, evidenceFiles);
-                    setEvidenceFiles([]);
+                    void onUploadEvidence(
+                      order.id,
+                      evidenceFiles,
+                      evidenceKind,
+                      evidenceDescription,
+                    ).then((ok) => {
+                      if (ok) {
+                        setEvidenceFiles([]);
+                        setEvidenceDescription("");
+                      }
+                    });
                   }}
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Camera className="h-4 w-4" />
                   {saving ? "Subiendo fotos..." : "Adjuntar a la orden"}
                 </button>
+                {evidenceFiles.length > 0 && !evidenceDescription.trim() && (
+                  <p className="text-xs text-amber-700">
+                    Escribe una descripción para adjuntar la evidencia.
+                  </p>
+                )}
               </div>
             )}
           </section>

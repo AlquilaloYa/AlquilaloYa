@@ -92,4 +92,16 @@ describe("AccessControl", () => {
     expect(ac.can(P.CLIENT_CREATE)).toBe(true);
     expect(ac.can(P.CLIENT_UPDATE)).toBe(false);
   });
+
+  it("MANTENIMIENTO solo opera en la app móvil: órdenes asignadas, sin ERP", () => {
+    const ac = AccessControl.forRole("MANTENIMIENTO");
+    expect(ac.can(P.WORK_ORDER_READ)).toBe(true);
+    expect(ac.can(P.WORK_ORDER_UPDATE)).toBe(true);
+    expect(ac.can(P.WORK_ORDER_MATERIAL_RECORD)).toBe(true);
+    expect(ac.can(P.WORK_ORDER_CREATE)).toBe(false);
+    expect(ac.can(P.CLIENT_READ)).toBe(false);
+    expect(ac.can(P.HR_READ)).toBe(false);
+    expect(ac.can(P.USER_MANAGE)).toBe(false);
+    expect(ac.can(P.PERMISSION_REQUEST_CREATE)).toBe(false);
+  });
 });

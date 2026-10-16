@@ -57,6 +57,9 @@ importers:
 
   apps/fieldops-mobile:
     dependencies:
+      '@capacitor-community/speech-recognition':
+        specifier: ^7.0.1
+        version: 7.0.1(@capacitor/core@8.5.3)
       '@capacitor/android':
         specifier: ^8.5.3
         version: 8.5.3(@capacitor/core@8.5.3)
@@ -521,6 +524,11 @@ packages:
   '@alloc/quick-lru@5.3.0':
     resolution: {integrity: sha512-U4+70Pc5ZS9osnCBCE5Jha/ciHM+Yp+CNMNC/7HvYbNRk1Ldd+f7qO65W5qfhu/TCv+/ozljlXXe9Nj8419DMA==}
     engines: {node: '>=10'}
+
+  '@capacitor-community/speech-recognition@7.0.1':
+    resolution: {integrity: sha512-ykpBZziR575X0eURO5vXaD9gVrXXC/7Ra2qql/2KP6/jxWOqAFuw4eKjSPjwdAgGE6a/Z+v8FJm4SVh57MVwDA==}
+    peerDependencies:
+      '@capacitor/core': '>=7.0.0'
 
   '@capacitor/android@8.5.3':
     resolution: {integrity: sha512-ilH4gSSz3DrketMkzDVAvY9JsWJ//rCQnECLTdcFRO7xXDogwAbUvQAnIAbiqefwV/D1xfjEL4Gw1MJXEcaA9g==}
@@ -4293,6 +4301,10 @@ packages:
 snapshots:
 
   '@alloc/quick-lru@5.3.0': {}
+
+  '@capacitor-community/speech-recognition@7.0.1(@capacitor/core@8.5.3)':
+    dependencies:
+      '@capacitor/core': 8.5.3
 
   '@capacitor/android@8.5.3(@capacitor/core@8.5.3)':
     dependencies:

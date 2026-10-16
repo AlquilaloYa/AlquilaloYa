@@ -1547,6 +1547,52 @@ body {
   margin: 12px 0;
 }
 
+.field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dictate-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid rgba(22, 59, 101, 0.25);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #163b65;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dictate-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.dictate-active {
+  background: #163b65;
+  border-color: #163b65;
+  color: #ffffff;
+}
+
+.dictate-active svg {
+  animation: dictate-pulse 1s ease-in-out infinite;
+}
+
+@keyframes dictate-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
 .task-filters {
   justify-content: flex-start;
   overflow-x: auto;
@@ -1605,6 +1651,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
   aspect-ratio: 1;
   padding: 8px;
   border: none;
@@ -1832,6 +1879,82 @@ body {
 
 .notification-dot.green {
   background: #16a34a;
+}
+
+.nav-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+}
+
+.nav-badge-dot {
+  background: #ef4444;
+}
+
+.nav-badge-blink {
+  animation: nav-badge-blink 1s ease-in-out infinite;
+}
+
+.bottom-nav button.nav-alert {
+  color: #ef4444;
+}
+
+.bottom-nav button.nav-alert > span {
+  animation: bell-blink 1s ease-in-out infinite;
+}
+
+@keyframes nav-badge-blink {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.45);
+    opacity: 0.35;
+  }
+}
+
+@keyframes bell-blink {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.88);
+    opacity: 0.45;
+  }
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(2px);
+}
+
+.loading-spinner {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  animation: loading-spin 0.7s linear infinite;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .profile-card {

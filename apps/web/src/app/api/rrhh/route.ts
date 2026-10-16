@@ -40,6 +40,7 @@ type Body = {
   direccion?: string;
   notas?: string;
   documentos?: unknown;
+  userId?: string | null;
   motivo?: string;
 };
 
@@ -47,7 +48,7 @@ const CAMPOS_AUDITABLES = [
   "nombres", "apellidos", "dni", "email", "telefono", "cargo", "area",
   "sede", "equipo", "responsable", "organizationId", "siteId", "departmentId",
   "teamId", "positionId", "managerId", "fechaIngreso", "estado", "onboardingStage",
-  "direccion", "notas", "fechaNacimiento", "nacionalidad", "codigoEmpleado", "fechaBaja",
+  "direccion", "notas", "fechaNacimiento", "nacionalidad", "codigoEmpleado", "fechaBaja", "userId",
 ] as const;
 const ETAPAS_ONBOARDING = ["REGISTRO", "FICHA", "DOCUMENTOS", "VALIDACION", "CONTRATO", "ACCESOS", "ASIGNACION", "FINALIZADO"] as const;
 
@@ -142,6 +143,7 @@ function toView(r: {
   direccion: string;
   notas: string;
   documentos: unknown;
+  userId: string | null;
   creadoPor: string;
   createdAt: Date;
   updatedAt: Date;
@@ -174,6 +176,7 @@ function toView(r: {
     direccion: r.direccion,
     notas: r.notas,
     documentos: toDocs(r.documentos),
+    userId: r.userId,
     creadoPor: r.creadoPor,
     createdAt: r.createdAt?.toISOString?.() ?? null,
     updatedAt: r.updatedAt?.toISOString?.() ?? null,
@@ -323,6 +326,28 @@ export async function PUT(req: Request) {
     if (body.onboardingStage !== undefined && !isOnboardingStage(body.onboardingStage)) {
       return NextResponse.json({ error: "Etapa de onboarding inválida" }, { status: 400 });
     }
+    if (body.userId !== undefined && body.userId) {
+      const nextUserId = body.userId;
+      const [user] = await db
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.id, nextUserId))
+        .limit(1);
+      if (!user) {
+        return NextResponse.json({ error: "El usuario seleccionado no existe" }, { status: 400 });
+      }
+      const [taken] = await db
+        .select({ id: schema.hrEmployees.id })
+        .from(schema.hrEmployees)
+        .where(and(eq(schema.hrEmployees.userId, nextUserId), isNull(schema.hrEmployees.deletedAt)))
+        .limit(1);
+      if (taken && taken.id !== body.id) {
+        return NextResponse.json(
+          { error: "Ese usuario ya está vinculado a otro colaborador" },
+          { status: 409 }
+        );
+      }
+    }
     const patch: {
       nombres?: string;
       apellidos?: string;
@@ -350,6 +375,7 @@ export async function PUT(req: Request) {
       direccion?: string;
       notas?: string;
       documentos?: Doc[];
+      userId?: string | null;
       updatedAt: Date;
     } = { updatedAt: new Date() };
     if (body.nombres !== undefined) {
@@ -392,6 +418,7 @@ export async function PUT(req: Request) {
     if (body.direccion !== undefined) patch.direccion = body.direccion.trim();
     if (body.notas !== undefined) patch.notas = body.notas.trim();
     if (body.documentos !== undefined) patch.documentos = toDocs(body.documentos);
+    if (body.userId !== undefined) patch.userId = body.userId || null;
     const row = await db.transaction(async (tx) => {
       const [updated] = await tx.update(schema.hrEmployees).set(patch).where(eq(schema.hrEmployees.id, body.id!)).returning();
       if (!updated) return null;

@@ -92,7 +92,10 @@ export async function POST(
         { status: 409 },
       );
     }
-    if (auth.user.role === "ASISTENTE_ADMINISTRATIVO") {
+    if (
+      auth.user.role === "ASISTENTE_ADMINISTRATIVO" ||
+      auth.user.role === "MANTENIMIENTO"
+    ) {
       const [employee] = await db
         .select({ id: schema.hrEmployees.id })
         .from(schema.hrEmployees)

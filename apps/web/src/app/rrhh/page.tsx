@@ -90,6 +90,7 @@ interface Employee {
   direccion: string;
   notas: string;
   documentos: Array<{ nombre: string; tipo: string; url: string }>;
+  userId: string | null;
   creadoPor: string;
 }
 
@@ -212,10 +213,12 @@ const EMPTY = {
   estado: "ACTIVO" as EstadoRh,
   direccion: "",
   notas: "",
+  userId: "",
 };
 
 export default function RecursosHumanosPage() {
   const [rows, setRows] = useState<Employee[]>([]);
+  const [users, setUsers] = useState<Array<{ id: string; email: string; name: string; role: string }>>([]);
   const [estructura, setEstructura] = useState<EstructuraHR>(EMPTY_STRUCTURE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -260,6 +263,11 @@ export default function RecursosHumanosPage() {
       if (resSolicitudes.ok) setRequests((await resSolicitudes.json()) as RequestBrief[]);
       const resDashboard = await apiFetch("/api/rrhh/dashboard");
       if (resDashboard.ok) setDashboard((await resDashboard.json()) as DashboardRRHH);
+      const resUsers = await apiFetch("/api/users?limit=200");
+      if (resUsers.ok) {
+        const payload = (await resUsers.json()) as { items?: Array<{ id: string; email: string; name: string; role: string }> };
+        setUsers(payload.items ?? []);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -327,6 +335,7 @@ export default function RecursosHumanosPage() {
       estado: r.estado,
       direccion: r.direccion,
       notas: r.notas,
+      userId: r.userId ?? "",
     });
     setModalOpen(true);
     void loadEmployeeRecords(r.id);
@@ -841,6 +850,14 @@ export default function RecursosHumanosPage() {
                   <select value={form.onboardingStage} onChange={(event) => setForm({ ...form, onboardingStage: event.target.value as EtapaOnboarding })} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface">
                     {ETAPAS_ONBOARDING.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="mb-1 block font-label-md text-on-surface">Usuario vinculado (app móvil)</label>
+                  <select value={form.userId} onChange={(event) => setForm({ ...form, userId: event.target.value })} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface">
+                    <option value="">Sin vincular</option>
+                    {users.map((account) => <option key={account.id} value={account.id}>{account.name || account.email} · {account.email}</option>)}
+                  </select>
+                  <p className="mt-1 text-xs text-on-surface-variant">Vincula este colaborador a una cuenta para que reciba las notificaciones de sus tareas en la app.</p>
                 </div>
               </div>
               <div>

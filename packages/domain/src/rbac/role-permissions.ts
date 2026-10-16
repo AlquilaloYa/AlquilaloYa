@@ -51,6 +51,11 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
     P.WORK_ORDER_MATERIAL_RECORD,
   ]),
   MARKETING: new Set([P.MARKETING_READ]),
+  MANTENIMIENTO: new Set([
+    P.WORK_ORDER_READ,
+    P.WORK_ORDER_UPDATE,
+    P.WORK_ORDER_MATERIAL_RECORD,
+  ]),
 };
 
 export function permissionsForRole(role: UserRole): Permission[] {

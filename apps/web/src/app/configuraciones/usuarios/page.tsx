@@ -44,6 +44,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   RRHH: "Recursos Humanos",
   ASISTENTE_ADMINISTRATIVO: "Asistente Administrativo",
   MARKETING: "Marketing",
+  MANTENIMIENTO: "Mantenimiento (solo app)",
 };
 
 const ROLE_COLORS: Record<UserRole, string> = {
@@ -52,6 +53,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
   RRHH: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200",
   ASISTENTE_ADMINISTRATIVO: "bg-secondary-container text-secondary-container-foreground",
   MARKETING: "bg-surface-container-high text-on-surface",
+  MANTENIMIENTO: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200",
 };
 
 const inputCls =

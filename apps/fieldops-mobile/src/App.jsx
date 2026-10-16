@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { PushNotifications } from '@capacitor/push-notifications'
+import { SpeechRecognition } from '@capacitor-community/speech-recognition'
 import { fieldopsApi } from './fieldops-api'
 import './App.css'
 
@@ -127,6 +128,213 @@ function mergeOrderSummary(current, summary) {
   }
 }
 
+let notificationAudioContext = null
+
+function playNotificationChime() {
+  if (typeof window === 'undefined') return
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    if (!AudioCtx) return
+    if (!notificationAudioContext) notificationAudioContext = new AudioCtx()
+    const context = notificationAudioContext
+    const resume = context.state === 'suspended' ? context.resume() : Promise.resolve()
+    void resume.then(() => {
+      const now = context.currentTime
+      const gain = context.createGain()
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.exponentialRampToValueAtTime(0.22, now + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6)
+      gain.connect(context.destination)
+      ;[880, 1174.66].forEach((frequency, index) => {
+        const oscillator = context.createOscillator()
+        oscillator.type = 'sine'
+        oscillator.frequency.value = frequency
+        oscillator.connect(gain)
+        oscillator.start(now + index * 0.16)
+        oscillator.stop(now + 0.3 + index * 0.16)
+      })
+    })
+  } catch {
+    /* el navegador puede bloquear el audio antes de una interacción */
+  }
+}
+
+function LoadingOverlay() {
+  return (
+    <div className="loading-overlay" role="status" aria-live="polite" aria-label="Cargando">
+      <span className="loading-spinner" aria-hidden="true" />
+    </div>
+  )
+}
+
+function MicIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8" />
+    </svg>
+  )
+}
+
+function DictateButton({ supported, active, onClick, label }) {
+  if (!supported) return null
+  return (
+    <button
+      type="button"
+      className={`dictate-btn ${active ? 'dictate-active' : ''}`}
+      onClick={onClick}
+      aria-pressed={active}
+    >
+      <MicIcon />
+      <span>{active ? 'Detener dictado' : label || 'Dictar por voz'}</span>
+    </button>
+  )
+}
+
+function useDictation() {
+  const nativePlatform = Capacitor.isNativePlatform()
+  const webSupported =
+    typeof window !== 'undefined' &&
+    Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
+  const recognitionRef = useRef(null)
+  const activeFieldRef = useRef(null)
+  const [activeField, setActiveField] = useState(null)
+  const [nativeAvailable, setNativeAvailable] = useState(nativePlatform)
+
+  useEffect(() => {
+    if (!nativePlatform) return undefined
+    let cancelled = false
+    SpeechRecognition.available()
+      .then(({ available }) => {
+        if (!cancelled) setNativeAvailable(available)
+      })
+      .catch(() => {
+        if (!cancelled) setNativeAvailable(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [nativePlatform])
+
+  const supported = nativePlatform ? nativeAvailable : webSupported
+
+  const clearActive = useCallback(() => {
+    activeFieldRef.current = null
+    setActiveField(null)
+  }, [])
+
+  const stop = useCallback(() => {
+    if (nativePlatform) SpeechRecognition.stop().catch(() => {})
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop()
+      } catch {}
+      recognitionRef.current = null
+    }
+    clearActive()
+  }, [nativePlatform, clearActive])
+
+  const startWeb = useCallback(
+    (field, onText) => {
+      const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      const recognition = new Recognition()
+      recognition.lang = 'es-ES'
+      recognition.interimResults = false
+      recognition.continuous = true
+      recognition.onresult = (event) => {
+        let text = ''
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          if (event.results[i].isFinal) text += event.results[i][0].transcript
+        }
+        const clean = text.trim()
+        if (clean) onText(clean)
+      }
+      recognition.onerror = () => {
+        recognitionRef.current = null
+        clearActive()
+      }
+      recognition.onend = () => {
+        recognitionRef.current = null
+        if (activeFieldRef.current === field) clearActive()
+      }
+      recognitionRef.current = recognition
+      try {
+        recognition.start()
+      } catch {
+        clearActive()
+      }
+    },
+    [clearActive],
+  )
+
+  const startNative = useCallback(
+    async (field, onText) => {
+      try {
+        const permission = await SpeechRecognition.requestPermissions()
+        if (permission.speechRecognition !== 'granted') {
+          clearActive()
+          return
+        }
+      } catch {
+        clearActive()
+        return
+      }
+      while (activeFieldRef.current === field) {
+        let result
+        try {
+          result = await SpeechRecognition.start({
+            language: 'es-ES',
+            maxResults: 3,
+            partialResults: false,
+            popup: false,
+          })
+        } catch {
+          break
+        }
+        const matches = result?.matches ?? []
+        const clean = matches.length ? String(matches[0]).trim() : ''
+        if (clean) onText(clean)
+        if (activeFieldRef.current !== field) break
+      }
+      if (activeFieldRef.current === field) clearActive()
+    },
+    [clearActive],
+  )
+
+  const start = useCallback(
+    (field, onText) => {
+      if (!supported) return
+      if (activeFieldRef.current === field) {
+        stop()
+        return
+      }
+      stop()
+      activeFieldRef.current = field
+      setActiveField(field)
+      if (nativePlatform) {
+        startNative(field, onText)
+      } else {
+        startWeb(field, onText)
+      }
+    },
+    [supported, nativePlatform, stop, startNative, startWeb],
+  )
+
+  useEffect(
+    () => () => {
+      if (nativePlatform) SpeechRecognition.stop().catch(() => {})
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop()
+        } catch {}
+      }
+    },
+    [nativePlatform],
+  )
+
+  return { supported, activeField, start, stop }
+}
+
 function App() {
   const [tasks, setTasks] = useState([])
   const tasksRef = useRef(tasks)
@@ -183,6 +391,7 @@ function App() {
   const [evidenceKind, setEvidenceKind] = useState('FOTO FINAL')
   const [evidenceDescription, setEvidenceDescription] = useState('')
   const [diagnosisPhotoNote, setDiagnosisPhotoNote] = useState('')
+  const dictation = useDictation()
   const [reassignTo, setReassignTo] = useState('')
   const [reassignReason, setReassignReason] = useState('')
   const [showReassign, setShowReassign] = useState(false)
@@ -193,6 +402,7 @@ function App() {
   const urgentTasks = openTasks.filter((task) => task.priority === 'URGENTE')
   const highTasks = openTasks.filter((task) => task.priority === 'ALTA')
   const completedTasks = tasks.filter((task) => task.status === 'COMPLETED')
+  const bellIndicator = urgentTasks.length > 0 ? 'urgent' : openTasks.length > 0 ? 'dot' : ''
   const recentOrders = [...tasks]
     .filter((task) => task.updatedAt)
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
@@ -344,9 +554,17 @@ function App() {
         const nextVersions = new Map()
         const nextTasks = []
         const newUrgentTasks = []
+        let hasNewTasks = false
 
         for (const summary of summaries) {
           const previous = previousVersions?.get(summary.id)
+          if (
+            previousVersions &&
+            !previous &&
+            !['COMPLETED', 'CANCELLED'].includes(summary.status)
+          ) {
+            hasNewTasks = true
+          }
           const changed = !previous ||
             previous.updatedAt !== summary.updatedAt ||
             previous.priority !== summary.priority ||
@@ -379,6 +597,7 @@ function App() {
         tasksRef.current = nextTasks
         knownOrderVersionsRef.current = nextVersions
         setTasks(nextTasks)
+        if (hasNewTasks || newUrgentTasks.length) playNotificationChime()
         if (newUrgentTasks.length) setUrgentNotice(newUrgentTasks[0])
       } catch (error) {
         if (active) {
@@ -477,6 +696,8 @@ function App() {
     const originalTask = tasks.find((task) => task.id === taskId)
     if (!originalTask) return false
     const updatedTask = updater(originalTask)
+    const showOverlay = !options.silent
+    if (showOverlay) setIsLoading(true)
     const changes = {}
     if (updatedTask.status !== originalTask.status) changes.status = updatedTask.status
     if (updatedTask.targetAt !== originalTask.targetAt && updatedTask.targetAt) {
@@ -526,6 +747,8 @@ function App() {
       }
       setStorageWarning(message)
       return false
+    } finally {
+      if (showOverlay) setIsLoading(false)
     }
   }
 
@@ -798,7 +1021,7 @@ function App() {
 
   async function confirmNoMaterials(event) {
     const checked = event.target.checked
-    if (await updateTask(selectedTask.id, (task) => ({ ...task, materialsConfirmed: checked }))) {
+    if (await updateTask(selectedTask.id, (task) => ({ ...task, materialsConfirmed: checked }), { silent: true })) {
       setMaterialsConfirmed(checked)
     }
   }
@@ -861,11 +1084,14 @@ function App() {
   async function addDiagnosisPhoto(event) {
     event.preventDefault()
     const form = event.currentTarget
-    const file = form.elements.namedItem('diagnosis-photo')?.files?.[0]
-    if (!file || selectedTask.status === 'COMPLETED') return
+    const files = Array.from(form.elements.namedItem('diagnosis-photo')?.files ?? [])
+    if (!files.length || selectedTask.status === 'COMPLETED') return
     setIsLoading(true)
     try {
-      await fieldopsApi.uploadEvidence(selectedTask.id, file, 'FOTO DIAGNÓSTICO', diagnosisPhotoNote.trim() || 'Desperfecto detectado en el diagnóstico')
+      const description = diagnosisPhotoNote.trim() || 'Desperfecto detectado en el diagnóstico'
+      for (const file of files) {
+        await fieldopsApi.uploadEvidence(selectedTask.id, file, 'FOTO DIAGNÓSTICO', description)
+      }
       await reloadOrders()
       setDiagnosisPhotoNote('')
       setStorageWarning('')
@@ -1220,8 +1446,14 @@ function App() {
             )}
             {selectedTask.status !== 'RESCHEDULED' && (
               <form className="form-card" onSubmit={saveDiagnosis}>
-                <label>Problema encontrado<textarea rows="3" required value={diagnosisDraft} onChange={(event) => setDiagnosisDraft(event.target.value)} placeholder="Describe el estado del problema encontrado" /></label>
-                <label>Causa probable<textarea rows="2" value={causeDraft} onChange={(event) => setCauseDraft(event.target.value)} placeholder="¿Qué originó el problema?" /></label>
+                <div className="field-block">
+                  <label>Problema encontrado<textarea rows="3" required value={diagnosisDraft} onChange={(event) => setDiagnosisDraft(event.target.value)} placeholder="Describe el estado del problema encontrado" /></label>
+                  <DictateButton supported={dictation.supported} active={dictation.activeField === 'diagnosis'} onClick={() => dictation.start('diagnosis', (text) => setDiagnosisDraft((current) => (current ? `${current} ${text}` : text)))} />
+                </div>
+                <div className="field-block">
+                  <label>Causa probable<textarea rows="2" value={causeDraft} onChange={(event) => setCauseDraft(event.target.value)} placeholder="¿Qué originó el problema?" /></label>
+                  <DictateButton supported={dictation.supported} active={dictation.activeField === 'cause'} onClick={() => dictation.start('cause', (text) => setCauseDraft((current) => (current ? `${current} ${text}` : text)))} />
+                </div>
                 <fieldset className="choice-group"><legend>¿Puede resolverse hoy?</legend><label><input type="radio" checked={canResolveToday} onChange={() => setCanResolveToday(true)} /> Sí, puedo resolverlo</label><label><input type="radio" checked={!canResolveToday} onChange={() => setCanResolveToday(false)} /> No, requiere otra visita</label></fieldset>
                 <button type="submit" className="primary-btn">Guardar diagnóstico</button>
               </form>
@@ -1240,7 +1472,7 @@ function App() {
                 </div>
               )}
               <form className="form-card secondary-form" onSubmit={addDiagnosisPhoto}>
-                <div className="form-grid"><label>Foto del desperfecto<input name="diagnosis-photo" type="file" accept="image/jpeg,image/png,image/webp" required /></label></div>
+                <div className="form-grid"><label>Fotos del desperfecto<input name="diagnosis-photo" type="file" accept="image/jpeg,image/png,image/webp" multiple required /></label></div>
                 <label>Descripción (opcional)<input value={diagnosisPhotoNote} onChange={(event) => setDiagnosisPhotoNote(event.target.value)} placeholder="Ej. Fuga en la tubería, golpe en la puerta" /></label>
                 <button type="submit" className="ghost-btn" disabled={selectedTask.status === 'COMPLETED'}>Adjuntar foto</button>
               </form>
@@ -1375,7 +1607,7 @@ function App() {
 
   if (activeTab === 'order') {
     const initials = user?.name?.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
-    return <div className="app-shell"><div className="device-frame"><header className={`topbar ${isTopBarElevated ? 'elevated' : 'plain'}`}><div className="left-header"><button className="icon-btn" aria-label="Volver" type="button" onClick={() => setActiveTab('tasks')}>←</button><div className="brand-block compact"><img className="brand-logo" src="/logo-brand-cropped.png" alt="Alquilaya" /></div></div><div className="right-header"><span className="eyebrow">DETALLE DE ORDEN</span><span className="avatar">{initials}</span></div></header>{storageWarning && <div className="storage-warning" role="status">{storageWarning}</div>}{renderOrder()}{previewAttachment && <div className="image-lightbox" role="presentation" onClick={() => setPreviewAttachment(null)}><section className="image-lightbox-panel" role="dialog" aria-modal="true" aria-label={`Vista previa ${previewAttachment.kind}`} onClick={(event) => event.stopPropagation()}><button className="image-lightbox-close" type="button" aria-label="Cerrar vista previa" onClick={() => setPreviewAttachment(null)}>×</button><img src={previewAttachment.url} alt={previewAttachment.description || previewAttachment.name} /><div><strong>{previewAttachment.kind}</strong><span>{previewAttachment.description || previewAttachment.name}</span></div></section></div>}</div></div>
+    return <div className="app-shell"><div className="device-frame"><header className={`topbar ${isTopBarElevated ? 'elevated' : 'plain'}`}><div className="left-header"><button className="icon-btn" aria-label="Volver" type="button" onClick={() => setActiveTab('tasks')}>←</button><div className="brand-block compact"><img className="brand-logo" src="/logo-brand-cropped.png" alt="Alquilaya" /></div></div><div className="right-header"><span className="eyebrow">DETALLE DE ORDEN</span><span className="avatar">{initials}</span></div></header>{storageWarning && <div className="storage-warning" role="status">{storageWarning}</div>}{renderOrder()}{previewAttachment && <div className="image-lightbox" role="presentation" onClick={() => setPreviewAttachment(null)}><section className="image-lightbox-panel" role="dialog" aria-modal="true" aria-label={`Vista previa ${previewAttachment.kind}`} onClick={(event) => event.stopPropagation()}><button className="image-lightbox-close" type="button" aria-label="Cerrar vista previa" onClick={() => setPreviewAttachment(null)}>×</button><img src={previewAttachment.url} alt={previewAttachment.description || previewAttachment.name} /><div><strong>{previewAttachment.kind}</strong><span>{previewAttachment.description || previewAttachment.name}</span></div></section></div>}{isLoading && <LoadingOverlay />}</div></div>
   }
 
   const initials = user?.name?.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
@@ -1402,8 +1634,25 @@ function App() {
         )}
         {renderMainTab()}
         <nav className="bottom-nav" aria-label="Navegación principal">
-          {primaryTabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'selected' : ''} type="button" aria-label={tab.label} title={tab.label} aria-current={activeTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)}><span><NavigationIcon name={tab.icon} /></span></button>)}
+          {primaryTabs.map((tab) => {
+            const indicator = tab.id === 'notifications' ? bellIndicator : ''
+            return (
+              <button
+                key={tab.id}
+                className={`${activeTab === tab.id ? 'selected' : ''} ${indicator === 'urgent' ? 'nav-alert' : ''}`.trim()}
+                type="button"
+                aria-label={indicator === 'urgent' ? `${tab.label} (tarea urgente)` : indicator === 'dot' ? `${tab.label} (novedades)` : tab.label}
+                title={tab.label}
+                aria-current={activeTab === tab.id ? 'page' : undefined}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                <span><NavigationIcon name={tab.icon} /></span>
+                {indicator ? <span className={`nav-badge ${indicator === 'urgent' ? 'nav-badge-blink' : 'nav-badge-dot'}`} aria-hidden="true" /> : null}
+              </button>
+            )
+          })}
         </nav>
+        {isLoading && <LoadingOverlay />}
       </div>
     </div>
   )

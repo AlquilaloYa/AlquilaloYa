@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   Star,
   Banknote,
+  Calculator,
   BarChart3,
   Contact,
   Building2,
@@ -62,7 +63,7 @@ interface NavItem {
   phase?: string;
   permission?: Permission;
   external?: boolean;
-  group?: "contratos" | "marketing" | "google" | "rrhh" | "operatividad";
+  group?: "contratos" | "marketing" | "google" | "rrhh" | "operatividad" | "contabilidad";
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -114,6 +115,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "hr.read", group: "rrhh" },
   { href: "/cronograma-asistencia", label: "Registro de asistencia", icon: AlarmClock, section: "Recursos Humanos", permission: "attendance.read", group: "rrhh" },
+  { href: "/contabilidad", label: "Contabilidad", icon: Calculator, section: "Contabilidad", group: "contabilidad" },
   { href: "/google/gmail", label: "Gmail", icon: Mail, section: "Google SyS", group: "google" },
   { href: "/google/drive", label: "Google Drive", icon: HardDrive, section: "Google SyS", group: "google" },
   { href: "/google/sheets", label: "Google Sheets", icon: Table, section: "Google SyS", group: "google" },
@@ -159,6 +161,9 @@ function canAccessPage(
   pathname: string,
   additionalPermissions: readonly Permission[] = []
 ): boolean {
+  if (role === "MANTENIMIENTO") {
+    return false;
+  }
   // MFA es por usuario: cualquier sesión puede gestionar su propia seguridad.
   if (pathname === "/configuraciones/seguridad" || pathname.startsWith("/configuraciones/seguridad/")) {
     return true;
@@ -329,6 +334,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [marketingOpen, setMarketingOpen] = useState(false);
   const [googleOpen, setGoogleOpen] = useState(false);
   const [rrhhOpen, setRrhhOpen] = useState(false);
+  const [contabilidadOpen, setContabilidadOpen] = useState(false);
   const [operatividadOpen, setOperatividadOpen] = useState(false);
 
   useEffect(() => {
@@ -342,7 +348,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       user &&
       !canAccessPage(user.role, pathname, user.additionalPermissions)
     ) {
-      router.replace(user.role === "MARKETING" ? "/pipeline" : "/dashboard");
+      router.replace(
+        user.role === "MARKETING"
+          ? "/pipeline"
+          : user.role === "MANTENIMIENTO"
+            ? "/acceso-app"
+            : "/dashboard"
+      );
     }
   }, [pathname, router, user]);
 
@@ -448,6 +460,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 icon: Users,
                 open: rrhhOpen,
                 onToggle: () => setRrhhOpen((open) => !open),
+              },
+              {
+                key: "contabilidad",
+                label: "Contabilidad",
+                icon: Calculator,
+                open: contabilidadOpen,
+                onToggle: () => setContabilidadOpen((open) => !open),
               },
             ];
             const renderedGroups = new Set<NonNullable<NavItem["group"]>>();

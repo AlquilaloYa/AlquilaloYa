@@ -22,7 +22,10 @@ async function getAuthorizedOrder(
     .limit(1);
   if (!order) return { order: null, response: null };
 
-  if (user.role === "ASISTENTE_ADMINISTRATIVO") {
+  if (
+    user.role === "ASISTENTE_ADMINISTRATIVO" ||
+    user.role === "MANTENIMIENTO"
+  ) {
     const [employee] = await db
       .select({ id: schema.hrEmployees.id })
       .from(schema.hrEmployees)
