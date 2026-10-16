@@ -52,10 +52,12 @@ const NEXT_STATES: Record<string, string[]> = {
 };
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const PRIORITIES = ["BAJA", "MEDIA", "ALTA", "URGENTE"] as const;
 
 type UpdateBody = {
   status?: unknown;
   assignedEmployeeId?: unknown;
+  priority?: unknown;
   scheduledAt?: unknown;
   rescheduleVisit?: unknown;
   customerAppointment?: unknown;
@@ -377,6 +379,29 @@ export async function PATCH(
       typeof body.canResolveToday === "boolean"
         ? body.canResolveToday
         : undefined;
+
+    let nextPriority = current.priority;
+    if (body.priority !== undefined) {
+      if (
+        typeof body.priority !== "string" ||
+        !PRIORITIES.includes(body.priority as (typeof PRIORITIES)[number])
+      ) {
+        return NextResponse.json(
+          { error: "La prioridad indicada no es válida" },
+          { status: 400 },
+        );
+      }
+      if (
+        ["COMPLETED", "CANCELLED"].includes(current.status) &&
+        body.priority !== current.priority
+      ) {
+        return NextResponse.json(
+          { error: "No se puede cambiar la prioridad de una orden cerrada" },
+          { status: 409 },
+        );
+      }
+      nextPriority = body.priority as (typeof PRIORITIES)[number];
+    }
     if (
       isCustomerAppointment &&
       (!scheduledAt ||
@@ -787,6 +812,7 @@ export async function PATCH(
         updatedAt: now,
       };
       if (scheduledAt && !isCustomerAppointment) update.targetAt = scheduledAt;
+      if (body.priority !== undefined) update.priority = nextPriority;
       if (diagnosis !== undefined) update.diagnosis = diagnosis;
       if (cause !== undefined) update.cause = cause;
       if (resolution !== undefined) update.resolution = resolution;
@@ -941,10 +967,14 @@ export async function PATCH(
       .where(eq(schema.workOrders.id, params.id))
       .limit(1);
 
+    const priorityBecomesUrgent =
+      nextPriority === "URGENTE" && current.priority !== "URGENTE";
+    const assigneeBecomesUrgent =
+      hasAssigneeChange && nextPriority === "URGENTE";
     if (
-      hasAssigneeChange &&
       assignedEmployeeId &&
-      current.priority === "URGENTE"
+      (priorityBecomesUrgent || assigneeBecomesUrgent) &&
+      !["COMPLETED", "CANCELLED"].includes(nextStatus)
     ) {
       try {
         await sendUrgentWorkOrderPush(dbModule, {
@@ -954,7 +984,7 @@ export async function PATCH(
           title: current.title,
         });
       } catch (error) {
-        logger.error("Falló el envío push al reasignar una orden urgente", {
+        logger.error("Falló el envío push de una orden urgente", {
           workOrderId: current.id,
           error: error instanceof Error ? error.message : "Error desconocido",
         });
