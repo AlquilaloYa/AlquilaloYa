@@ -23,6 +23,7 @@ interface ClientView {
   domicilio?: string | null;
   codigoDepartamento?: string | null;
   activo: boolean;
+  fechaInicioContrato?: string | null;
   fechaFinContrato?: string | null;
   fechaInicioAdenda?: string | null;
   fechaFinAdenda?: string | null;
@@ -77,7 +78,7 @@ export default function ClientesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
-  const [sortKey, setSortKey] = useState<"departamento" | "nombre" | "documento" | "telefono" | "finContrato" | "inicioAdenda" | "finAdenda" | "tipo" | "ruc" | null>(null);
+  const [sortKey, setSortKey] = useState<"departamento" | "nombre" | "documento" | "telefono" | "inicioContrato" | "finContrato" | "inicioAdenda" | "finAdenda" | "tipo" | "ruc" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const clientesTabla = useMemo(() => {
@@ -101,6 +102,7 @@ export default function ClientesPage() {
       nombre: (c) => [c.nombres, c.apellidos].filter(Boolean).join(" "),
       documento: (c) => c.documentoIdentidad,
       telefono: (c) => c.telefono,
+      inicioContrato: (c) => c.fechaInicioContrato,
       finContrato: (c) => c.fechaFinContrato,
       inicioAdenda: (c) => c.fechaInicioAdenda,
       finAdenda: (c) => c.fechaFinAdenda,
@@ -190,7 +192,7 @@ export default function ClientesPage() {
             ) : (
               <TableScroll className="max-h-[32rem] w-full rounded-md border">
                 <div className="max-h-[30rem] overflow-y-auto">
-                  <table className="w-full min-w-[1080px] text-sm">
+                  <table className="w-full min-w-[1160px] text-sm">
                     <thead className="sticky top-0 z-10 bg-[#151a24] text-left text-xs text-white/80">
                       <tr>
                         <th className="px-3 py-2 font-medium">WhatsApp</th>
@@ -205,6 +207,9 @@ export default function ClientesPage() {
                         </th>
                         <th onClick={() => cambiarOrden("telefono")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "telefono" ? "text-white" : "")}>
                           Teléfono{sortKey === "telefono" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                        </th>
+                        <th onClick={() => cambiarOrden("inicioContrato")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "inicioContrato" ? "text-white" : "")}>
+                          Inicio contrato{sortKey === "inicioContrato" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                         </th>
                         <th onClick={() => cambiarOrden("finContrato")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "finContrato" ? "text-white" : "")}>
                           Fin contrato{sortKey === "finContrato" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
@@ -252,6 +257,7 @@ export default function ClientesPage() {
                           <td className="px-3 py-2 text-muted-foreground">
                             <span className="whitespace-nowrap">{c.telefono ?? "—"}</span>
                           </td>
+                          <td className="px-3 py-2">{fmtFecha(c.fechaInicioContrato)}</td>
                           <td className="px-3 py-2">{fmtFecha(c.fechaFinContrato)}</td>
                           <td className="px-3 py-2">{fmtFecha(c.fechaInicioAdenda)}</td>
                           <td className="px-3 py-2">{fmtFecha(c.fechaFinAdenda)}</td>

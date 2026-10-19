@@ -114,6 +114,9 @@ export async function GET(req: Request) {
           domicilio: c.domicilio,
           nacionalidad: c.nacionalidad,
           activo: c.activo,
+          fechaInicioContrato: contrato?.fechaInicio
+            ? String(contrato.fechaInicio).slice(0, 10)
+            : null,
           fechaFinContrato: contrato?.fechaFin
             ? String(contrato.fechaFin).slice(0, 10)
             : null,
