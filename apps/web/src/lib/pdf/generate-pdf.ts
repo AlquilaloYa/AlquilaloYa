@@ -28,6 +28,8 @@ async function pdfFromHtml(html: string, filename: string): Promise<PdfResult> {
   }
   try {
     const page = await browser.newPage();
+    // El HTML del contrato es editable por usuarios: no ejecutar scripts.
+    await page.setJavaScriptEnabled(false);
     await page.setContent(html, { waitUntil: "load" });
     const bytes = await page.pdf({
       format: "A4",

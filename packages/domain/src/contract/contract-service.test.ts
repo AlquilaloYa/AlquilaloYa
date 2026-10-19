@@ -408,6 +408,109 @@ describe("ContractService", () => {
     const service = new ContractService(repo, makeSnapshotPort());
     await expect(service.signContract("contract-firmado")).rejects.toThrow();
   });
+
+  it("updateDraft: permite editar documentoHtml en PENDIENTE_EMISION", async () => {
+    const { repo } = makeRepo(
+      makeDirectContract(ContractStatus.PENDIENTE_EMISION)
+    );
+    const service = new ContractService(repo, makeSnapshotPort());
+
+    const updated = await service.updateDraft("contract-firmado", {
+      documentoHtml: "<p>Cláusula adicional</p>",
+    });
+    expect(updated.documentoHtml).toBe("<p>Cláusula adicional</p>");
+
+    await expect(
+      service.updateDraft("contract-firmado", { montoCanonMensual: "999.00" })
+    ).rejects.toThrow(/BORRADOR/);
+  });
+
+  it("emitContract: congela documentoHtml en el snapshot", async () => {
+    const created = await new ContractService(
+      makeRepo().repo,
+      makeSnapshotPort()
+    ).createContract(makeInput({ documentoHtml: "<p>Documento propio</p>" }));
+    const { repo } = makeRepo(created);
+    const captured: ContractSnapshotData[] = [];
+    const snapPort: SnapshotPort = {
+      async create(data) {
+        captured.push(data);
+        return { id: "snap-html", codigoContrato: data.codigoContrato };
+      },
+      async assertInmutable() {},
+    };
+    const service = new ContractService(repo, snapPort);
+
+    await service.emitContract(
+      { ...created, estado: ContractStatus.PENDIENTE_EMISION } as ContractWithRelations
+    );
+
+    expect(captured[0]!.documentoHtml).toBe("<p>Documento propio</p>");
+  });
+
+  it("updateDocument: crea un snapshot nuevo con el HTML editado", async () => {
+    const contract = {
+      ...makeDirectContract(ContractStatus.EMITIDO, "snap-viejo"),
+      documentoHtml: "<p>Original</p>",
+    };
+    const { repo } = makeRepo(contract);
+    const snapshot = {
+      id: "snap-viejo",
+      codigoContrato: contract.codigoContrato,
+      plantillaVersionId: contract.plantillaVersionId,
+      datosCliente: {},
+      datosDepartamento: {},
+      datosContrato: {},
+      clausulas: [],
+      anexos: [],
+      documentoHtml: "<p>Original</p>",
+      inmutable: true,
+      emitidoEn: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+    const repoConSnapshot: ContractRepository = {
+      ...repo,
+      async findWithRelations(id) {
+        if (id !== contract.id) return null;
+        return {
+          ...contract,
+          cliente: CLIENTE,
+          departamento: DEPARTAMENTO,
+          plantillaVersion: PLANTILLA,
+          snapshot,
+        } as ContractWithRelations;
+      },
+    };
+    const captured: ContractSnapshotData[] = [];
+    const snapPort: SnapshotPort = {
+      async create(data) {
+        captured.push(data);
+        return { id: "snap-nuevo", codigoContrato: data.codigoContrato };
+      },
+      async assertInmutable() {},
+    };
+    const { events, sink } = collectEvents();
+    const service = new ContractService(repoConSnapshot, snapPort, sink);
+
+    const updated = await service.updateDocument(
+      contract.id,
+      "<p>Original + punto nuevo</p>"
+    );
+
+    expect(captured[0]!.documentoHtml).toBe("<p>Original + punto nuevo</p>");
+    expect(captured[0]!.datosContrato).toEqual(snapshot.datosContrato);
+    expect(updated.snapshotId).toBe("snap-nuevo");
+    expect(events).toContain("CONTRACT_UPDATED");
+  });
+
+  it("updateDocument: rechaza contratos sin snapshot", async () => {
+    const { repo } = makeRepo(makeDirectContract(ContractStatus.BORRADOR));
+    const service = new ContractService(repo, makeSnapshotPort());
+
+    await expect(
+      service.updateDocument("contract-firmado", "<p>x</p>")
+    ).rejects.toThrow(/emitido/);
+  });
 });
 
 function makeDirectContract(

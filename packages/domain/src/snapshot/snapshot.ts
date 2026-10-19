@@ -10,6 +10,8 @@ export interface ContractSnapshot {
   datosContrato: Record<string, unknown>;
   clausulas: Array<{ versionId: UUID; contenido: string }>;
   anexos: Array<{ versionId: UUID; contenido: string }>;
+  /** HTML editable congelado usado para generar el PDF (NULL = plantilla). */
+  documentoHtml?: string | null;
   inmutable: boolean;
   emitidoEn: string | null;
   createdAt: string;

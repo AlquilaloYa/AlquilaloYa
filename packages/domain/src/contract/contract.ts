@@ -80,6 +80,8 @@ export interface Contract extends AuditableEntity {
   mascotasItems: string[];
   /** Ficha de datos del arrendatario (hoja de datos del PDF sin adjuntos). */
   datosArrendatario: DatosArrendatario | null;
+  /** HTML editable del documento (NULL = usar la plantilla de la versión). */
+  documentoHtml?: string | null;
   /** Motivo registrado al resolver el contrato. */
   motivoResolucion: string | null;
   /** Fecha en la que se resolvió el contrato. */
@@ -117,6 +119,7 @@ export type UpdateDraftInput = Partial<
     | "muebleriaItems"
     | "mascotasItems"
     | "datosArrendatario"
+    | "documentoHtml"
   >
 >;
 

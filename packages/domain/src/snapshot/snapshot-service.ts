@@ -27,6 +27,7 @@ export class SnapshotService {
       datosContrato: data.datosContrato,
       clausulas: data.clausulas,
       anexos: data.anexos,
+      documentoHtml: data.documentoHtml ?? null,
     });
     return { id: created.id, codigoContrato: created.codigoContrato };
   }

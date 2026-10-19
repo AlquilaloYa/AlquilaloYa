@@ -23,6 +23,7 @@ function toDomain(s: SnapshotRow): ContractSnapshot {
     anexos: Array.isArray(s.anexos)
       ? (s.anexos as Array<{ versionId: UUID; contenido: string }>)
       : [],
+    documentoHtml: s.documentoHtml ?? null,
     inmutable: s.inmutable,
     emitidoEn: s.emitidoEn ? s.emitidoEn.toISOString() : null,
     createdAt: s.createdAt.toISOString(),
@@ -42,6 +43,7 @@ export class DrizzleSnapshotRepository implements SnapshotRepository {
         datosContrato: input.datosContrato,
         clausulas: input.clausulas as unknown as Record<string, unknown>,
         anexos: input.anexos as unknown as Record<string, unknown>,
+        documentoHtml: input.documentoHtml ?? null,
       })
       .returning();
     if (!row) {

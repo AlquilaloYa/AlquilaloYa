@@ -8,6 +8,7 @@ import { apiFetch } from "@/lib/api";
 import { AlertTriangle, ArrowLeft, CalendarPlus, Download, File, FileText, Pencil, ShieldCheck, Upload } from "lucide-react";
 import { AdendaModal, EditAdendaModal, ExtensionModal, type EditableAdenda } from "@/components/adenda-modals";
 import { ServiciosExtrasPanel } from "@/components/servicios-extras";
+import { EditorDocumentoModal } from "@/components/editor-documento-modal";
 
 type SnapshotCliente = {
   id: string;
@@ -44,6 +45,7 @@ type Snapshot = {
   datosContrato: SnapshotContrato;
   clausulas: Array<{ versionId: string; contenido: string }>;
   anexos: Array<{ versionId: string; contenido: string }>;
+  documentoHtml?: string | null;
   inmutable: boolean;
   emitidoEn: string | null;
   createdAt: string;
@@ -73,6 +75,7 @@ type ContractDetail = {
   separacion?: boolean;
   muebleriaItems?: string[];
   mascotasItems?: string[];
+  documentoHtml?: string | null;
   motivoResolucion?: string | null;
   resueltoEn?: string | null;
   cliente: {
@@ -86,7 +89,7 @@ type ContractDetail = {
     telefono: string | null;
   };
   departamento: { id: string; nombre: string };
-  plantillaVersion: { id: string; version: number };
+  plantillaVersion: { id: string; version: number; contenido: string | null };
   snapshot: Snapshot | null;
 };
 
@@ -136,6 +139,7 @@ export default function ContratoDetailPage() {
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"ficha" | "adendas" | "servicios-extras">("ficha");
+  const [showDocEditor, setShowDocEditor] = useState(false);
 
   async function descargarPdf() {
     setDescargando(true);
@@ -395,7 +399,15 @@ export default function ContratoDetailPage() {
                     <ShieldCheck className="h-5 w-5" />
                     Documentos
                   </h3>
-<div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowDocEditor(true)}
+                        title="Editar el HTML con el que se genera el PDF del contrato"
+                        className="inline-flex items-center gap-2 rounded border border-outline-variant px-3 py-2 font-label-md text-primary hover:bg-surface-container dark:border-transparent"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Editar documento
+                      </button>
                       {contract.snapshot ? (
                         <button
                           onClick={descargarPdf}
@@ -1016,6 +1028,28 @@ export default function ContratoDetailPage() {
             onClose={() => setEditarAdenda(null)}
             onSaved={async () => {
               setEditarAdenda(null);
+              await load();
+            }}
+          />
+        ) : null}
+        {showDocEditor && contract ? (
+          <EditorDocumentoModal
+            contractId={contract.id}
+            codigoContrato={contract.codigoContrato}
+            emitido={Boolean(contract.snapshot)}
+            htmlInicial={
+              contract.snapshot
+                ? contract.snapshot.documentoHtml ??
+                  contract.plantillaVersion.contenido ??
+                  ""
+                : contract.documentoHtml ??
+                  contract.plantillaVersion.contenido ??
+                  ""
+            }
+            plantillaHtml={contract.plantillaVersion.contenido ?? null}
+            onClose={() => setShowDocEditor(false)}
+            onSaved={async () => {
+              setShowDocEditor(false);
               await load();
             }}
           />

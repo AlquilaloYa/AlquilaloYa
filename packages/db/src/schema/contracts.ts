@@ -6,6 +6,7 @@ import {
   integer,
   date,
   jsonb,
+  text,
   timestamp,
   uuid,
   varchar,
@@ -56,6 +57,8 @@ export const contracts = pgTable(
     muebleriaItems: jsonb("muebleria_items").notNull().default([]),
     mascotasItems: jsonb("mascotas_items").notNull().default([]),
     datosArrendatario: jsonb("datos_arrendatario"),
+    /** HTML editable del documento (override del borrador; NULL = usar la plantilla). */
+    documentoHtml: text("documento_html"),
     motivoResolucion: varchar("motivo_resolucion", { length: 500 }),
     resueltoEn: timestamp("resuelto_en", { withTimezone: true }),
     creadoPor: uuid("creado_por"),

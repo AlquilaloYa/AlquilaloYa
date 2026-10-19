@@ -345,7 +345,10 @@ async function renderPdf(
     }
   }
 
-  return generateContractPdf(snapshot, templateHtml);
+  return generateContractPdf(
+    snapshot,
+    snapshot.documentoHtml ?? templateHtml
+  );
 }
 
 function pdfResponse(bytes: Uint8Array, filename: string): NextResponse {

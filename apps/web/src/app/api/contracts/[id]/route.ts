@@ -304,6 +304,47 @@ export async function POST(request: Request, { params }: Ctx) {
         }
         return NextResponse.json(contract.snapshot ?? null);
       }
+      case "editDocument": {
+        const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
+        if (denied) return denied;
+        const data = body as { action: string; documentoHtml?: string };
+        const documentoHtml = (data.documentoHtml ?? "").toString();
+        if (!documentoHtml.trim()) {
+          return NextResponse.json(
+            { error: "El documento HTML no puede estar vacío" },
+            { status: 400 }
+          );
+        }
+        const updated = await contractService.updateDocument(
+          params.id,
+          documentoHtml
+        );
+        try {
+          const { db, schema } = dbModule as {
+            db: typeof import("@contract/db").db;
+            schema: typeof import("@contract/db").schema;
+          };
+          const doc = await ensureContractPdfDocument(
+            db,
+            schema,
+            contractRepository,
+            params.id
+          );
+          return NextResponse.json({
+            ...updated,
+            documentoPdf: doc
+              ? {
+                  id: doc.id,
+                  filename: doc.filename,
+                  version: doc.version,
+                  almacenado: Boolean(doc.storageKey),
+                }
+              : null,
+          });
+        } catch {
+          return NextResponse.json({ ...updated, documentoPdf: null });
+        }
+      }
       default:
         return NextResponse.json(
           { error: `Acción no soportada: ${body.action}` },

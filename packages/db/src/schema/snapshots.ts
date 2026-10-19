@@ -3,6 +3,7 @@ import {
   index,
   jsonb,
   pgTable,
+  text,
   timestamp,
   uuid,
   varchar,
@@ -28,6 +29,8 @@ export const contractSnapshots = pgTable(
     datosContrato: jsonb("datos_contrato").notNull(),
     clausulas: jsonb("clausulas").notNull().default([]),
     anexos: jsonb("anexos").notNull().default([]),
+    /** HTML congelado usado para generar el PDF (NULL = plantilla de la versión). */
+    documentoHtml: text("documento_html"),
     inmutable: boolean("inmutable").notNull().default(false),
     emitidoEn: timestamp("emitido_en", { withTimezone: true }),
     /** Borrado lógico en cascada desde un contacto (contratos, contratos finales y adendas). */

@@ -232,13 +232,17 @@ export async function ensureContractPdfDocument(
   },
   contractId: string
 ): Promise<DocumentRow | null> {
-  const existing = await findContractPdfDocument(db, schema, contractId);
-  if (existing?.storageKey) return existing;
-
   const contract = await contractRepository.findWithRelations(contractId);
   if (!contract) return null;
   const snapshot = contract.snapshot;
   if (!snapshot || !snapshot.inmutable) return null;
+
+  // Solo reutiliza el PDF si corresponde al snapshot vigente (al editar un
+  // contrato emitido se crea un snapshot nuevo y se genera una nueva versión).
+  const existing = await findContractPdfDocument(db, schema, contractId);
+  if (existing?.storageKey && existing.snapshotId === snapshot.id) {
+    return existing;
+  }
 
   // Buscar el HTML de la plantilla para usarlo como base del PDF
   let templateHtml: string | null = null;
@@ -257,13 +261,21 @@ export async function ensureContractPdfDocument(
   }
 
   const { generateContractPdf } = await import("./pdf/generate-pdf");
-  const pdf = await generateContractPdf(snapshot, templateHtml);
+  const version = (existing?.version ?? 0) + 1;
+  const pdf = await generateContractPdf(
+    snapshot,
+    snapshot.documentoHtml ?? templateHtml
+  );
   return registerGeneratedDocument(db, schema, {
     contractId: contract.id,
     snapshotId: snapshot.id,
     tipo: "CONTRATO_PDF",
-    version: existing?.version ?? 1,
-    filename: `${contract.codigoContrato}.pdf`,
+    version,
+    // Cada versión usa su propio archivo para conservar las anteriores.
+    filename:
+      version > 1
+        ? `${contract.codigoContrato}-v${version}.pdf`
+        : `${contract.codigoContrato}.pdf`,
     bytes: pdf.bytes,
     idempotencyKey: `contract:${contract.id}:document:${snapshot.id}`,
   });

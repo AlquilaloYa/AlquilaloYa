@@ -142,7 +142,17 @@ export class ContractService {
       throw new Error("Contrato no encontrado");
     }
     if (current.estado !== StatusConst.BORRADOR) {
-      throw new Error("Solo pueden editarse contratos en estado BORRADOR");
+      // El HTML del documento también puede ajustarse en PENDIENTE_EMISION
+      // (aún sin snapshot): el resto de campos sigue bloqueado.
+      const soloDocumento = Object.keys(changes).every(
+        (key) => key === "documentoHtml"
+      );
+      if (
+        !soloDocumento ||
+        current.estado !== StatusConst.PENDIENTE_EMISION
+      ) {
+        throw new Error("Solo pueden editarse contratos en estado BORRADOR");
+      }
     }
     if (current.snapshotId) {
       throw new Error("El contrato ya fue emitido y no puede editarse");
@@ -155,6 +165,50 @@ export class ContractService {
       current.estado
     );
     return updated;
+  }
+
+  /**
+   * Edita el HTML del documento de un contrato ya emitido.
+   * Crea un NUEVO snapshot (nueva versión) con el HTML modificado y lo deja como
+   * vigente; el snapshot anterior se conserva como historial (inmutable).
+   */
+  async updateDocument(id: UUID, documentoHtml: string): Promise<Contract> {
+    const current = await this.repo.findById(id);
+    if (!current) {
+      throw new Error("Contrato no encontrado");
+    }
+    if (!current.snapshotId) {
+      throw new Error(
+        "El contrato aún no fue emitido; edita el documento desde el borrador"
+      );
+    }
+    const withRelations = await this.repo.findWithRelations(id);
+    const snapshot = withRelations?.snapshot;
+    if (!snapshot) {
+      throw new Error("Snapshot del contrato no encontrado");
+    }
+
+    const nuevo = await this.snapshots.create({
+      codigoContrato: snapshot.codigoContrato,
+      plantillaVersionId: snapshot.plantillaVersionId,
+      datosCliente: snapshot.datosCliente,
+      datosDepartamento: snapshot.datosDepartamento,
+      datosContrato: snapshot.datosContrato,
+      clausulas: snapshot.clausulas,
+      anexos: snapshot.anexos,
+      documentoHtml,
+    });
+
+    await this.repo.setSnapshot(id, nuevo.id);
+    await this.emit(
+      EventName.CONTRACT_UPDATED,
+      id,
+      current.estado,
+      current.estado,
+      nuevo.id,
+      { documentoEditado: true }
+    );
+    return (await this.repo.findById(id)) ?? current;
   }
 
   /** Solicitar emisión: BORRADOR -> PENDIENTE_EMISION. */
@@ -204,6 +258,7 @@ export class ContractService {
       },
       clausulas,
       anexos,
+      documentoHtml: contract.documentoHtml ?? null,
     });
 
     await this.emit(
@@ -331,6 +386,10 @@ export class ContractService {
     }
 
     const count = await this.repo.countRenovaciones(current.codigoContrato);
+    const latestSnapshotHtml =
+      (await this.repo.findWithRelations(id))?.snapshot?.documentoHtml ??
+      current.documentoHtml ??
+      null;
     const nuevo = await this.repo.create({
       codigoContrato: `${current.codigoContrato}-R${count + 1}`,
       clienteId: current.clienteId,
@@ -348,6 +407,7 @@ export class ContractService {
       muebleriaItems: current.muebleriaItems,
       mascotasItems: current.mascotasItems ?? [],
       datosArrendatario: current.datosArrendatario,
+      documentoHtml: latestSnapshotHtml,
     });
 
     await this.emit(
