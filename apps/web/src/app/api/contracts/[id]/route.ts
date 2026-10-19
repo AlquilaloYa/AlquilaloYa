@@ -23,7 +23,27 @@ export async function GET(req: Request, { params }: Ctx) {
     if (!contract) {
       return NextResponse.json({ error: "No encontrado" }, { status: 404 });
     }
-    return NextResponse.json(contract);
+    // Datos vivos para la aproximación de vista previa del editor de documento.
+    const source = contract.snapshot
+      ? {
+          cliente: contract.snapshot.datosCliente,
+          departamento: contract.snapshot.datosDepartamento,
+          contrato: contract.snapshot.datosContrato,
+        }
+      : {
+          cliente: contract.cliente,
+          departamento: contract.departamento,
+          contrato: {
+            montoCanonMensual: contract.montoCanonMensual,
+            depositoGarantia: contract.depositoGarantia,
+            fechaInicio: contract.fechaInicio,
+            fechaFin: contract.fechaFin,
+            mascotasItems: contract.mascotasItems ?? [],
+            muebleriaItems: contract.muebleriaItems ?? [],
+            separacionDetalle: contract.separacionDetalle,
+          },
+        };
+    return NextResponse.json({ ...contract, source });
   } catch (error) {
     return NextResponse.json(
       { error: (error as Error).message },
