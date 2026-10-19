@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { EditorDocumentoModal } from "@/components/editor-documento-modal";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
@@ -17,7 +18,7 @@ import { MASCOTAS, etiquetasDeIds } from "@/lib/catalogos";
 import { inventarioDepartamento, cargarInventarios } from "@/lib/inventarios-departamento";
 import { migrarDatosLocales } from "@/lib/migracion-local";
 import { useAuth } from "@/lib/auth-context";
-import { Download, Plus, RefreshCw, X } from "lucide-react";
+import { Download, Pencil, Plus, RefreshCw, X } from "lucide-react";
 
 type ContractApi = {
   id: string;
@@ -43,6 +44,22 @@ type ContractApi = {
   clienteNombre: string;
   apellidoCliente: string;
   departamentoNombre: string;
+};
+
+type ContractDocDetailApi = {
+  id: string;
+  codigoContrato: string;
+  documentoHtml?: string | null;
+  plantillaVersion?: { contenido?: string | null } | null;
+  snapshot?: { documentoHtml?: string | null } | null;
+};
+
+type DocEditorState = {
+  contractId: string;
+  codigoContrato: string;
+  emitido: boolean;
+  htmlInicial: string;
+  plantillaHtml: string | null;
 };
 
 type ClientApi = {
@@ -175,6 +192,8 @@ export default function ContratosPage() {
   const [busy, setBusy] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [regenerandoId, setRegenerandoId] = useState<string | null>(null);
+  const [docEditor, setDocEditor] = useState<DocEditorState | null>(null);
+  const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
   const [separaciones, setSeparaciones] = useState<SeparacionRecord[]>([]);
   const [contactos, setContactos] = useState<ContactSeed[]>([]);
   const [, setTick] = useState(0);
@@ -324,6 +343,37 @@ export default function ContratosPage() {
     } finally {
       setRegenerandoId(null);
       await load();
+    }
+  }
+
+  async function abrirEditorDocumento(contract: ContractApi) {
+    setLoadingDocId(contract.id);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/contracts/${contract.id}`);
+      const body = (await res.json().catch(() => ({}))) as
+        | ContractDocDetailApi
+        | { error?: string };
+      if (!res.ok) {
+        throw new Error(
+          ("error" in body && body.error) || "No se pudo cargar el contrato"
+        );
+      }
+      const detail = body as ContractDocDetailApi;
+      const plantillaHtml = detail.plantillaVersion?.contenido ?? null;
+      setDocEditor({
+        contractId: detail.id,
+        codigoContrato: detail.codigoContrato,
+        emitido: Boolean(detail.snapshot),
+        htmlInicial: detail.snapshot
+          ? detail.snapshot.documentoHtml ?? plantillaHtml ?? ""
+          : detail.documentoHtml ?? plantillaHtml ?? "",
+        plantillaHtml,
+      });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoadingDocId(null);
     }
   }
 
@@ -616,6 +666,16 @@ res.push({
                               {downloadingId === r.id ? "Descargando…" : "Descargar PDF"}
                             </button>
                           ) : null}
+                          <button
+                            type="button"
+                            disabled={busy || loadingDocId === r.id}
+                            onClick={() => void abrirEditorDocumento(r)}
+                            className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 font-label-md font-semibold text-white shadow-sm transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
+                            title="Editar el HTML con el que se genera el PDF"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            {loadingDocId === r.id ? "…" : "Editar documento"}
+                          </button>
                           {isAdmin && r.snapshotId && ["EMITIDO", "PENDIENTE_FIRMA", "FIRMADO", "NOTARIADO"].includes(r.estado) ? (
                             <button
                               type="button"
@@ -703,6 +763,20 @@ res.push({
           onClose={() => setRenewing(null)}
           onDone={async () => {
             setRenewing(null);
+            await load();
+          }}
+        />
+      ) : null}
+      {docEditor ? (
+        <EditorDocumentoModal
+          contractId={docEditor.contractId}
+          codigoContrato={docEditor.codigoContrato}
+          emitido={docEditor.emitido}
+          htmlInicial={docEditor.htmlInicial}
+          plantillaHtml={docEditor.plantillaHtml}
+          onClose={() => setDocEditor(null)}
+          onSaved={async () => {
+            setDocEditor(null);
             await load();
           }}
         />

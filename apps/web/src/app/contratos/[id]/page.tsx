@@ -403,7 +403,7 @@ export default function ContratoDetailPage() {
                       <button
                         onClick={() => setShowDocEditor(true)}
                         title="Editar el HTML con el que se genera el PDF del contrato"
-                        className="inline-flex items-center gap-2 rounded border border-outline-variant px-3 py-2 font-label-md text-primary hover:bg-surface-container dark:border-transparent"
+                        className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 font-label-md font-semibold text-white shadow-sm transition-colors hover:bg-green-700"
                       >
                         <Pencil className="h-4 w-4" />
                         Editar documento

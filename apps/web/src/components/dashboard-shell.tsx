@@ -394,7 +394,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <div className={`mb-8 flex items-center ${collapsed ? "justify-center px-0" : "justify-between gap-2 px-5"}`}>
           {!collapsed ? (
             <>
-              <h1 className="font-headline-md font-bold leading-tight text-primary dark:text-white">AlquilaYa ERP</h1>
+              <div className="flex min-w-0 items-center gap-2">
+                <img
+                  src="/app-icon.png"
+                  alt=""
+                  className="h-8 w-8 shrink-0 rounded-lg"
+                />
+                <h1 className="truncate font-headline-md font-bold leading-tight text-primary dark:text-white">AlquilaYa ERP</h1>
+              </div>
               <button
                 onClick={() => setCollapsed(true)}
                 className="flex h-8 w-8 items-center justify-center rounded text-on-surface-variant transition-colors hover:bg-surface-container-high dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white"

@@ -25,9 +25,9 @@ export default function AccesoAppPage() {
     <div className="flex min-h-screen items-center justify-center bg-surface px-6 text-on-surface">
       <div className="w-full max-w-md rounded-2xl border border-outline-variant bg-surface-container-lowest p-8 text-center shadow-sm">
         <img
-          src="/logo-black-mode.png"
+          src="/logo-white-mode.png"
           alt="AlquilaYa Repair"
-          className="mx-auto h-14 w-20 object-contain"
+          className="mx-auto h-12 w-auto object-contain"
         />
         <h1 className="mt-6 font-headline-md font-bold">Acceso solo desde la app móvil</h1>
         <p className="mt-3 font-body-md text-on-surface-variant">

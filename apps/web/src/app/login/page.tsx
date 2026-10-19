@@ -67,7 +67,7 @@ export default function LoginPage() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/65 via-slate-950/40 to-slate-950/65" />
         <div className="relative flex items-center gap-3 text-white">
-          <img src="/logo-black-mode.png" alt="AlquilaYa ERP" className="h-12 w-16 object-contain" />
+          <img src="/logo-black-mode.png" alt="AlquilaYa ERP" className="h-10 w-auto object-contain" />
           <div>
             <span className="block font-headline-md font-bold text-white">AlquilaYa ERP</span>
             <span className="font-label-md uppercase tracking-wider text-white/85">Sistema de gestión integral ERP</span>
@@ -98,8 +98,8 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
             <div className="flex items-center gap-2">
-              <img src="/logo-white-mode.png" alt="AlquilaYa ERP" className="h-9 w-12 object-contain dark:hidden" />
-              <img src="/logo-black-mode.png" alt="AlquilaYa ERP" className="hidden h-9 w-12 object-contain dark:block" />
+              <img src="/logo-white-mode.png" alt="AlquilaYa ERP" className="h-8 w-auto object-contain dark:hidden" />
+              <img src="/logo-black-mode.png" alt="AlquilaYa ERP" className="hidden h-8 w-auto object-contain dark:block" />
               <span className="font-headline-md font-bold text-primary">AlquilaYa ERP</span>
             </div>
           </div>
