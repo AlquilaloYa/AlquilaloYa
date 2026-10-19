@@ -477,6 +477,7 @@ export async function PATCH(request: Request) {
       numeroAdenda?: string;
       fechaInicioAdenda?: string;
       fechaFinAdenda?: string;
+      documentoHtml?: string;
     };
     if (!body.documentId) {
       return NextResponse.json(
@@ -610,11 +611,21 @@ export async function PATCH(request: Request) {
       .set({
         datosContrato,
         anexos: anexos as unknown as Record<string, unknown>,
+        ...(typeof body.documentoHtml === "string"
+          ? { documentoHtml: body.documentoHtml.trim() || null }
+          : {}),
       })
       .where(eq(schema.contractSnapshots.id, snapshot.id));
 
     // 3) Regenerar el PDF desde el snapshot actualizado y reemplazarlo.
-    const snapshotActualizado = { ...snapshot, datosContrato, anexos };
+    const snapshotActualizado = {
+      ...snapshot,
+      datosContrato,
+      anexos,
+      ...(typeof body.documentoHtml === "string"
+        ? { documentoHtml: body.documentoHtml.trim() || null }
+        : {}),
+    };
     let pdf: Awaited<ReturnType<typeof generateAdendaPdf>>;
     try {
       pdf = await generateAdendaPdf(snapshotActualizado);

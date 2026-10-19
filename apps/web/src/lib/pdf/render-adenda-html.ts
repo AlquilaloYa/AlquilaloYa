@@ -226,6 +226,10 @@ function datosCuenta(departamento: Record<string, unknown>): string {
  * la plantilla formal (modelo Benavides) con el nuevo plazo de la adenda.
  */
 export async function renderAdendaHtml(snapshot: ContractSnapshot): Promise<string> {
+  // HTML editado manualmente: se congela en el snapshot y se usa tal cual.
+  if (snapshot.documentoHtml && snapshot.documentoHtml.trim()) {
+    return snapshot.documentoHtml;
+  }
   // La adenda sale con el contacto/cliente actual: si se corrigió el nombre u
   // otros datos del cliente, se reflejan aquí aunque el contrato los tenga
   // congelados en su snapshot.

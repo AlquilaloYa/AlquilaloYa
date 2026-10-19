@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import { buildContractServices } from "@/lib/contract-app";
+import { findDocumentById } from "@/lib/documents";
+import { renderAdendaHtml } from "@/lib/pdf/render-adenda-html";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /**
- * GET /api/adendas/:id  — detalle de una adenda para editarla.
- * Devuelve datosContrato (título, numeración, fechas) y el anexo con su
- * contenido para precargar el modal de edición.
+ * GET /api/adendas/:id
+ * Detalle de una adenda para su edición: devuelve el HTML actual (el congelado
+ * en el snapshot o, si no hay, el render generado como plantilla base) y los
+ * metadatos del snapshot.
  */
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: Request, { params }: { params: { id: string } }) {
   try {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
@@ -25,55 +26,46 @@ export async function GET(
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq } = await import("drizzle-orm");
-    const { id } = await params;
 
-    const [row] = await db
-      .select({
-        id: schema.documents.id,
-        contractId: schema.documents.contractId,
-        snapshotId: schema.documents.snapshotId,
-        tipo: schema.documents.tipo,
-        version: schema.documents.version,
-        filename: schema.documents.filename,
-        estadoGeneracion: schema.documents.estadoGeneracion,
-        createdAt: schema.documents.createdAt,
-        datosContrato: schema.contractSnapshots.datosContrato,
-        anexos: schema.contractSnapshots.anexos,
-        codigoContrato: schema.contracts.codigoContrato,
-      })
-      .from(schema.documents)
-      .innerJoin(schema.contracts, eq(schema.documents.contractId, schema.contracts.id))
-      .leftJoin(
-        schema.contractSnapshots,
-        eq(schema.documents.snapshotId, schema.contractSnapshots.id)
-      )
-      .where(eq(schema.documents.id, id))
-      .limit(1);
-
-    if (!row) {
+    const doc = await findDocumentById(db, schema, params.id);
+    if (!doc) {
       return NextResponse.json({ error: "Adenda no encontrada" }, { status: 404 });
     }
-    if (!["ADENDA", "ADENDA_EXTENSION"].includes(row.tipo)) {
-      return NextResponse.json({ error: "El documento no es una adenda" }, { status: 400 });
+    if (!["ADENDA", "ADENDA_EXTENSION"].includes(doc.tipo)) {
+      return NextResponse.json(
+        { error: "El documento no es una adenda" },
+        { status: 400 }
+      );
+    }
+    if (!doc.snapshotId) {
+      return NextResponse.json(
+        { error: "La adenda no tiene snapshot asociado" },
+        { status: 400 }
+      );
     }
 
-    const anexoContenido = Array.isArray(row.anexos)
-      ? String((row.anexos[0] as Record<string, unknown> | undefined)?.contenido ?? "")
-      : "";
+    const { snapshotRepository } = await buildContractServices();
+    const snapshot = await snapshotRepository.findById(doc.snapshotId);
+    if (!snapshot) {
+      return NextResponse.json(
+        { error: "Snapshot de la adenda no encontrado" },
+        { status: 404 }
+      );
+    }
+
+    const documentoHtml = snapshot.documentoHtml ?? null;
+    // Base para editar: el HTML congelado o el render actual como plantilla.
+    const htmlActual = documentoHtml ?? (await renderAdendaHtml(snapshot));
 
     return NextResponse.json({
-      id: row.id,
-      contractId: row.contractId,
-      snapshotId: row.snapshotId,
-      tipo: row.tipo,
-      version: row.version,
-      filename: row.filename,
-      estadoGeneracion: row.estadoGeneracion,
-      createdAt: row.createdAt?.toISOString?.() ?? null,
-      codigoContrato: row.codigoContrato,
-      datosContrato: row.datosContrato as Record<string, unknown> | null,
-      anexoContenido,
+      id: doc.id,
+      contractId: doc.contractId,
+      snapshotId: doc.snapshotId,
+      tipo: doc.tipo,
+      filename: doc.filename,
+      codigoContrato: snapshot.codigoContrato,
+      documentoHtml,
+      htmlActual,
     });
   } catch (error) {
     return NextResponse.json(
