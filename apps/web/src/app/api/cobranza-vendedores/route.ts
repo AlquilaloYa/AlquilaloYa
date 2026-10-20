@@ -8,18 +8,16 @@ import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-const PERSONAS = ["miguel", "emely", "evelin"] as const;
+const PERSONAS = ["miguel", "emely"] as const;
 const NOMBRES: Record<string, string> = {
   miguel: "Miguel",
   emely: "Emely",
-  evelin: "Evelyn",
 };
 
 function normalizarPersona(p: string): string | null {
   const v = p.trim().toLowerCase();
   if (v.startsWith("miguel")) return "miguel";
   if (v.startsWith("emely")) return "emely";
-  if (v.startsWith("evelin") || v.startsWith("evelyn")) return "evelin";
   return null;
 }
 

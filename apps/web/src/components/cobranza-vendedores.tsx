@@ -53,7 +53,6 @@ const ESTADO_META: Record<string, { label: string; cls: string }> = {
 const AGENT_COLORS: Record<string, { dot: string; slice: string }> = {
   miguel: { dot: "bg-blue-500", slice: "rgb(96, 165, 250)" },
   emely: { dot: "bg-emerald-500", slice: "rgb(16, 185, 129)" },
-  evelin: { dot: "bg-violet-500", slice: "rgb(167, 139, 250)" },
 };
 
 function estadoDepartamento(d: DepartamentoAsignado): {
@@ -87,7 +86,6 @@ function compacto(n: number): string {
 const VENDEDORES_INICIALES: Vendedor[] = [
   { key: "miguel", nombre: "Miguel", generado: 0, porCobrar: 0, porcentaje: 0, contratos: [], departamentos: [] },
   { key: "emely", nombre: "Emely", generado: 0, porCobrar: 0, porcentaje: 0, contratos: [], departamentos: [] },
-  { key: "evelin", nombre: "Evelyn", generado: 0, porCobrar: 0, porcentaje: 0, contratos: [], departamentos: [] },
 ];
 
 export function CobranzaVendedores() {
