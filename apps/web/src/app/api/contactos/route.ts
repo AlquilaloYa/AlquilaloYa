@@ -69,7 +69,7 @@ telefono: r.telefono ?? "",
 
 type DbModule = typeof import("@contract/db");
 
-/** Normaliza un nombre: minúsculas, sin tildes ni signos, espacios simples. */
+/** Normaliza un nombre: minusculas, sin tildes ni signos, espacios simples. */
 function normalizarNombre(valor: string): string {
   return valor
     .normalize("NFD")
@@ -80,12 +80,12 @@ function normalizarNombre(valor: string): string {
     .trim();
 }
 
-/** Solo los dígitos de un documento (DNI/RUC). */
+/** Solo los digitos de un documento (DNI/RUC). */
 function soloDigitos(valor: string): string {
   return valor.replace(/\D/g, "");
 }
 
-/** Últimos 9 dígitos de un teléfono (ignora código de país y separadores). */
+/** Ultimos 9 digitos de un telefono (ignora codigo de pais y separadores). */
 function colaTelefono(valor: string): string {
   const digitos = soloDigitos(valor);
   return digitos.length > 9 ? digitos.slice(-9) : digitos;
@@ -127,7 +127,7 @@ async function detectarListaNegra(
     }
     if (tel.length >= 7 && colaTelefono(persona.telefono ?? "") === tel) {
       return {
-        motivo: `El teléfono coincide con una persona registrada en la lista negra`,
+        motivo: `El telefono coincide con una persona registrada en la lista negra`,
         persona,
       };
     }
@@ -212,7 +212,7 @@ async function sincronizarClientesDesdeContacto(
   return ligados.length;
 }
 
-/** GET /api/contactos â€” listado (?dni= filtra por documento). */
+/** GET /api/contactos - listado (?dni= filtra por documento). */
 export async function GET(req: Request) {
   try {
     const dbModule = await import("@contract/db");
@@ -238,7 +238,7 @@ export async function GET(req: Request) {
   }
 }
 
-/** POST /api/contactos â€” crea un contacto. */
+/** POST /api/contactos - crea un contacto. */
 export async function POST(req: Request) {
   try {
     const dbModule = await import("@contract/db");
@@ -265,7 +265,7 @@ export async function POST(req: Request) {
     if (alerta) {
       return NextResponse.json(
         {
-          error: "Cliente problemático: no se puede registrar.",
+          error: "Cliente problematico: no se puede registrar.",
           code: "BLACKLIST_MATCH",
           motivo: alerta.motivo,
           persona: alerta.persona,
@@ -315,11 +315,9 @@ ruc: body.ruc || null,
   }
 }
 
-/** PUT /api/contactos â€” actualiza por id. */
+/** PUT /api/contactos - actualiza por id. */
 export async function PUT(req: Request) {
   try {
-    // Un contacto ya guardado puede editarse libremente; la alerta de lista
-    // negra se aplica al registrar (POST).
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
@@ -349,7 +347,7 @@ export async function PUT(req: Request) {
     if (alerta) {
       return NextResponse.json(
         {
-          error: "Cliente problemático: no se puede registrar.",
+          error: "Cliente problematico: no se puede registrar.",
           code: "BLACKLIST_MATCH",
           motivo: alerta.motivo,
           persona: alerta.persona,
@@ -401,7 +399,7 @@ ruc: body.ruc || null,
   }
 }
 
-/** DELETE /api/contactos?id= â€” borra el contacto y todo lo generado a partir de el. */
+/** DELETE /api/contactos?id= - borra el contacto y todo lo generado a partir de el. */
 export async function DELETE(req: Request) {
   try {
     const dbModule = await import("@contract/db");
@@ -466,7 +464,7 @@ export async function DELETE(req: Request) {
         : [];
 
       // 4. Snapshots: el congelado del contrato, los de cada documento y los de
-      //    las adendas, que comparten el código base con sufijo "-ADD-N".
+      //    las adendas, que comparten el cÃ³digo base con sufijo "-ADD-N".
       const snapshotIds = new Set<string>();
       for (const c of contratos) if (c.snapshotId) snapshotIds.add(c.snapshotId);
       for (const d of docs) if (d.snapshotId) snapshotIds.add(d.snapshotId);
