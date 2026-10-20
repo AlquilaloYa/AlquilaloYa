@@ -25,3 +25,4 @@ export * from "./attendance";
 export * from "./permission-requests";
 export * from "./servicios-extras";
 export * from "./personas-no-alquilar";
+export * from "./accounting";

@@ -52,6 +52,9 @@ import {
   Table,
   ExternalLink,
   Globe,
+  Scale,
+  TrendingUp,
+  Waves,
   type LucideIcon,
 } from "lucide-react";
 
@@ -115,7 +118,27 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "hr.read", group: "rrhh" },
   { href: "/cronograma-asistencia", label: "Registro de asistencia", icon: AlarmClock, section: "Recursos Humanos", permission: "attendance.read", group: "rrhh" },
-  { href: "/contabilidad", label: "Contabilidad", icon: Calculator, section: "Contabilidad", group: "contabilidad" },
+  {
+    href: "/contabilidad/balance-general",
+    label: "Balance General",
+    icon: Scale,
+    section: "Contabilidad",
+    group: "contabilidad",
+  },
+  {
+    href: "/contabilidad/estado-resultados",
+    label: "Estado de Resultados",
+    icon: TrendingUp,
+    section: "Contabilidad",
+    group: "contabilidad",
+  },
+  {
+    href: "/contabilidad/flujo-financiero",
+    label: "Flujo de Efectivo",
+    icon: Waves,
+    section: "Contabilidad",
+    group: "contabilidad",
+  },
   { href: "/google/gmail", label: "Gmail", icon: Mail, section: "Google SyS", group: "google" },
   { href: "/google/drive", label: "Google Drive", icon: HardDrive, section: "Google SyS", group: "google" },
   { href: "/google/sheets", label: "Google Sheets", icon: Table, section: "Google SyS", group: "google" },
