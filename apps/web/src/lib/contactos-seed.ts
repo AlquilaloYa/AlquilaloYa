@@ -45,6 +45,24 @@ export async function obtenerContactos(): Promise<ContactSeed[]> {
   }
 }
 
+/** Persona de la lista negra que coincide al registrar un contacto. */
+export interface PersonaBloqueada {
+  nombres: string;
+  documentoIdentidad: string;
+}
+
+/** Error devuelto cuando el contacto coincide con la lista negra. */
+export class ClienteProblematicoError extends Error {
+  readonly motivo: string;
+  readonly persona: PersonaBloqueada | null;
+  constructor(mensaje: string, motivo: string, persona: PersonaBloqueada | null) {
+    super(mensaje);
+    this.name = "ClienteProblematicoError";
+    this.motivo = motivo;
+    this.persona = persona;
+  }
+}
+
 export async function crearContacto(data: ContactSeed): Promise<ContactSeed> {
   const res = await apiFetch("/api/contactos", {
     method: "POST",
@@ -52,8 +70,19 @@ export async function crearContacto(data: ContactSeed): Promise<ContactSeed> {
     body: JSON.stringify(data),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error ?? "No se pudo crear el contacto");
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      motivo?: string;
+      persona?: PersonaBloqueada;
+    };
+    if (res.status === 409 && body.motivo) {
+      throw new ClienteProblematicoError(
+        body.error ?? "Cliente problemático: no se puede registrar.",
+        body.motivo,
+        body.persona ?? null,
+      );
+    }
+    throw new Error(body.error ?? "No se pudo crear el contacto");
   }
   return (await res.json()) as ContactSeed;
 }

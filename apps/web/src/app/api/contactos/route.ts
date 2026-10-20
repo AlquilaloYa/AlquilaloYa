@@ -1,4 +1,4 @@
-Ôªøimport { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { desc, eq, isNull } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
@@ -69,6 +69,94 @@ telefono: r.telefono ?? "",
 
 type DbModule = typeof import("@contract/db");
 
+/** Normaliza un nombre: min˙sculas, sin tildes ni signos, espacios simples. */
+function normalizarNombre(valor: string): string {
+  return valor
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Solo los dÌgitos de un documento (DNI/RUC). */
+function soloDigitos(valor: string): string {
+  return valor.replace(/\D/g, "");
+}
+
+/** ⁄ltimos 9 dÌgitos de un telÈfono (ignora cÛdigo de paÌs y separadores). */
+function colaTelefono(valor: string): string {
+  const digitos = soloDigitos(valor);
+  return digitos.length > 9 ? digitos.slice(-9) : digitos;
+}
+
+/**
+ * Compara el contacto que se intenta registrar contra la lista negra
+ * (personas a las que nunca alquilar). Devuelve el motivo de coincidencia o
+ * null si no coincide con nadie.
+ */
+async function detectarListaNegra(
+  db: DbModule["db"],
+  schema: DbModule["schema"],
+  datos: { nombre: string; apellido: string; dni: string; ruc?: string | null; telefono: string },
+): Promise<{ motivo: string; persona: { nombres: string; documentoIdentidad: string } } | null> {
+  const { isNull } = await import("drizzle-orm");
+  const filas = await db
+    .select({
+      nombres: schema.personasNoAlquilar.nombres,
+      documentoIdentidad: schema.personasNoAlquilar.documentoIdentidad,
+      telefono: schema.personasNoAlquilar.telefono,
+    })
+    .from(schema.personasNoAlquilar)
+    .where(isNull(schema.personasNoAlquilar.eliminadoEn));
+
+  const nombreCompleto = normalizarNombre(`${datos.nombre} ${datos.apellido}`);
+  const docs = [datos.dni, datos.ruc]
+    .map((valor) => soloDigitos(valor ?? ""))
+    .filter((valor) => valor.length >= 6);
+  const tel = colaTelefono(datos.telefono);
+
+  for (const persona of filas) {
+    const documento = soloDigitos(persona.documentoIdentidad);
+    if (documento && docs.includes(documento)) {
+      return {
+        motivo: `El documento ${persona.documentoIdentidad} pertenece a una persona registrada en la lista negra`,
+        persona,
+      };
+    }
+    if (tel.length >= 7 && colaTelefono(persona.telefono ?? "") === tel) {
+      return {
+        motivo: `El telÈfono coincide con una persona registrada en la lista negra`,
+        persona,
+      };
+    }
+    const nombreLista = normalizarNombre(persona.nombres);
+    if (nombreLista && nombreCompleto === nombreLista) {
+      return {
+        motivo: `El nombre coincide con una persona registrada en la lista negra`,
+        persona,
+      };
+    }
+    if (nombreLista) {
+      const tokensLista = nombreLista.split(" ");
+      const tokensContacto = nombreCompleto.split(" ");
+      const contenidos = tokensLista.every((token) => tokensContacto.includes(token));
+      if (
+        contenidos &&
+        tokensContacto.length >= 2 &&
+        nombreCompleto !== nombreLista
+      ) {
+        return {
+          motivo: `Coincide parcialmente con un nombre de la lista negra`,
+          persona,
+        };
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Replica los datos del contacto en los clientes ligados por DNI/RUC, para que
  * un cambio en Contactos se refleje de inmediato en Clientes.
@@ -124,7 +212,7 @@ async function sincronizarClientesDesdeContacto(
   return ligados.length;
 }
 
-/** GET /api/contactos √¢‚Ç¨‚Äù listado (?dni= filtra por documento). */
+/** GET /api/contactos ‚Äî listado (?dni= filtra por documento). */
 export async function GET(req: Request) {
   try {
     const dbModule = await import("@contract/db");
@@ -150,7 +238,7 @@ export async function GET(req: Request) {
   }
 }
 
-/** POST /api/contactos √¢‚Ç¨‚Äù crea un contacto. */
+/** POST /api/contactos ‚Äî crea un contacto. */
 export async function POST(req: Request) {
   try {
     const dbModule = await import("@contract/db");
@@ -166,6 +254,24 @@ export async function POST(req: Request) {
     const body = (await req.json()) as Body;
     if (!body.nombre?.trim()) {
       return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
+    }
+    const alerta = await detectarListaNegra(db, schema, {
+      nombre: body.nombre.trim(),
+      apellido: (body.apellido ?? "").trim(),
+      dni: (body.dni ?? "").trim(),
+      ruc: body.ruc ?? null,
+      telefono: body.telefono || "",
+    });
+    if (alerta) {
+      return NextResponse.json(
+        {
+          error: "Cliente problem·tico: no se puede registrar.",
+          code: "BLACKLIST_MATCH",
+          motivo: alerta.motivo,
+          persona: alerta.persona,
+        },
+        { status: 409 }
+      );
     }
     const [row] = await db
       .insert(schema.contacts)
@@ -209,9 +315,11 @@ ruc: body.ruc || null,
   }
 }
 
-/** PUT /api/contactos √¢‚Ç¨‚Äù actualiza por id. */
+/** PUT /api/contactos ‚Äî actualiza por id. */
 export async function PUT(req: Request) {
   try {
+    // Un contacto ya guardado puede editarse libremente; la alerta de lista
+    // negra se aplica al registrar (POST).
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
@@ -231,6 +339,24 @@ export async function PUT(req: Request) {
       .from(schema.contacts)
       .where(eq(schema.contacts.id, body.id))
       .limit(1);
+    const alerta = await detectarListaNegra(db, schema, {
+      nombre: (body.nombre ?? "").trim(),
+      apellido: (body.apellido ?? "").trim(),
+      dni: (body.dni ?? "").trim(),
+      ruc: body.ruc ?? null,
+      telefono: body.telefono || "",
+    });
+    if (alerta) {
+      return NextResponse.json(
+        {
+          error: "Cliente problem·tico: no se puede registrar.",
+          code: "BLACKLIST_MATCH",
+          motivo: alerta.motivo,
+          persona: alerta.persona,
+        },
+        { status: 409 }
+      );
+    }
     const [row] = await db
       .update(schema.contacts)
       .set({
@@ -275,7 +401,7 @@ ruc: body.ruc || null,
   }
 }
 
-/** DELETE /api/contactos?id= √¢‚Ç¨‚Äù borra el contacto y todo lo generado a partir de el. */
+/** DELETE /api/contactos?id= ‚Äî borra el contacto y todo lo generado a partir de el. */
 export async function DELETE(req: Request) {
   try {
     const dbModule = await import("@contract/db");
@@ -340,7 +466,7 @@ export async function DELETE(req: Request) {
         : [];
 
       // 4. Snapshots: el congelado del contrato, los de cada documento y los de
-      //    las adendas, que comparten el c√≥digo base con sufijo "-ADD-N".
+      //    las adendas, que comparten el cÛdigo base con sufijo "-ADD-N".
       const snapshotIds = new Set<string>();
       for (const c of contratos) if (c.snapshotId) snapshotIds.add(c.snapshotId);
       for (const d of docs) if (d.snapshotId) snapshotIds.add(d.snapshotId);

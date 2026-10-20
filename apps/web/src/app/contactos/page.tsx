@@ -10,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@contract/ui/component
 import { Input } from "@contract/ui/components/input";
 import { Label } from "@contract/ui/components/label";
 import { PersonType } from "@contract/domain/client";
-import { Plus, FileText, X, Check, Upload, Trash2 } from "lucide-react";
+import { Plus, FileText, X, Check, Upload, Trash2, ShieldAlert } from "lucide-react";
 import {
   type ContactSeed as ContactView,
+  ClienteProblematicoError,
   obtenerContactos,
   crearContacto,
   actualizarContacto,
@@ -395,6 +396,80 @@ function ConfirmarBorradoContacto(props: {
   );
 }
 
+/**
+ * Alarma bloqueante: el contacto coincide con la lista negra de personas a las
+ * que nunca se debe alquilar. Se muestra en rojo y no deja registrar.
+ */
+function AlertaClienteProblematico(props: {
+  motivo: string;
+  persona: { nombres: string; documentoIdentidad: string } | null;
+  onClose: () => void;
+}) {
+  const { motivo, persona, onClose } = props;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      onClick={onClose}
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="titulo-cliente-problematico"
+    >
+      <div className="absolute inset-0 bg-black/70" />
+      <div
+        className="relative z-10 w-full max-w-2xl rounded-xl border-4 border-white bg-red-700 p-6 text-white shadow-2xl sm:p-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-4">
+          <ShieldAlert className="h-10 w-10 shrink-0 text-white" />
+          <div className="min-w-0">
+            <h3
+              id="titulo-cliente-problematico"
+              className="text-2xl font-extrabold uppercase leading-tight text-white sm:text-3xl"
+            >
+              Cliente problemático
+            </h3>
+            <p className="mt-3 text-base font-bold leading-relaxed text-white sm:text-lg">
+              NO se puede registrar este contacto.
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-white sm:text-base">
+              {motivo}
+            </p>
+            {persona ? (
+              <div className="mt-4 rounded-lg bg-black/25 p-3 text-sm text-white">
+                <p>
+                  <span className="font-semibold">Persona en lista negra: </span>
+                  {persona.nombres}
+                </p>
+                <p>
+                  <span className="font-semibold">Documento: </span>
+                  {persona.documentoIdentidad}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <div className="mt-7 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md bg-white px-6 py-2.5 text-sm font-bold text-red-700 hover:bg-white/90"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VistaDocs(props: {
   titulo: string;
   archivos: ArchivoAdjunto[];
@@ -592,6 +667,10 @@ export default function ContactosPage() {
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [porEliminar, setPorEliminar] = useState<ContactView | null>(null);
+  const [alertaListaNegra, setAlertaListaNegra] = useState<{
+    motivo: string;
+    persona: { nombres: string; documentoIdentidad: string } | null;
+  } | null>(null);
 
   async function eliminarContactoConfirmado(c: ContactView) {
     setEliminandoId(c.id);
@@ -781,6 +860,10 @@ export default function ContactosPage() {
         setContactos((prev) => [guardado, ...prev]);
       }
     } catch (err) {
+      if (err instanceof ClienteProblematicoError) {
+        setAlertaListaNegra({ motivo: err.motivo, persona: err.persona });
+        return;
+      }
       setError(err instanceof Error ? err.message : "No se pudo guardar.");
       return;
     }
@@ -1566,6 +1649,13 @@ export default function ContactosPage() {
           titulo={preview.titulo}
           archivos={preview.archivos}
           onClose={() => setPreview(null)}
+        />
+      ) : null}
+      {alertaListaNegra ? (
+        <AlertaClienteProblematico
+          motivo={alertaListaNegra.motivo}
+          persona={alertaListaNegra.persona}
+          onClose={() => setAlertaListaNegra(null)}
         />
       ) : null}
       {mascotasAbierta ? (

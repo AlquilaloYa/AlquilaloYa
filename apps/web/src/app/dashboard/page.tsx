@@ -5,7 +5,7 @@ import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { AlertTriangle, ChevronDown, Trash2, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 import { DonutChart } from "@/components/donut-chart";
 import { CobranzaVendedores } from "@/components/cobranza-vendedores";
 import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
@@ -1403,6 +1403,83 @@ const campoClase =
 const botonClase =
   "rounded bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-50";
 
+/**
+ * Visor a pantalla completa de las fotos de una persona de la lista negra.
+ * Permite ver las imágenes a plenitud y navegar entre varias.
+ */
+function FotoLightbox(props: {
+  personaId: string;
+  nombres: string;
+  total: number;
+  indiceInicial: number;
+  onClose: () => void;
+}) {
+  const { personaId, nombres, total, indiceInicial, onClose } = props;
+  const [indice, setIndice] = useState(indiceInicial);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") setIndice((i) => (i + 1) % total);
+      if (e.key === "ArrowLeft") setIndice((i) => (i - 1 + total) % total);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose, total]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex flex-col items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Fotos de ${nombres}`}
+    >
+      <div className="absolute inset-0 bg-black/90" onClick={onClose} />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Cerrar"
+        className="absolute right-4 top-4 z-10 rounded-full bg-black/60 p-2 text-white transition hover:bg-black/80"
+      >
+        <X className="h-6 w-6" />
+      </button>
+      {total > 1 && (
+        <button
+          type="button"
+          onClick={() => setIndice((i) => (i - 1 + total) % total)}
+          aria-label="Anterior"
+          className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/60 p-3 text-white transition hover:bg-black/80"
+        >
+          <ChevronLeft className="h-7 w-7" />
+        </button>
+      )}
+      <div className="relative z-10 flex max-h-[85vh] max-w-[90vw] items-center justify-center">
+        <img
+          src={`/api/personas-no-alquilar/${personaId}/foto?i=${indice}`}
+          alt={`Foto ${indice + 1} de ${nombres}`}
+          className="max-h-[85vh] max-w-[90vw] rounded object-contain shadow-2xl"
+        />
+      </div>
+      {total > 1 && (
+        <button
+          type="button"
+          onClick={() => setIndice((i) => (i + 1) % total)}
+          aria-label="Siguiente"
+          className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/60 p-3 text-white transition hover:bg-black/80"
+        >
+          <ChevronRight className="h-7 w-7" />
+        </button>
+      )}
+      <div className="relative z-10 mt-4 text-center">
+        <p className="font-label-lg text-white">{nombres}</p>
+        <p className="text-sm text-white/70">
+          {indice + 1} / {total}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
   const { data, loading, error, reload } = useDashboardJson<
     PersonaNoAlquilar[]
@@ -1414,6 +1491,7 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
   const [guardando, setGuardando] = useState(false);
   const [eliminando, setEliminando] = useState<string | null>(null);
   const [errorForm, setErrorForm] = useState<string | null>(null);
+  const [visor, setVisor] = useState<{ persona: PersonaNoAlquilar; indice: number } | null>(null);
   const personas = data ?? [];
 
   async function agregar() {
@@ -1577,22 +1655,30 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
                       <div className="flex shrink-0 items-center gap-1">
                         {Array.from({ length: Math.min(p.totalFotos, 3) }).map(
                           (_, indice) => (
-                            <div
+                            <button
                               key={indice}
-                              className="h-14 w-20 overflow-hidden rounded border border-outline-variant bg-surface-container"
+                              type="button"
+                              onClick={() => setVisor({ persona: p, indice })}
+                              aria-label={`Ver foto ${indice + 1} de ${p.nombres}`}
+                              className="h-14 w-20 overflow-hidden rounded border border-outline-variant bg-surface-container transition hover:ring-2 hover:ring-primary"
                             >
                               <img
                                 src={`/api/personas-no-alquilar/${p.id}/foto?i=${indice}`}
                                 alt={`Foto ${indice + 1} de ${p.nombres}`}
                                 className="h-full w-full object-cover"
                               />
-                            </div>
+                            </button>
                           )
                         )}
                         {p.totalFotos > 3 && (
-                          <span className="text-xs text-on-surface-variant">
+                          <button
+                            type="button"
+                            onClick={() => setVisor({ persona: p, indice: 3 })}
+                            aria-label={`Ver las ${p.totalFotos} fotos de ${p.nombres}`}
+                            className="text-xs text-on-surface-variant hover:text-primary"
+                          >
                             +{p.totalFotos - 3}
-                          </span>
+                          </button>
                         )}
                       </div>
                     ) : (
@@ -1625,6 +1711,15 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
           )}
         </div>
       )}
+      {visor ? (
+        <FotoLightbox
+          personaId={visor.persona.id}
+          nombres={visor.persona.nombres}
+          total={visor.persona.totalFotos}
+          indiceInicial={visor.indice}
+          onClose={() => setVisor(null)}
+        />
+      ) : null}
     </DashboardPanel>
   );
 }
