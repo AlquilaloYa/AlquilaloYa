@@ -4,6 +4,7 @@ import { requireUser, requirePermission } from "@/lib/session";
 import { deleteObject } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
+const BUCKET = "blacklist";
 
 /** DELETE /api/personas-no-alquilar/:id — retira a la persona de la lista negra. */
 export async function DELETE(
@@ -26,7 +27,7 @@ export async function DELETE(
     const [row] = await db
       .select({
         id: schema.personasNoAlquilar.id,
-        fotoStorageKey: schema.personasNoAlquilar.fotoStorageKey,
+        fotos: schema.personasNoAlquilar.fotos,
       })
       .from(schema.personasNoAlquilar)
       .where(
@@ -41,16 +42,15 @@ export async function DELETE(
       return NextResponse.json({ error: "No encontrada" }, { status: 404 });
     }
 
-    if (row.fotoStorageKey) {
-      await deleteObject(row.fotoStorageKey).catch(() => undefined);
-    }
+    await Promise.all(
+      row.fotos.map((foto) => deleteObject(foto.key, BUCKET).catch(() => undefined))
+    );
 
     await db
       .update(schema.personasNoAlquilar)
       .set({
         eliminadoEn: new Date(),
-        fotoStorageKey: null,
-        fotoMimeType: null,
+        fotos: [],
         updatedAt: new Date(),
       })
       .where(eq(schema.personasNoAlquilar.id, row.id));

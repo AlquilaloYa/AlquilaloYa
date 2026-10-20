@@ -1393,6 +1393,7 @@ interface PersonaNoAlquilar {
   documentoIdentidad: string;
   telefono: string | null;
   tieneFoto: boolean;
+  totalFotos: number;
   creadoPor: string | null;
   createdAt: string;
 }
@@ -1409,7 +1410,7 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
   const [nombres, setNombres] = useState("");
   const [documento, setDocumento] = useState("");
   const [telefono, setTelefono] = useState("");
-  const [foto, setFoto] = useState<File | null>(null);
+  const [fotos, setFotos] = useState<File[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [eliminando, setEliminando] = useState<string | null>(null);
   const [errorForm, setErrorForm] = useState<string | null>(null);
@@ -1427,7 +1428,7 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
       fd.set("nombres", nombres.trim());
       fd.set("documentoIdentidad", documento.trim());
       fd.set("telefono", telefono.trim());
-      if (foto) fd.set("foto", foto);
+      if (fotos.length) for (const archivo of fotos) fd.append("fotos", archivo);
       const res = await apiFetch("/api/personas-no-alquilar", {
         method: "POST",
         body: fd,
@@ -1441,7 +1442,7 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
       setNombres("");
       setDocumento("");
       setTelefono("");
-      setFoto(null);
+      setFotos([]);
       const input = document.getElementById("blacklist-foto") as HTMLInputElement | null;
       if (input) input.value = "";
       await reload();
@@ -1508,12 +1509,20 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <input
-                id="blacklist-foto"
+                id="blacklist-fotos"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                onChange={(event) => setFoto(event.target.files?.[0] ?? null)}
+                multiple
+                onChange={(event) => {
+                  const seleccion = Array.from(event.target.files ?? []);
+                  setFotos([...fotos, ...seleccion].slice(0, 5));
+                  event.target.value = "";
+                }}
                 className="text-sm text-on-surface-variant"
               />
+              <span className="text-sm text-on-surface-variant">
+                {fotos.length} de 5 fotos · JPG, PNG o WebP
+              </span>
               <button
                 type="button"
                 onClick={() => void agregar()}
@@ -1523,6 +1532,30 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
                 {guardando ? "Guardando…" : "Agregar"}
               </button>
             </div>
+            {fotos.length > 0 && (
+              <ul className="mt-3 flex flex-wrap gap-3">
+                {fotos.map((archivo, indice) => (
+                  <li
+                    key={`${archivo.name}-${indice}`}
+                    className="relative h-20 w-28 overflow-hidden rounded border border-outline-variant bg-surface-container"
+                  >
+                    <img
+                      src={URL.createObjectURL(archivo)}
+                      alt={archivo.name}
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      aria-label={`Quitar ${archivo.name}`}
+                      onClick={() => setFotos(fotos.filter((_, i) => i !== indice))}
+                      className="absolute right-0 top-0 rounded-bl bg-black/60 p-1 text-white transition hover:bg-black/80"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             {errorForm ? (
               <p className="mt-2 text-sm text-destructive">{errorForm}</p>
             ) : null}
@@ -1540,19 +1573,33 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
                   className="flex items-center justify-between gap-3 py-3"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="h-14 w-20 shrink-0 overflow-hidden rounded border border-outline-variant bg-surface-container">
-                      {p.tieneFoto ? (
-                        <img
-                          src={`/api/personas-no-alquilar/${p.id}/foto`}
-                          alt={`DNI de ${p.nombres}`}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="flex h-full w-full items-center justify-center text-[10px] text-on-surface-variant">
-                          Sin foto
-                        </span>
-                      )}
-                    </div>
+                    {p.tieneFoto ? (
+                      <div className="flex shrink-0 items-center gap-1">
+                        {Array.from({ length: Math.min(p.totalFotos, 3) }).map(
+                          (_, indice) => (
+                            <div
+                              key={indice}
+                              className="h-14 w-20 overflow-hidden rounded border border-outline-variant bg-surface-container"
+                            >
+                              <img
+                                src={`/api/personas-no-alquilar/${p.id}/foto?i=${indice}`}
+                                alt={`Foto ${indice + 1} de ${p.nombres}`}
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                          )
+                        )}
+                        {p.totalFotos > 3 && (
+                          <span className="text-xs text-on-surface-variant">
+                            +{p.totalFotos - 3}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded border border-outline-variant bg-surface-container text-[10px] text-on-surface-variant">
+                        Sin fotos
+                      </div>
+                    )}
                     <div className="min-w-0">
                       <p className="truncate font-label-lg text-on-surface">
                         {p.nombres}

@@ -1,16 +1,24 @@
+import { sql } from "drizzle-orm";
 import {
+  jsonb,
   pgTable,
-  text,
   timestamp,
   uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
 
+/** Referencia a una imagen guardada en el bucket privado `blacklist`. */
+export interface FotoRef {
+  key: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 /**
  * Lista negra de personas a las que nunca se debe alquilar.
- * Registro manual: nombre, documento (DNI), teléfono y foto del DNI
- * (objeto en el storage privado, referenciado por foto_storage_key).
+ * Registro manual: nombre, documento (DNI), teléfono y una o varias fotos
+ * (objetos del bucket privado `blacklist`, referenciados por `fotos`).
  */
 export const personasNoAlquilar = pgTable(
   "personas_no_alquilar",
@@ -19,8 +27,10 @@ export const personasNoAlquilar = pgTable(
     nombres: varchar("nombres", { length: 255 }).notNull(),
     documentoIdentidad: varchar("documento_identidad", { length: 50 }).notNull(),
     telefono: varchar("telefono", { length: 30 }),
-    fotoStorageKey: text("foto_storage_key"),
-    fotoMimeType: varchar("foto_mime_type", { length: 100 }),
+    fotos: jsonb("fotos")
+      .$type<FotoRef[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     creadoPor: varchar("creado_por", { length: 255 }),
     eliminadoEn: timestamp("eliminado_en", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
