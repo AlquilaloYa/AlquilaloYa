@@ -55,6 +55,7 @@ import {
   Scale,
   TrendingUp,
   Waves,
+  LineChart,
   type LucideIcon,
 } from "lucide-react";
 
@@ -136,6 +137,13 @@ const NAV_ITEMS: NavItem[] = [
     href: "/contabilidad/flujo-financiero",
     label: "Flujo de Efectivo",
     icon: Waves,
+    section: "Contabilidad",
+    group: "contabilidad",
+  },
+  {
+    href: "/contabilidad/analiticas",
+    label: "Analíticas",
+    icon: LineChart,
     section: "Contabilidad",
     group: "contabilidad",
   },

@@ -30,6 +30,12 @@ function inicioMesSiguiente(mes: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
+/** Nombre de mes legible (0 = Enero). */
+const NOMBRES_MES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
 interface PagoFila {
   periodo: string;
   monto: string | number;
@@ -40,8 +46,179 @@ interface PagoFila {
   eliminadoEn: string | null;
 }
 
+interface MaterialFila {
+  total: number;
+  fecha: string;
+}
+
+interface AjusteFila {
+  id: string;
+  periodo: string;
+  estado: string;
+  grupo: string;
+  etiqueta: string;
+  monto: number;
+  nota: string;
+}
+
+interface Base {
+  pagos: PagoFila[];
+  materiales: MaterialFila[];
+  ajustes: AjusteFila[];
+}
+
 function totalCuota(p: PagoFila): number {
   return Number(p.monto ?? 0) + Number(p.mantenimiento ?? 0);
+}
+
+/** Ingresos devengados del mes (cuotas del periodo, cualquiera sea su estado). */
+function ingresosMes(b: Base, mes: string): number {
+  return b.pagos
+    .filter((p) => p.periodo.slice(0, 7) === mes)
+    .reduce((s, p) => s + totalCuota(p), 0);
+}
+
+/** Gastos del mes: materiales de órdenes de trabajo. */
+function gastosMes(b: Base, mes: string): number {
+  return b.materiales
+    .filter((m) => m.fecha.slice(0, 7) === mes)
+    .reduce((s, m) => s + m.total, 0);
+}
+
+function entradasMes(b: Base, mes: string): number {
+  return b.pagos
+    .filter(
+      (p) =>
+        p.estado === "PAGADO" &&
+        p.fechaPago &&
+        p.fechaPago.slice(0, 7) === mes
+    )
+    .reduce((s, p) => s + totalCuota(p), 0);
+}
+
+function salidasMes(b: Base, mes: string): number {
+  return gastosMes(b, mes);
+}
+
+function sumaAjustes(
+  arr: AjusteFila[],
+  estado: string,
+  grupo: string
+): number {
+  return arr
+    .filter((a) => a.estado === estado && a.grupo === grupo)
+    .reduce((s, a) => s + a.monto, 0);
+}
+
+/** Caja acumulada a partir de `fecha` (cobrado menos salidas, siempre). */
+function saldoAntesDe(b: Base, fecha: string): number {
+  const cobrado = b.pagos
+    .filter((p) => p.estado === "PAGADO" && p.fechaPago && p.fechaPago < fecha)
+    .reduce((s, p) => s + totalCuota(p), 0);
+  const salido = b.materiales
+    .filter((m) => m.fecha < fecha)
+    .reduce((s, m) => s + m.total, 0);
+  const ajustes = b.ajustes.filter((a) => a.estado === "FLUJO" && a.periodo < fecha);
+  const entradas =
+    sumaAjustes(ajustes, "FLUJO", "ENTRADA") -
+    sumaAjustes(ajustes, "FLUJO", "SALIDA");
+  return cobrado - salido + entradas;
+}
+
+function flujoDeMes(b: Base, mes: string) {
+  const entradas = entradasMes(b, mes);
+  const salidas = salidasMes(b, mes);
+  const saldoInicial = saldoAntesDe(b, `${mes}-01`);
+  const neto = entradas - salidas;
+  return { entradas, salidas, saldoInicial, neto, saldoFinal: saldoInicial + neto };
+}
+
+function resultadosDeMes(b: Base, mes: string) {
+  const ingresos = ingresosMes(b, mes);
+  const gastos = gastosMes(b, mes);
+  return { ingresos, gastos, utilidad: ingresos - gastos };
+}
+
+/** Balance al cierre de `end` (primer día del mes siguiente). */
+function balanceEn(b: Base, end: string, caja: number) {
+  const cuentasPorCobrar = b.pagos
+    .filter((p) => p.estado !== "PAGADO" && p.periodo < end)
+    .reduce((s, p) => s + Math.max(0, totalCuota(p) - Number(p.montoPagado ?? 0)), 0);
+
+  const ajustes = b.ajustes.filter((a) => a.periodo < end);
+  const otrosActivos = sumaAjustes(ajustes, "BALANCE", "ACTIVO");
+  const pasivos = sumaAjustes(ajustes, "BALANCE", "PASIVO");
+  const capital = sumaAjustes(ajustes, "BALANCE", "PATRIMONIO");
+
+  const ingresosAcum = b.pagos
+    .filter((p) => p.periodo < end)
+    .reduce((s, p) => s + totalCuota(p), 0);
+  const gastosAcum = b.materiales
+    .filter((m) => m.fecha < end)
+    .reduce((s, m) => s + m.total, 0);
+  const resultadoAcumulado =
+    ingresosAcum -
+    gastosAcum +
+    sumaAjustes(
+      ajustes.filter((a) => a.estado === "RESULTADOS"),
+      "RESULTADOS",
+      "INGRESO"
+    ) -
+    sumaAjustes(
+      ajustes.filter((a) => a.estado === "RESULTADOS"),
+      "RESULTADOS",
+      "GASTO"
+    );
+
+  const totalActivo = caja + cuentasPorCobrar + otrosActivos;
+  const totalPatrimonio = capital + resultadoAcumulado;
+  const totalPasivoPatrimonio = pasivos + totalPatrimonio;
+
+  return {
+    caja,
+    cuentasPorCobrar,
+    otrosActivos,
+    totalActivo,
+    pasivos,
+    totalPasivo: pasivos,
+    capital,
+    resultadoAcumulado,
+    totalPatrimonio,
+    totalPasivoPatrimonio,
+    diferencia: totalActivo - totalPasivoPatrimonio,
+  };
+}
+
+/** Desglose anual: los 12 meses, los totales y el balance al cierre. */
+function analiticaAnual(b: Base, anio: number) {
+  const meses = Array.from({ length: 12 }, (_, i) => {
+    const mes = `${anio}-${String(i + 1).padStart(2, "0")}`;
+    const resultados = resultadosDeMes(b, mes);
+    const flujo = flujoDeMes(b, mes);
+    return {
+      mes,
+      indice: i + 1,
+      etiqueta: NOMBRES_MES[i] ?? String(i + 1),
+      ...resultados,
+      entradas: flujo.entradas,
+      salidas: flujo.salidas,
+      neto: flujo.neto,
+      saldoCaja: flujo.saldoFinal,
+    };
+  });
+
+  const totales = {
+    ingresos: meses.reduce((s, m) => s + m.ingresos, 0),
+    gastos: meses.reduce((s, m) => s + m.gastos, 0),
+    utilidad: meses.reduce((s, m) => s + m.utilidad, 0),
+    entradas: meses.reduce((s, m) => s + m.entradas, 0),
+    salidas: meses.reduce((s, m) => s + m.salidas, 0),
+    neto: meses.reduce((s, m) => s + m.neto, 0),
+    saldoFinal: meses[11]?.saldoCaja ?? 0,
+  };
+
+  const cierre = balanceEn(b, inicioMesSiguiente(`${anio}-12`), totales.saldoFinal);
+  return { anio, meses, totales, cierre };
 }
 
 export async function GET(req: Request) {
@@ -58,10 +235,14 @@ export async function GET(req: Request) {
     };
 
     const url = new URL(req.url);
+    const anioParam = url.searchParams.get("anio") ?? "";
     const mesParam = url.searchParams.get("periodo") ?? "";
-    const mes = /^\d{4}-\d{2}$/.test(mesParam) ? mesParam : periodoActual();
-    const startStr = `${mes}-01`;
-    const endStr = inicioMesSiguiente(mes);
+    const esAnual = /^\d{4}$/.test(anioParam);
+    const mes = esAnual
+      ? ""
+      : /^\d{4}-\d{2}$/.test(mesParam)
+        ? mesParam
+        : periodoActual();
 
     const pagosRaw = await db
       .select({
@@ -75,26 +256,12 @@ export async function GET(req: Request) {
       })
       .from(schema.payments);
 
-    const pagos: PagoFila[] = pagosRaw.map((p) => ({
-      periodo: toDateStr(p.periodo),
-      monto: p.monto,
-      mantenimiento: p.mantenimiento,
-      montoPagado: p.montoPagado,
-      estado: p.estado,
-      fechaPago: p.fechaPago ? toDateStr(p.fechaPago) : null,
-      eliminadoEn: p.eliminadoEn ? toDateStr(p.eliminadoEn) : null,
-    }));
-
     const materialesRaw = await db
       .select({
         totalCost: schema.workOrderMaterials.totalCost,
         createdAt: schema.workOrderMaterials.createdAt,
       })
       .from(schema.workOrderMaterials);
-    const materiales = materialesRaw.map((m) => ({
-      total: Number(m.totalCost ?? 0),
-      fecha: toDateStr(m.createdAt),
-    }));
 
     const ajustesRaw = await db
       .select({
@@ -107,29 +274,60 @@ export async function GET(req: Request) {
         nota: schema.accountingEntries.nota,
       })
       .from(schema.accountingEntries);
-    const ajustes = ajustesRaw.map((a) => ({
-      id: a.id,
-      periodo: toDateStr(a.periodo),
-      estado: a.estado as Estado,
-      grupo: a.grupo,
-      etiqueta: a.etiqueta,
-      monto: Number(a.monto ?? 0),
-      nota: a.nota,
-    }));
 
-    const vigentes = pagos.filter((p) => !p.eliminadoEn);
-    const ajustesDelMes = ajustes.filter((a) => a.periodo.slice(0, 7) === mes);
-    const ajustesAcum = ajustes.filter((a) => a.periodo < endStr);
+    const base: Base = {
+      pagos: pagosRaw
+        .map((p) => ({
+          periodo: toDateStr(p.periodo),
+          monto: p.monto,
+          mantenimiento: p.mantenimiento,
+          montoPagado: p.montoPagado,
+          estado: p.estado,
+          fechaPago: p.fechaPago ? toDateStr(p.fechaPago) : null,
+          eliminadoEn: p.eliminadoEn ? toDateStr(p.eliminadoEn) : null,
+        }))
+        .filter((p) => !p.eliminadoEn),
+      materiales: materialesRaw.map((m) => ({
+        total: Number(m.totalCost ?? 0),
+        fecha: toDateStr(m.createdAt),
+      })),
+      ajustes: ajustesRaw.map((a) => ({
+        id: a.id,
+        periodo: toDateStr(a.periodo),
+        estado: a.estado,
+        grupo: a.grupo,
+        etiqueta: a.etiqueta,
+        monto: Number(a.monto ?? 0),
+        nota: a.nota,
+      })),
+    };
+
+    // ---------- Modo anual: análisis del año contable completo ----------
+    if (esAnual) {
+      const anio = Number(anioParam);
+      const actual = analiticaAnual(base, anio);
+      const anterior = analiticaAnual(base, anio - 1);
+      return NextResponse.json({
+        anio,
+        meses: actual.meses,
+        totales: actual.totales,
+        cierre: actual.cierre,
+        previo: {
+          anio: anio - 1,
+          totales: anterior.totales,
+          cierre: anterior.cierre,
+        },
+      });
+    }
+
+    // ---------- Modo mensual: un solo periodo ----------
+    const startStr = `${mes}-01`;
+    const endStr = inicioMesSiguiente(mes);
+    const ajustesDelMes = base.ajustes.filter((a) => a.periodo.slice(0, 7) === mes);
     const suma = (arr: { monto: number }[]) => arr.reduce((s, x) => s + x.monto, 0);
 
-    // ---------- Estado de Resultados (devengado del mes) ----------
-    const ingresosERP = vigentes
-      .filter((p) => p.periodo.slice(0, 7) === mes)
-      .reduce((s, p) => s + totalCuota(p), 0);
-    const gastosERP = materiales
-      .filter((m) => m.fecha.slice(0, 7) === mes)
-      .reduce((s, m) => s + m.total, 0);
-
+    const ingresosERP = ingresosMes(base, mes);
+    const gastosERP = gastosMes(base, mes);
     const ajIngresos = ajustesDelMes.filter(
       (a) => a.estado === "RESULTADOS" && a.grupo === "INGRESO"
     );
@@ -143,37 +341,18 @@ export async function GET(req: Request) {
       gastosERP,
     };
 
-    // ---------- Estado de Flujo de Efectivo (caja del mes) ----------
-    const cobrosMes = vigentes.filter(
-      (p) => p.estado === "PAGADO" && p.fechaPago && p.fechaPago.slice(0, 7) === mes
-    );
-    const entradasERP = cobrosMes.reduce((s, p) => s + totalCuota(p), 0);
-    const salidasERP = gastosERP;
-
-    const cobrosAntes = vigentes.filter(
-      (p) => p.estado === "PAGADO" && p.fechaPago && p.fechaPago < startStr
-    );
-    const materialesAntes = materiales.filter((m) => m.fecha < startStr);
-    const flujoAntesERP =
-      cobrosAntes.reduce((s, p) => s + totalCuota(p), 0) -
-      materialesAntes.reduce((s, m) => s + m.total, 0);
-
+    const entradasERP = entradasMes(base, mes);
+    const salidasERP = salidasMes(base, mes);
     const ajEntradas = ajustesDelMes.filter(
       (a) => a.estado === "FLUJO" && a.grupo === "ENTRADA"
     );
     const ajSalidas = ajustesDelMes.filter(
       (a) => a.estado === "FLUJO" && a.grupo === "SALIDA"
     );
-    const ajFlujoAntes = ajustesAcum.filter(
-      (a) => a.estado === "FLUJO" && a.periodo < startStr
-    );
-    const flujoAntesAjustes =
-      suma(ajFlujoAntes.filter((a) => a.grupo === "ENTRADA")) -
-      suma(ajFlujoAntes.filter((a) => a.grupo === "SALIDA"));
+    const saldoInicial = saldoAntesDe(base, startStr);
 
     const entradas = entradasERP + suma(ajEntradas);
     const salidas = salidasERP + suma(ajSalidas);
-    const saldoInicial = flujoAntesERP + flujoAntesAjustes;
     const flujo = {
       entradas,
       salidas,
@@ -184,52 +363,7 @@ export async function GET(req: Request) {
       saldoFinal: saldoInicial + (entradas - salidas),
     };
 
-    // ---------- Balance General (saldos al cierre del mes) ----------
-    const caja = flujo.saldoFinal;
-    const cuentasPorCobrar = vigentes
-      .filter((p) => p.estado !== "PAGADO" && p.periodo < endStr)
-      .reduce((s, p) => s + Math.max(0, totalCuota(p) - Number(p.montoPagado ?? 0)), 0);
-
-    const ajActivos = ajustesAcum.filter(
-      (a) => a.estado === "BALANCE" && a.grupo === "ACTIVO"
-    );
-    const ajPasivos = ajustesAcum.filter(
-      (a) => a.estado === "BALANCE" && a.grupo === "PASIVO"
-    );
-    const ajCapital = ajustesAcum.filter(
-      (a) => a.estado === "BALANCE" && a.grupo === "PATRIMONIO"
-    );
-
-    const ingresosAcum = vigentes
-      .filter((p) => p.periodo < endStr)
-      .reduce((s, p) => s + totalCuota(p), 0);
-    const gastosAcum = materiales
-      .filter((m) => m.fecha < endStr)
-      .reduce((s, m) => s + m.total, 0);
-    const resultadoAcumulado =
-      ingresosAcum -
-      gastosAcum +
-      suma(ajustesAcum.filter((a) => a.estado === "RESULTADOS" && a.grupo === "INGRESO")) -
-      suma(ajustesAcum.filter((a) => a.estado === "RESULTADOS" && a.grupo === "GASTO"));
-
-    const otrosActivos = suma(ajActivos);
-    const pasivos = suma(ajPasivos);
-    const capital = suma(ajCapital);
-    const totalActivo = caja + cuentasPorCobrar + otrosActivos;
-    const totalPatrimonio = capital + resultadoAcumulado;
-    const balance = {
-      caja,
-      cuentasPorCobrar,
-      otrosActivos,
-      totalActivo,
-      pasivos,
-      totalPasivo: pasivos,
-      capital,
-      resultadoAcumulado,
-      totalPatrimonio,
-      totalPasivoPatrimonio: pasivos + totalPatrimonio,
-      diferencia: totalActivo - (pasivos + totalPatrimonio),
-    };
+    const balance = balanceEn(base, endStr, flujo.saldoFinal);
 
     return NextResponse.json({
       periodo: mes,
