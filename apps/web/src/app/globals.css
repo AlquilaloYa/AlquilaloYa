@@ -55,6 +55,9 @@
   --input: 225 5% 79%;
   --card: 0 0% 100%;
   --card-foreground: 216 65% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 216 65% 12%;
+  --foreground: 216 65% 12%;
 
   --radius: 0.5rem;
 }
@@ -112,6 +115,9 @@
   --input: 217 10% 30%;
   --card: 215 47% 12%;
   --card-foreground: 216 100% 91%;
+  --popover: 215 47% 12%;
+  --popover-foreground: 216 100% 91%;
+  --foreground: 216 100% 91%;
 }
 
 * {
@@ -189,7 +195,7 @@ body,
 
 @layer components {
   .field {
-    @apply h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100;
+    @apply h-12 w-full rounded-lg border border-input bg-card px-3 text-sm text-on-surface outline-none transition placeholder:text-on-surface-variant focus:border-primary focus:ring-4 focus:ring-primary/10;
   }
 }
 

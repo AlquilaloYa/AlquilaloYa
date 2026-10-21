@@ -40,6 +40,8 @@ export const Permission = {
   WORK_ORDER_CREATE: "work_order.create",
   WORK_ORDER_UPDATE: "work_order.update",
   WORK_ORDER_MATERIAL_RECORD: "work_order.material.record",
+  SCORING_READ: "scoring.read",
+  SCORING_MANAGE: "scoring.manage",
 } as const;
 
 export type Permission = (typeof Permission)[keyof typeof Permission];
@@ -91,4 +93,6 @@ export const PERMISSION_DESCRIPTIONS: Record<Permission, string> = {
   [Permission.WORK_ORDER_UPDATE]: "Asignar y actualizar órdenes de trabajo",
   [Permission.WORK_ORDER_MATERIAL_RECORD]:
     "Registrar materiales en órdenes de trabajo asignadas",
+  [Permission.SCORING_READ]: "Ver el scoring de inquilinos",
+  [Permission.SCORING_MANAGE]: "Registrar incidencias que afectan el scoring",
 };

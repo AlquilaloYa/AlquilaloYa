@@ -21,7 +21,8 @@
     "./rbac": "./src/rbac/index.ts",
     "./activity": "./src/activity/index.ts",
     "./workflow": "./src/workflow/index.ts",
-    "./integration": "./src/integration/index.ts"
+    "./integration": "./src/integration/index.ts",
+    "./scoring": "./src/scoring/index.ts"
   },
   "scripts": {
     "lint": "eslint src --max-warnings 0",

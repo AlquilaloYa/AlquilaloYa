@@ -26,3 +26,8 @@ export {
   DrizzleCredentialRepository,
   DrizzleConnectorLogRepository,
 } from "./connector-repository";
+export {
+  DrizzleScoringRepository,
+  type TenantScoreRow,
+  type TenantIncident,
+} from "./scoring-repository";

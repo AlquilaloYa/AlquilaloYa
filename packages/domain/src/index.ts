@@ -10,4 +10,5 @@ export * from "./rbac/index";
 export * from "./activity/index";
 export * from "./workflow/index";
 export * from "./integration/index";
+export * from "./scoring/index";
 export * from "./common/index";

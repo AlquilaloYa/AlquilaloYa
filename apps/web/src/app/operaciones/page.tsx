@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   useCallback,
@@ -125,7 +125,7 @@ interface Evidence {
   description?: string;
 }
 
-const EVIDENCE_KINDS = ["FOTO INICIAL", "FOTO DIAGNÓSTICO", "FOTO FINAL"] as const;
+const EVIDENCE_KINDS = ["FOTO INICIAL", "FOTO DIAGNÃ“STICO", "FOTO FINAL"] as const;
 type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
 
 interface WorkEvent {
@@ -179,7 +179,7 @@ const STATUS_LABEL: Record<WorkStatus, string> = {
   ACCEPTED: "Aceptada",
   VISIT_SCHEDULED: "Visita programada",
   ON_SITE: "En sitio",
-  DIAGNOSIS: "Diagnóstico",
+  DIAGNOSIS: "DiagnÃ³stico",
   ESTIMATED: "Presupuestada",
   IN_PROGRESS: "En progreso",
   RESOLVED: "Resuelta",
@@ -192,35 +192,35 @@ const STATUS_LABEL: Record<WorkStatus, string> = {
 };
 
 const STATUS_STYLE: Record<WorkStatus, string> = {
-  CREATED: "bg-slate-100 text-slate-700 ring-slate-200",
-  ASSIGNED: "bg-blue-50 text-blue-700 ring-blue-200",
-  REASSIGNED: "bg-blue-50 text-blue-700 ring-blue-200",
-  ACCEPTED: "bg-indigo-50 text-indigo-700 ring-indigo-200",
-  VISIT_SCHEDULED: "bg-amber-50 text-amber-800 ring-amber-200",
-  ON_SITE: "bg-orange-50 text-orange-800 ring-orange-200",
-  DIAGNOSIS: "bg-violet-50 text-violet-800 ring-violet-200",
-  ESTIMATED: "bg-cyan-50 text-cyan-800 ring-cyan-200",
-  IN_PROGRESS: "bg-amber-50 text-amber-800 ring-amber-200",
-  RESOLVED: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  PENDING_CLOSURE: "bg-teal-50 text-teal-800 ring-teal-200",
-  COMPLETED: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  REJECTED: "bg-rose-50 text-rose-800 ring-rose-200",
-  BLOCKED: "bg-rose-50 text-rose-800 ring-rose-200",
-  CANCELLED: "bg-slate-100 text-slate-600 ring-slate-200",
-  RESCHEDULED: "bg-amber-50 text-amber-800 ring-amber-200",
+  CREATED: "bg-muted text-on-surface-variant ring-border",
+  ASSIGNED: "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30",
+  REASSIGNED: "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30",
+  ACCEPTED: "bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-indigo-500/30",
+  VISIT_SCHEDULED: "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30",
+  ON_SITE: "bg-orange-50 text-orange-800 ring-orange-200 dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/30",
+  DIAGNOSIS: "bg-violet-50 text-violet-800 ring-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/30",
+  ESTIMATED: "bg-cyan-50 text-cyan-800 ring-cyan-200 dark:bg-cyan-500/15 dark:text-cyan-300 dark:ring-cyan-500/30",
+  IN_PROGRESS: "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30",
+  RESOLVED: "bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30",
+  PENDING_CLOSURE: "bg-teal-50 text-teal-800 ring-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:ring-teal-500/30",
+  COMPLETED: "bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30",
+  REJECTED: "bg-rose-50 text-rose-800 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30",
+  BLOCKED: "bg-rose-50 text-rose-800 ring-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-500/30",
+  CANCELLED: "bg-muted text-on-surface-variant ring-border",
+  RESCHEDULED: "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30",
 };
 
 const PRIORITY_STYLE: Record<Priority, string> = {
-  BAJA: "bg-slate-100 text-slate-700",
-  MEDIA: "bg-blue-50 text-blue-700",
-  ALTA: "bg-amber-50 text-amber-800",
-  URGENTE: "bg-red-50 text-red-700",
+  BAJA: "bg-muted text-on-surface-variant",
+  MEDIA: "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
+  ALTA: "bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
+  URGENTE: "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300",
 };
 const PRIORITY_DOT: Record<Priority, string> = {
-  BAJA: "bg-slate-500",
-  MEDIA: "bg-blue-600",
-  ALTA: "bg-amber-500",
-  URGENTE: "bg-red-600",
+  BAJA: "bg-slate-400 dark:bg-slate-500",
+  MEDIA: "bg-blue-600 dark:bg-blue-400",
+  ALTA: "bg-amber-500 dark:bg-amber-400",
+  URGENTE: "bg-red-600 dark:bg-red-400",
 };
 
 const STATUS_FILTERS: Array<{
@@ -262,13 +262,13 @@ function isOverdue(order: WorkOrder): boolean {
 }
 
 function humanizeEvent(event: WorkEvent): string {
-  if (event.eventType === "ORDER_CREATED") return "Creó la orden de trabajo";
+  if (event.eventType === "ORDER_CREATED") return "CreÃ³ la orden de trabajo";
   if (event.eventType === "ASSIGNMENT_CHANGED")
-    return "Actualizó la asignación";
+    return "ActualizÃ³ la asignaciÃ³n";
   if (event.fromStatus && event.toStatus) {
-    return `Cambió el estado: ${STATUS_LABEL[event.fromStatus as WorkStatus] ?? event.fromStatus} → ${STATUS_LABEL[event.toStatus as WorkStatus] ?? event.toStatus}`;
+    return `CambiÃ³ el estado: ${STATUS_LABEL[event.fromStatus as WorkStatus] ?? event.fromStatus} â†’ ${STATUS_LABEL[event.toStatus as WorkStatus] ?? event.toStatus}`;
   }
-  return "Actualizó la orden";
+  return "ActualizÃ³ la orden";
 }
 
 function FieldOpsMobilePreview() {
@@ -279,19 +279,19 @@ function FieldOpsMobilePreview() {
   ];
 
   return (
-    <section className="mb-7 rounded-[24px] border border-slate-200 bg-[#f3f5f7] p-3 shadow-[0_8px_24px_rgba(15,23,42,0.08)] sm:hidden">
-      <div className="mx-auto max-w-[420px] rounded-[26px] border border-slate-200 bg-[#f5f6f8] p-0 shadow-[0_12px_32px_rgba(15,23,42,0.08)]">
-        <div className="border-b border-slate-200 bg-[#f5f6f8] px-4 pb-3 pt-4">
+    <section className="mb-7 rounded-[24px] border border-border bg-[#f3f5f7] p-3 shadow-[0_8px_24px_rgba(15,23,42,0.08)] sm:hidden">
+      <div className="mx-auto max-w-[420px] rounded-[26px] border border-border bg-[#f5f6f8] p-0 shadow-[0_12px_32px_rgba(15,23,42,0.08)]">
+        <div className="border-b border-border bg-[#f5f6f8] px-4 pb-3 pt-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 aria-label="Volver"
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-card text-on-surface-variant shadow-sm"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-on-surface-variant">
                 FIELDOPS
               </div>
             </div>
@@ -299,39 +299,39 @@ function FieldOpsMobilePreview() {
               <button
                 type="button"
                 aria-label="Notificaciones"
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-card text-on-surface-variant shadow-sm"
               >
                 <Bell className="h-4 w-4" />
               </button>
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#7bb7ff] via-[#f1d0b3] to-[#7ad0a9] text-xs font-bold text-slate-900 shadow-sm">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#7bb7ff] via-[#f1d0b3] to-[#7ad0a9] text-xs font-bold text-on-surface shadow-sm">
                 PR
               </div>
             </div>
           </div>
-          <h2 className="mt-4 text-[2rem] font-black leading-none tracking-[-0.04em] text-slate-900">
+          <h2 className="mt-4 text-[2rem] font-black leading-none tracking-[-0.04em] text-on-surface">
             Mis Tareas
           </h2>
         </div>
 
         <div className="bg-[#f5f6f8] px-4 pb-4 pt-3">
           <div className="flex items-center justify-between">
-            <div className="text-[1.05rem] font-semibold text-slate-900">
-              Hola, <span className="font-black">Pedro Rodríguez</span>
+            <div className="text-[1.05rem] font-semibold text-on-surface">
+              Hola, <span className="font-black">Pedro RodrÃ­guez</span>
             </div>
             <div className="inline-flex items-center gap-2 rounded-full bg-[#d7f6e8] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-[#0e8b5c]">
               <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
-              TURNO ACTIVO · EN LÍNEA
+              TURNO ACTIVO Â· EN LÃNEA
             </div>
           </div>
-          <p className="mt-2 text-sm text-slate-600">
-            Técnico Principal · Electromecánico
+          <p className="mt-2 text-sm text-on-surface-variant">
+            TÃ©cnico Principal Â· ElectromecÃ¡nico
           </p>
 
           <div className="mt-4 grid grid-cols-3 gap-2.5">
             {cards.map((card) => (
               <div
                 key={card.label}
-                className={`rounded-2xl border border-slate-200 px-3 py-3 ${card.tone}`}
+                className={`rounded-2xl border border-border px-3 py-3 ${card.tone}`}
               >
                 <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-current/80">
                   {card.label}
@@ -343,7 +343,7 @@ function FieldOpsMobilePreview() {
             ))}
           </div>
 
-          <div className="mt-4 flex gap-2 overflow-hidden rounded-full bg-slate-200 p-1 text-[11px] font-bold uppercase tracking-[0.04em]">
+          <div className="mt-4 flex gap-2 overflow-hidden rounded-full bg-surface-variant p-1 text-[11px] font-bold uppercase tracking-[0.04em]">
             {[
               { label: "Todas (11)", active: false },
               { label: "Urgentes (2)", active: true },
@@ -352,16 +352,16 @@ function FieldOpsMobilePreview() {
               <button
                 key={filter.label}
                 type="button"
-                className={`flex-1 rounded-full px-2 py-2 transition ${filter.active ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}
+                className={`flex-1 rounded-full px-2 py-2 transition ${filter.active ? "bg-card text-on-surface shadow-sm" : "text-on-surface-variant"}`}
               >
                 {filter.label}
               </button>
             ))}
           </div>
 
-          <div className="mt-5 overflow-hidden rounded-[18px] border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="mt-5 overflow-hidden rounded-[18px] border border-border bg-card p-3 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-on-surface-variant">
                 <span className="font-mono text-[#eb4d4d]">OT-000125</span>
               </div>
               <span className="inline-flex items-center gap-1 rounded-full bg-[#ffebeb] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#d63b3b]">
@@ -370,23 +370,23 @@ function FieldOpsMobilePreview() {
               </span>
             </div>
 
-            <h3 className="mt-4 text-[1.1rem] font-black leading-[1.2] tracking-[-0.04em] text-slate-900">
+            <h3 className="mt-4 text-[1.1rem] font-black leading-[1.2] tracking-[-0.04em] text-on-surface">
               Fuga de agua departamento 302
             </h3>
 
-            <div className="mt-3 flex items-center gap-2 text-sm text-slate-600">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+            <div className="mt-3 flex items-center gap-2 text-sm text-on-surface-variant">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-on-surface-variant">
                 <MapPin className="h-3 w-3" />
               </span>
-              Torre B · Depto 302 (Residente: Juan Pérez)
+              Torre B Â· Depto 302 (Residente: Juan PÃ©rez)
             </div>
 
-            <div className="mt-4 flex gap-3 text-xs text-slate-500">
-              <div className="flex items-center gap-2 rounded-md border border-slate-200 px-2 py-1.5">
+            <div className="mt-4 flex gap-3 text-xs text-on-surface-variant">
+              <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
                 <Camera className="h-3.5 w-3.5" />
                 3 fotos
               </div>
-              <div className="flex items-center gap-2 rounded-md border border-slate-200 px-2 py-1.5">
+              <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
                 <CalendarClock className="h-3.5 w-3.5" />
                 1 video
               </div>
@@ -405,7 +405,7 @@ function FieldOpsMobilePreview() {
             </button>
           </div>
 
-          <div className="mt-4 rounded-xl border border-slate-200 bg-[#eff4ff] p-3 text-sm leading-6 text-slate-700">
+          <div className="mt-4 rounded-xl border border-border bg-[#eff4ff] p-3 text-sm leading-6 text-on-surface-variant">
             <div className="flex items-start gap-2">
               <span className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#dfeafe] text-[#2563eb]">
                 <AlertCircle className="h-3 w-3" />
@@ -417,58 +417,58 @@ function FieldOpsMobilePreview() {
           </div>
         </div>
 
-        <div className="border-t border-slate-200 bg-[#f5f6f8] px-4 py-4">
+        <div className="border-t border-border bg-[#f5f6f8] px-4 py-4">
           <div className="mb-3 flex items-center gap-3">
             <button
               type="button"
               aria-label="Volver"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-card text-on-surface-variant shadow-sm"
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
               FIELDOPS
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="rounded-2xl border border-border bg-card p-3 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-on-surface-variant">
                 #OT-000125
               </span>
               <span className="rounded-full bg-[#dfeafc] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#2d5bc9]">
-                ALTA / CRÍTICA
+                ALTA / CRÃTICA
               </span>
             </div>
 
-            <h3 className="mt-4 text-[2.25rem] font-black leading-[1.05] tracking-[-0.06em] text-slate-900">
+            <h3 className="mt-4 text-[2.25rem] font-black leading-[1.05] tracking-[-0.06em] text-on-surface">
               Fuga de agua departamento 302
             </h3>
 
-            <div className="mt-4 flex items-center gap-2 text-[15px] text-slate-600">
+            <div className="mt-4 flex items-center gap-2 text-[15px] text-on-surface-variant">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#e5ecff] text-[#2563eb]">
                 <CalendarClock className="h-3.5 w-3.5" />
               </span>
               Programada para hoy: 10:30 AM (en 15 min)
             </div>
 
-            <div className="mt-5 rounded-[20px] border border-slate-200 bg-[#f5f7fb] p-3">
+            <div className="mt-5 rounded-[20px] border border-border bg-[#f5f7fb] p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#d9f7e8] text-[#1b8d63]">
                     <Check className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="text-[15px] font-bold text-slate-900">
-                      Confirmación Operativa
+                    <div className="text-[15px] font-bold text-on-surface">
+                      ConfirmaciÃ³n Operativa
                     </div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      Protocolo en Terreno · Sección 10
+                    <div className="mt-1 text-sm text-on-surface-variant">
+                      Protocolo en Terreno Â· SecciÃ³n 10
                     </div>
                   </div>
                 </div>
                 <span className="rounded-full bg-[#bfe7d5] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-[#0b7b4b]">
-                  GPS · LISTO
+                  GPS Â· LISTO
                 </span>
               </div>
             </div>
@@ -477,91 +477,91 @@ function FieldOpsMobilePreview() {
               type="button"
               className="mt-5 flex h-[58px] w-full items-center justify-center rounded-2xl bg-[#0f5fd7] text-[1.1rem] font-black uppercase tracking-[-0.02em] text-white shadow-[0_12px_24px_rgba(15,80,210,0.28)]"
             >
-              ESTOY AQUÍ · REGISTRAR LLEGADA
+              ESTOY AQUÃ Â· REGISTRAR LLEGADA
             </button>
 
-            <div className="mt-4 rounded-xl bg-slate-100 p-3 text-[15px] leading-6 text-slate-700">
-              <div className="flex items-center gap-2 text-slate-800">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white text-[#2563eb]">
+            <div className="mt-4 rounded-xl bg-muted p-3 text-[15px] leading-6 text-on-surface-variant">
+              <div className="flex items-center gap-2 text-on-surface">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-card text-[#2563eb]">
                   <Check className="h-3.5 w-3.5" />
                 </span>
-                Estampa fecha y hora exacta del servidor en tiempo real. Próximo estado del flujo: ON_SITE (En Sitio).
+                Estampa fecha y hora exacta del servidor en tiempo real. PrÃ³ximo estado del flujo: ON_SITE (En Sitio).
               </div>
             </div>
           </div>
         </div>
 
-        <div className="border-t border-slate-200 bg-[#f5f6f8] px-4 py-4">
+        <div className="border-t border-border bg-[#f5f6f8] px-4 py-4">
           <div className="mb-3 flex items-center gap-3">
             <button
               type="button"
               aria-label="Volver"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-card text-on-surface-variant shadow-sm"
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
               FIELDOPS
             </div>
           </div>
 
-          <div className="rounded-[20px] border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="rounded-[20px] border border-border bg-card p-3 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-on-surface-variant">
                 <span className="font-mono">#OT-000125</span>
               </div>
               <span className="rounded-full bg-[#dfeafc] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#2d5bc9]">
-                Cierre técnico
+                Cierre tÃ©cnico
               </span>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-on-surface-variant">
               <div className="rounded-xl bg-[#edf3f8] p-2.5">
-                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant">
                   Inicio en sitio
                 </div>
-                <div className="mt-2 text-[1.1rem] font-black text-slate-900">10:34 AM</div>
+                <div className="mt-2 text-[1.1rem] font-black text-on-surface">10:34 AM</div>
               </div>
               <div className="rounded-xl bg-[#edf3f8] p-2.5">
-                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
-                  Duración real
+                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant">
+                  DuraciÃ³n real
                 </div>
-                <div className="mt-2 text-[1.1rem] font-black text-slate-900">2h 28m</div>
+                <div className="mt-2 text-[1.1rem] font-black text-on-surface">2h 28m</div>
               </div>
             </div>
 
-            <div className="mt-4 rounded-[16px] border border-slate-200 bg-[#f4f7f9] p-3">
-              <div className="flex items-center gap-2 text-[15px] font-black text-slate-900">
+            <div className="mt-4 rounded-[16px] border border-border bg-[#f4f7f9] p-3">
+              <div className="flex items-center gap-2 text-[15px] font-black text-on-surface">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#dfeafe] text-[#3b82f6]">
                   <Wrench className="h-3.5 w-3.5" />
                 </span>
-                Resolución Técnica
+                ResoluciÃ³n TÃ©cnica
               </div>
-              <p className="mt-3 text-[15px] leading-6 text-slate-700">
-                Se retiró tramo dañado de 2 metros de tubería de 2&quot;, se instalaron nuevos codos y unión con sellador industrial. Se ejecutó prueba de flujo continuo y presión durante 15 minutos sin caída de presión.
+              <p className="mt-3 text-[15px] leading-6 text-on-surface-variant">
+                Se retirÃ³ tramo daÃ±ado de 2 metros de tuberÃ­a de 2&quot;, se instalaron nuevos codos y uniÃ³n con sellador industrial. Se ejecutÃ³ prueba de flujo continuo y presiÃ³n durante 15 minutos sin caÃ­da de presiÃ³n.
               </p>
             </div>
 
-            <div className="mt-4 rounded-[16px] border border-[#d1f7e4] bg-[#ebfff5] p-3 text-[15px] leading-6 text-slate-800">
-              <div className="flex items-center gap-2 font-black text-slate-900">
+            <div className="mt-4 rounded-[16px] border border-[#d1f7e4] bg-[#ebfff5] p-3 text-[15px] leading-6 text-on-surface">
+              <div className="flex items-center gap-2 font-black text-on-surface">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#d8fbe8] text-[#0e8b5c]">
                   <Check className="h-3.5 w-3.5" />
                 </span>
-                Prueba de estanqueidad y presión satisfactoria
+                Prueba de estanqueidad y presiÃ³n satisfactoria
               </div>
               <p className="mt-2">
-                15 min en régimen continuo a 4.2 bar sin caída de presión.
+                15 min en rÃ©gimen continuo a 4.2 bar sin caÃ­da de presiÃ³n.
               </p>
             </div>
 
-            <div className="mt-4 flex items-center justify-between rounded-[16px] border border-slate-200 bg-white p-3">
-              <div className="flex items-center gap-2 text-[15px] font-black text-slate-900">
+            <div className="mt-4 flex items-center justify-between rounded-[16px] border border-border bg-card p-3">
+              <div className="flex items-center gap-2 text-[15px] font-black text-on-surface">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#dfeafe] text-[#2563eb]">
                   <Camera className="h-3.5 w-3.5" />
                 </span>
                 Evidencia Final en Sitio
               </div>
-              <div className="text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">
+              <div className="text-[11px] font-black uppercase tracking-[0.08em] text-on-surface-variant">
                 2/2 requeridas
               </div>
             </div>
@@ -621,7 +621,7 @@ export default function OperacionesPage() {
       const catalogsPayload = await catalogsResponse.json();
       if (!ordersResponse.ok)
         throw new Error(
-          ordersPayload.error ?? "No se pudieron cargar las órdenes",
+          ordersPayload.error ?? "No se pudieron cargar las Ã³rdenes",
         );
       if (!employeesResponse.ok)
         throw new Error(
@@ -640,7 +640,7 @@ export default function OperacionesPage() {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "No se pudieron cargar las órdenes",
+          : "No se pudieron cargar las Ã³rdenes",
       );
     } finally {
       setLoading(false);
@@ -755,7 +755,7 @@ export default function OperacionesPage() {
         const evidencePayload = await evidenceResponse.json();
         if (!evidenceResponse.ok) {
           setError(
-            `La orden ${payload.code} se creó, pero no se pudieron adjuntar las fotos: ${evidencePayload.error ?? "error de carga"}`,
+            `La orden ${payload.code} se creÃ³, pero no se pudieron adjuntar las fotos: ${evidencePayload.error ?? "error de carga"}`,
           );
         } else {
           setError("");
@@ -826,7 +826,7 @@ export default function OperacionesPage() {
   async function deleteOrder(order: WorkOrder) {
     if (
       !window.confirm(
-        `¿Eliminar definitivamente la orden ${order.code}? Se borrarán sus visitas, materiales y fotos. Esta acción no se puede deshacer.`,
+        `Â¿Eliminar definitivamente la orden ${order.code}? Se borrarÃ¡n sus visitas, materiales y fotos. Esta acciÃ³n no se puede deshacer.`,
       )
     )
       return;
@@ -925,7 +925,7 @@ export default function OperacionesPage() {
 
   return (
     <DashboardShell>
-      <main className="min-h-screen bg-[#f7f9fb] px-4 pb-28 pt-7 text-slate-900 sm:px-6 lg:px-8 lg:pb-12">
+      <main className="min-h-screen bg-[#f7f9fb] px-4 pb-28 pt-7 text-on-surface sm:px-6 lg:px-8 lg:pb-12">
         <div className="mx-auto max-w-[1440px]">
           <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -933,12 +933,12 @@ export default function OperacionesPage() {
                 <Wrench className="h-4 w-4" />
                 OPERACIONES
               </div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-                Órdenes de trabajo
+              <h1 className="text-3xl font-bold tracking-tight text-on-surface sm:text-4xl">
+                Ã“rdenes de trabajo
               </h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">
+              <p className="mt-2 max-w-2xl text-sm text-on-surface-variant sm:text-base">
                 Coordina al equipo de campo, programa visitas y sigue cada
-                intervención hasta su cierre.
+                intervenciÃ³n hasta su cierre.
               </p>
             </div>
             <div className="flex gap-3">
@@ -946,7 +946,7 @@ export default function OperacionesPage() {
                 type="button"
                 onClick={() => void loadData(true)}
                 disabled={refreshing}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-60"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-on-surface transition hover:bg-muted disabled:opacity-60"
               >
                 <ArrowDownUp
                   className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
@@ -987,12 +987,12 @@ export default function OperacionesPage() {
           <FieldOpsMobilePreview />
 
           <section
-            aria-label="Resumen de órdenes"
+            aria-label="Resumen de Ã³rdenes"
             className="mb-7 grid grid-cols-2 gap-3 lg:grid-cols-5"
           >
             <Metric
               icon={ClipboardList}
-              label="Órdenes abiertas"
+              label="Ã“rdenes abiertas"
               value={stats.open}
               accent="blue"
             />
@@ -1022,24 +1022,24 @@ export default function OperacionesPage() {
             />
           </section>
 
-          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
-            <div className="border-b border-slate-200 p-4 sm:p-5">
+          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+            <div className="border-b border-border p-4 sm:p-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">
+                  <h2 className="text-lg font-bold text-on-surface">
                     Despacho de trabajo
                   </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {visibleOrders.length} órdenes en esta vista
+                  <p className="mt-1 text-sm text-on-surface-variant">
+                    {visibleOrders.length} Ã³rdenes en esta vista
                   </p>
                 </div>
                 <label className="relative block w-full lg:max-w-sm">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" />
                   <input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Buscar orden, dirección o trabajador"
-                    className="h-12 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    placeholder="Buscar orden, direcciÃ³n o trabajador"
+                    className="h-12 w-full rounded-lg border border-border bg-card pl-10 pr-3 text-sm outline-none transition placeholder:text-on-surface-variant focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                   />
                 </label>
               </div>
@@ -1058,7 +1058,7 @@ export default function OperacionesPage() {
                     className={`min-h-10 shrink-0 rounded-full px-4 text-sm font-semibold transition ${
                       statusFilter === filter.value
                         ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        : "bg-muted text-on-surface-variant hover:bg-muted"
                     }`}
                   >
                     {filter.label}
@@ -1068,11 +1068,11 @@ export default function OperacionesPage() {
             </div>
 
             {loading ? (
-              <div className="space-y-3 p-5" aria-label="Cargando órdenes">
+              <div className="space-y-3 p-5" aria-label="Cargando Ã³rdenes">
                 {[0, 1, 2].map((item) => (
                   <div
                     key={item}
-                    className="h-24 animate-pulse rounded-lg bg-slate-100"
+                    className="h-24 animate-pulse rounded-lg bg-muted"
                   />
                 ))}
               </div>
@@ -1081,13 +1081,13 @@ export default function OperacionesPage() {
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-blue-600">
                   <ClipboardList className="h-7 w-7" />
                 </div>
-                <h3 className="font-bold text-slate-900">
-                  {orders.length ? "No hay resultados" : "Aún no hay órdenes"}
+                <h3 className="font-bold text-on-surface">
+                  {orders.length ? "No hay resultados" : "AÃºn no hay Ã³rdenes"}
                 </h3>
-                <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
+                <p className="mx-auto mt-1 max-w-md text-sm text-on-surface-variant">
                   {orders.length
-                    ? "Prueba con otro filtro o término de búsqueda."
-                    : "Crea una orden para coordinar la primera intervención de campo."}
+                    ? "Prueba con otro filtro o tÃ©rmino de bÃºsqueda."
+                    : "Crea una orden para coordinar la primera intervenciÃ³n de campo."}
                 </p>
                 {!orders.length && canCreate && (
                   <button
@@ -1100,32 +1100,32 @@ export default function OperacionesPage() {
                 )}
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-border">
                 {visibleOrders.map((order) => (
                   <div key={order.id} className="group flex items-stretch">
                     <button
                       type="button"
                       onClick={() => void openOrder(order)}
-                      className="grid w-full flex-1 grid-cols-1 gap-3 px-4 py-4 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5 lg:grid-cols-[minmax(220px,1.4fr)_minmax(130px,0.8fr)_minmax(110px,0.75fr)_minmax(150px,0.8fr)_auto] lg:items-center lg:gap-5"
+                      className="grid w-full flex-1 grid-cols-1 gap-3 px-4 py-4 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5 lg:grid-cols-[minmax(220px,1.4fr)_minmax(130px,0.8fr)_minmax(110px,0.75fr)_minmax(150px,0.8fr)_auto] lg:items-center lg:gap-5"
                     >
                       <div className="min-w-0">
                         <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs font-bold tracking-wide text-slate-500">
+                          <span className="font-mono text-xs font-bold tracking-wide text-on-surface-variant">
                             {order.code}
                           </span>
                           <PriorityPill priority={order.priority} />
                         </div>
-                        <div className="truncate font-semibold text-slate-900 group-hover:text-blue-700">
+                        <div className="truncate font-semibold text-on-surface group-hover:text-blue-700">
                           {order.title}
                         </div>
-                        <div className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
+                        <div className="mt-1 flex items-center gap-1.5 text-sm text-on-surface-variant">
                           <MapPin className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">
-                            {order.site} · {order.departmentCode}
+                            {order.site} Â· {order.departmentCode}
                           </span>
                         </div>
                         {order.contactName && (
-                          <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-on-surface-variant">
                             <UserRound className="h-3.5 w-3.5 shrink-0" />
                             <span className="truncate">
                               {order.contactName}
@@ -1133,8 +1133,8 @@ export default function OperacionesPage() {
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-slate-600">
-                        <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
+                      <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+                        <UserRound className="h-4 w-4 shrink-0 text-on-surface-variant" />
                         <span className="truncate">
                           {order.assigneeName || "Sin asignar"}
                         </span>
@@ -1143,7 +1143,7 @@ export default function OperacionesPage() {
                         <StatusPill status={order.status} />
                       </div>
                       <div
-                        className={`flex min-w-0 flex-wrap items-center gap-2 text-sm ${isOverdue(order) ? "font-semibold text-red-700" : "text-slate-500"}`}
+                        className={`flex min-w-0 flex-wrap items-center gap-2 text-sm ${isOverdue(order) ? "font-semibold text-red-700" : "text-on-surface-variant"}`}
                       >
                         <CalendarClock className="h-4 w-4 shrink-0" />
                         <span className="min-w-0 break-words">
@@ -1155,7 +1155,7 @@ export default function OperacionesPage() {
                                 minute: "2-digit",
                                 hourCycle: "h23",
                               })
-                            : "Sin fecha límite"}
+                            : "Sin fecha lÃ­mite"}
                         </span>
                         {isOverdue(order) && (
                           <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase">
@@ -1163,7 +1163,7 @@ export default function OperacionesPage() {
                           </span>
                         )}
                       </div>
-                      <ChevronRight className="hidden h-5 w-5 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-blue-600 lg:block" />
+                      <ChevronRight className="hidden h-5 w-5 text-on-surface-variant transition group-hover:translate-x-0.5 group-hover:text-blue-600 lg:block" />
                     </button>
                     {isAdmin && (
                       <div className="flex items-center pr-3 sm:pr-5">
@@ -1173,7 +1173,7 @@ export default function OperacionesPage() {
                           disabled={deletingId === order.id}
                           aria-label={`Eliminar orden ${order.code}`}
                           title="Eliminar orden"
-                          className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="flex h-9 w-9 items-center justify-center rounded-lg text-on-surface-variant transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -1185,9 +1185,9 @@ export default function OperacionesPage() {
             )}
           </section>
 
-          <div className="mt-4 flex items-start gap-2 text-xs leading-5 text-slate-500">
+          <div className="mt-4 flex items-start gap-2 text-xs leading-5 text-on-surface-variant">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-            Cada cambio de estado y asignación queda registrado en el historial
+            Cada cambio de estado y asignaciÃ³n queda registrado en el historial
             de la orden.
           </div>
         </div>
@@ -1201,9 +1201,9 @@ export default function OperacionesPage() {
               <div>
                 <label
                   htmlFor="order-title"
-                  className="mb-1.5 block text-sm font-semibold text-slate-700"
+                  className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                 >
-                  Título de la incidencia *
+                  TÃ­tulo de la incidencia *
                 </label>
                 <input
                   id="order-title"
@@ -1218,7 +1218,7 @@ export default function OperacionesPage() {
                 <div>
                   <label
                     htmlFor="order-type"
-                    className="mb-1.5 block text-sm font-semibold text-slate-700"
+                    className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                   >
                     Tipo de incidencia *
                   </label>
@@ -1233,9 +1233,9 @@ export default function OperacionesPage() {
                       Selecciona un tipo
                     </option>
                     {[
-                      "Plomería",
+                      "PlomerÃ­a",
                       "Electricidad",
-                      "Cerrajería",
+                      "CerrajerÃ­a",
                       "Limpieza",
                       "Mantenimiento",
                       "Otro",
@@ -1249,7 +1249,7 @@ export default function OperacionesPage() {
                 <div>
                   <label
                     htmlFor="order-priority"
-                    className="mb-1.5 block text-sm font-semibold text-slate-700"
+                    className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                   >
                     Prioridad
                   </label>
@@ -1270,7 +1270,7 @@ export default function OperacionesPage() {
                 <div>
                   <label
                     htmlFor="order-site"
-                    className="mb-1.5 block text-sm font-semibold text-slate-700"
+                    className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                   >
                     Sede *
                   </label>
@@ -1296,9 +1296,9 @@ export default function OperacionesPage() {
                 <div>
                   <label
                     htmlFor="order-department"
-                    className="mb-1.5 block text-sm font-semibold text-slate-700"
+                    className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                   >
-                    Departamento · UNI/DEP *
+                    Departamento Â· UNI/DEP *
                   </label>
                   <select
                     id="order-department"
@@ -1313,7 +1313,7 @@ export default function OperacionesPage() {
                     className="field"
                   >
                     <option value="" disabled>
-                      Selecciona código de departamento
+                      Selecciona cÃ³digo de departamento
                     </option>
                     {siteDepartments.map((department) => (
                       <option key={department.id} value={department.id}>
@@ -1327,9 +1327,9 @@ export default function OperacionesPage() {
                 <div>
                   <label
                     htmlFor="order-client"
-                    className="mb-1.5 block text-sm font-semibold text-slate-700"
+                    className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                   >
-                    Residente · Clientes
+                    Residente Â· Clientes
                   </label>
                   <select
                     id="order-client"
@@ -1356,19 +1356,19 @@ export default function OperacionesPage() {
                     <option value="">Sin residente asociado</option>
                     {clientsWithDepartment.map((client) => (
                       <option key={client.id} value={client.id}>
-                        {client.name} · {client.codigoDepartamento}
+                        {client.name} Â· {client.codigoDepartamento}
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1.5 text-xs text-slate-500">
-                    Al elegir un residente, su código en Clientes selecciona
-                    automáticamente su departamento UNI/DEP y sede.
+                  <p className="mt-1.5 text-xs text-on-surface-variant">
+                    Al elegir un residente, su cÃ³digo en Clientes selecciona
+                    automÃ¡ticamente su departamento UNI/DEP y sede.
                   </p>
                 </div>
                 <div>
                   <label
                     htmlFor="order-target"
-                    className="mb-1.5 block text-sm font-semibold text-slate-700"
+                    className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                   >
                     Fecha objetivo
                   </label>
@@ -1383,7 +1383,7 @@ export default function OperacionesPage() {
               <div>
                 <label
                   htmlFor="order-assignee"
-                  className="mb-1.5 block text-sm font-semibold text-slate-700"
+                  className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                 >
                   Asignar personal de mantenimiento
                 </label>
@@ -1397,29 +1397,29 @@ export default function OperacionesPage() {
                   {employees.map((employee) => (
                     <option key={employee.id} value={employee.id}>
                       {employee.nombres} {employee.apellidos}
-                      {employee.cargo ? ` · ${employee.cargo}` : ""}
+                      {employee.cargo ? ` Â· ${employee.cargo}` : ""}
                     </option>
                   ))}
                 </select>
                 {employees.length === 0 && (
                   <p className="mt-1.5 text-xs text-amber-700">
-                    No hay personal activo del área de mantenimiento en RR. HH.
+                    No hay personal activo del Ã¡rea de mantenimiento en RR. HH.
                   </p>
                 )}
               </div>
               <div>
                 <label
                   htmlFor="order-description"
-                  className="mb-1.5 block text-sm font-semibold text-slate-700"
+                  className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                 >
-                  Descripción
+                  DescripciÃ³n
                 </label>
                 <textarea
                   id="order-description"
                   name="description"
                   rows={3}
                   maxLength={10000}
-                  placeholder="Describe el problema y la información útil para el equipo"
+                  placeholder="Describe el problema y la informaciÃ³n Ãºtil para el equipo"
                   className="field min-h-24 resize-y py-3"
                 />
               </div>
@@ -1427,11 +1427,11 @@ export default function OperacionesPage() {
                 files={creationPhotos}
                 onChange={updateCreationPhotos}
               />
-              <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
+              <div className="flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
-                  className="h-12 rounded-lg border border-slate-300 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="h-12 rounded-lg border border-border px-5 text-sm font-semibold text-on-surface-variant hover:bg-muted"
                 >
                   Cancelar
                 </button>
@@ -1491,9 +1491,9 @@ function Metric({
     green: "bg-emerald-50 text-emerald-700",
   };
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium leading-4 text-slate-500 sm:text-sm">
+        <span className="text-xs font-medium leading-4 text-on-surface-variant sm:text-sm">
           {label}
         </span>
         <span
@@ -1502,7 +1502,7 @@ function Metric({
           <Icon className="h-4 w-4" />
         </span>
       </div>
-      <div className="mt-3 text-2xl font-bold tracking-tight text-slate-950">
+      <div className="mt-3 text-2xl font-bold tracking-tight text-on-surface">
         {value}
       </div>
     </div>
@@ -1545,22 +1545,22 @@ function PhotoPicker({
   }, [files]);
 
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
+    <div className="rounded-xl border border-dashed border-border bg-muted p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
             <Camera className="h-5 w-5" />
           </span>
           <div>
-            <p className="text-sm font-bold text-slate-800">
+            <p className="text-sm font-bold text-on-surface">
               Fotos de la incidencia
             </p>
-            <p className="mt-0.5 text-xs text-slate-500">
-              JPG, PNG o WebP · hasta 5 fotos · 8 MB por foto
+            <p className="mt-0.5 text-xs text-on-surface-variant">
+              JPG, PNG o WebP Â· hasta 5 fotos Â· 8 MB por foto
             </p>
           </div>
         </div>
-        <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+        <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-on-surface-variant hover:bg-muted">
           <Plus className="h-4 w-4" />
           Elegir fotos
           <input
@@ -1580,7 +1580,7 @@ function PhotoPicker({
           {files.map((file, index) => (
             <div
               key={`${file.name}-${file.size}-${index}`}
-              className="overflow-hidden rounded-lg border border-slate-200 bg-white"
+              className="overflow-hidden rounded-lg border border-border bg-card"
             >
               {previews[index] && (
                 <img
@@ -1589,7 +1589,7 @@ function PhotoPicker({
                   className="h-28 w-full object-cover"
                 />
               )}
-              <div className="truncate px-2 py-1.5 text-xs text-slate-600">
+              <div className="truncate px-2 py-1.5 text-xs text-on-surface-variant">
                 {file.name}
               </div>
             </div>
@@ -1620,14 +1620,14 @@ function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="max-h-[94dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:max-w-2xl sm:rounded-xl sm:p-6"
+        className="max-h-[94dvh] w-full overflow-y-auto rounded-t-2xl bg-card p-5 shadow-2xl sm:max-w-2xl sm:rounded-xl sm:p-6"
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h2 id="modal-title" className="text-xl font-bold text-slate-950">
+            <h2 id="modal-title" className="text-xl font-bold text-on-surface">
               {title}
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-on-surface-variant">
               Los campos marcados con * son obligatorios.
             </p>
           </div>
@@ -1635,7 +1635,7 @@ function Modal({
             type="button"
             onClick={onClose}
             aria-label="Cerrar"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-on-surface-variant hover:bg-muted"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1689,30 +1689,30 @@ function OrderDrawer({
         aria-labelledby="drawer-title"
         className="flex h-full w-full max-w-2xl flex-col overflow-hidden bg-[#f8fafc] shadow-2xl"
       >
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-7">
+        <header className="flex items-start justify-between gap-4 border-b border-border bg-card px-5 py-4 sm:px-7">
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className="font-mono text-xs font-bold tracking-wide text-slate-500">
+              <span className="font-mono text-xs font-bold tracking-wide text-on-surface-variant">
                 {order.code}
               </span>
               <StatusPill status={order.status} />
             </div>
             <h2
               id="drawer-title"
-              className="text-xl font-bold text-slate-950 sm:text-2xl"
+              className="text-xl font-bold text-on-surface sm:text-2xl"
             >
               {order.title}
             </h2>
-            <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-on-surface-variant">
               <MapPin className="h-4 w-4 shrink-0" />
-              {order.site} · {order.departmentCode}
+              {order.site} Â· {order.departmentCode}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Cerrar detalle"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-on-surface-variant hover:bg-muted"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1720,8 +1720,8 @@ function OrderDrawer({
 
         <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-7">
           <div className="mb-5 grid grid-cols-2 gap-3">
-            <div className="rounded-lg border border-slate-200 bg-white p-3">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+            <div className="rounded-lg border border-border bg-card p-3">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
                 Prioridad
               </div>
               <div className="mt-1">
@@ -1730,7 +1730,7 @@ function OrderDrawer({
             </div>
             <InfoBlock label="Tipo de incidencia" value={order.issueType} />
             <InfoBlock
-              label="Departamento · UNI/DEP"
+              label="Departamento Â· UNI/DEP"
               value={order.departmentCode}
             />
             <InfoBlock label="Sede" value={order.site} />
@@ -1744,45 +1744,45 @@ function OrderDrawer({
             />
           </div>
 
-          <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
-            <h3 className="mb-2 text-sm font-bold text-slate-900">
-              Descripción
+          <section className="mb-5 rounded-xl border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-bold text-on-surface">
+              DescripciÃ³n
             </h3>
-            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">
-              {order.description || "Sin descripción adicional."}
+            <p className="whitespace-pre-wrap text-sm leading-6 text-on-surface-variant">
+              {order.description || "Sin descripciÃ³n adicional."}
             </p>
           </section>
 
-          <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
+          <section className="mb-5 rounded-xl border border-border bg-card p-4">
             <div className="mb-3 flex items-center gap-2">
               <Package className="h-4 w-4 text-blue-600" />
-              <h3 className="text-sm font-bold text-slate-900">
+              <h3 className="text-sm font-bold text-on-surface">
                 Productos y materiales solicitados
               </h3>
               {order.materials.length > 0 && (
-                <span className="ml-auto rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                <span className="ml-auto rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-on-surface-variant">
                   {order.materials.length}
                 </span>
               )}
             </div>
             {order.materials.length > 0 ? (
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-border">
                 {order.materials.map((material) => (
                   <li
                     key={material.id}
                     className="flex items-center justify-between gap-3 py-2"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-800">
+                      <p className="truncate text-sm font-medium text-on-surface">
                         {material.material}
                       </p>
                       {material.observations && (
-                        <p className="truncate text-xs text-slate-500">
+                        <p className="truncate text-xs text-on-surface-variant">
                           {material.observations}
                         </p>
                       )}
                     </div>
-                    <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                    <span className="shrink-0 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-on-surface-variant">
                       {material.quantity}
                       {material.unit ? ` ${material.unit}` : ""}
                     </span>
@@ -1790,18 +1790,18 @@ function OrderDrawer({
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-on-surface-variant">
                 {order.materialsConfirmed
-                  ? "El técnico confirmó que no se requieren productos."
-                  : "Todavía no se registraron productos solicitados."}
+                  ? "El tÃ©cnico confirmÃ³ que no se requieren productos."
+                  : "TodavÃ­a no se registraron productos solicitados."}
               </p>
             )}
           </section>
 
-          <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
+          <section className="mb-5 rounded-xl border border-border bg-card p-4">
             <div className="mb-3 flex items-center gap-2">
               <Camera className="h-4 w-4 text-blue-600" />
-              <h3 className="text-sm font-bold text-slate-900">
+              <h3 className="text-sm font-bold text-on-surface">
                 Fotos y evidencias
               </h3>
             </div>
@@ -1813,30 +1813,30 @@ function OrderDrawer({
                     href={attachment.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="overflow-hidden rounded-lg border border-slate-200"
+                    className="overflow-hidden rounded-lg border border-border"
                   >
                     <img
                       src={attachment.url}
                       alt={attachment.fileName}
                       className="h-28 w-full object-cover"
                     />
-                    <span className="block truncate px-2 py-1.5 text-xs text-slate-600">
-                      {attachment.kind ? `${attachment.kind} · ` : ""}
+                    <span className="block truncate px-2 py-1.5 text-xs text-on-surface-variant">
+                      {attachment.kind ? `${attachment.kind} Â· ` : ""}
                       {attachment.fileName}
                     </span>
                   </a>
                 ))}
               </div>
             ) : (
-              <p className="mb-3 text-sm text-slate-500">
-                Todavía no hay fotos adjuntas.
+              <p className="mb-3 text-sm text-on-surface-variant">
+                TodavÃ­a no hay fotos adjuntas.
               </p>
             )}
             {canUpdate && (
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block">
-                    <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+                    <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
                       Tipo de evidencia
                     </span>
                     <select
@@ -1854,8 +1854,8 @@ function OrderDrawer({
                     </select>
                   </label>
                   <label className="block">
-                    <span className="mb-1.5 block text-sm font-semibold text-slate-700">
-                      Descripción
+                    <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
+                      DescripciÃ³n
                     </span>
                     <input
                       value={evidenceDescription}
@@ -1863,7 +1863,7 @@ function OrderDrawer({
                         setEvidenceDescription(event.target.value)
                       }
                       maxLength={1000}
-                      placeholder="Ej. Conexión reparada y sin fugas"
+                      placeholder="Ej. ConexiÃ³n reparada y sin fugas"
                       className="field"
                     />
                   </label>
@@ -1892,24 +1892,24 @@ function OrderDrawer({
                       }
                     });
                   }}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-on-surface-variant hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Camera className="h-4 w-4" />
                   {saving ? "Subiendo fotos..." : "Adjuntar a la orden"}
                 </button>
                 {evidenceFiles.length > 0 && !evidenceDescription.trim() && (
                   <p className="text-xs text-amber-700">
-                    Escribe una descripción para adjuntar la evidencia.
+                    Escribe una descripciÃ³n para adjuntar la evidencia.
                   </p>
                 )}
               </div>
             )}
           </section>
 
-          <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
+          <section className="mb-5 rounded-xl border border-border bg-card p-4">
             <div className="mb-3 flex items-center gap-2">
               <Users className="h-4 w-4 text-blue-600" />
-              <h3 className="text-sm font-bold text-slate-900">Responsable</h3>
+              <h3 className="text-sm font-bold text-on-surface">Responsable</h3>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <select
@@ -1934,27 +1934,27 @@ function OrderDrawer({
                   saving || assignee === (order.assignedEmployeeId ?? "")
                 }
                 onClick={() => void onAssign(assignee)}
-                className="h-12 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-12 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-on-surface hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Guardar asignación
+                Guardar asignaciÃ³n
               </button>
             </div>
             {order.assignments.length > 1 && (
-              <p className="mt-3 text-xs text-slate-500">
-                Historial de asignación: {order.assignments.length} cambios
+              <p className="mt-3 text-xs text-on-surface-variant">
+                Historial de asignaciÃ³n: {order.assignments.length} cambios
                 registrados.
               </p>
             )}
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-4">
-            <h3 className="mb-3 text-sm font-bold text-slate-900">
+          <section className="rounded-xl border border-border bg-card p-4">
+            <h3 className="mb-3 text-sm font-bold text-on-surface">
               Historial de actividad
             </h3>
             <div className="space-y-4">
               {order.events.map((event) => (
                 <div key={event.id} className="flex gap-3">
-                  <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                  <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-on-surface-variant">
                     {event.eventType === "STATUS_CHANGED" ? (
                       <ArrowLeft className="h-3.5 w-3.5" />
                     ) : (
@@ -1962,11 +1962,11 @@ function OrderDrawer({
                     )}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-800">
+                    <p className="text-sm font-medium text-on-surface">
                       {humanizeEvent(event)}
                     </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {event.actorName} · {formatDate(event.createdAt)}
+                    <p className="mt-0.5 text-xs text-on-surface-variant">
+                      {event.actorName} Â· {formatDate(event.createdAt)}
                     </p>
                   </div>
                 </div>
@@ -1985,7 +1985,7 @@ function OrderDrawer({
         )}
 
         {canDelete && (
-          <footer className="border-t border-slate-200 bg-white px-5 py-4 sm:px-7">
+          <footer className="border-t border-border bg-card px-5 py-4 sm:px-7">
             <button
               type="button"
               onClick={() => void onDelete(order)}
@@ -2004,11 +2004,11 @@ function OrderDrawer({
 
 function InfoBlock({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+    <div className="rounded-lg border border-border bg-card p-3">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
         {label}
       </div>
-      <div className="mt-1 truncate text-sm font-semibold text-slate-800">
+      <div className="mt-1 truncate text-sm font-semibold text-on-surface">
         {value}
       </div>
     </div>

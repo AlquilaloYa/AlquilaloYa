@@ -38,6 +38,7 @@ const BASE_OPERATIVO: Permission[] = [
   P.DOCUMENT_READ,
   P.TEMPLATE_READ,
   P.WORK_ORDER_READ,
+  P.SCORING_READ,
 ];
 
 const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {

@@ -36,4 +36,38 @@ const SunIcon = () => (
   </svg>
 );
 
-export { MoonIcon, SunIcon };
+export type ThemeMode = "light" | "dark";
+
+export interface ThemeToggleProps {
+  theme: ThemeMode;
+  onToggle: () => void;
+  className?: string;
+  showLabel?: boolean;
+}
+
+/**
+ * Botón accesible para alternar el tema. Es controlado (no depende de un
+ * proveedor de tema concreto) para poder reutilizarse en cualquier app.
+ */
+function ThemeToggle({
+  theme,
+  onToggle,
+  className,
+  showLabel = false,
+}: ThemeToggleProps) {
+  const label = theme === "light" ? "Activar modo oscuro" : "Activar modo claro";
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label="Cambiar tema"
+      title={label}
+      className={className}
+    >
+      {theme === "light" ? <MoonIcon /> : <SunIcon />}
+      {showLabel ? <span>{theme === "light" ? "Modo oscuro" : "Modo claro"}</span> : null}
+    </button>
+  );
+}
+
+export { MoonIcon, SunIcon, ThemeToggle };

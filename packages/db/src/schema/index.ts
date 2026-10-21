@@ -26,3 +26,4 @@ export * from "./permission-requests";
 export * from "./servicios-extras";
 export * from "./personas-no-alquilar";
 export * from "./accounting";
+export * from "./tenant-scoring";

@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { useTheme } from "@/lib/theme-provider";
 import type { UserRole } from "@contract/domain/rbac";
 import { AccessControl } from "@contract/domain/rbac";
 import type { Permission } from "@contract/domain/rbac";
 import { TopBar } from "@/components/top-bar";
+import { ThemeToggle } from "@contract/ui/components/theme-toggle";
 import { AppointmentReminders } from "@/components/appointment-reminders";
 import {
   LayoutDashboard,
@@ -45,6 +47,7 @@ import {
   LayoutGrid,
   UserCog,
   KeyRound,
+  Gauge,
   HardDrive,
   ListTodo,
   ClipboardList,
@@ -114,6 +117,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/separaciones", label: "Separación", icon: Receipt, section: "Separación", permission: "contract.read", group: "contratos" },
   { href: "/plantillas", label: "Plantillas", icon: FilePlus2, section: "Plantillas", permission: "template.read", group: "contratos" },
   { href: "/clientes", label: "Clientes", icon: Star, section: "Clientes", permission: "client.read" },
+  { href: "/scoring", label: "Scoring de inquilinos", icon: Gauge, section: "Scoring", permission: "scoring.read" },
   { href: "/pagos", label: "Cobranza", icon: Banknote, section: "Cobranza", permission: "contract.read" },
   { href: "/analiticas", label: "Analíticas", icon: BarChart3, section: "Analíticas", permission: "contract.read" },
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
@@ -356,6 +360,7 @@ function NavGroup({
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -535,6 +540,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="mt-auto border-t border-outline-variant/30 pt-4 px-2 dark:border-white/10">
+          <ThemeToggle
+            theme={theme}
+            onToggle={toggleTheme}
+            showLabel
+            className="mb-2 flex w-full items-center gap-3 rounded-r-md px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:bg-surface-container-high dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white lg:hidden"
+          />
           <ul className="flex flex-col gap-1">
             {FOOTER_ITEMS.map((item) => {
               const Icon = item.icon;
