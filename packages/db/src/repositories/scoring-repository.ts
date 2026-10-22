@@ -14,6 +14,7 @@ export interface TenantScoreRow {
   documentoIdentidad: string;
   telefono: string | null;
   contratosActivos: number;
+  departamentos: string[];
   score: number;
   band: ScoringResult["band"];
   breakdown: ScoringResult["breakdown"];
@@ -64,8 +65,15 @@ export class DrizzleScoringRepository {
       .select({
         id: schema.contracts.id,
         clienteId: schema.contracts.clienteId,
+        departamentoCodigo: schema.departments.codigo,
+        departamentoNombre: schema.departments.nombre,
+        departamentoNumero: schema.departments.numero,
       })
       .from(schema.contracts)
+      .leftJoin(
+        schema.departments,
+        eq(schema.departments.id, schema.contracts.departamentoId),
+      )
       .where(
         and(
           inArray(schema.contracts.estado, ["FIRMADO", "NOTARIADO"]),
@@ -160,6 +168,15 @@ export class DrizzleScoringRepository {
       contratosPorCliente.set(c.clienteId, (contratosPorCliente.get(c.clienteId) ?? 0) + 1);
     }
 
+    const departamentosPorCliente = new Map<string, string[]>();
+    for (const c of contracts) {
+      const etiqueta = c.departamentoNombre ?? c.departamentoCodigo;
+      if (!etiqueta) continue;
+      const lista = departamentosPorCliente.get(c.clienteId) ?? [];
+      if (!lista.includes(etiqueta)) lista.push(etiqueta);
+      departamentosPorCliente.set(c.clienteId, lista);
+    }
+
     const rows: TenantScoreRow[] = clientes.map((cliente) => {
       const result = computeTenantScore({
         pagos: pagosPorCliente.get(cliente.id) ?? [],
@@ -172,6 +189,7 @@ export class DrizzleScoringRepository {
         documentoIdentidad: cliente.documentoIdentidad,
         telefono: cliente.telefono,
         contratosActivos: contratosPorCliente.get(cliente.id) ?? 0,
+        departamentos: departamentosPorCliente.get(cliente.id) ?? [],
         score: result.score,
         band: result.band,
         breakdown: result.breakdown,

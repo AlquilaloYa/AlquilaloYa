@@ -24,6 +24,7 @@ export async function GET(req: Request) {
         documentoIdentidad: row.documentoIdentidad,
         telefono: row.telefono,
         contratosActivos: row.contratosActivos,
+        departamentos: row.departamentos,
         score: row.score,
         band: row.band,
         breakdown: row.breakdown,

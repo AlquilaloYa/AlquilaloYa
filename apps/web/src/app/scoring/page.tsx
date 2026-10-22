@@ -30,6 +30,7 @@ interface TenantScore {
   documentoIdentidad: string;
   telefono: string | null;
   contratosActivos: number;
+  departamentos: string[];
   score: number;
   band: { band: ScoreBand; label: string; min: number; max: number; color: string };
   breakdown: Breakdown;
@@ -181,6 +182,7 @@ export default function ScoringPage() {
                   <thead>
                     <tr className="border-b text-left text-on-surface-variant">
                       <th className="px-3 py-2 font-medium">Inquilino</th>
+                      <th className="px-3 py-2 font-medium">Departamento</th>
                       <th className="px-3 py-2 font-medium">Documento</th>
                       <th className="px-3 py-2 font-medium">Contratos</th>
                       <th className="px-3 py-2 font-medium">Reportes</th>
@@ -195,6 +197,9 @@ export default function ScoringPage() {
                         onClick={() => setSelected(t)}
                       >
                         <td className="px-3 py-2 text-on-surface">{t.nombre}</td>
+                        <td className="px-3 py-2 text-on-surface-variant">
+                          {t.departamentos.length > 0 ? t.departamentos.join(", ") : "—"}
+                        </td>
                         <td className="px-3 py-2 text-on-surface-variant">{t.documentoIdentidad}</td>
                         <td className="px-3 py-2 text-on-surface-variant">{t.contratosActivos}</td>
                         <td className="px-3 py-2 text-on-surface-variant">
@@ -368,6 +373,10 @@ function TenantPanel({
             <h2 className="font-headline-md text-on-surface">{tenant.nombre}</h2>
             <p className="font-body-sm text-on-surface-variant">
               {tenant.documentoIdentidad}
+            </p>
+            <p className="font-body-sm text-on-surface-variant">
+              Departamento:{" "}
+              {tenant.departamentos.length > 0 ? tenant.departamentos.join(", ") : "—"}
             </p>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Cerrar">
