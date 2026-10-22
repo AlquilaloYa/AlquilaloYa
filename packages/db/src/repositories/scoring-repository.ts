@@ -67,7 +67,6 @@ export class DrizzleScoringRepository {
         clienteId: schema.contracts.clienteId,
         departamentoCodigo: schema.departments.codigo,
         departamentoNombre: schema.departments.nombre,
-        departamentoNumero: schema.departments.numero,
       })
       .from(schema.contracts)
       .leftJoin(
@@ -170,7 +169,7 @@ export class DrizzleScoringRepository {
 
     const departamentosPorCliente = new Map<string, string[]>();
     for (const c of contracts) {
-      const etiqueta = c.departamentoNombre ?? c.departamentoCodigo;
+      const etiqueta = c.departamentoCodigo ?? c.departamentoNombre;
       if (!etiqueta) continue;
       const lista = departamentosPorCliente.get(c.clienteId) ?? [];
       if (!lista.includes(etiqueta)) lista.push(etiqueta);
