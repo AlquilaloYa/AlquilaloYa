@@ -32,6 +32,7 @@ export async function GET(req: Request) {
         nombres: schema.personasNoAlquilar.nombres,
         documentoIdentidad: schema.personasNoAlquilar.documentoIdentidad,
         telefono: schema.personasNoAlquilar.telefono,
+        motivo: schema.personasNoAlquilar.motivo,
         fotos: schema.personasNoAlquilar.fotos,
         creadoPor: schema.personasNoAlquilar.creadoPor,
         createdAt: schema.personasNoAlquilar.createdAt,
@@ -46,6 +47,7 @@ export async function GET(req: Request) {
         nombres: row.nombres,
         documentoIdentidad: row.documentoIdentidad,
         telefono: row.telefono,
+        motivo: row.motivo,
         tieneFoto: row.fotos.length > 0,
         totalFotos: row.fotos.length,
         creadoPor: row.creadoPor,
@@ -85,6 +87,7 @@ export async function POST(req: Request) {
     const nombres = String(form.get("nombres") ?? "").trim();
     const documentoIdentidad = String(form.get("documentoIdentidad") ?? "").trim();
     const telefono = String(form.get("telefono") ?? "").trim() || null;
+    const motivo = String(form.get("motivo") ?? "").trim() || null;
     // "fotos" admite varias; "foto" sigue funcionando por compatibilidad.
     const archivos = [...form.getAll("fotos"), ...form.getAll("foto")].filter(
       (entry): entry is File => entry instanceof File
@@ -136,6 +139,7 @@ export async function POST(req: Request) {
         nombres,
         documentoIdentidad,
         telefono,
+        motivo,
         fotos,
         creadoPor: auth.user.name || auth.user.email,
       });
@@ -163,6 +167,7 @@ export async function POST(req: Request) {
         nombres,
         documentoIdentidad,
         telefono,
+        motivo,
         tieneFoto: fotos.length > 0,
         totalFotos: fotos.length,
       },

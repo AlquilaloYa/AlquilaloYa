@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   jsonb,
   pgTable,
+  text,
   timestamp,
   uniqueIndex,
   uuid,
@@ -27,6 +28,7 @@ export const personasNoAlquilar = pgTable(
     nombres: varchar("nombres", { length: 255 }).notNull(),
     documentoIdentidad: varchar("documento_identidad", { length: 50 }).notNull(),
     telefono: varchar("telefono", { length: 30 }),
+    motivo: text("motivo"),
     fotos: jsonb("fotos")
       .$type<FotoRef[]>()
       .notNull()

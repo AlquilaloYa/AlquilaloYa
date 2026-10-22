@@ -1411,6 +1411,7 @@ interface PersonaNoAlquilar {
   nombres: string;
   documentoIdentidad: string;
   telefono: string | null;
+  motivo: string | null;
   tieneFoto: boolean;
   totalFotos: number;
   creadoPor: string | null;
@@ -1506,6 +1507,7 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
   const [nombres, setNombres] = useState("");
   const [documento, setDocumento] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [motivo, setMotivo] = useState("");
   const [fotos, setFotos] = useState<File[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [eliminando, setEliminando] = useState<string | null>(null);
@@ -1525,6 +1527,7 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
       fd.set("nombres", nombres.trim());
       fd.set("documentoIdentidad", documento.trim());
       fd.set("telefono", telefono.trim());
+      fd.set("motivo", motivo.trim());
       if (fotos.length) for (const archivo of fotos) fd.append("fotos", archivo);
       const res = await apiFetch("/api/personas-no-alquilar", {
         method: "POST",
@@ -1539,6 +1542,7 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
       setNombres("");
       setDocumento("");
       setTelefono("");
+      setMotivo("");
       setFotos([]);
       const input = document.getElementById("blacklist-foto") as HTMLInputElement | null;
       if (input) input.value = "";
@@ -1604,6 +1608,12 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
                 onChange={(event) => setTelefono(event.target.value)}
               />
             </div>
+            <textarea
+              className={`${campoClase} mt-3 min-h-[72px] resize-y`}
+              placeholder="¿Por qué nunca alquilarle? (motivo)"
+              value={motivo}
+              onChange={(event) => setMotivo(event.target.value)}
+            />
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <input
                 id="blacklist-fotos"
@@ -1713,6 +1723,12 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
                         DNI {p.documentoIdentidad}
                         {p.telefono ? ` · ${p.telefono}` : ""}
                       </p>
+                      {p.motivo ? (
+                        <p className="mt-0.5 line-clamp-2 text-sm text-on-surface-variant">
+                          <span className="font-medium text-on-surface">Motivo: </span>
+                          {p.motivo}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                   <button
