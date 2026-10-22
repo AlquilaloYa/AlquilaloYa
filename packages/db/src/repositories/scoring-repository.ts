@@ -115,6 +115,13 @@ export class DrizzleScoringRepository {
     ]);
 
     const hoy = todayDayNumber();
+    // La medición de tardanza empieza HOY: las cuotas de períodos anteriores al
+    // mes actual no generan penalización (no hay antecedentes de mora).
+    const inicioMesActual = (() => {
+      const now = new Date();
+      const utc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+      return Math.floor(utc / DIAS_MS);
+    })();
 
     const pagosPorCliente = new Map<string, PaymentInput[]>();
     for (const pago of pagos) {
@@ -125,13 +132,15 @@ export class DrizzleScoringRepository {
 
       let diasAtrasoPagado = 0;
       let diasVencidoPendiente = 0;
-      if (pago.estado === "PAGADO" || pago.estado === "PARCIAL") {
-        const fechaPago = toDayNumber(pago.fechaPago);
-        if (fechaPago !== null && fechaPago > periodo) {
-          diasAtrasoPagado = fechaPago - periodo;
+      if (periodo >= inicioMesActual) {
+        if (pago.estado === "PAGADO" || pago.estado === "PARCIAL") {
+          const fechaPago = toDayNumber(pago.fechaPago);
+          if (fechaPago !== null && fechaPago > periodo) {
+            diasAtrasoPagado = fechaPago - periodo;
+          }
+        } else if (pago.estado === "PENDIENTE" || pago.estado === "VENCIDO") {
+          if (periodo < hoy) diasVencidoPendiente = hoy - periodo;
         }
-      } else if (pago.estado === "PENDIENTE" || pago.estado === "VENCIDO") {
-        if (periodo < hoy) diasVencidoPendiente = hoy - periodo;
       }
 
       const lista = pagosPorCliente.get(clienteId) ?? [];

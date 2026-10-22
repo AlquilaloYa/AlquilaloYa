@@ -183,7 +183,6 @@ export default function ScoringPage() {
                       <th className="px-3 py-2 font-medium">Inquilino</th>
                       <th className="px-3 py-2 font-medium">Documento</th>
                       <th className="px-3 py-2 font-medium">Contratos</th>
-                      <th className="px-3 py-2 font-medium">Atrasos</th>
                       <th className="px-3 py-2 font-medium">Reportes</th>
                       <th className="w-64 px-3 py-2 font-medium">Puntaje</th>
                     </tr>
@@ -198,13 +197,6 @@ export default function ScoringPage() {
                         <td className="px-3 py-2 text-on-surface">{t.nombre}</td>
                         <td className="px-3 py-2 text-on-surface-variant">{t.documentoIdentidad}</td>
                         <td className="px-3 py-2 text-on-surface-variant">{t.contratosActivos}</td>
-                        <td className="px-3 py-2 text-on-surface-variant">
-                          {t.breakdown.cuotasVencidasPendientes > 0
-                            ? `${t.breakdown.cuotasVencidasPendientes} vencidas`
-                            : t.breakdown.cuotasPagadasConAtraso > 0
-                              ? `${t.breakdown.cuotasPagadasConAtraso} con atraso`
-                              : "—"}
-                        </td>
                         <td className="px-3 py-2 text-on-surface-variant">
                           {t.breakdown.penalizacionIncidencias > 0 ? "Sí" : "—"}
                         </td>
@@ -395,12 +387,13 @@ function TenantPanel({
           <ScoreBar score={tenant.score} color={tenant.band.color} label={tenant.band.label} />
 
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-            <Metric label="Penalización tardanza" value={`-${tenant.breakdown.penalizacionTardanza}`} />
             <Metric label="Penalización reportes" value={`-${tenant.breakdown.penalizacionIncidencias}`} />
-            <Metric label="Cuotas con atraso" value={String(tenant.breakdown.cuotasPagadasConAtraso)} />
-            <Metric label="Cuotas vencidas" value={String(tenant.breakdown.cuotasVencidasPendientes)} />
-            <Metric label="Atraso promedio (días)" value={String(tenant.breakdown.diasAtrasoPromedio)} />
-            <Metric label="Atraso máximo (días)" value={String(tenant.breakdown.diasVencidoMaximo)} />
+            <Metric
+              label="Reportes registrados"
+              value={String(
+                tenant.breakdown.detalleIncidencias.reduce((s, d) => s + d.cantidad, 0),
+              )}
+            />
           </div>
         </div>
 

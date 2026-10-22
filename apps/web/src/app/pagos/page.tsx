@@ -530,21 +530,25 @@ export default function PagosPage() {
       const montoPagado = Math.max(0, Number(pago?.montoPagado ?? 0) || 0);
       const saldo = Math.max(0, total - montoPagado);
       const parcialActivo = !pagado && montoPagado > 0 && saldo > 0.001;
+      // La mora se mide desde este mes: las cuotas de meses anteriores no
+      // cuentan como atraso (no hay antecedentes de mora).
+      const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).getTime();
+      const cuentaMora = cuota.getTime() >= inicioMes;
       const diasMora = pagado
-        ? pago?.fechaPago && pago.fechaPago > localDateStr(vencimiento)
+        ? cuentaMora && pago?.fechaPago && pago.fechaPago > localDateStr(vencimiento)
           ? Math.floor(
               (parseLocalDate(pago.fechaPago).getTime() - vencimiento.getTime()) /
                 86_400_000
             )
           : 0
-        : vencimiento.getTime() < inicioDia
+        : cuentaMora && vencimiento.getTime() < inicioDia
           ? Math.floor((inicioDia - vencimiento.getTime()) / 86_400_000)
           : 0;
       const estadoPago = pagado
         ? "PAGADO"
         : parcialActivo
           ? "PARCIAL"
-          : vencimiento.getTime() < inicioDia
+          : cuentaMora && vencimiento.getTime() < inicioDia
             ? "VENCIDO"
             : "PENDIENTE";
       out.push({
@@ -696,14 +700,6 @@ export default function PagosPage() {
             </div>
             <div className="mt-1 font-headline-md text-destructive">
               {moneda(resumen.vencido)}
-            </div>
-          </div>
-          <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
-            <div className="text-xs uppercase tracking-wider text-on-surface-variant">
-              Penalidades estimadas
-            </div>
-            <div className="mt-1 font-headline-md text-tertiary">
-              {moneda(resumen.penalidades)}
             </div>
           </div>
           <button

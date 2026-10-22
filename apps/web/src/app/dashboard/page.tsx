@@ -1125,6 +1125,8 @@ function MorosidadPopup({ onCerrar }: { onCerrar: () => void }) {
 
     for (const pago of pagos) {
       if (pago.estado !== "PAGADO" || !pago.fechaPago) continue;
+      // La mora se mide desde este mes: no se listan atrasos de períodos previos.
+      if (!pago.periodo.startsWith(mesActual)) continue;
       const contrato = contratoPorId.get(pago.contractId);
       if (!contrato) continue;
 
