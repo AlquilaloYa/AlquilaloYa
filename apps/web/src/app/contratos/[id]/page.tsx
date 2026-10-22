@@ -140,6 +140,39 @@ export default function ContratoDetailPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"ficha" | "adendas" | "servicios-extras">("ficha");
   const [showDocEditor, setShowDocEditor] = useState(false);
+  const [docHtmlInicial, setDocHtmlInicial] = useState<string>("");
+  const [abriendoDocEditor, setAbriendoDocEditor] = useState(false);
+
+  async function abrirEditorDocumento() {
+    if (!contract) return;
+    const plantilla = contract.plantillaVersion.contenido ?? "";
+    let html = contract.snapshot
+      ? contract.snapshot.documentoHtml ?? ""
+      : contract.documentoHtml ?? plantilla;
+    // Emitido sin edición manual: renderiza la plantilla con los datos
+    // congelados (igual que el PDF) para mostrar el documento generado real.
+    if (contract.snapshot && !contract.snapshot.documentoHtml && plantilla) {
+      setAbriendoDocEditor(true);
+      try {
+        const res = await apiFetch(
+          `/api/contracts/${contract.id}/document/preview`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ html: plantilla }),
+          }
+        );
+        const body = (await res.json().catch(() => ({}))) as { html?: string };
+        if (res.ok && body.html) html = body.html;
+      } catch {
+        /* si falla, se usa la plantilla tal cual */
+      } finally {
+        setAbriendoDocEditor(false);
+      }
+    }
+    setDocHtmlInicial(html);
+    setShowDocEditor(true);
+  }
 
   async function descargarPdf() {
     setDescargando(true);
@@ -401,7 +434,8 @@ export default function ContratoDetailPage() {
                   </h3>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setShowDocEditor(true)}
+                        onClick={() => void abrirEditorDocumento()}
+                        disabled={abriendoDocEditor}
                         title="Editar el HTML con el que se genera el PDF del contrato"
                         className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 font-label-md font-semibold text-white shadow-sm transition-colors hover:bg-green-700"
                       >
@@ -1037,15 +1071,7 @@ export default function ContratoDetailPage() {
             contractId={contract.id}
             codigoContrato={contract.codigoContrato}
             emitido={Boolean(contract.snapshot)}
-            htmlInicial={
-              contract.snapshot
-                ? contract.snapshot.documentoHtml ??
-                  contract.plantillaVersion.contenido ??
-                  ""
-                : contract.documentoHtml ??
-                  contract.plantillaVersion.contenido ??
-                  ""
-            }
+            htmlInicial={docHtmlInicial}
             plantillaHtml={contract.plantillaVersion.contenido ?? null}
             onClose={() => setShowDocEditor(false)}
             onSaved={async () => {

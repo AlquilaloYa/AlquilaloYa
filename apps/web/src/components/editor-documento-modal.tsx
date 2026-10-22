@@ -107,7 +107,7 @@ function montoEnLetras(val: string): string {
 }
 
 /** Payload de datos vivos usado para la vista previa/aproximación del borrador. */
-type PreviewData = {
+export type PreviewData = {
   cliente?: {
     nombres?: string | null;
     apellidos?: string | null;
@@ -116,7 +116,7 @@ type PreviewData = {
     nacionalidad?: string | null;
     domicilio?: string | null;
   } | null;
-  departamento?: { codigo?: string | null; piso?: string | null } | null;
+  departamento?: { codigo?: string | null; piso?: string | number | null } | null;
   contrato?: {
     montoCanonMensual?: string | null;
     depositoGarantia?: string | null;
@@ -164,7 +164,7 @@ function codigoCorto(codigo: string): string {
  * Reemplazo LOCAL de marcadores (aproximación para el borrador, sin snapshot).
  * El PDF real se genera en el servidor con el render definitivo.
  */
-function renderPreviewHtml(html: string, data: PreviewData | null): string {
+export function renderPreviewHtml(html: string, data: PreviewData | null): string {
   if (!data) return html;
   const cliente = (data.cliente ?? null) as Record<string, unknown> | null;
   const depto = (data.departamento ?? null) as Record<string, unknown> | null;

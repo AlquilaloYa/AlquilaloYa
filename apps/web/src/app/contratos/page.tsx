@@ -361,13 +361,33 @@ export default function ContratosPage() {
       }
       const detail = body as ContractDocDetailApi;
       const plantillaHtml = detail.plantillaVersion?.contenido ?? null;
+      const emitido = Boolean(detail.snapshot);
+      // Si el contrato ya fue emitido pero nunca se editó manualmente, el
+      // snapshot no tiene HTML propio: se renderiza la plantilla con los datos
+      // congelados (igual que el PDF) para mostrar el documento generado real
+      // y no la plantilla con marcadores vacíos.
+      let htmlInicial = detail.snapshot
+        ? detail.snapshot.documentoHtml ?? ""
+        : detail.documentoHtml ?? plantillaHtml ?? "";
+      if (emitido && !detail.snapshot?.documentoHtml && plantillaHtml) {
+        const previewRes = await apiFetch(
+          `/api/contracts/${detail.id}/document/preview`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ html: plantillaHtml }),
+          }
+        );
+        const previewBody = (await previewRes.json().catch(() => ({}))) as {
+          html?: string;
+        };
+        if (previewRes.ok && previewBody.html) htmlInicial = previewBody.html;
+      }
       setDocEditor({
         contractId: detail.id,
         codigoContrato: detail.codigoContrato,
-        emitido: Boolean(detail.snapshot),
-        htmlInicial: detail.snapshot
-          ? detail.snapshot.documentoHtml ?? plantillaHtml ?? ""
-          : detail.documentoHtml ?? plantillaHtml ?? "",
+        emitido,
+        htmlInicial,
         plantillaHtml,
       });
     } catch (e) {
