@@ -25,6 +25,9 @@ function ThemeInitScript() {
       var root = document.documentElement;
       root.setAttribute('data-theme', dark ? 'dark' : 'light');
       if (dark) root.classList.add('dark'); else root.classList.remove('dark');
+      var bg = localStorage.getItem('sc_bg_palette');
+      var valid = ['azul','gris','verde','violeta','arena'];
+      root.setAttribute('data-bg', valid.indexOf(bg) >= 0 ? bg : 'azul');
     } catch (e) {}
   })();
   `;

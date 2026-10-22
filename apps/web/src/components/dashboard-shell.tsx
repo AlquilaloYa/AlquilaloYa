@@ -48,6 +48,7 @@ import {
   UserCog,
   KeyRound,
   Gauge,
+  Palette,
   HardDrive,
   ListTodo,
   ClipboardList,
@@ -151,6 +152,13 @@ const NAV_ITEMS: NavItem[] = [
     section: "Contabilidad",
     group: "contabilidad",
   },
+  {
+    href: "/contabilidad/gastos",
+    label: "Gastos",
+    icon: Receipt,
+    section: "Contabilidad",
+    group: "contabilidad",
+  },
   { href: "/google/gmail", label: "Gmail", icon: Mail, section: "Google SyS", group: "google" },
   { href: "/google/drive", label: "Google Drive", icon: HardDrive, section: "Google SyS", group: "google" },
   { href: "/google/sheets", label: "Google Sheets", icon: Table, section: "Google SyS", group: "google" },
@@ -168,6 +176,7 @@ const CONFIGURATION_ITEMS: NavItem[] = [
   { href: "/actividad", label: "Actividad", icon: Activity, section: "Actividad", permission: "activity.read" },
   { href: "/integraciones", label: "Integraciones", icon: Plug, section: "Integraciones", permission: "integration.read" },
   { href: "/configuraciones/usuarios", label: "Usuarios", icon: UserCog, section: "Usuarios", permission: "user.read" },
+  { href: "/configuraciones/apariencia", label: "Apariencia", icon: Palette, section: "Apariencia" },
   { href: "/configuraciones/seguridad", label: "Seguridad", icon: KeyRound, section: "Seguridad" },
 ];
 

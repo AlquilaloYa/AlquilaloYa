@@ -120,10 +120,107 @@
   --foreground: 216 100% 91%;
 }
 
+/* ===== Paletas de fondo (Configuración → Apariencia) =====
+   Solo sobrescriben superficies de fondo; el color de texto (--on-surface,
+   --on-surface-variant) se conserva para no romper el contraste. */
+[data-bg="azul"] {
+  --background: 228 100% 98%;
+  --surface: 228 100% 98%;
+  --surface-container-lowest: 0 0% 100%;
+  --surface-container-low: 219 100% 96%;
+  --surface-container: 217 100% 93%;
+  --surface-container-high: 216 100% 90%;
+  --surface-container-highest: 216 100% 87%;
+}
+[data-theme="dark"][data-bg="azul"] {
+  --background: 214 100% 6%;
+  --surface: 214 100% 6%;
+  --surface-container-lowest: 214 100% 4%;
+  --surface-container-low: 215 46% 10%;
+  --surface-container: 215 47% 12%;
+  --surface-container-high: 215 41% 14%;
+  --surface-container-highest: 214 34% 16%;
+}
+
+[data-bg="gris"] {
+  --background: 220 14% 96%;
+  --surface: 220 14% 96%;
+  --surface-container-lowest: 0 0% 100%;
+  --surface-container-low: 220 13% 94%;
+  --surface-container: 220 13% 91%;
+  --surface-container-high: 220 12% 88%;
+  --surface-container-highest: 220 12% 85%;
+}
+[data-theme="dark"][data-bg="gris"] {
+  --background: 220 13% 9%;
+  --surface: 220 13% 9%;
+  --surface-container-lowest: 220 15% 6%;
+  --surface-container-low: 220 13% 12%;
+  --surface-container: 220 13% 14%;
+  --surface-container-high: 220 12% 17%;
+  --surface-container-highest: 220 12% 20%;
+}
+
+[data-bg="verde"] {
+  --background: 150 40% 97%;
+  --surface: 150 40% 97%;
+  --surface-container-lowest: 0 0% 100%;
+  --surface-container-low: 150 36% 94%;
+  --surface-container: 150 32% 91%;
+  --surface-container-high: 150 30% 88%;
+  --surface-container-highest: 150 28% 85%;
+}
+[data-theme="dark"][data-bg="verde"] {
+  --background: 158 30% 7%;
+  --surface: 158 30% 7%;
+  --surface-container-lowest: 160 35% 4%;
+  --surface-container-low: 158 25% 10%;
+  --surface-container: 158 24% 12%;
+  --surface-container-high: 158 22% 15%;
+  --surface-container-highest: 158 20% 18%;
+}
+
+[data-bg="violeta"] {
+  --background: 260 50% 98%;
+  --surface: 260 50% 98%;
+  --surface-container-lowest: 0 0% 100%;
+  --surface-container-low: 258 44% 95%;
+  --surface-container: 258 40% 92%;
+  --surface-container-high: 258 36% 89%;
+  --surface-container-highest: 258 32% 86%;
+}
+[data-theme="dark"][data-bg="violeta"] {
+  --background: 258 30% 8%;
+  --surface: 258 30% 8%;
+  --surface-container-lowest: 260 35% 5%;
+  --surface-container-low: 258 25% 11%;
+  --surface-container: 258 24% 13%;
+  --surface-container-high: 258 22% 16%;
+  --surface-container-highest: 258 20% 19%;
+}
+
+[data-bg="arena"] {
+  --background: 40 45% 97%;
+  --surface: 40 45% 97%;
+  --surface-container-lowest: 0 0% 100%;
+  --surface-container-low: 40 40% 94%;
+  --surface-container: 40 36% 91%;
+  --surface-container-high: 40 32% 88%;
+  --surface-container-highest: 40 28% 85%;
+}
+[data-theme="dark"][data-bg="arena"] {
+  --background: 35 18% 9%;
+  --surface: 35 18% 9%;
+  --surface-container-lowest: 35 22% 6%;
+  --surface-container-low: 35 16% 12%;
+  --surface-container: 35 15% 14%;
+  --surface-container-high: 35 14% 17%;
+  --surface-container-highest: 35 13% 20%;
+}
+
 * {
   border-color: hsl(var(--border));
 }
-
 html {
   scroll-behavior: smooth;
 }
