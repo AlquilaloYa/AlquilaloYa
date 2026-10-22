@@ -30,4 +30,5 @@ export {
   DrizzleScoringRepository,
   type TenantScoreRow,
   type TenantIncident,
+  type ReportedClient,
 } from "./scoring-repository";

@@ -101,7 +101,8 @@ type DashboardPanel =
   | "unidades"
   | "renovados"
   | "noalquilar"
-  | "incidencias";
+  | "incidencias"
+  | "clientesreportados";
 
 interface DetalleMorosidad {
   contrato: string;
@@ -280,7 +281,7 @@ function StatCard({
       </div>
     </>
   );
-  if (["unidadesTotales", "morosidad", "ocupadas", "disponibles", "tasaOcupacion", "aPuntoDeFinalizar", "contratosRenovadosMes", "personasNoAlquilar", "incidencias"].includes(s.valueKey)) {
+  if (["unidadesTotales", "morosidad", "ocupadas", "disponibles", "tasaOcupacion", "aPuntoDeFinalizar", "contratosRenovadosMes", "personasNoAlquilar", "incidencias", "clientesReportados"].includes(s.valueKey)) {
     return (
       <button
         type="button"
@@ -1387,6 +1388,24 @@ function RenovadosMesPopup({ onCerrar }: { onCerrar: () => void }) {
   );
 }
 
+interface ClienteReportado {
+  clienteId: string;
+  nombre: string;
+  documentoIdentidad: string;
+  telefono: string | null;
+  totalReportes: number;
+  reportes: {
+    id: string;
+    clienteId: string;
+    tipo: string;
+    severidad: string;
+    descripcion: string;
+    departamentoCodigo: string | null;
+    creadoPor: string | null;
+    createdAt: string;
+  }[];
+}
+
 interface PersonaNoAlquilar {
   id: string;
   nombres: string;
@@ -1832,6 +1851,99 @@ function IncidenciasPopup({ onCerrar }: { onCerrar: () => void }) {
   );
 }
 
+function ClientesReportadosPopup({ onCerrar }: { onCerrar: () => void }) {
+  const { data, loading, error } = useDashboardJson<{
+    total: number;
+    clientes: ClienteReportado[];
+  }>("/api/dashboard/clientes-reportados");
+  const clientes = data?.clientes ?? [];
+
+  const reporteClase: Record<string, string> = {
+    LEVE: "bg-amber-400 text-amber-900",
+    MEDIA: "bg-orange-500 text-white",
+    GRAVE: "bg-destructive text-destructive-foreground",
+  };
+
+  return (
+    <DashboardPanel
+      titulo="Clientes reportados"
+      subtitulo={
+        loading
+          ? "Cargando…"
+          : `${clientes.length} ${
+              clientes.length === 1 ? "cliente reportado" : "clientes reportados"
+            }`
+      }
+      onCerrar={onCerrar}
+    >
+      <EstadoCarga loading={loading} error={error} />
+      {!loading && !error && (clientes.length === 0 ? (
+        <p className="py-10 text-center text-sm text-on-surface-variant">
+          No hay clientes con reportes registrados.
+        </p>
+      ) : (
+        <ul className="space-y-4">
+          {clientes.map((cliente) => (
+            <li
+              key={cliente.clienteId}
+              className="rounded-lg border border-outline-variant p-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-label-lg text-on-surface">{cliente.nombre}</p>
+                  <p className="text-sm text-on-surface-variant">
+                    {cliente.documentoIdentidad}
+                    {cliente.telefono ? ` · ${cliente.telefono}` : ""}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-surface-variant px-2.5 py-0.5 text-xs font-semibold text-on-surface-variant">
+                  {cliente.totalReportes}{" "}
+                  {cliente.totalReportes === 1 ? "reporte" : "reportes"}
+                </span>
+              </div>
+              <ul className="mt-3 space-y-2">
+                {cliente.reportes.map((reporte) => (
+                  <li
+                    key={reporte.id}
+                    className="rounded-md bg-surface-container-low px-3 py-2"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-on-surface">
+                        {reporte.tipo}
+                      </span>
+                      <span
+                        className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                          reporteClase[reporte.severidad] || ""
+                        }`}
+                      >
+                        {reporte.severidad}
+                      </span>
+                      {reporte.departamentoCodigo ? (
+                        <span className="text-xs text-on-surface-variant">
+                          Dpto. {reporte.departamentoCodigo}
+                        </span>
+                      ) : null}
+                    </div>
+                    {reporte.descripcion ? (
+                      <p className="mt-1 text-sm text-on-surface-variant">
+                        {reporte.descripcion}
+                      </p>
+                    ) : null}
+                    <p className="mt-1 text-[11px] text-on-surface-variant">
+                      {new Date(reporte.createdAt).toLocaleString("es-PE")}
+                      {reporte.creadoPor ? ` · ${reporte.creadoPor}` : ""}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      ))}
+    </DashboardPanel>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -1927,6 +2039,7 @@ return (
                     contratosRenovadosMes: "renovados",
                     personasNoAlquilar: "noalquilar",
                     incidencias: "incidencias",
+                    clientesReportados: "clientesreportados",
                   };
                   setPanelAbierto(paneles[s.valueKey] ?? null);
                 }}
@@ -2039,6 +2152,7 @@ return (
       {panelAbierto === "renovados" ? <RenovadosMesPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "noalquilar" ? <NoAlquilarPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "incidencias" ? <IncidenciasPopup onCerrar={() => setPanelAbierto(null)} /> : null}
+      {panelAbierto === "clientesreportados" ? <ClientesReportadosPopup onCerrar={() => setPanelAbierto(null)} /> : null}
     </DashboardShell>
   );
 }

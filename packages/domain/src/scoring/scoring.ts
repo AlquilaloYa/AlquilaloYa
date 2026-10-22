@@ -26,10 +26,10 @@ export function bandForScore(score: number): ScoreBandInfo {
 
 export type IncidentSeveridad = "LEVE" | "MEDIA" | "GRAVE";
 
-/** Penalización base por severidad de una incidencia de convivencia. */
+/** Penalización base por severidad de un reporte de cliente. */
 const INCIDENT_PENALTY: Record<IncidentSeveridad, number> = {
   LEVE: 4,
-  MEDIA: 10,
+  MEDIA: 9,
   GRAVE: 20,
 };
 
@@ -70,22 +70,15 @@ export interface ScoringResult {
 const BASE = 100;
 
 /**
- * Penalización por tardanza. Progresiva: los primeros días pesan poco y
- * crece rápido con atrasos largos o cuotas vencidas sin pagar.
+ * Penalización por tardanza: 1 punto por cada día de retraso.
+ * Aplica tanto a cuotas pagadas tarde como a cuotas vencidas sin pagar.
  */
 function penaltyForPaidLate(dias: number): number {
-  if (dias <= 0) return 0;
-  if (dias <= 5) return dias * 0.5;
-  if (dias <= 15) return 2.5 + (dias - 5) * 1;
-  if (dias <= 30) return 12.5 + (dias - 15) * 1.5;
-  return 35 + (dias - 30) * 2;
+  return dias > 0 ? dias : 0;
 }
 
 function penaltyForOverduePending(dias: number): number {
-  if (dias <= 0) return 0;
-  if (dias <= 10) return dias * 1.5;
-  if (dias <= 30) return 15 + (dias - 10) * 2;
-  return 55 + (dias - 30) * 2.5;
+  return dias > 0 ? dias : 0;
 }
 
 /**

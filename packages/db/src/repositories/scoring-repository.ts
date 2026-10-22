@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "../index";
 import {
   computeTenantScore,
@@ -42,6 +42,15 @@ function todayDayNumber(): number {
   const now = new Date();
   const utc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   return Math.floor(utc / DIAS_MS);
+}
+
+export interface ReportedClient {
+  clienteId: string;
+  nombre: string;
+  documentoIdentidad: string;
+  telefono: string | null;
+  totalReportes: number;
+  reportes: TenantIncident[];
 }
 
 /** Repositorio de scoring de inquilinos (Fase 6). */
@@ -188,6 +197,67 @@ export class DrizzleScoringRepository {
     }));
   }
 
+  /**
+   * Lista los clientes que tienen reportes activos, con todos sus reportes.
+   * Se usa en el panel "Clientes reportados" del dashboard.
+   */
+  async listReportedClients(): Promise<ReportedClient[]> {
+    const rows = await db
+      .select({
+        id: schema.tenantIncidents.id,
+        clienteId: schema.tenantIncidents.clienteId,
+        tipo: schema.tenantIncidents.tipo,
+        severidad: schema.tenantIncidents.severidad,
+        descripcion: schema.tenantIncidents.descripcion,
+        departamentoCodigo: schema.tenantIncidents.departamentoCodigo,
+        creadoPor: schema.tenantIncidents.creadoPor,
+        createdAt: schema.tenantIncidents.createdAt,
+        nombres: schema.clients.nombres,
+        apellidos: schema.clients.apellidos,
+        documentoIdentidad: schema.clients.documentoIdentidad,
+        telefono: schema.clients.telefono,
+      })
+      .from(schema.tenantIncidents)
+      .innerJoin(
+        schema.clients,
+        eq(schema.clients.id, schema.tenantIncidents.clienteId),
+      )
+      .where(isNull(schema.tenantIncidents.eliminadoEn))
+      .orderBy(desc(schema.tenantIncidents.createdAt));
+
+    const porCliente = new Map<string, ReportedClient>();
+    for (const row of rows) {
+      let cliente = porCliente.get(row.clienteId);
+      if (!cliente) {
+        const nombre = [row.nombres, row.apellidos].filter(Boolean).join(" ");
+        cliente = {
+          clienteId: row.clienteId,
+          nombre: nombre || "Cliente sin nombre",
+          documentoIdentidad: row.documentoIdentidad,
+          telefono: row.telefono,
+          totalReportes: 0,
+          reportes: [],
+        };
+        porCliente.set(row.clienteId, cliente);
+      }
+      cliente.reportes.push({
+        id: row.id,
+        clienteId: row.clienteId,
+        tipo: row.tipo,
+        severidad: row.severidad,
+        descripcion: row.descripcion,
+        departamentoCodigo: row.departamentoCodigo,
+        creadoPor: row.creadoPor,
+        createdAt: row.createdAt.toISOString(),
+      });
+      cliente.totalReportes++;
+    }
+
+    return [...porCliente.values()].sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, "es"),
+    );
+  }
+
   async createIncident(input: {
     clienteId: string;
     tipo?: string;
@@ -196,6 +266,10 @@ export class DrizzleScoringRepository {
     departamentoCodigo?: string | null;
     creadoPor?: string | null;
   }): Promise<TenantIncident> {
+    const departamentoCodigo =
+      input.departamentoCodigo?.trim() ||
+      (await this.resolveDepartamentoCodigo(input.clienteId));
+
     const [row] = await db
       .insert(schema.tenantIncidents)
       .values({
@@ -203,7 +277,7 @@ export class DrizzleScoringRepository {
         tipo: input.tipo ?? "CONVIVENCIA",
         severidad: input.severidad ?? "MEDIA",
         descripcion: input.descripcion ?? "",
-        departamentoCodigo: input.departamentoCodigo ?? null,
+        departamentoCodigo,
         creadoPor: input.creadoPor ?? null,
       })
       .returning();
@@ -218,6 +292,32 @@ export class DrizzleScoringRepository {
       creadoPor: row.creadoPor,
       createdAt: row.createdAt.toISOString(),
     };
+  }
+
+  /**
+   * El departamento del cliente ya está asignado por su contrato vigente,
+   * así que se resuelve automáticamente sin pedirlo en el formulario.
+   */
+  private async resolveDepartamentoCodigo(
+    clienteId: string,
+  ): Promise<string | null> {
+    const [row] = await db
+      .select({ codigo: schema.departments.codigo })
+      .from(schema.contracts)
+      .innerJoin(
+        schema.departments,
+        eq(schema.departments.id, schema.contracts.departamentoId),
+      )
+      .where(
+        and(
+          eq(schema.contracts.clienteId, clienteId),
+          inArray(schema.contracts.estado, ["FIRMADO", "NOTARIADO"]),
+          isNull(schema.contracts.eliminadoEn),
+        ),
+      )
+      .orderBy(desc(schema.contracts.creadoEn))
+      .limit(1);
+    return row?.codigo ?? null;
   }
 
   async softDeleteIncident(id: string): Promise<boolean> {

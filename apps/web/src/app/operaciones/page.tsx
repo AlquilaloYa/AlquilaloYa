@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   useCallback,
@@ -125,7 +125,7 @@ interface Evidence {
   description?: string;
 }
 
-const EVIDENCE_KINDS = ["FOTO INICIAL", "FOTO DIAGNÃ“STICO", "FOTO FINAL"] as const;
+const EVIDENCE_KINDS = ["FOTO INICIAL", "FOTO DIAGNÓSTICO", "FOTO FINAL"] as const;
 type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
 
 interface WorkEvent {
@@ -179,7 +179,7 @@ const STATUS_LABEL: Record<WorkStatus, string> = {
   ACCEPTED: "Aceptada",
   VISIT_SCHEDULED: "Visita programada",
   ON_SITE: "En sitio",
-  DIAGNOSIS: "DiagnÃ³stico",
+  DIAGNOSIS: "Diagnóstico",
   ESTIMATED: "Presupuestada",
   IN_PROGRESS: "En progreso",
   RESOLVED: "Resuelta",
@@ -262,13 +262,13 @@ function isOverdue(order: WorkOrder): boolean {
 }
 
 function humanizeEvent(event: WorkEvent): string {
-  if (event.eventType === "ORDER_CREATED") return "CreÃ³ la orden de trabajo";
+  if (event.eventType === "ORDER_CREATED") return "Creó la orden de trabajo";
   if (event.eventType === "ASSIGNMENT_CHANGED")
-    return "ActualizÃ³ la asignaciÃ³n";
+    return "Actualizó la asignación";
   if (event.fromStatus && event.toStatus) {
-    return `CambiÃ³ el estado: ${STATUS_LABEL[event.fromStatus as WorkStatus] ?? event.fromStatus} â†’ ${STATUS_LABEL[event.toStatus as WorkStatus] ?? event.toStatus}`;
+    return `Cambió el estado: ${STATUS_LABEL[event.fromStatus as WorkStatus] ?? event.fromStatus} → ${STATUS_LABEL[event.toStatus as WorkStatus] ?? event.toStatus}`;
   }
-  return "ActualizÃ³ la orden";
+  return "Actualizó la orden";
 }
 
 function FieldOpsMobilePreview() {
@@ -316,15 +316,15 @@ function FieldOpsMobilePreview() {
         <div className="bg-[#f5f6f8] px-4 pb-4 pt-3">
           <div className="flex items-center justify-between">
             <div className="text-[1.05rem] font-semibold text-on-surface">
-              Hola, <span className="font-black">Pedro RodrÃ­guez</span>
+              Hola, <span className="font-black">Pedro Rodríguez</span>
             </div>
             <div className="inline-flex items-center gap-2 rounded-full bg-[#d7f6e8] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-[#0e8b5c]">
               <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
-              TURNO ACTIVO Â· EN LÃNEA
+              TURNO ACTIVO · EN LÍNEA
             </div>
           </div>
           <p className="mt-2 text-sm text-on-surface-variant">
-            TÃ©cnico Principal Â· ElectromecÃ¡nico
+            Técnico Principal · Electromecánico
           </p>
 
           <div className="mt-4 grid grid-cols-3 gap-2.5">
@@ -378,7 +378,7 @@ function FieldOpsMobilePreview() {
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-on-surface-variant">
                 <MapPin className="h-3 w-3" />
               </span>
-              Torre B Â· Depto 302 (Residente: Juan PÃ©rez)
+              Torre B · Depto 302 (Residente: Juan Pérez)
             </div>
 
             <div className="mt-4 flex gap-3 text-xs text-on-surface-variant">
@@ -437,7 +437,7 @@ function FieldOpsMobilePreview() {
                 #OT-000125
               </span>
               <span className="rounded-full bg-[#dfeafc] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#2d5bc9]">
-                ALTA / CRÃTICA
+                ALTA / CRÍTICA
               </span>
             </div>
 
@@ -460,15 +460,15 @@ function FieldOpsMobilePreview() {
                   </div>
                   <div>
                     <div className="text-[15px] font-bold text-on-surface">
-                      ConfirmaciÃ³n Operativa
+                      Confirmación Operativa
                     </div>
                     <div className="mt-1 text-sm text-on-surface-variant">
-                      Protocolo en Terreno Â· SecciÃ³n 10
+                      Protocolo en Terreno · Sección 10
                     </div>
                   </div>
                 </div>
                 <span className="rounded-full bg-[#bfe7d5] px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-[#0b7b4b]">
-                  GPS Â· LISTO
+                  GPS · LISTO
                 </span>
               </div>
             </div>
@@ -477,7 +477,7 @@ function FieldOpsMobilePreview() {
               type="button"
               className="mt-5 flex h-[58px] w-full items-center justify-center rounded-2xl bg-[#0f5fd7] text-[1.1rem] font-black uppercase tracking-[-0.02em] text-white shadow-[0_12px_24px_rgba(15,80,210,0.28)]"
             >
-              ESTOY AQUÃ Â· REGISTRAR LLEGADA
+              ESTOY AQUÍ · REGISTRAR LLEGADA
             </button>
 
             <div className="mt-4 rounded-xl bg-muted p-3 text-[15px] leading-6 text-on-surface-variant">
@@ -485,7 +485,7 @@ function FieldOpsMobilePreview() {
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-card text-[#2563eb]">
                   <Check className="h-3.5 w-3.5" />
                 </span>
-                Estampa fecha y hora exacta del servidor en tiempo real. PrÃ³ximo estado del flujo: ON_SITE (En Sitio).
+                Estampa fecha y hora exacta del servidor en tiempo real. Próximo estado del flujo: ON_SITE (En Sitio).
               </div>
             </div>
           </div>
@@ -511,7 +511,7 @@ function FieldOpsMobilePreview() {
                 <span className="font-mono">#OT-000125</span>
               </div>
               <span className="rounded-full bg-[#dfeafc] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#2d5bc9]">
-                Cierre tÃ©cnico
+                Cierre técnico
               </span>
             </div>
 
@@ -524,7 +524,7 @@ function FieldOpsMobilePreview() {
               </div>
               <div className="rounded-xl bg-[#edf3f8] p-2.5">
                 <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant">
-                  DuraciÃ³n real
+                  Duración real
                 </div>
                 <div className="mt-2 text-[1.1rem] font-black text-on-surface">2h 28m</div>
               </div>
@@ -535,10 +535,10 @@ function FieldOpsMobilePreview() {
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#dfeafe] text-[#3b82f6]">
                   <Wrench className="h-3.5 w-3.5" />
                 </span>
-                ResoluciÃ³n TÃ©cnica
+                Resolución Técnica
               </div>
               <p className="mt-3 text-[15px] leading-6 text-on-surface-variant">
-                Se retirÃ³ tramo daÃ±ado de 2 metros de tuberÃ­a de 2&quot;, se instalaron nuevos codos y uniÃ³n con sellador industrial. Se ejecutÃ³ prueba de flujo continuo y presiÃ³n durante 15 minutos sin caÃ­da de presiÃ³n.
+                Se retiró tramo dañado de 2 metros de tubería de 2&quot;, se instalaron nuevos codos y unión con sellador industrial. Se ejecutó prueba de flujo continuo y presión durante 15 minutos sin caída de presión.
               </p>
             </div>
 
@@ -547,10 +547,10 @@ function FieldOpsMobilePreview() {
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#d8fbe8] text-[#0e8b5c]">
                   <Check className="h-3.5 w-3.5" />
                 </span>
-                Prueba de estanqueidad y presiÃ³n satisfactoria
+                Prueba de estanqueidad y presión satisfactoria
               </div>
               <p className="mt-2">
-                15 min en rÃ©gimen continuo a 4.2 bar sin caÃ­da de presiÃ³n.
+                15 min en régimen continuo a 4.2 bar sin caída de presión.
               </p>
             </div>
 
@@ -621,7 +621,7 @@ export default function OperacionesPage() {
       const catalogsPayload = await catalogsResponse.json();
       if (!ordersResponse.ok)
         throw new Error(
-          ordersPayload.error ?? "No se pudieron cargar las Ã³rdenes",
+          ordersPayload.error ?? "No se pudieron cargar las órdenes",
         );
       if (!employeesResponse.ok)
         throw new Error(
@@ -640,7 +640,7 @@ export default function OperacionesPage() {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "No se pudieron cargar las Ã³rdenes",
+          : "No se pudieron cargar las órdenes",
       );
     } finally {
       setLoading(false);
@@ -755,7 +755,7 @@ export default function OperacionesPage() {
         const evidencePayload = await evidenceResponse.json();
         if (!evidenceResponse.ok) {
           setError(
-            `La orden ${payload.code} se creÃ³, pero no se pudieron adjuntar las fotos: ${evidencePayload.error ?? "error de carga"}`,
+            `La orden ${payload.code} se creó, pero no se pudieron adjuntar las fotos: ${evidencePayload.error ?? "error de carga"}`,
           );
         } else {
           setError("");
@@ -826,7 +826,7 @@ export default function OperacionesPage() {
   async function deleteOrder(order: WorkOrder) {
     if (
       !window.confirm(
-        `Â¿Eliminar definitivamente la orden ${order.code}? Se borrarÃ¡n sus visitas, materiales y fotos. Esta acciÃ³n no se puede deshacer.`,
+        `¿Eliminar definitivamente la orden ${order.code}? Se borrarán sus visitas, materiales y fotos. Esta acción no se puede deshacer.`,
       )
     )
       return;
@@ -925,7 +925,7 @@ export default function OperacionesPage() {
 
   return (
     <DashboardShell>
-      <main className="min-h-screen bg-[#f7f9fb] px-4 pb-28 pt-7 text-on-surface sm:px-6 lg:px-8 lg:pb-12">
+      <main className="min-h-screen bg-surface-container-low px-4 pb-28 pt-7 text-on-surface sm:px-6 lg:px-8 lg:pb-12">
         <div className="mx-auto max-w-[1440px]">
           <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -934,11 +934,11 @@ export default function OperacionesPage() {
                 OPERACIONES
               </div>
               <h1 className="text-3xl font-bold tracking-tight text-on-surface sm:text-4xl">
-                Ã“rdenes de trabajo
+                Órdenes de trabajo
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-on-surface-variant sm:text-base">
                 Coordina al equipo de campo, programa visitas y sigue cada
-                intervenciÃ³n hasta su cierre.
+                intervención hasta su cierre.
               </p>
             </div>
             <div className="flex gap-3">
@@ -987,12 +987,12 @@ export default function OperacionesPage() {
           <FieldOpsMobilePreview />
 
           <section
-            aria-label="Resumen de Ã³rdenes"
+            aria-label="Resumen de órdenes"
             className="mb-7 grid grid-cols-2 gap-3 lg:grid-cols-5"
           >
             <Metric
               icon={ClipboardList}
-              label="Ã“rdenes abiertas"
+              label="Órdenes abiertas"
               value={stats.open}
               accent="blue"
             />
@@ -1030,7 +1030,7 @@ export default function OperacionesPage() {
                     Despacho de trabajo
                   </h2>
                   <p className="mt-1 text-sm text-on-surface-variant">
-                    {visibleOrders.length} Ã³rdenes en esta vista
+                    {visibleOrders.length} órdenes en esta vista
                   </p>
                 </div>
                 <label className="relative block w-full lg:max-w-sm">
@@ -1038,7 +1038,7 @@ export default function OperacionesPage() {
                   <input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Buscar orden, direcciÃ³n o trabajador"
+                    placeholder="Buscar orden, dirección o trabajador"
                     className="h-12 w-full rounded-lg border border-border bg-card pl-10 pr-3 text-sm outline-none transition placeholder:text-on-surface-variant focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                   />
                 </label>
@@ -1068,7 +1068,7 @@ export default function OperacionesPage() {
             </div>
 
             {loading ? (
-              <div className="space-y-3 p-5" aria-label="Cargando Ã³rdenes">
+              <div className="space-y-3 p-5" aria-label="Cargando órdenes">
                 {[0, 1, 2].map((item) => (
                   <div
                     key={item}
@@ -1082,12 +1082,12 @@ export default function OperacionesPage() {
                   <ClipboardList className="h-7 w-7" />
                 </div>
                 <h3 className="font-bold text-on-surface">
-                  {orders.length ? "No hay resultados" : "AÃºn no hay Ã³rdenes"}
+                  {orders.length ? "No hay resultados" : "Aún no hay órdenes"}
                 </h3>
                 <p className="mx-auto mt-1 max-w-md text-sm text-on-surface-variant">
                   {orders.length
-                    ? "Prueba con otro filtro o tÃ©rmino de bÃºsqueda."
-                    : "Crea una orden para coordinar la primera intervenciÃ³n de campo."}
+                    ? "Prueba con otro filtro o término de búsqueda."
+                    : "Crea una orden para coordinar la primera intervención de campo."}
                 </p>
                 {!orders.length && canCreate && (
                   <button
@@ -1121,7 +1121,7 @@ export default function OperacionesPage() {
                         <div className="mt-1 flex items-center gap-1.5 text-sm text-on-surface-variant">
                           <MapPin className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">
-                            {order.site} Â· {order.departmentCode}
+                            {order.site} · {order.departmentCode}
                           </span>
                         </div>
                         {order.contactName && (
@@ -1155,7 +1155,7 @@ export default function OperacionesPage() {
                                 minute: "2-digit",
                                 hourCycle: "h23",
                               })
-                            : "Sin fecha lÃ­mite"}
+                            : "Sin fecha límite"}
                         </span>
                         {isOverdue(order) && (
                           <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase">
@@ -1187,7 +1187,7 @@ export default function OperacionesPage() {
 
           <div className="mt-4 flex items-start gap-2 text-xs leading-5 text-on-surface-variant">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-            Cada cambio de estado y asignaciÃ³n queda registrado en el historial
+            Cada cambio de estado y asignación queda registrado en el historial
             de la orden.
           </div>
         </div>
@@ -1203,7 +1203,7 @@ export default function OperacionesPage() {
                   htmlFor="order-title"
                   className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                 >
-                  TÃ­tulo de la incidencia *
+                  Título de la incidencia *
                 </label>
                 <input
                   id="order-title"
@@ -1233,9 +1233,9 @@ export default function OperacionesPage() {
                       Selecciona un tipo
                     </option>
                     {[
-                      "PlomerÃ­a",
+                      "Plomería",
                       "Electricidad",
-                      "CerrajerÃ­a",
+                      "Cerrajería",
                       "Limpieza",
                       "Mantenimiento",
                       "Otro",
@@ -1298,7 +1298,7 @@ export default function OperacionesPage() {
                     htmlFor="order-department"
                     className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                   >
-                    Departamento Â· UNI/DEP *
+                    Departamento · UNI/DEP *
                   </label>
                   <select
                     id="order-department"
@@ -1313,7 +1313,7 @@ export default function OperacionesPage() {
                     className="field"
                   >
                     <option value="" disabled>
-                      Selecciona cÃ³digo de departamento
+                      Selecciona código de departamento
                     </option>
                     {siteDepartments.map((department) => (
                       <option key={department.id} value={department.id}>
@@ -1329,7 +1329,7 @@ export default function OperacionesPage() {
                     htmlFor="order-client"
                     className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                   >
-                    Residente Â· Clientes
+                    Residente · Clientes
                   </label>
                   <select
                     id="order-client"
@@ -1356,13 +1356,13 @@ export default function OperacionesPage() {
                     <option value="">Sin residente asociado</option>
                     {clientsWithDepartment.map((client) => (
                       <option key={client.id} value={client.id}>
-                        {client.name} Â· {client.codigoDepartamento}
+                        {client.name} · {client.codigoDepartamento}
                       </option>
                     ))}
                   </select>
                   <p className="mt-1.5 text-xs text-on-surface-variant">
-                    Al elegir un residente, su cÃ³digo en Clientes selecciona
-                    automÃ¡ticamente su departamento UNI/DEP y sede.
+                    Al elegir un residente, su código en Clientes selecciona
+                    automáticamente su departamento UNI/DEP y sede.
                   </p>
                 </div>
                 <div>
@@ -1397,13 +1397,13 @@ export default function OperacionesPage() {
                   {employees.map((employee) => (
                     <option key={employee.id} value={employee.id}>
                       {employee.nombres} {employee.apellidos}
-                      {employee.cargo ? ` Â· ${employee.cargo}` : ""}
+                      {employee.cargo ? ` · ${employee.cargo}` : ""}
                     </option>
                   ))}
                 </select>
                 {employees.length === 0 && (
                   <p className="mt-1.5 text-xs text-amber-700">
-                    No hay personal activo del Ã¡rea de mantenimiento en RR. HH.
+                    No hay personal activo del área de mantenimiento en RR. HH.
                   </p>
                 )}
               </div>
@@ -1412,14 +1412,14 @@ export default function OperacionesPage() {
                   htmlFor="order-description"
                   className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                 >
-                  DescripciÃ³n
+                  Descripción
                 </label>
                 <textarea
                   id="order-description"
                   name="description"
                   rows={3}
                   maxLength={10000}
-                  placeholder="Describe el problema y la informaciÃ³n Ãºtil para el equipo"
+                  placeholder="Describe el problema y la información útil para el equipo"
                   className="field min-h-24 resize-y py-3"
                 />
               </div>
@@ -1556,7 +1556,7 @@ function PhotoPicker({
               Fotos de la incidencia
             </p>
             <p className="mt-0.5 text-xs text-on-surface-variant">
-              JPG, PNG o WebP Â· hasta 5 fotos Â· 8 MB por foto
+              JPG, PNG o WebP · hasta 5 fotos · 8 MB por foto
             </p>
           </div>
         </div>
@@ -1687,7 +1687,7 @@ function OrderDrawer({
         role="dialog"
         aria-modal="true"
         aria-labelledby="drawer-title"
-        className="flex h-full w-full max-w-2xl flex-col overflow-hidden bg-[#f8fafc] shadow-2xl"
+        className="flex h-full w-full max-w-2xl flex-col overflow-hidden bg-surface shadow-2xl"
       >
         <header className="flex items-start justify-between gap-4 border-b border-border bg-card px-5 py-4 sm:px-7">
           <div className="min-w-0">
@@ -1705,7 +1705,7 @@ function OrderDrawer({
             </h2>
             <p className="mt-1 flex items-center gap-1.5 text-sm text-on-surface-variant">
               <MapPin className="h-4 w-4 shrink-0" />
-              {order.site} Â· {order.departmentCode}
+              {order.site} · {order.departmentCode}
             </p>
           </div>
           <button
@@ -1730,7 +1730,7 @@ function OrderDrawer({
             </div>
             <InfoBlock label="Tipo de incidencia" value={order.issueType} />
             <InfoBlock
-              label="Departamento Â· UNI/DEP"
+              label="Departamento · UNI/DEP"
               value={order.departmentCode}
             />
             <InfoBlock label="Sede" value={order.site} />
@@ -1746,10 +1746,10 @@ function OrderDrawer({
 
           <section className="mb-5 rounded-xl border border-border bg-card p-4">
             <h3 className="mb-2 text-sm font-bold text-on-surface">
-              DescripciÃ³n
+              Descripción
             </h3>
             <p className="whitespace-pre-wrap text-sm leading-6 text-on-surface-variant">
-              {order.description || "Sin descripciÃ³n adicional."}
+              {order.description || "Sin descripción adicional."}
             </p>
           </section>
 
@@ -1792,8 +1792,8 @@ function OrderDrawer({
             ) : (
               <p className="text-sm text-on-surface-variant">
                 {order.materialsConfirmed
-                  ? "El tÃ©cnico confirmÃ³ que no se requieren productos."
-                  : "TodavÃ­a no se registraron productos solicitados."}
+                  ? "El técnico confirmó que no se requieren productos."
+                  : "Todavía no se registraron productos solicitados."}
               </p>
             )}
           </section>
@@ -1821,7 +1821,7 @@ function OrderDrawer({
                       className="h-28 w-full object-cover"
                     />
                     <span className="block truncate px-2 py-1.5 text-xs text-on-surface-variant">
-                      {attachment.kind ? `${attachment.kind} Â· ` : ""}
+                      {attachment.kind ? `${attachment.kind} · ` : ""}
                       {attachment.fileName}
                     </span>
                   </a>
@@ -1829,7 +1829,7 @@ function OrderDrawer({
               </div>
             ) : (
               <p className="mb-3 text-sm text-on-surface-variant">
-                TodavÃ­a no hay fotos adjuntas.
+                Todavía no hay fotos adjuntas.
               </p>
             )}
             {canUpdate && (
@@ -1855,7 +1855,7 @@ function OrderDrawer({
                   </label>
                   <label className="block">
                     <span className="mb-1.5 block text-sm font-semibold text-on-surface-variant">
-                      DescripciÃ³n
+                      Descripción
                     </span>
                     <input
                       value={evidenceDescription}
@@ -1863,7 +1863,7 @@ function OrderDrawer({
                         setEvidenceDescription(event.target.value)
                       }
                       maxLength={1000}
-                      placeholder="Ej. ConexiÃ³n reparada y sin fugas"
+                      placeholder="Ej. Conexión reparada y sin fugas"
                       className="field"
                     />
                   </label>
@@ -1899,7 +1899,7 @@ function OrderDrawer({
                 </button>
                 {evidenceFiles.length > 0 && !evidenceDescription.trim() && (
                   <p className="text-xs text-amber-700">
-                    Escribe una descripciÃ³n para adjuntar la evidencia.
+                    Escribe una descripción para adjuntar la evidencia.
                   </p>
                 )}
               </div>
@@ -1936,12 +1936,12 @@ function OrderDrawer({
                 onClick={() => void onAssign(assignee)}
                 className="h-12 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-on-surface hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Guardar asignaciÃ³n
+                Guardar asignación
               </button>
             </div>
             {order.assignments.length > 1 && (
               <p className="mt-3 text-xs text-on-surface-variant">
-                Historial de asignaciÃ³n: {order.assignments.length} cambios
+                Historial de asignación: {order.assignments.length} cambios
                 registrados.
               </p>
             )}
@@ -1966,7 +1966,7 @@ function OrderDrawer({
                       {humanizeEvent(event)}
                     </p>
                     <p className="mt-0.5 text-xs text-on-surface-variant">
-                      {event.actorName} Â· {formatDate(event.createdAt)}
+                      {event.actorName} · {formatDate(event.createdAt)}
                     </p>
                   </div>
                 </div>

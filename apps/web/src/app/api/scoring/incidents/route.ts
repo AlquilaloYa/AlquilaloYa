@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     const descripcion = typeof body.descripcion === "string" ? body.descripcion.trim() : "";
     if (descripcion.length < 3) {
       return NextResponse.json(
-        { error: "Describe brevemente la incidencia" },
+        { error: "Describe brevemente el reporte del cliente" },
         { status: 400 },
       );
     }
@@ -64,18 +64,12 @@ export async function POST(req: Request) {
       );
     }
 
-    const departamentoCodigo =
-      typeof body.departamentoCodigo === "string" && body.departamentoCodigo.trim()
-        ? body.departamentoCodigo.trim().slice(0, 50)
-        : null;
-
     const repo = new dbModule.DrizzleScoringRepository();
     const incident = await repo.createIncident({
       clienteId,
       tipo,
       severidad,
       descripcion,
-      departamentoCodigo,
       creadoPor: auth.user.name || auth.user.email,
     });
     return NextResponse.json(incident, { status: 201 });

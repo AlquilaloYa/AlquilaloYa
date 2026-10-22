@@ -8,37 +8,51 @@ describe("computeTenantScore", () => {
     expect(result.band.band).toBe("EXCELENTE");
   });
 
-  it("penaliza levemente el atraso corto de pago", () => {
+  it("penaliza 1 punto por cada día de atraso en cuota pagada", () => {
     const result = computeTenantScore({
       pagos: [{ diasAtrasoPagado: 4, diasVencidoPendiente: 0 }],
       incidencias: [],
     });
-    expect(result.score).toBeGreaterThan(90);
+    expect(result.score).toBe(96);
+    expect(result.breakdown.penalizacionTardanza).toBe(4);
     expect(result.breakdown.cuotasPagadasConAtraso).toBe(1);
   });
 
-  it("penaliza con fuerza cuotas vencidas sin pagar", () => {
+  it("penaliza 1 punto por cada día en cuotas vencidas sin pagar", () => {
     const result = computeTenantScore({
       pagos: [{ diasAtrasoPagado: 0, diasVencidoPendiente: 40 }],
       incidencias: [],
     });
-    expect(result.score).toBeLessThan(70);
+    expect(result.score).toBe(60);
+    expect(result.breakdown.penalizacionTardanza).toBe(40);
     expect(result.breakdown.cuotasVencidasPendientes).toBe(1);
     expect(result.breakdown.diasVencidoMaximo).toBe(40);
   });
 
-  it("reduce el puntaje por incidencias de convivencia según severidad", () => {
+  it("reduce el puntaje por reportes según severidad (leve -4, media -9, grave -20)", () => {
     const leve = computeTenantScore({
       pagos: [],
       incidencias: [{ tipo: "CONVIVENCIA", severidad: "LEVE" }],
+    });
+    const media = computeTenantScore({
+      pagos: [],
+      incidencias: [{ tipo: "CONVIVENCIA", severidad: "MEDIA" }],
     });
     const grave = computeTenantScore({
       pagos: [],
       incidencias: [{ tipo: "CONVIVENCIA", severidad: "GRAVE" }],
     });
     expect(leve.score).toBe(96);
+    expect(media.score).toBe(91);
     expect(grave.score).toBe(80);
-    expect(grave.score).toBeLessThan(leve.score);
+  });
+
+  it("combina tardanza y reportes en el mismo puntaje", () => {
+    const result = computeTenantScore({
+      pagos: [{ diasAtrasoPagado: 10, diasVencidoPendiente: 0 }],
+      incidencias: [{ tipo: "CONVIVENCIA", severidad: "GRAVE" }],
+    });
+    expect(result.score).toBe(70);
   });
 
   it("nunca baja del mínimo de 1 aunque las penalizaciones sean extremas", () => {

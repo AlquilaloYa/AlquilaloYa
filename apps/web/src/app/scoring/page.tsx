@@ -131,7 +131,7 @@ export default function ScoringPage() {
           <div>
             <h1 className="font-headline-lg text-on-surface">Scoring de inquilinos</h1>
             <p className="font-body-sm text-on-surface-variant">
-              Puntaje de 1 a 100 según puntualidad de pago e incidencias registradas.
+              Puntaje de 1 a 100: −1 punto por día de retraso y penalización por reportes de clientes.
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => void load()}>
@@ -149,7 +149,7 @@ export default function ScoringPage() {
           <KpiCard label="Inquilinos evaluados" value={String(resumen.total)} />
           <KpiCard label="Puntaje promedio" value={`${resumen.promedio}`} />
           <KpiCard label="En riesgo o crítico" value={String(resumen.criticos)} tone="danger" />
-          <KpiCard label="Con incidencias" value={String(resumen.conIncidencias)} tone="warn" />
+          <KpiCard label="Con reportes" value={String(resumen.conIncidencias)} tone="warn" />
         </div>
 
         <Card>
@@ -184,7 +184,7 @@ export default function ScoringPage() {
                       <th className="px-3 py-2 font-medium">Documento</th>
                       <th className="px-3 py-2 font-medium">Contratos</th>
                       <th className="px-3 py-2 font-medium">Atrasos</th>
-                      <th className="px-3 py-2 font-medium">Incidencias</th>
+                      <th className="px-3 py-2 font-medium">Reportes</th>
                       <th className="w-64 px-3 py-2 font-medium">Puntaje</th>
                     </tr>
                   </thead>
@@ -305,7 +305,6 @@ function TenantPanel({
   const [tipo, setTipo] = useState("CONVIVENCIA");
   const [severidad, setSeveridad] = useState("MEDIA");
   const [descripcion, setDescripcion] = useState("");
-  const [departamentoCodigo, setDepartamentoCodigo] = useState("");
 
   const loadIncidents = useCallback(async () => {
     setLoadingIncidents(true);
@@ -339,15 +338,13 @@ function TenantPanel({
           tipo,
           severidad,
           descripcion,
-          departamentoCodigo: departamentoCodigo.trim() || null,
         }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error ?? "No se pudo registrar la incidencia");
+        throw new Error(data.error ?? "No se pudo registrar el reporte");
       }
       setDescripcion("");
-      setDepartamentoCodigo("");
       setShowForm(false);
       await loadIncidents();
       onChanged();
@@ -399,7 +396,7 @@ function TenantPanel({
 
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <Metric label="Penalización tardanza" value={`-${tenant.breakdown.penalizacionTardanza}`} />
-            <Metric label="Penalización incidencias" value={`-${tenant.breakdown.penalizacionIncidencias}`} />
+            <Metric label="Penalización reportes" value={`-${tenant.breakdown.penalizacionIncidencias}`} />
             <Metric label="Cuotas con atraso" value={String(tenant.breakdown.cuotasPagadasConAtraso)} />
             <Metric label="Cuotas vencidas" value={String(tenant.breakdown.cuotasVencidasPendientes)} />
             <Metric label="Atraso promedio (días)" value={String(tenant.breakdown.diasAtrasoPromedio)} />
@@ -408,7 +405,7 @@ function TenantPanel({
         </div>
 
         <div className="mt-5 flex items-center justify-between">
-          <h3 className="font-headline-md text-on-surface">Incidencias</h3>
+          <h3 className="font-headline-md text-on-surface">Reportes de clientes</h3>
           {canManage ? (
             <Button size="sm" onClick={() => setShowForm((v) => !v)}>
               <Plus className="mr-1 h-4 w-4" /> Registrar
@@ -450,17 +447,6 @@ function TenantPanel({
             </div>
             <label className="block text-sm">
               <span className="mb-1 block text-on-surface-variant">
-                Departamento (opcional)
-              </span>
-              <input
-                value={departamentoCodigo}
-                onChange={(e) => setDepartamentoCodigo(e.target.value)}
-                placeholder="Ej. ANG170-9C"
-                className="field h-10"
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-on-surface-variant">
                 Descripción (qué ocurrió, con qué vecino, etc.)
               </span>
               <textarea
@@ -470,6 +456,9 @@ function TenantPanel({
                 className="field h-auto py-2"
               />
             </label>
+            <p className="text-xs text-on-surface-variant">
+              El departamento se toma automáticamente del contrato del cliente.
+            </p>
             {formError ? <p className="text-sm text-error">{formError}</p> : null}
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
@@ -488,7 +477,7 @@ function TenantPanel({
             <p className="py-4 text-center text-sm text-on-surface-variant">Cargando...</p>
           ) : incidents.length === 0 ? (
             <p className="py-4 text-center text-sm text-on-surface-variant">
-              Sin incidencias registradas.
+              Sin reportes registrados.
             </p>
           ) : (
             incidents.map((inc) => (
@@ -501,7 +490,7 @@ function TenantPanel({
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label="Eliminar incidencia"
+                      aria-label="Eliminar reporte"
                       onClick={() => void remove(inc.id)}
                     >
                       <Trash2 className="h-4 w-4 text-error" />

@@ -413,10 +413,8 @@ export class DrizzleDashboardRepository {
       );
 
     let montoVencido = 0;
-    const contratosMorosos = new Set<string>();
     for (const p of vencidos) {
       montoVencido += Number(p.monto) + Number(p.mantenimiento);
-      contratosMorosos.add(p.contractId);
     }
 
     const [devengadoRow] = await db
@@ -436,14 +434,15 @@ export class DrizzleDashboardRepository {
         ? Math.round((montoVencido / montoDevengado) * 100)
         : 0;
 
-    let clientesReportados = 0;
-    if (contratosMorosos.size > 0) {
-      const clientes = await db
-        .select({ clienteId: schema.contracts.clienteId })
-        .from(schema.contracts)
-        .where(inArray(schema.contracts.id, Array.from(contratosMorosos)));
-      clientesReportados = new Set(clientes.map((c) => c.clienteId)).size;
-    }
+    // Clientes reportados = clientes con al menos un reporte activo
+    // (tenant_incidents), no los morosos.
+    const [reportadosRow] = await db
+      .select({
+        value: sql<number>`count(distinct ${schema.tenantIncidents.clienteId})`,
+      })
+      .from(schema.tenantIncidents)
+      .where(isNull(schema.tenantIncidents.eliminadoEn));
+    const clientesReportados = Number(reportadosRow?.value ?? 0);
 
     // Incidencias = órdenes de trabajo reales.
     // Pendientes = incidencias no resueltas (ni canceladas/rechazadas).
