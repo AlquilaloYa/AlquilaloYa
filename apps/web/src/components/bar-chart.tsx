@@ -29,7 +29,10 @@ export function BarChart({
 
   return (
     <div className={className}>
-      <div className="flex items-end gap-4" style={{ height }}>
+      <div
+        className="flex items-end gap-4"
+        style={{ height, paddingTop: 28, boxSizing: "border-box" }}
+      >
         {data.map((d) => {
           const pct = Math.max(0, Math.min(100, (d.value / max) * 100));
           const barColor = d.color ?? color;
@@ -37,10 +40,13 @@ export function BarChart({
           return (
             <div
               key={d.label}
-              className="flex flex-1 flex-col items-center justify-end gap-2"
+              className="relative flex h-full flex-1 items-end justify-center"
               title={formatValue ? `${d.label}: ${String(formatValue(d.value))}` : d.label}
             >
-              <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-bold text-on-surface shadow-sm">
+              <span
+                className="absolute z-10 rounded-full bg-surface px-2 py-0.5 text-xs font-bold text-on-surface shadow-sm"
+                style={{ bottom: `calc(${pct}% + 8px)` }}
+              >
                 {displayValue}
               </span>
               <div

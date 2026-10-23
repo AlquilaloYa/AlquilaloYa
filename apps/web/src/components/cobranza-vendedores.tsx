@@ -136,7 +136,7 @@ export function CobranzaVendedores() {
           No se pudo cargar la cobranza: {errorCarga}
         </p>
       ) : null}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {vendedores.map((v) => (
           <button
             key={v.key}
