@@ -659,6 +659,13 @@ export default function OperacionesPage() {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [creationPhotos, setCreationPhotos] = useState<File[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<OrderDetails | null>(null);
+  const [timelineOrder, setTimelineOrder] = useState<OrderDetails | null>(null);
+  const [expandedTimelineOrderId, setExpandedTimelineOrderId] = useState<
+    string | null
+  >(null);
+  const [timelineLoadingId, setTimelineLoadingId] = useState<string | null>(
+    null,
+  );
   const [statusFilter, setStatusFilter] =
     useState<(typeof STATUS_FILTERS)[number]["value"]>("TODAS");
   const [query, setQuery] = useState("");
@@ -675,7 +682,7 @@ export default function OperacionesPage() {
     message: string;
   } | null>(null);
   const lastTimelineEventRef = useRef<string | null>(null);
-  const lastTimelineOrderRef = useRef<string | null>(null);
+  const timelineRequestRef = useRef(0);
   const timelinePollingErrorRef = useRef(false);
   const isAdmin = user?.role === "ADMIN";
 
@@ -744,31 +751,50 @@ export default function OperacionesPage() {
     return () => window.clearTimeout(timer);
   }, [timelineToast]);
 
-  const latestTimelineEvent = selectedOrder?.events?.[0];
-  useEffect(() => {
-    if (!selectedOrder) {
-      lastTimelineOrderRef.current = null;
+  async function toggleOrderTimeline(order: WorkOrder) {
+    if (expandedTimelineOrderId === order.id) {
+      timelineRequestRef.current += 1;
+      setExpandedTimelineOrderId(null);
+      setTimelineOrder(null);
+      setTimelineLoadingId(null);
       lastTimelineEventRef.current = null;
       return;
     }
-    if (lastTimelineOrderRef.current !== selectedOrder.id) {
-      lastTimelineOrderRef.current = selectedOrder.id;
-      lastTimelineEventRef.current = latestTimelineEvent?.id ?? null;
-      return;
-    }
-    if (latestTimelineEvent && latestTimelineEvent.id !== lastTimelineEventRef.current) {
-      lastTimelineEventRef.current = latestTimelineEvent.id;
-      setTimelineToast({
-        id: Date.now(),
-        title: `Línea de tiempo · ${selectedOrder.code}`,
-        message: humanizeEvent(latestTimelineEvent),
-      });
-    }
-  }, [selectedOrder, latestTimelineEvent]);
 
-  const selectedOrderId = selectedOrder?.id;
+    const requestId = timelineRequestRef.current + 1;
+    timelineRequestRef.current = requestId;
+    setExpandedTimelineOrderId(order.id);
+    setTimelineOrder(null);
+    setTimelineLoadingId(order.id);
+    setError("");
+    try {
+      const response = await apiFetch(`/api/operaciones/ordenes/${order.id}`, {
+        cache: "no-store",
+      });
+      const payload = await response.json();
+      if (!response.ok)
+        throw new Error(payload.error ?? "No se pudo cargar la línea de tiempo");
+      if (timelineRequestRef.current !== requestId) return;
+      const detail = payload as OrderDetails;
+      lastTimelineEventRef.current = detail.events?.[0]?.id ?? null;
+      setTimelineOrder(detail);
+    } catch (timelineError) {
+      if (timelineRequestRef.current === requestId) {
+        setExpandedTimelineOrderId(null);
+        setError(
+          timelineError instanceof Error
+            ? timelineError.message
+            : "No se pudo cargar la línea de tiempo",
+        );
+      }
+    } finally {
+      if (timelineRequestRef.current === requestId) setTimelineLoadingId(null);
+    }
+  }
+
+  const timelineOrderId = timelineOrder?.id;
   useEffect(() => {
-    if (!selectedOrderId) return undefined;
+    if (!timelineOrderId) return undefined;
     let cancelled = false;
     let requestInFlight = false;
     const timer = window.setInterval(async () => {
@@ -776,7 +802,7 @@ export default function OperacionesPage() {
       requestInFlight = true;
       try {
         const response = await apiFetch(
-          `/api/operaciones/ordenes/${selectedOrderId}`,
+          `/api/operaciones/ordenes/${timelineOrderId}`,
           { cache: "no-store" },
         );
         if (!response.ok) {
@@ -790,8 +816,15 @@ export default function OperacionesPage() {
         const payload = (await response.json()) as OrderDetails;
         if (cancelled) return;
         const latest = payload.events?.[0];
-        if (latest && latest.id !== lastTimelineEventRef.current)
-          setSelectedOrder(payload);
+        if (latest && latest.id !== lastTimelineEventRef.current) {
+          lastTimelineEventRef.current = latest.id;
+          setTimelineOrder(payload);
+          setTimelineToast({
+            id: Date.now(),
+            title: `Línea de tiempo · ${payload.code}`,
+            message: humanizeEvent(latest),
+          });
+        }
         if (timelinePollingErrorRef.current) {
           timelinePollingErrorRef.current = false;
           setError("");
@@ -813,7 +846,7 @@ export default function OperacionesPage() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [selectedOrderId]);
+  }, [timelineOrderId]);
 
   const stats = useMemo(
     () => ({
@@ -1276,12 +1309,13 @@ export default function OperacionesPage() {
             ) : (
               <div className="divide-y divide-border">
                 {visibleOrders.map((order) => (
-                  <div key={order.id} className="group flex items-stretch">
-                    <button
-                      type="button"
-                      onClick={() => void openOrder(order)}
-                      className="grid w-full flex-1 grid-cols-1 gap-3 px-4 py-4 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5 lg:grid-cols-[minmax(220px,1.4fr)_minmax(130px,0.8fr)_minmax(110px,0.75fr)_minmax(150px,0.8fr)_auto] lg:items-center lg:gap-5"
-                    >
+                  <div key={order.id} className="group">
+                    <div className="flex items-stretch">
+                      <button
+                        type="button"
+                        onClick={() => void openOrder(order)}
+                        className="grid w-full flex-1 grid-cols-1 gap-3 px-4 py-4 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5 lg:grid-cols-[minmax(220px,1.4fr)_minmax(130px,0.8fr)_minmax(110px,0.75fr)_minmax(150px,0.8fr)_auto] lg:items-center lg:gap-5"
+                      >
                       <div className="min-w-0">
                         <div className="mb-1.5 flex flex-wrap items-center gap-2">
                           <span className="font-mono text-xs font-bold tracking-wide text-on-surface-variant">
@@ -1333,9 +1367,25 @@ export default function OperacionesPage() {
                         )}
                       </div>
                       <ChevronRight className="hidden h-5 w-5 text-on-surface-variant transition group-hover:translate-x-0.5 group-hover:text-blue-600 lg:block" />
-                    </button>
-                    {isAdmin && (
-                      <div className="flex items-center pr-3 sm:pr-5">
+                      </button>
+                      <div className="flex items-center gap-1 pr-3 sm:pr-5">
+                        <button
+                          type="button"
+                          onClick={() => void toggleOrderTimeline(order)}
+                          aria-expanded={expandedTimelineOrderId === order.id}
+                          aria-controls={`timeline-${order.id}`}
+                          aria-label={`${expandedTimelineOrderId === order.id ? "Ocultar" : "Ver"} línea de tiempo ${order.code}`}
+                          title={`${expandedTimelineOrderId === order.id ? "Ocultar" : "Ver"} línea de tiempo`}
+                          className={`flex h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition ${
+                            expandedTimelineOrderId === order.id
+                              ? "bg-amber-100 text-amber-900"
+                              : "text-on-surface-variant hover:bg-muted"
+                          }`}
+                        >
+                          <Clock3 className="h-4 w-4" />
+                          <span className="hidden xl:inline">Línea de tiempo</span>
+                        </button>
+                        {isAdmin && (
                         <button
                           type="button"
                           onClick={() => void deleteOrder(order)}
@@ -1346,6 +1396,18 @@ export default function OperacionesPage() {
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
+                        )}
+                      </div>
+                    </div>
+                    {expandedTimelineOrderId === order.id && (
+                      <div id={`timeline-${order.id}`} className="border-t border-border bg-surface-container-low/50 px-4 py-4 sm:px-6">
+                        {timelineLoadingId === order.id ? (
+                          <p className="text-sm text-on-surface-variant" role="status">
+                            Cargando línea de tiempo...
+                          </p>
+                        ) : timelineOrder?.id === order.id ? (
+                          <HorizontalOrderTimeline order={timelineOrder} />
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -1703,6 +1765,149 @@ export default function OperacionesPage() {
   );
 }
 
+function HorizontalOrderTimeline({ order }: { order: OrderDetails }) {
+  const events = [...order.events].reverse();
+  const isClosed = ["COMPLETED", "CANCELLED"].includes(order.status);
+
+  return (
+    <section
+      aria-label={`Línea de tiempo de la orden ${order.code}`}
+      className={`rounded-xl border p-4 ${
+        isClosed
+          ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/30 dark:bg-emerald-500/10"
+          : "border-amber-300 bg-amber-50/70 dark:border-amber-500/40 dark:bg-amber-500/10"
+      }`}
+    >
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span
+          className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+            isClosed
+              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200"
+              : "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200"
+          }`}
+        >
+          {isClosed ? (
+            <CheckCircle2 className="h-4 w-4" />
+          ) : (
+            <Bell className="h-4 w-4" />
+          )}
+          {!isClosed && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+            </span>
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-bold text-on-surface">
+            Línea de tiempo · {order.code}
+          </h3>
+          <p className="text-xs text-on-surface-variant">
+            {isClosed
+              ? "Orden cerrada · historial completo"
+              : "Modo alerta · se actualiza con cada visita y proceso"}
+          </p>
+        </div>
+        <span
+          className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ring-1 ring-inset ${
+            isClosed
+              ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-500/30"
+              : "bg-amber-100 text-amber-900 ring-amber-200 dark:bg-amber-500/20 dark:text-amber-200 dark:ring-amber-500/30"
+          }`}
+        >
+          {isClosed ? "Completada" : "Alerta activa"}
+        </span>
+      </div>
+
+      {!isClosed && isOverdue(order) && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          La ventana de llegada terminó y la orden sigue abierta.
+        </div>
+      )}
+
+      {events.length === 0 ? (
+        <p className="text-sm text-on-surface-variant">
+          Todavía no hay movimientos registrados.
+        </p>
+      ) : (
+        <ol className="relative flex gap-0 overflow-x-auto pb-2">
+          <span
+            aria-hidden="true"
+            className="absolute left-3 right-8 top-3 h-px bg-amber-300 dark:bg-amber-500/40"
+          />
+          {events.map((event, index) => {
+            const isLatest = index === events.length - 1;
+            const scheduledAt =
+              typeof event.details.scheduledAt === "string"
+                ? event.details.scheduledAt
+                : null;
+            const arrivalWindowEnd =
+              typeof event.details.arrivalWindowEnd === "string"
+                ? event.details.arrivalWindowEnd
+                : null;
+
+            return (
+              <li
+                key={event.id}
+                className="relative z-10 w-64 shrink-0 pr-5"
+              >
+                <span
+                  className={`flex h-6 w-6 items-center justify-center rounded-full ring-4 ring-amber-50 ${
+                    isLatest
+                      ? "bg-blue-600 text-white ring-blue-100 dark:bg-blue-400 dark:ring-blue-500/20"
+                      : "bg-amber-500 text-white dark:bg-amber-400 dark:ring-amber-500/20"
+                  }`}
+                >
+                  {event.eventType === "STATUS_CHANGED" ? (
+                    <ArrowLeft className="h-3 w-3" />
+                  ) : (
+                    <UserRound className="h-3 w-3" />
+                  )}
+                </span>
+                <div className="mt-3 min-h-20 rounded-lg border border-amber-200/80 bg-card/80 p-3 dark:border-amber-500/20">
+                  <div className="flex items-start justify-between gap-2">
+                    <p
+                      className={`text-sm leading-5 ${
+                        isLatest
+                          ? "font-bold text-on-surface"
+                          : "font-medium text-on-surface"
+                      }`}
+                    >
+                      {humanizeEvent(event)}
+                    </p>
+                    {isLatest && (
+                      <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800 dark:bg-blue-500/20 dark:text-blue-200">
+                        Último
+                      </span>
+                    )}
+                  </div>
+                  {scheduledAt && arrivalWindowEnd && (
+                    <p className="mt-1 text-xs font-semibold text-amber-800 dark:text-amber-200">
+                      Ventana:{" "}
+                      {formatArrivalWindow(scheduledAt, arrivalWindowEnd)}
+                    </p>
+                  )}
+                  <p className="mt-2 text-xs text-on-surface-variant">
+                    {event.actorName} ·{" "}
+                    {formatDate(event.createdAt, {
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hourCycle: "h23",
+                    })}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
+  );
+}
+
 function Metric({
   icon: Icon,
   label,
@@ -1907,8 +2112,6 @@ function OrderDrawer({
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [evidenceKind, setEvidenceKind] = useState<EvidenceKind>("FOTO FINAL");
   const [evidenceDescription, setEvidenceDescription] = useState("");
-  const eventsAsc = [...order.events].reverse();
-  const isClosed = ["COMPLETED", "CANCELLED"].includes(order.status);
   return (
     <div
       className="fixed inset-0 z-[70] flex justify-end bg-slate-950/40"
@@ -2236,139 +2439,12 @@ function OrderDrawer({
               </button>
             </div>
             {order.assignments.length > 1 && (
-              <p className="mt-3 text-xs text-on-surface-variant">
-                Historial de asignación: {order.assignments.length} cambios
-                registrados.
-              </p>
-            )}
-          </section>
-
-          <section
-            className={`rounded-xl border p-4 ${
-              isClosed
-                ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/30 dark:bg-emerald-500/10"
-                : "border-amber-300 bg-amber-50/70 dark:border-amber-500/40 dark:bg-amber-500/10"
-            }`}
-          >
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span
-                className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                  isClosed
-                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200"
-                    : "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200"
-                }`}
-              >
-                {isClosed ? (
-                  <CheckCircle2 className="h-4 w-4" />
-                ) : (
-                  <Bell className="h-4 w-4" />
-                )}
-                {!isClosed && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
-                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
-                  </span>
-                )}
-              </span>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-bold text-on-surface">
-                  Línea de tiempo
-                </h3>
-                <p className="text-xs text-on-surface-variant">
-                  {isClosed
-                    ? "Orden cerrada · historial completo"
-                    : "Modo alerta · se actualiza con cada visita y proceso"}
+                <p className="mt-3 text-xs text-on-surface-variant">
+                  Historial de asignación: {order.assignments.length} cambios
+                  registrados.
                 </p>
-              </div>
-              <span
-                className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ring-1 ring-inset ${
-                  isClosed
-                    ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-500/30"
-                    : "bg-amber-100 text-amber-900 ring-amber-200 dark:bg-amber-500/20 dark:text-amber-200 dark:ring-amber-500/30"
-                }`}
-              >
-                {isClosed ? "Completada" : "Alerta activa"}
-              </span>
-            </div>
-
-            {!isClosed && isOverdue(order) && (
-              <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                La ventana de llegada terminó y la orden sigue abierta.
-              </div>
-            )}
-
-            {eventsAsc.length === 0 ? (
-              <p className="text-sm text-on-surface-variant">
-                Todavía no hay movimientos registrados.
-              </p>
-            ) : (
-              <ol className="relative space-y-4 border-l border-amber-300/80 pl-4 dark:border-amber-500/30">
-                {eventsAsc.map((event) => {
-                  const isLatest = event.id === order.events[0]?.id;
-                  const scheduledAt =
-                    typeof event.details.scheduledAt === "string"
-                      ? event.details.scheduledAt
-                      : null;
-                  const arrivalWindowEnd =
-                    typeof event.details.arrivalWindowEnd === "string"
-                      ? event.details.arrivalWindowEnd
-                      : null;
-                  return (
-                    <li key={event.id} className="relative">
-                      <span
-                        className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ${
-                          isLatest
-                            ? "bg-blue-600 ring-blue-100 dark:bg-blue-400 dark:ring-blue-500/20"
-                            : "bg-amber-500 ring-amber-100 dark:bg-amber-400 dark:ring-amber-500/20"
-                        }`}
-                      />
-                      <div className="flex items-start gap-2">
-                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-card text-on-surface-variant shadow-sm">
-                          {event.eventType === "STATUS_CHANGED" ? (
-                            <ArrowLeft className="h-3 w-3" />
-                          ) : (
-                            <UserRound className="h-3 w-3" />
-                          )}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p
-                            className={`text-sm ${isLatest ? "font-bold text-on-surface" : "font-medium text-on-surface"}`}
-                          >
-                            {humanizeEvent(event)}
-                          </p>
-                          {scheduledAt && arrivalWindowEnd ? (
-                            <p className="mt-0.5 text-xs font-semibold text-amber-800 dark:text-amber-200">
-                              Ventana de llegada:{" "}
-                              {formatArrivalWindow(
-                                scheduledAt,
-                                arrivalWindowEnd,
-                              )}
-                            </p>
-                          ) : null}
-                          <p className="mt-0.5 text-xs text-on-surface-variant">
-                            {event.actorName} ·{" "}
-                            {formatDate(event.createdAt, {
-                              day: "numeric",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hourCycle: "h23",
-                            })}
-                          </p>
-                        </div>
-                        {isLatest && (
-                          <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800 dark:bg-blue-500/20 dark:text-blue-200">
-                            Último
-                          </span>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
-          </section>
+              )}
+            </section>
         </div>
 
         {order.status === "COMPLETED" && (
