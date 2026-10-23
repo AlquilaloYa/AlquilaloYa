@@ -41,6 +41,7 @@ export function CommandPalette({
   const [active, setActive] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const navEntries = useMemo<Entry[]>(
     () =>
@@ -103,6 +104,22 @@ export function CommandPalette({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    function onOutsidePointerDown(event: PointerEvent) {
+      if (
+        dialogRef.current &&
+        event.target instanceof Node &&
+        !dialogRef.current.contains(event.target)
+      ) {
+        close();
+      }
+    }
+    document.addEventListener("pointerdown", onOutsidePointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", onOutsidePointerDown, true);
+  }, [close, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -187,14 +204,14 @@ export function CommandPalette({
   return (
     <div
       className="fixed inset-0 z-50 flex justify-center bg-black/40 p-4 pt-[12vh]"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) close();
-      }}
       role="dialog"
       aria-modal="true"
       aria-label="Búsqueda global"
     >
-      <div className="h-fit w-full max-w-xl overflow-hidden rounded-xl border bg-popover shadow-2xl">
+      <div
+        ref={dialogRef}
+        className="h-fit w-full max-w-xl overflow-hidden rounded-xl border bg-popover shadow-2xl"
+      >
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input

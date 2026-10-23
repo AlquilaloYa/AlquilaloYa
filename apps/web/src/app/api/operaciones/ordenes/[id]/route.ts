@@ -15,6 +15,7 @@ import { requirePermission, requireUser } from "@/lib/session";
 import { createSignedObjectUrl, deleteObject } from "@/lib/storage";
 import { logger } from "@/lib/logger";
 import { sendUrgentWorkOrderPush } from "@/lib/fieldops-push";
+import { notificationRows } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -540,7 +541,8 @@ export async function PATCH(
     }
 
     let assignedEmployeeId = current.assignedEmployeeId;
-    let assignee: { id: string; name: string } | null = null;
+    let assignee: { id: string; name: string; userId: string | null } | null =
+      null;
     const hasAssigneeChange =
       body.assignedEmployeeId !== undefined &&
       body.assignedEmployeeId !== current.assignedEmployeeId;
@@ -585,6 +587,7 @@ export async function PATCH(
           id: schema.hrEmployees.id,
           nombres: schema.hrEmployees.nombres,
           apellidos: schema.hrEmployees.apellidos,
+          userId: schema.hrEmployees.userId,
         })
         .from(schema.hrEmployees)
         .where(
@@ -611,6 +614,7 @@ export async function PATCH(
       assignee = {
         id: employee.id,
         name: `${employee.nombres} ${employee.apellidos}`.trim(),
+        userId: employee.userId,
       };
       assignedEmployeeId = employee.id;
     } else if (hasAssigneeChange) {
@@ -751,6 +755,7 @@ export async function PATCH(
 
     const now = new Date();
     await db.transaction(async (tx) => {
+      const notificationEventId = crypto.randomUUID();
       if (hasAssigneeChange) {
         await tx
           .update(schema.workOrderAssignments)
@@ -770,7 +775,9 @@ export async function PATCH(
             assignedAt: now,
           });
         }
+        const assignmentEventId = crypto.randomUUID();
         await tx.insert(schema.workOrderEvents).values({
+          id: assignmentEventId,
           workOrderId: params.id,
           actorId: auth.user.id,
           actorName: auth.user.name,
@@ -784,6 +791,25 @@ export async function PATCH(
           },
           createdAt: now,
         });
+        if (assignee?.userId) {
+          await tx.insert(schema.notifications).values(
+            notificationRows([assignee.userId], {
+              type:
+                nextPriority === "URGENTE"
+                  ? "WORK_ORDER_URGENT"
+                  : "WORK_ORDER_ASSIGNED",
+              title:
+                nextPriority === "URGENTE"
+                  ? "Orden urgente asignada"
+                  : "Nueva orden de trabajo asignada",
+              body: `${current.code}: ${current.title}`,
+              href: "/operaciones",
+              entityType: "WORK_ORDER",
+              entityId: current.id,
+              dedupeKey: `work-order-assignment:${assignmentEventId}`,
+            }),
+          );
+        }
       }
 
       if (isReschedulingVisit && scheduledAt) {
@@ -1058,6 +1084,35 @@ export async function PATCH(
           },
           createdAt: now,
         });
+      }
+
+      const hasRelevantChange =
+        hasAssigneeChange ||
+        nextStatus !== current.status ||
+        nextPriority !== current.priority ||
+        scheduledAt !== null ||
+        isReschedulingVisit ||
+        isCustomerAppointment ||
+        cause !== undefined ||
+        observations !== undefined ||
+        body.materialsConfirmed !== undefined ||
+        body.canResolveToday !== undefined;
+      if (
+        hasRelevantChange &&
+        current.createdBy &&
+        current.createdBy !== auth.user.id
+      ) {
+        await tx.insert(schema.notifications).values(
+          notificationRows([current.createdBy], {
+            type: "WORK_ORDER_UPDATE",
+            title: "Actualización de orden de trabajo",
+            body: `${current.code}: ${current.title} · Estado: ${nextStatus}`,
+            href: "/operaciones",
+            entityType: "WORK_ORDER",
+            entityId: current.id,
+            dedupeKey: `work-order-update:${notificationEventId}`,
+          }),
+        );
       }
     });
 

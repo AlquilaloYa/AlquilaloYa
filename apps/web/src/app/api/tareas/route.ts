@@ -62,8 +62,9 @@ export async function GET(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user, Permission.CLIENT_READ);
-    if (denied) return denied;
+    const clientReadDenied = requirePermission(auth.user, Permission.CLIENT_READ);
+    const contractReadDenied = requirePermission(auth.user, Permission.CONTRACT_READ);
+    if (clientReadDenied && contractReadDenied) return clientReadDenied;
 
     const { db, schema } = dbModule as {
       db: typeof import("@contract/db").db;
@@ -72,6 +73,11 @@ export async function GET(req: Request) {
     const rows = await db
       .select()
       .from(schema.tasks)
+      .where(
+        clientReadDenied
+          ? eq(schema.tasks.origenTipo, "CONTRATO")
+          : undefined,
+      )
       .orderBy(desc(schema.tasks.fechaLimite));
     return NextResponse.json(rows.map(toView));
   } catch (error) {

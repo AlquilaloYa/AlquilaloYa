@@ -4,6 +4,7 @@ import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
 import { logger } from "@/lib/logger";
 import { sendUrgentWorkOrderPush } from "@/lib/fieldops-push";
+import { notificationRows } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -352,8 +353,12 @@ export async function POST(req: Request) {
       );
     }
 
-    let assignee: { id: string; nombre: string; apellido: string } | null =
-      null;
+    let assignee: {
+      id: string;
+      nombre: string;
+      apellido: string;
+      userId: string | null;
+    } | null = null;
     if (
       body.assignedEmployeeId !== undefined &&
       body.assignedEmployeeId !== null &&
@@ -373,6 +378,7 @@ export async function POST(req: Request) {
           id: schema.hrEmployees.id,
           nombre: schema.hrEmployees.nombres,
           apellido: schema.hrEmployees.apellidos,
+          userId: schema.hrEmployees.userId,
         })
         .from(schema.hrEmployees)
         .where(
@@ -401,6 +407,7 @@ export async function POST(req: Request) {
     }
 
     const id = crypto.randomUUID();
+    const assignmentEventId = crypto.randomUUID();
     const now = new Date();
     const status = assignee ? "ASSIGNED" : "CREATED";
     const [order] = await db.transaction(async (tx) => {
@@ -436,6 +443,7 @@ export async function POST(req: Request) {
         });
       }
       await tx.insert(schema.workOrderEvents).values({
+        id: assignmentEventId,
         workOrderId: id,
         actorId: auth.user.id,
         actorName: auth.user.name,
@@ -450,6 +458,22 @@ export async function POST(req: Request) {
         },
         createdAt: now,
       });
+      if (assignee?.userId) {
+        await tx.insert(schema.notifications).values(
+          notificationRows([assignee.userId], {
+            type: priority === "URGENTE" ? "WORK_ORDER_URGENT" : "WORK_ORDER_ASSIGNED",
+            title:
+              priority === "URGENTE"
+                ? "Orden urgente asignada"
+                : "Nueva orden de trabajo asignada",
+            body: `${created.code}: ${created.title}`,
+            href: "/operaciones",
+            entityType: "WORK_ORDER",
+            entityId: created.id,
+            dedupeKey: `work-order-assignment:${assignmentEventId}`,
+          }),
+        );
+      }
       return [created];
     });
 

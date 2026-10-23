@@ -3,9 +3,11 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { hrEmployees } from "./hr";
 
 /** Tarea de trabajo interno asignada a una persona con fecha limite de resolucion. */
@@ -33,6 +35,11 @@ export const tasks = pgTable(
     index("tasks_asignado_idx").on(table.asignadoA),
     index("tasks_empleado_idx").on(table.empleadoId),
     index("tasks_origen_contrato_idx").on(table.origenContratoId, table.origenEvento),
+    uniqueIndex("tasks_contract_expiry_unique")
+      .on(table.origenContratoId, table.origenEvento)
+      .where(
+        sql`${table.origenContratoId} IS NOT NULL AND ${table.origenEvento} = 'VENCIMIENTO'`,
+      ),
   ]
 );
 

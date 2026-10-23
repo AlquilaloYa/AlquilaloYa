@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { evaluarReglas } from "@/lib/automatizaciones";
+import { evaluateContractExpiryNotifications } from "@/lib/contract-expiry-notifications";
 import { safeEqual } from "@/lib/secure-compare";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,8 @@ async function run(req: Request) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
     const resultados = await evaluarReglas("CRON");
-    return NextResponse.json({ ok: true, resultados });
+    const vencimientos = await evaluateContractExpiryNotifications();
+    return NextResponse.json({ ok: true, resultados, vencimientos });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

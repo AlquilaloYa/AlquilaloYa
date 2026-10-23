@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
+import { notificationRows } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -67,16 +68,46 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Describe el cambio (máximo 2000 caracteres)" }, { status: 400 });
     }
 
-    const [row] = await dbModule.db
-      .insert(dbModule.schema.permissionRequests)
-      .values({
-        userId: auth.user.id,
-        userName: auth.user.name,
-        userRole: auth.user.role,
-        modulo,
-        detalle,
-      })
-      .returning();
+    const row = await dbModule.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(dbModule.schema.permissionRequests)
+        .values({
+          userId: auth.user.id,
+          userName: auth.user.name,
+          userRole: auth.user.role,
+          modulo,
+          detalle,
+        })
+        .returning();
+      if (!created) return null;
+
+      const approvers = await tx
+        .select({ id: dbModule.schema.users.id })
+        .from(dbModule.schema.users)
+        .where(
+          and(
+            eq(dbModule.schema.users.active, true),
+            inArray(dbModule.schema.users.role, ["DEVELOPER", "ADMIN"]),
+          ),
+        );
+      if (approvers.length) {
+        await tx.insert(dbModule.schema.notifications).values(
+          notificationRows(
+            approvers.map((approver) => approver.id),
+            {
+              type: "PERMISSION_REQUEST",
+              title: "Nueva solicitud de permiso",
+              body: `${auth.user.name} solicitó un cambio en ${modulo}.`,
+              href: "/solicitudes-permiso",
+              entityType: "PERMISSION_REQUEST",
+              entityId: created.id,
+              dedupeKey: `permission-request:${created.id}`,
+            },
+          ),
+        );
+      }
+      return created;
+    });
     if (!row) return NextResponse.json({ error: "No se pudo crear la solicitud" }, { status: 500 });
     return NextResponse.json(requestJson(row), { status: 201 });
   } catch (error) {
