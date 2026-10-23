@@ -4,11 +4,13 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowDownUp,
   ArrowLeft,
   Bell,
@@ -75,6 +77,7 @@ interface WorkOrder {
   assigneeName: string | null;
   assigneeRole: string | null;
   targetAt: string | null;
+  arrivalWindowEnd: string | null;
   diagnosis: string;
   resolution: string;
   materialsConfirmed: boolean;
@@ -142,6 +145,7 @@ interface Visit {
   id: string;
   visitNumber: string;
   scheduledAt: string;
+  arrivalWindowEnd: string | null;
   arrivedAt: string | null;
   completedAt: string | null;
 }
@@ -252,19 +256,81 @@ function formatDate(
   ).format(date);
 }
 
+const DEFAULT_WINDOW_MS = 2 * 60 * 60 * 1000;
+
+function addHours(value: string, hours: number): string {
+  return new Date(new Date(value).getTime() + hours * 60 * 60 * 1000).toISOString();
+}
+
+function formatTime(value: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("es-PE", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+}
+
+function formatArrivalWindow(
+  start: string | null,
+  end: string | null,
+): string {
+  if (!start) return "Sin fecha de llegada";
+  const startDate = new Date(start);
+  if (Number.isNaN(startDate.getTime())) return "Sin fecha de llegada";
+  const endDate = end ? new Date(end) : new Date(startDate.getTime() + DEFAULT_WINDOW_MS);
+  const sameDay =
+    startDate.toDateString() === endDate.toDateString();
+  const startDay = new Intl.DateTimeFormat("es-PE", {
+    day: "numeric",
+    month: "short",
+  }).format(startDate);
+  const endDay = new Intl.DateTimeFormat("es-PE", {
+    day: "numeric",
+    month: "short",
+  }).format(endDate);
+  return sameDay
+    ? `${startDay} · ${formatTime(start)} – ${formatTime(endDate.toISOString())}`
+    : `${startDay} ${formatTime(start)} – ${endDay} ${formatTime(endDate.toISOString())}`;
+}
+
+function orderWindowEnd(order: WorkOrder): string | null {
+  return order.arrivalWindowEnd ?? (order.targetAt ? addHours(order.targetAt, 2) : null);
+}
+
 function isOverdue(order: WorkOrder): boolean {
+  const windowEnd = orderWindowEnd(order);
   return Boolean(
-    order.targetAt &&
-    new Date(order.targetAt).getTime() < Date.now() &&
-    order.status !== "COMPLETED" &&
-    order.status !== "CANCELLED",
+    windowEnd &&
+      new Date(windowEnd).getTime() < Date.now() &&
+      order.status !== "COMPLETED" &&
+      order.status !== "CANCELLED",
   );
 }
 
 function humanizeEvent(event: WorkEvent): string {
-  if (event.eventType === "ORDER_CREATED") return "Creó la orden de trabajo";
+  if (event.eventType === "ORDER_CREATED") return "Recepción de la orden";
   if (event.eventType === "ASSIGNMENT_CHANGED")
     return "Actualizó la asignación";
+  if (event.eventType === "VISIT_RESCHEDULED") {
+    const reason = typeof event.details.reason === "string" ? event.details.reason : "";
+    return reason
+      ? `Reprogramó la visita · ${reason}`
+      : "Reprogramó la visita";
+  }
+  if (event.eventType === "CUSTOMER_APPOINTMENT_SCHEDULED")
+    return "Programó una cita con el cliente";
+  if (event.eventType === "WORK_ORDER_DETAILS_UPDATED")
+    return "Actualizó el detalle de la orden";
+  if (event.eventType === "MATERIAL_ADDED") return "Registró un material";
+  if (event.eventType === "EVIDENCE_UPLOADED") return "Adjuntó evidencia";
+  if (event.toStatus === "VISIT_SCHEDULED") return "Visita programada";
+  if (event.toStatus === "ON_SITE") return "Llegada del técnico registrada";
+  if (event.toStatus === "DIAGNOSIS") return "Inició el diagnóstico";
+  if (event.toStatus === "IN_PROGRESS") return "Inició el trabajo";
+  if (event.toStatus === "COMPLETED") return "Orden finalizada";
   if (event.fromStatus && event.toStatus) {
     return `Cambió el estado: ${STATUS_LABEL[event.fromStatus as WorkStatus] ?? event.fromStatus} → ${STATUS_LABEL[event.toStatus as WorkStatus] ?? event.toStatus}`;
   }
@@ -603,6 +669,14 @@ export default function OperacionesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [timelineToast, setTimelineToast] = useState<{
+    id: number;
+    title: string;
+    message: string;
+  } | null>(null);
+  const lastTimelineEventRef = useRef<string | null>(null);
+  const lastTimelineOrderRef = useRef<string | null>(null);
+  const timelinePollingErrorRef = useRef(false);
   const isAdmin = user?.role === "ADMIN";
 
   const loadData = useCallback(async (quiet = false) => {
@@ -664,6 +738,83 @@ export default function OperacionesPage() {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (!timelineToast) return undefined;
+    const timer = window.setTimeout(() => setTimelineToast(null), 6500);
+    return () => window.clearTimeout(timer);
+  }, [timelineToast]);
+
+  const latestTimelineEvent = selectedOrder?.events?.[0];
+  useEffect(() => {
+    if (!selectedOrder) {
+      lastTimelineOrderRef.current = null;
+      lastTimelineEventRef.current = null;
+      return;
+    }
+    if (lastTimelineOrderRef.current !== selectedOrder.id) {
+      lastTimelineOrderRef.current = selectedOrder.id;
+      lastTimelineEventRef.current = latestTimelineEvent?.id ?? null;
+      return;
+    }
+    if (latestTimelineEvent && latestTimelineEvent.id !== lastTimelineEventRef.current) {
+      lastTimelineEventRef.current = latestTimelineEvent.id;
+      setTimelineToast({
+        id: Date.now(),
+        title: `Línea de tiempo · ${selectedOrder.code}`,
+        message: humanizeEvent(latestTimelineEvent),
+      });
+    }
+  }, [selectedOrder, latestTimelineEvent]);
+
+  const selectedOrderId = selectedOrder?.id;
+  useEffect(() => {
+    if (!selectedOrderId) return undefined;
+    let cancelled = false;
+    let requestInFlight = false;
+    const timer = window.setInterval(async () => {
+      if (requestInFlight) return;
+      requestInFlight = true;
+      try {
+        const response = await apiFetch(
+          `/api/operaciones/ordenes/${selectedOrderId}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          throw new Error(
+            payload?.error ?? "No se pudo actualizar la línea de tiempo",
+          );
+        }
+        const payload = (await response.json()) as OrderDetails;
+        if (cancelled) return;
+        const latest = payload.events?.[0];
+        if (latest && latest.id !== lastTimelineEventRef.current)
+          setSelectedOrder(payload);
+        if (timelinePollingErrorRef.current) {
+          timelinePollingErrorRef.current = false;
+          setError("");
+        }
+      } catch (pollError) {
+        if (!cancelled) {
+          timelinePollingErrorRef.current = true;
+          setError(
+            pollError instanceof Error
+              ? pollError.message
+              : "No se pudo actualizar la línea de tiempo",
+          );
+        }
+      } finally {
+        requestInFlight = false;
+      }
+    }, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [selectedOrderId]);
+
   const stats = useMemo(
     () => ({
       open: orders.filter(
@@ -709,7 +860,8 @@ export default function OperacionesPage() {
       const payload = await response.json();
       if (!response.ok)
         throw new Error(payload.error ?? "No se pudo abrir la orden");
-      setSelectedOrder(payload as OrderDetails);
+      const detail = payload as OrderDetails;
+      setSelectedOrder(detail);
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -729,6 +881,28 @@ export default function OperacionesPage() {
       [...form.entries()].filter(([key]) => key !== "evidence"),
     );
     try {
+      const targetDate = String(data.targetDate ?? "").trim();
+      const targetStart = String(data.targetStart ?? "").trim();
+      const targetEnd = String(data.targetEnd ?? "").trim();
+      delete data.targetDate;
+      delete data.targetStart;
+      delete data.targetEnd;
+      if (targetDate && targetStart) {
+        if (targetEnd && targetEnd <= targetStart) {
+          throw new Error(
+            "La ventana de llegada debe terminar después de la hora de inicio.",
+          );
+        }
+        data.targetAt = new Date(`${targetDate}T${targetStart}`).toISOString();
+        if (targetEnd)
+          data.arrivalWindowEnd = new Date(`${targetDate}T${targetEnd}`).toISOString();
+        else delete data.arrivalWindowEnd;
+      } else if (targetDate || targetStart || targetEnd) {
+        throw new Error("Indica la fecha y hora de inicio de la ventana de llegada.");
+      } else {
+        delete data.targetAt;
+        delete data.arrivalWindowEnd;
+      }
       const response = await apiFetch("/api/operaciones/ordenes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1147,15 +1321,10 @@ export default function OperacionesPage() {
                       >
                         <CalendarClock className="h-4 w-4 shrink-0" />
                         <span className="min-w-0 break-words">
-                          {order.targetAt
-                            ? formatDate(order.targetAt, {
-                                day: "numeric",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                hourCycle: "h23",
-                              })
-                            : "Sin fecha límite"}
+                          {formatArrivalWindow(
+                            order.targetAt,
+                            orderWindowEnd(order),
+                          )}
                         </span>
                         {isOverdue(order) && (
                           <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase">
@@ -1367,17 +1536,48 @@ export default function OperacionesPage() {
                 </div>
                 <div>
                   <label
-                    htmlFor="order-target"
+                    htmlFor="order-target-date"
                     className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
                   >
-                    Fecha objetivo
+                    Fecha de llegada
                   </label>
                   <input
-                    id="order-target"
-                    name="targetAt"
-                    type="datetime-local"
+                    id="order-target-date"
+                    name="targetDate"
+                    type="date"
                     className="field"
                   />
+                </div>
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="order-window-start"
+                    className="mb-1.5 block text-sm font-semibold text-on-surface-variant"
+                  >
+                    Ventana de llegada
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="order-window-start"
+                      name="targetStart"
+                      type="time"
+                      aria-label="Hora de inicio de la ventana de llegada"
+                      className="field flex-1"
+                    />
+                    <span className="text-sm font-semibold text-on-surface-variant">
+                      hasta
+                    </span>
+                    <input
+                      id="order-window-end"
+                      name="targetEnd"
+                      type="time"
+                      aria-label="Hora de fin de la ventana de llegada"
+                      className="field flex-1"
+                    />
+                  </div>
+                  <p className="mt-1.5 text-xs text-on-surface-variant">
+                    El técnico puede llegar en cualquier momento dentro de este
+                    rango. Si no indicas el fin, se usan 2 horas.
+                  </p>
                 </div>
               </div>
               <div>
@@ -1468,6 +1668,37 @@ export default function OperacionesPage() {
           />
         )}
       </main>
+
+      {timelineToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-5 left-5 z-[100] w-[min(360px,calc(100vw-2.5rem))] overflow-hidden rounded-xl border border-amber-300 bg-card shadow-2xl dark:border-amber-500/40"
+        >
+          <div className="flex items-start gap-3 p-3">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200">
+              <Bell className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200">
+                {timelineToast.title}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-on-surface">
+                {timelineToast.message}
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label="Cerrar aviso de línea de tiempo"
+              onClick={() => setTimelineToast(null)}
+              className="rounded p-1 text-on-surface-variant hover:bg-muted"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="h-1 bg-amber-400" />
+        </div>
+      )}
     </DashboardShell>
   );
 }
@@ -1676,6 +1907,8 @@ function OrderDrawer({
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
   const [evidenceKind, setEvidenceKind] = useState<EvidenceKind>("FOTO FINAL");
   const [evidenceDescription, setEvidenceDescription] = useState("");
+  const eventsAsc = [...order.events].reverse();
+  const isClosed = ["COMPLETED", "CANCELLED"].includes(order.status);
   return (
     <div
       className="fixed inset-0 z-[70] flex justify-end bg-slate-950/40"
@@ -1735,8 +1968,8 @@ function OrderDrawer({
             />
             <InfoBlock label="Sede" value={order.site} />
             <InfoBlock
-              label="Fecha objetivo"
-              value={formatDate(order.targetAt)}
+              label="Ventana de llegada"
+              value={formatArrivalWindow(order.targetAt, orderWindowEnd(order))}
             />
             <InfoBlock
               label="Contacto"
@@ -1751,6 +1984,69 @@ function OrderDrawer({
             <p className="whitespace-pre-wrap text-sm leading-6 text-on-surface-variant">
               {order.description || "Sin descripción adicional."}
             </p>
+          </section>
+
+          <section className="mb-5 rounded-xl border border-border bg-card p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <CalendarClock className="h-4 w-4 text-blue-600" />
+              <h3 className="text-sm font-bold text-on-surface">
+                Visitas y ventanas de llegada
+              </h3>
+              {order.visits.length > 0 && (
+                <span className="ml-auto rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-on-surface-variant">
+                  {order.visits.length}
+                </span>
+              )}
+            </div>
+            {order.visits.length > 0 ? (
+              <ul className="divide-y divide-border">
+                {order.visits.map((visit) => (
+                  <li key={visit.id} className="py-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-on-surface">
+                        Visita {Number(visit.visitNumber)}
+                      </span>
+                      <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-500/30">
+                        {formatArrivalWindow(
+                          visit.scheduledAt,
+                          visit.arrivalWindowEnd ??
+                            addHours(visit.scheduledAt, 2),
+                        )}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-on-surface-variant">
+                      <span>
+                        {visit.arrivedAt
+                          ? `Llegada: ${formatDate(visit.arrivedAt, {
+                              day: "numeric",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hourCycle: "h23",
+                            })}`
+                          : "Llegada pendiente"}
+                      </span>
+                      {visit.completedAt ? (
+                        <span>
+                          Cierre: {formatDate(visit.completedAt, {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hourCycle: "h23",
+                          })}
+                        </span>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-on-surface-variant">
+                Aún no hay visitas programadas. La ventana se mostrará aquí en
+                cuanto el equipo confirme la visita.
+              </p>
+            )}
           </section>
 
           <section className="mb-5 rounded-xl border border-border bg-card p-4">
@@ -1947,31 +2243,131 @@ function OrderDrawer({
             )}
           </section>
 
-          <section className="rounded-xl border border-border bg-card p-4">
-            <h3 className="mb-3 text-sm font-bold text-on-surface">
-              Historial de actividad
-            </h3>
-            <div className="space-y-4">
-              {order.events.map((event) => (
-                <div key={event.id} className="flex gap-3">
-                  <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-on-surface-variant">
-                    {event.eventType === "STATUS_CHANGED" ? (
-                      <ArrowLeft className="h-3.5 w-3.5" />
-                    ) : (
-                      <UserRound className="h-3.5 w-3.5" />
-                    )}
+          <section
+            className={`rounded-xl border p-4 ${
+              isClosed
+                ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/30 dark:bg-emerald-500/10"
+                : "border-amber-300 bg-amber-50/70 dark:border-amber-500/40 dark:bg-amber-500/10"
+            }`}
+          >
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span
+                className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                  isClosed
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200"
+                    : "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200"
+                }`}
+              >
+                {isClosed ? (
+                  <CheckCircle2 className="h-4 w-4" />
+                ) : (
+                  <Bell className="h-4 w-4" />
+                )}
+                {!isClosed && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-500 opacity-75" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-on-surface">
-                      {humanizeEvent(event)}
-                    </p>
-                    <p className="mt-0.5 text-xs text-on-surface-variant">
-                      {event.actorName} · {formatDate(event.createdAt)}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-bold text-on-surface">
+                  Línea de tiempo
+                </h3>
+                <p className="text-xs text-on-surface-variant">
+                  {isClosed
+                    ? "Orden cerrada · historial completo"
+                    : "Modo alerta · se actualiza con cada visita y proceso"}
+                </p>
+              </div>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ring-1 ring-inset ${
+                  isClosed
+                    ? "bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-500/30"
+                    : "bg-amber-100 text-amber-900 ring-amber-200 dark:bg-amber-500/20 dark:text-amber-200 dark:ring-amber-500/30"
+                }`}
+              >
+                {isClosed ? "Completada" : "Alerta activa"}
+              </span>
             </div>
+
+            {!isClosed && isOverdue(order) && (
+              <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                La ventana de llegada terminó y la orden sigue abierta.
+              </div>
+            )}
+
+            {eventsAsc.length === 0 ? (
+              <p className="text-sm text-on-surface-variant">
+                Todavía no hay movimientos registrados.
+              </p>
+            ) : (
+              <ol className="relative space-y-4 border-l border-amber-300/80 pl-4 dark:border-amber-500/30">
+                {eventsAsc.map((event) => {
+                  const isLatest = event.id === order.events[0]?.id;
+                  const scheduledAt =
+                    typeof event.details.scheduledAt === "string"
+                      ? event.details.scheduledAt
+                      : null;
+                  const arrivalWindowEnd =
+                    typeof event.details.arrivalWindowEnd === "string"
+                      ? event.details.arrivalWindowEnd
+                      : null;
+                  return (
+                    <li key={event.id} className="relative">
+                      <span
+                        className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ${
+                          isLatest
+                            ? "bg-blue-600 ring-blue-100 dark:bg-blue-400 dark:ring-blue-500/20"
+                            : "bg-amber-500 ring-amber-100 dark:bg-amber-400 dark:ring-amber-500/20"
+                        }`}
+                      />
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-card text-on-surface-variant shadow-sm">
+                          {event.eventType === "STATUS_CHANGED" ? (
+                            <ArrowLeft className="h-3 w-3" />
+                          ) : (
+                            <UserRound className="h-3 w-3" />
+                          )}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={`text-sm ${isLatest ? "font-bold text-on-surface" : "font-medium text-on-surface"}`}
+                          >
+                            {humanizeEvent(event)}
+                          </p>
+                          {scheduledAt && arrivalWindowEnd ? (
+                            <p className="mt-0.5 text-xs font-semibold text-amber-800 dark:text-amber-200">
+                              Ventana de llegada:{" "}
+                              {formatArrivalWindow(
+                                scheduledAt,
+                                arrivalWindowEnd,
+                              )}
+                            </p>
+                          ) : null}
+                          <p className="mt-0.5 text-xs text-on-surface-variant">
+                            {event.actorName} ·{" "}
+                            {formatDate(event.createdAt, {
+                              day: "numeric",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hourCycle: "h23",
+                            })}
+                          </p>
+                        </div>
+                        {isLatest && (
+                          <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-800 dark:bg-blue-500/20 dark:text-blue-200">
+                            Último
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
           </section>
         </div>
 

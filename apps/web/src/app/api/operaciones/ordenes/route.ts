@@ -17,6 +17,7 @@ type CreateBody = {
   clientId?: unknown;
   assignedEmployeeId?: unknown;
   targetAt?: unknown;
+  arrivalWindowEnd?: unknown;
 };
 
 const PRIORITIES = ["BAJA", "MEDIA", "ALTA", "URGENTE"] as const;
@@ -46,6 +47,10 @@ function parseDate(value: unknown): Date | null | false {
   if (typeof value !== "string") return false;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? false : date;
+}
+
+function defaultWindowEnd(start: Date): Date {
+  return new Date(start.getTime() + 2 * 60 * 60 * 1000);
 }
 
 export async function GET(req: Request) {
@@ -104,6 +109,7 @@ export async function GET(req: Request) {
         contactName: schema.workOrders.contactName,
         assignedEmployeeId: schema.workOrders.assignedEmployeeId,
         targetAt: schema.workOrders.targetAt,
+        arrivalWindowEnd: schema.workOrders.arrivalWindowEnd,
         diagnosis: schema.workOrders.diagnosis,
         resolution: schema.workOrders.resolution,
         estimatedCost: schema.workOrders.estimatedCost,
@@ -193,6 +199,7 @@ export async function POST(req: Request) {
       typeof body.description === "string" ? body.description.trim() : "";
     const priority = body.priority ?? "MEDIA";
     const targetAt = parseDate(body.targetAt);
+    const requestedWindowEnd = parseDate(body.arrivalWindowEnd);
     if (!title || !issueType) {
       return NextResponse.json(
         { error: "Título y tipo de incidencia son obligatorios" },
@@ -225,12 +232,31 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    if (targetAt === false) {
+    if (targetAt === false || requestedWindowEnd === false) {
       return NextResponse.json(
-        { error: "La fecha objetivo no es válida" },
+        { error: "La ventana de llegada no es válida" },
         { status: 400 },
       );
     }
+    if (requestedWindowEnd && !targetAt) {
+      return NextResponse.json(
+        { error: "Indica la fecha de llegada antes de la ventana" },
+        { status: 400 },
+      );
+    }
+    if (
+      targetAt &&
+      requestedWindowEnd &&
+      requestedWindowEnd.getTime() <= targetAt.getTime()
+    ) {
+      return NextResponse.json(
+        { error: "La ventana de llegada debe terminar después del inicio" },
+        { status: 400 },
+      );
+    }
+    const arrivalWindowEnd = targetAt
+      ? (requestedWindowEnd ?? defaultWindowEnd(targetAt))
+      : null;
 
     const { db, schema } = dbModule;
     let client: { id: string; name: string } | null = null;
@@ -396,6 +422,7 @@ export async function POST(req: Request) {
           contactName: client?.name ?? "",
           assignedEmployeeId: assignee?.id ?? null,
           targetAt,
+          arrivalWindowEnd,
           createdBy: auth.user.id,
         })
         .returning();
@@ -418,6 +445,8 @@ export async function POST(req: Request) {
           assignedTo: assignee
             ? `${assignee.nombre} ${assignee.apellido}`.trim()
             : null,
+          scheduledAt: targetAt?.toISOString() ?? null,
+          arrivalWindowEnd: arrivalWindowEnd?.toISOString() ?? null,
         },
         createdAt: now,
       });

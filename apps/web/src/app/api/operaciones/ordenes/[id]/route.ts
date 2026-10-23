@@ -69,6 +69,7 @@ type UpdateBody = {
   assignedEmployeeId?: unknown;
   priority?: unknown;
   scheduledAt?: unknown;
+  arrivalWindowEnd?: unknown;
   rescheduleVisit?: unknown;
   customerAppointment?: unknown;
   customerName?: unknown;
@@ -107,6 +108,24 @@ function parseDate(value: unknown): Date | null | false {
   if (typeof value !== "string") return false;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? false : parsed;
+}
+
+const DEFAULT_WINDOW_MS = 2 * 60 * 60 * 1000;
+
+function defaultWindowEnd(start: Date): Date {
+  return new Date(start.getTime() + DEFAULT_WINDOW_MS);
+}
+
+function windowEndAfter(
+  start: Date,
+  previousStart: Date | null,
+  previousEnd: Date | null,
+): Date {
+  if (previousStart && previousEnd) {
+    const duration = previousEnd.getTime() - previousStart.getTime();
+    if (duration > 0) return new Date(start.getTime() + duration);
+  }
+  return defaultWindowEnd(start);
 }
 
 export async function GET(
@@ -315,6 +334,8 @@ export async function PATCH(
     }
 
     const scheduledAt = parseDate(body.scheduledAt);
+    const requestedWindowEnd = parseDate(body.arrivalWindowEnd);
+    let effectiveWindowEnd: Date | null = null;
     if (
       body.rescheduleVisit !== undefined &&
       typeof body.rescheduleVisit !== "boolean"
@@ -330,9 +351,23 @@ export async function PATCH(
     const estimatedMinutes = parseMetric(body.estimatedMinutes, true);
     const actualCost = parseMetric(body.actualCost);
     const actualMinutes = parseMetric(body.actualMinutes, true);
-    if (scheduledAt === false)
+    if (scheduledAt === false || requestedWindowEnd === false)
       return NextResponse.json(
-        { error: "La fecha de visita no es válida" },
+        { error: "La fecha o ventana de llegada no es válida" },
+        { status: 400 },
+      );
+    if (requestedWindowEnd && !scheduledAt)
+      return NextResponse.json(
+        { error: "Indica la fecha de la visita antes de la ventana" },
+        { status: 400 },
+      );
+    if (
+      scheduledAt &&
+      requestedWindowEnd &&
+      requestedWindowEnd.getTime() <= scheduledAt.getTime()
+    )
+      return NextResponse.json(
+        { error: "La ventana de llegada debe terminar después del inicio" },
         { status: 400 },
       );
     if (
@@ -441,7 +476,10 @@ export async function PATCH(
     }
     if (isReschedulingVisit && (!scheduledAt || !note)) {
       return NextResponse.json(
-        { error: "Indica la nueva fecha, hora y motivo de la reprogramación" },
+        {
+          error:
+            "Indica la nueva fecha, ventana de llegada y motivo de la reprogramación",
+        },
         { status: 400 },
       );
     }
@@ -621,7 +659,7 @@ export async function PATCH(
       current.status !== "VISIT_SCHEDULED"
     ) {
       return NextResponse.json(
-        { error: "Indica la fecha y hora de la visita" },
+        { error: "Indica la fecha y ventana de llegada de la visita" },
         { status: 400 },
       );
     }
@@ -768,9 +806,20 @@ export async function PATCH(
         if (visit.scheduledAt.getTime() === scheduledAt.getTime()) {
           throw new Error("La nueva fecha debe ser distinta a la programada");
         }
+        effectiveWindowEnd =
+          requestedWindowEnd ??
+          windowEndAfter(
+            scheduledAt,
+            visit.scheduledAt,
+            visit.arrivalWindowEnd,
+          );
         await tx
           .update(schema.workOrderVisits)
-          .set({ scheduledAt, note })
+          .set({
+            scheduledAt,
+            arrivalWindowEnd: effectiveWindowEnd,
+            note,
+          })
           .where(eq(schema.workOrderVisits.id, visit.id));
         await tx.insert(schema.workOrderEvents).values({
           workOrderId: params.id,
@@ -783,23 +832,38 @@ export async function PATCH(
             visitId: visit.id,
             visitNumber: Number(visit.visitNumber),
             previousScheduledAt: visit.scheduledAt.toISOString(),
+            previousArrivalWindowEnd:
+              visit.arrivalWindowEnd?.toISOString() ?? null,
             scheduledAt: scheduledAt.toISOString(),
+            arrivalWindowEnd: effectiveWindowEnd.toISOString(),
             reason: note,
           },
           createdAt: now,
         });
       } else if (scheduledAt) {
         const [lastVisit] = await tx
-          .select({ visitNumber: schema.workOrderVisits.visitNumber })
+          .select({
+            visitNumber: schema.workOrderVisits.visitNumber,
+            scheduledAt: schema.workOrderVisits.scheduledAt,
+            arrivalWindowEnd: schema.workOrderVisits.arrivalWindowEnd,
+          })
           .from(schema.workOrderVisits)
           .where(eq(schema.workOrderVisits.workOrderId, params.id))
           .orderBy(desc(schema.workOrderVisits.visitNumber))
           .limit(1);
         const visitNumber = lastVisit ? Number(lastVisit.visitNumber) + 1 : 1;
+        const previousStart = lastVisit?.scheduledAt ?? current.targetAt;
+        const previousEnd = lastVisit
+          ? lastVisit.arrivalWindowEnd
+          : current.arrivalWindowEnd;
+        effectiveWindowEnd =
+          requestedWindowEnd ??
+          windowEndAfter(scheduledAt, previousStart, previousEnd);
         await tx.insert(schema.workOrderVisits).values({
           workOrderId: params.id,
           visitNumber: String(visitNumber),
           scheduledAt,
+          arrivalWindowEnd: effectiveWindowEnd,
           note,
           isCustomerAppointment,
           customerName: isCustomerAppointment ? customerName : "",
@@ -834,7 +898,16 @@ export async function PATCH(
         assignedEmployeeId,
         updatedAt: now,
       };
-      if (scheduledAt && !isCustomerAppointment) update.targetAt = scheduledAt;
+      if (scheduledAt && !isCustomerAppointment) {
+        update.targetAt = scheduledAt;
+        update.arrivalWindowEnd =
+          effectiveWindowEnd ??
+          windowEndAfter(
+            scheduledAt,
+            current.targetAt,
+            current.arrivalWindowEnd,
+          );
+      }
       if (body.priority !== undefined) update.priority = nextPriority;
       if (diagnosis !== undefined) update.diagnosis = diagnosis;
       if (cause !== undefined) update.cause = cause;
@@ -948,6 +1021,7 @@ export async function PATCH(
           details: {
             note,
             scheduledAt: scheduledAt?.toISOString() ?? null,
+            arrivalWindowEnd: effectiveWindowEnd?.toISOString() ?? null,
           },
           createdAt: now,
         });
@@ -976,6 +1050,9 @@ export async function PATCH(
             customerName: isCustomerAppointment ? customerName : null,
             scheduledAt: isCustomerAppointment
               ? (scheduledAt?.toISOString() ?? null)
+              : null,
+            arrivalWindowEnd: isCustomerAppointment
+              ? (effectiveWindowEnd?.toISOString() ?? null)
               : null,
             note: isCustomerAppointment ? note : null,
           },

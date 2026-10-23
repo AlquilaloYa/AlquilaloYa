@@ -65,12 +65,43 @@ function formatStatus(status) {
 
 function formatDateTime(value) {
   if (!value) return 'Sin programar'
-  return new Date(value).toLocaleString('es-MX', {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Sin programar'
+  return date.toLocaleString('es-MX', {
     day: '2-digit',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function formatTimeOnly(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleTimeString('es-MX', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function formatArrivalWindowMobile(start, end) {
+  if (!start) return 'Sin ventana de llegada'
+  const startDate = new Date(start)
+  if (Number.isNaN(startDate.getTime())) return 'Sin ventana de llegada'
+  const endDate = end ? new Date(end) : new Date(startDate.getTime() + 2 * 60 * 60 * 1000)
+  if (Number.isNaN(endDate.getTime())) return `Llegada a partir de ${formatTimeOnly(start)}`
+  const sameDay = startDate.toDateString() === endDate.toDateString()
+  if (sameDay) {
+    return `Ventana de llegada · ${formatTimeOnly(start)} – ${formatTimeOnly(endDate.toISOString())}`
+  }
+  return `Ventana de llegada · ${startDate.toLocaleDateString('es-MX', {
+    day: '2-digit',
+    month: 'short',
+  })} ${formatTimeOnly(start)} – ${endDate.toLocaleDateString('es-MX', {
+    day: '2-digit',
+    month: 'short',
+  })} ${formatTimeOnly(endDate.toISOString())}`
 }
 
 function formatClock(ms) {
@@ -436,11 +467,14 @@ function App() {
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => toDateKey(new Date()))
   const [scheduleDate, setScheduleDate] = useState(() => toDateKey(new Date()))
   const [scheduleTime, setScheduleTime] = useState('10:30')
+  const [scheduleEnd, setScheduleEnd] = useState('')
   const [followUpDate, setFollowUpDate] = useState('')
   const [followUpTime, setFollowUpTime] = useState('')
+  const [followUpEnd, setFollowUpEnd] = useState('')
   const [customerAppointmentRequested, setCustomerAppointmentRequested] = useState(false)
   const [customerAppointmentDate, setCustomerAppointmentDate] = useState('')
   const [customerAppointmentTime, setCustomerAppointmentTime] = useState('')
+  const [customerAppointmentEnd, setCustomerAppointmentEnd] = useState('')
   const [customerAppointmentNote, setCustomerAppointmentNote] = useState('')
   const [visitDuration, setVisitDuration] = useState('150')
   const [scheduleNote, setScheduleNote] = useState('')
@@ -771,6 +805,9 @@ function App() {
     if (updatedTask.status !== originalTask.status) changes.status = updatedTask.status
     if (updatedTask.targetAt !== originalTask.targetAt && updatedTask.targetAt) {
       changes.scheduledAt = new Date(updatedTask.targetAt).toISOString()
+      changes.arrivalWindowEnd = updatedTask.arrivalWindowEnd
+        ? new Date(updatedTask.arrivalWindowEnd).toISOString()
+        : null
       if (updatedTask.status === 'RESCHEDULED') {
         changes.rescheduleVisit = true
         changes.note = options.note || ''
@@ -791,6 +828,9 @@ function App() {
     if (updatedTask.customerAppointments?.length > (originalTask.customerAppointments?.length ?? 0)) {
       const appointment = updatedTask.customerAppointments.at(-1)
       changes.scheduledAt = new Date(appointment.scheduledAt).toISOString()
+      changes.arrivalWindowEnd = appointment.arrivalWindowEnd
+        ? new Date(appointment.arrivalWindowEnd).toISOString()
+        : null
       changes.customerAppointment = true
       changes.customerName = appointment.customer
       changes.note = appointment.note
@@ -881,6 +921,9 @@ function App() {
       await fieldopsApi.updateOrder(selectedTask.id, {
         status: 'VISIT_SCHEDULED',
         scheduledAt: new Date(selectedTask.targetAt).toISOString(),
+        arrivalWindowEnd: selectedTask.arrivalWindowEnd
+          ? new Date(selectedTask.arrivalWindowEnd).toISOString()
+          : null,
       })
       await reloadOrders()
       setStorageWarning('')
@@ -1010,13 +1053,15 @@ function App() {
     event.preventDefault()
     if (!scheduleDate || !scheduleTime || !rescheduleReason.trim() || !['VISIT_SCHEDULED', 'RESCHEDULED'].includes(selectedTask.status) || !currentVisit || currentVisit.arrivedAt) return
     const scheduledAt = `${scheduleDate}T${scheduleTime}`
+    const arrivalWindowEnd = scheduleEnd ? `${scheduleDate}T${scheduleEnd}` : ''
     if (scheduledAt === toLocalDateTime(currentVisit.scheduledAt)) return
     const eventTime = currentTimeLabel()
     if (await updateTask(selectedTask.id, (task) => {
       const previousVisit = task.visits.at(-1)
-      return addEvent(task, `Reprogramó visita ${previousVisit.number} de ${formatDateTime(previousVisit.scheduledAt)} a ${formatDateTime(scheduledAt)}; motivo: ${rescheduleReason.trim()}`, {
+      return addEvent(task, `Reprogramó visita ${previousVisit.number} de ${formatArrivalWindowMobile(previousVisit.scheduledAt, previousVisit.arrivalWindowEnd)} a ${formatArrivalWindowMobile(scheduledAt, arrivalWindowEnd)}; motivo: ${rescheduleReason.trim()}`, {
         status: 'RESCHEDULED',
         targetAt: scheduledAt,
+        arrivalWindowEnd,
       }, eventTime)
     }, { note: rescheduleReason.trim() })) {
       setShowReschedule(false)
@@ -1028,13 +1073,15 @@ function App() {
     event.preventDefault()
     if (!followUpDate || !followUpTime || !['RESCHEDULED', 'DIAGNOSIS'].includes(selectedTask.status)) return
     const scheduledAt = `${followUpDate}T${followUpTime}`
+    const arrivalWindowEnd = followUpEnd ? `${followUpDate}T${followUpEnd}` : ''
     if (selectedTask.visits.some((visit) => visit.scheduledAt === scheduledAt)) return
     const eventTime = currentTimeLabel()
     if (await updateTask(selectedTask.id, (task) => {
       const visitNumber = task.visits.length + 1
-      return addEvent(task, `Programó visita de seguimiento ${visitNumber} para ${formatDateTime(scheduledAt)}`, {
+      return addEvent(task, `Programó visita de seguimiento ${visitNumber} para ${formatArrivalWindowMobile(scheduledAt, arrivalWindowEnd)}`, {
         status: 'VISIT_SCHEDULED',
         targetAt: scheduledAt,
+        arrivalWindowEnd,
         estimatedMinutes: Number(visitDuration) || task.estimatedMinutes,
       }, eventTime)
     }, { note: scheduleNote })) setWorkflowStep(1)
@@ -1191,6 +1238,9 @@ function App() {
       (selectedTask.customerAppointments?.length ?? 0) > 0
     ) return
     const scheduledAt = `${customerAppointmentDate}T${customerAppointmentTime}`
+    const arrivalWindowEnd = customerAppointmentEnd
+      ? `${customerAppointmentDate}T${customerAppointmentEnd}`
+      : ''
     if (selectedTask.visits.some((visit) => visit.scheduledAt === scheduledAt)) return
     const eventTime = currentTimeLabel()
     if (await updateTask(selectedTask.id, (task) => {
@@ -1202,6 +1252,7 @@ function App() {
             number: appointmentNumber,
             customer: task.resident,
             scheduledAt,
+            arrivalWindowEnd,
             note: customerAppointmentNote.trim(),
             status: 'SCHEDULED',
           },
@@ -1211,6 +1262,7 @@ function App() {
       setCustomerAppointmentRequested(false)
       setCustomerAppointmentDate('')
       setCustomerAppointmentTime('')
+      setCustomerAppointmentEnd('')
       setCustomerAppointmentNote('')
     }
   }
@@ -1444,6 +1496,7 @@ function App() {
                 <div className="scheduled-visit-card">
                   <span className="eyebrow">VISITA {currentVisit.number} · DEFINIDA EN LA ORDEN</span>
                   <strong>{formatDateTime(currentVisit.scheduledAt)}</strong>
+                  <span>{formatArrivalWindowMobile(currentVisit.scheduledAt, currentVisit.arrivalWindowEnd)}</span>
                   <span>Duración estimada: {selectedTask.estimatedMinutes} minutos</span>
                   {currentVisit.note && <small>{currentVisit.note}</small>}
                 </div>
@@ -1452,7 +1505,7 @@ function App() {
                     <strong>Reprogramación registrada</strong>
                     {currentVisit.rescheduleHistory.map((change, index) => (
                       <small key={`${change.changedAt}-${index}`}>
-                        {formatDateTime(change.previousScheduledAt)} → {formatDateTime(change.newScheduledAt)} · Motivo: {change.reason}
+                        {formatArrivalWindowMobile(change.previousScheduledAt, change.previousArrivalWindowEnd)} → {formatArrivalWindowMobile(change.newScheduledAt, change.arrivalWindowEnd)} · Motivo: {change.reason}
                       </small>
                     ))}
                   </div>
@@ -1467,6 +1520,7 @@ function App() {
                         const localVisit = toLocalDateTime(currentVisit.scheduledAt)
                         setScheduleDate(localVisit.slice(0, 10))
                         setScheduleTime(localVisit.slice(11, 16))
+                        setScheduleEnd(toLocalDateTime(currentVisit.arrivalWindowEnd).slice(11, 16))
                         setShowReschedule(!showReschedule)
                       }}
                     >
@@ -1476,26 +1530,28 @@ function App() {
                 )}
                 {showReschedule && ['VISIT_SCHEDULED', 'RESCHEDULED'].includes(selectedTask.status) && !currentVisit.arrivedAt && (
                   <form className="form-card reschedule-form" onSubmit={rescheduleVisit}>
-                    <h3>Nueva fecha y hora</h3>
+                    <h3>Nueva fecha y ventana de llegada</h3>
                     <div className="form-grid">
                       <label>Fecha<input type="date" required value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} /></label>
-                      <label>Hora<input type="time" required value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} /></label>
+                      <label>Desde<input type="time" required value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} /></label>
+                      <label>Hasta<input type="time" value={scheduleEnd} onChange={(event) => setScheduleEnd(event.target.value)} /></label>
                     </div>
+                    <p className="prototype-note">El técnico puede llegar en cualquier momento dentro del rango. Si dejas el fin vacío, se conserva la duración de la ventana anterior.</p>
                     <label>Motivo de la reprogramación<textarea rows="2" required value={rescheduleReason} onChange={(event) => setRescheduleReason(event.target.value)} placeholder="Indica por qué necesitas cambiar la visita" /></label>
-                    <button type="submit" className="primary-btn" disabled={!scheduleDate || !scheduleTime || !rescheduleReason.trim() || `${scheduleDate}T${scheduleTime}` === toLocalDateTime(currentVisit.scheduledAt)}>Guardar reprogramación</button>
+                    <button type="submit" className="primary-btn" disabled={!scheduleDate || !scheduleTime || (scheduleEnd && scheduleEnd <= scheduleTime) || !rescheduleReason.trim() || `${scheduleDate}T${scheduleTime}` === toLocalDateTime(currentVisit.scheduledAt)}>Guardar reprogramación</button>
                   </form>
                 )}
               </>
             ) : (
               <div className="empty-state">La orden no tiene una visita programada. Solicita que se defina en la orden antes de aceptarla.</div>
             )}
-            {selectedTask.visits.map((visit) => <div className="visit-history" key={visit.number}><strong>Historial · Visita {visit.number}</strong><span>{formatDateTime(visit.scheduledAt)}</span><small>{visit.arrivedAt ? `Llegada: ${visit.arrivedAt}` : 'Llegada pendiente'}</small>{visit.completedAt && <small>Visita cerrada: {visit.completedAt}</small>}</div>)}
+            {selectedTask.visits.map((visit) => <div className="visit-history" key={visit.number}><strong>Historial · Visita {visit.number}</strong><span>{formatDateTime(visit.scheduledAt)}</span><small>{formatArrivalWindowMobile(visit.scheduledAt, visit.arrivalWindowEnd)}</small><small>{visit.arrivedAt ? `Llegada: ${visit.arrivedAt}` : 'Llegada pendiente'}</small>{visit.completedAt && <small>Visita cerrada: {visit.completedAt}</small>}</div>)}
           </section>
         )}
         {workflowStep === 2 && (
           <section className="workflow-card">
             <div className="section-heading"><h2>Confirmar llegada</h2><span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
-            <div className="arrival-panel"><span className="arrival-symbol">⌖</span><strong>{selectedTask.location}</strong><span>Visita {currentVisit?.number ?? 1} · {formatDateTime(currentVisit?.scheduledAt)}</span>{currentVisit?.arrivedAt ? <div className="success-inline">✓ Llegada registrada: {currentVisit.arrivedAt}</div> : <button type="button" className="arrival-btn" disabled={!currentVisit} onClick={confirmArrival}>ESTOY AQUÍ · CONFIRMAR LLEGADA</button>}</div>
+            <div className="arrival-panel"><span className="arrival-symbol">⌖</span><strong>{selectedTask.location}</strong><span>Visita {currentVisit?.number ?? 1} · {formatDateTime(currentVisit?.scheduledAt)}</span><span>{formatArrivalWindowMobile(currentVisit?.scheduledAt, currentVisit?.arrivalWindowEnd)}</span>{currentVisit?.arrivedAt ? <div className="success-inline">✓ Llegada registrada: {currentVisit.arrivedAt}</div> : <button type="button" className="arrival-btn" disabled={!currentVisit} onClick={confirmArrival}>ESTOY AQUÍ · CONFIRMAR LLEGADA</button>}</div>
             <p className="prototype-note">La hora de llegada queda registrada en el servidor y vinculada a esta visita.</p>
             {currentVisit?.arrivedAt && <button type="button" className="primary-btn" onClick={() => setWorkflowStep(3)}>Registrar diagnóstico</button>}
           </section>
@@ -1544,7 +1600,7 @@ function App() {
                 <button type="submit" className="ghost-btn" disabled={selectedTask.status === 'COMPLETED' || diagnosisPhotoFiles.length === 0}>Adjuntar foto</button>
               </form>
             </div>
-            {!canResolveToday && <form className="form-card secondary-form" onSubmit={scheduleFollowUpVisit}><h3>Programar visita de seguimiento</h3><div className="form-grid"><label>Fecha de la nueva visita<input type="date" required value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} /></label><label>Hora<input type="time" required value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} /></label></div><label>Duración estimada (minutos)<input type="number" min="1" value={visitDuration} onChange={(event) => setVisitDuration(event.target.value)} /></label><label>Indicaciones para la visita<textarea rows="2" value={scheduleNote} onChange={(event) => setScheduleNote(event.target.value)} placeholder="Acceso, coordinación o materiales necesarios" /></label><button type="submit" className="ghost-btn" disabled={!['RESCHEDULED', 'DIAGNOSIS'].includes(selectedTask.status) || !followUpDate || !followUpTime || selectedTask.visits.some((visit) => toLocalDateTime(visit.scheduledAt) === `${followUpDate}T${followUpTime}`)}>Guardar nueva visita</button></form>}
+            {!canResolveToday && <form className="form-card secondary-form" onSubmit={scheduleFollowUpVisit}><h3>Programar visita de seguimiento</h3><div className="form-grid"><label>Fecha de la nueva visita<input type="date" required value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} /></label><label>Desde<input type="time" required value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} /></label><label>Hasta<input type="time" value={followUpEnd} onChange={(event) => setFollowUpEnd(event.target.value)} /></label></div><p className="prototype-note">Define el rango esperado de llegada; si el fin queda vacío, se conserva la duración de la ventana anterior.</p><label>Duración estimada (minutos)<input type="number" min="1" value={visitDuration} onChange={(event) => setVisitDuration(event.target.value)} /></label><label>Indicaciones para la visita<textarea rows="2" value={scheduleNote} onChange={(event) => setScheduleNote(event.target.value)} placeholder="Acceso, coordinación o materiales necesarios" /></label><button type="submit" className="ghost-btn" disabled={!['RESCHEDULED', 'DIAGNOSIS'].includes(selectedTask.status) || !followUpDate || !followUpTime || (followUpEnd && followUpEnd <= followUpTime) || selectedTask.visits.some((visit) => toLocalDateTime(visit.scheduledAt) === `${followUpDate}T${followUpTime}`)}>Guardar nueva visita</button></form>}
           </section>
         )}
         {workflowStep === 4 && (
@@ -1611,16 +1667,19 @@ function App() {
                 <p className="prototype-note">La cita quedará vinculada a {selectedTask.resident} y aparecerá en Mis visitas y Calendario.</p>
                 <div className="form-grid">
                   <label>Fecha<input type="date" required min={todayDate} value={customerAppointmentDate} onChange={(event) => setCustomerAppointmentDate(event.target.value)} /></label>
-                  <label>Hora<input type="time" required value={customerAppointmentTime} onChange={(event) => setCustomerAppointmentTime(event.target.value)} /></label>
+                  <label>Desde<input type="time" required value={customerAppointmentTime} onChange={(event) => setCustomerAppointmentTime(event.target.value)} /></label>
+                  <label>Hasta<input type="time" value={customerAppointmentEnd} onChange={(event) => setCustomerAppointmentEnd(event.target.value)} /></label>
                 </div>
+                <p className="prototype-note">Indica el rango en que el cliente puede recibir la visita. Si no indicas el fin, se conserva la duración de la ventana anterior.</p>
                 <label>Indicaciones para el cliente<textarea rows="2" value={customerAppointmentNote} onChange={(event) => setCustomerAppointmentNote(event.target.value)} placeholder="Confirma disponibilidad, acceso o motivo de la nueva visita" /></label>
-                <button type="submit" className="ghost-btn" disabled={!customerAppointmentDate || !customerAppointmentTime || selectedTask.visits.some((visit) => visit.scheduledAt === `${customerAppointmentDate}T${customerAppointmentTime}`)}>Programar cita con el cliente</button>
+                <button type="submit" className="ghost-btn" disabled={!customerAppointmentDate || !customerAppointmentTime || (customerAppointmentEnd && customerAppointmentEnd <= customerAppointmentTime) || selectedTask.visits.some((visit) => visit.scheduledAt === `${customerAppointmentDate}T${customerAppointmentTime}`)}>Programar cita con el cliente</button>
               </form>
             )}
             {selectedTask.customerAppointments?.map((appointment) => (
               <div className="scheduled-visit-card customer-appointment-card" key={`customer-appointment-${appointment.number}`}>
                 <span className="eyebrow">CITA DE SEGUIMIENTO · PROGRAMADA</span>
                 <strong>{formatDateTime(appointment.scheduledAt)}</strong>
+                <span>{formatArrivalWindowMobile(appointment.scheduledAt, appointment.arrivalWindowEnd)}</span>
                 <span>Cliente: {appointment.customer}</span>
                 {appointment.note && <small>{appointment.note}</small>}
               </div>

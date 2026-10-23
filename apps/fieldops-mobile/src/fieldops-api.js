@@ -38,6 +38,7 @@ function mapVisit(visit, rescheduleHistory = []) {
   return {
     number: Number(visit.visitNumber),
     scheduledAt: visit.scheduledAt,
+    arrivalWindowEnd: visit.arrivalWindowEnd || '',
     arrivedAt: visit.arrivedAt ? new Date(visit.arrivedAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '',
     arrivedAtIso: visit.arrivedAt || '',
     completedAt: visit.completedAt ? new Date(visit.completedAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '',
@@ -61,6 +62,8 @@ function buildRescheduleHistory(order) {
       changedAt: event.createdAt,
       previousScheduledAt: details.previousScheduledAt || '',
       newScheduledAt: details.scheduledAt || '',
+      previousArrivalWindowEnd: details.previousArrivalWindowEnd || '',
+      arrivalWindowEnd: details.arrivalWindowEnd || '',
       reason: details.reason || '',
     })
   }
@@ -97,6 +100,7 @@ function mapTask(order, materials = []) {
     responsible: assignedName,
     assignedEmployeeId: order.assignedEmployeeId || '',
     targetAt: order.targetAt || '',
+    arrivalWindowEnd: order.arrivalWindowEnd || '',
     updatedAt: order.updatedAt || '',
     workStartedAt: order.workStartedAt || '',
     estimatedMinutes: Number(order.estimatedMinutes) || 0,

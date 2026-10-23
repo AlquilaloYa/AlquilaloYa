@@ -158,7 +158,11 @@ export default function ScoringPage() {
             <CardTitle>Distribución por banda</CardTitle>
           </CardHeader>
           <CardContent>
-            <BarChart data={distribucion} height={180} />
+            <BarChart
+              data={distribucion}
+              height={380}
+              className="rounded-lg border border-border/60 bg-surface-container-lowest/40 p-3"
+            />
           </CardContent>
         </Card>
 

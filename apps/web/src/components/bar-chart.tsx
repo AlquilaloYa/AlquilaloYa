@@ -20,7 +20,7 @@ interface BarChartProps {
  */
 export function BarChart({
   data,
-  height = 220,
+  height = 260,
   formatValue,
   color = "hsl(var(--primary))",
   className,
@@ -29,36 +29,38 @@ export function BarChart({
 
   return (
     <div className={className}>
-      <div className="flex items-end gap-3" style={{ height }}>
+      <div className="flex items-end gap-4" style={{ height }}>
         {data.map((d) => {
           const pct = Math.max(0, Math.min(100, (d.value / max) * 100));
           const barColor = d.color ?? color;
+          const displayValue = formatValue ? formatValue(d.value) : d.value;
           return (
             <div
               key={d.label}
-              className="flex flex-1 flex-col items-center justify-end gap-1"
+              className="flex flex-1 flex-col items-center justify-end gap-2"
               title={formatValue ? `${d.label}: ${String(formatValue(d.value))}` : d.label}
             >
-              <span className="font-mono-label text-on-surface-variant">
-                {formatValue ? formatValue(d.value) : d.value}
+              <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-bold text-on-surface shadow-sm">
+                {displayValue}
               </span>
               <div
-                className="w-full rounded-t-md transition-[height]"
+                className="w-full rounded-t-lg transition-[height]"
                 style={{
                   height: `${pct}%`,
-                  minHeight: d.value > 0 ? 4 : 0,
+                  minHeight: d.value > 0 ? 10 : 0,
                   backgroundColor: barColor,
+                  boxShadow: "0 6px 18px -12px currentColor",
                 }}
               />
             </div>
           );
         })}
       </div>
-      <div className="mt-2 flex gap-3 border-t pt-2">
+      <div className="mt-3 flex gap-4 border-t border-border pt-3">
         {data.map((d) => (
           <span
             key={d.label}
-            className="flex-1 truncate text-center font-body-sm text-on-surface-variant"
+            className="flex-1 truncate text-center text-sm font-semibold text-on-surface-variant"
           >
             {d.label}
           </span>
