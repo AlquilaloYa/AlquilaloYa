@@ -3,12 +3,22 @@ import Link from "next/link";
 export default function HomePage() {
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#04101f] p-6 text-center text-white">
-      <img
-        src="/fondo.gif"
-        alt=""
-        aria-hidden
-        className="absolute inset-0 h-full w-full scale-105 object-cover blur-[2px]"
-      />
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        poster="/fondo.gif"
+        aria-hidden="true"
+        tabIndex={-1}
+        className="pointer-events-none absolute inset-0 h-full w-full scale-105 object-cover blur-[2px]"
+      >
+        <source
+          src="https://cdn.pixabay.com/video/2021/10/13/91917-631504067_large.mp4"
+          type="video/mp4"
+        />
+      </video>
       <div className="absolute inset-0 bg-slate-950/70" />
       <div className="relative">
         <img src="/logo-black-mode.png" alt="AlquilaYa ERP" className="mx-auto h-16 w-auto object-contain sm:h-20" />
