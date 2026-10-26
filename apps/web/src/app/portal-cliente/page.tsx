@@ -128,7 +128,6 @@ export default function ClientPortalPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [issueType, setIssueType] = useState("");
-  const [manualIssueType, setManualIssueType] = useState("");
   const [description, setDescription] = useState("");
   const [customerPresentAtVisit, setCustomerPresentAtVisit] = useState(true);
   const [currentLocalDate, setCurrentLocalDate] = useState("");
@@ -269,9 +268,8 @@ export default function ClientPortalPage() {
       const response = await fetch("/api/portal-cliente/ordenes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        const finalIssueType = issueType === "Otro" ? manualIssueType : issueType;
         body: JSON.stringify({
-          issueType: finalIssueType,
+          issueType,
           description,
           customerPresentAtVisit,
           availability: options,
@@ -436,16 +434,6 @@ export default function ClientPortalPage() {
                 <option value="Mantenimiento">Mantenimiento</option>
                 <option value="Otro">Otro</option>
               </select>
-              {issueType === "Otro" && (
-                <input
-                  required
-                  maxLength={80}
-                  value={manualIssueType}
-                  onChange={(e) => setManualIssueType(e.target.value)}
-                  className="mt-2 h-11 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 outline-none focus:border-cyan-400"
-                  placeholder="Describe el tipo de problema"
-                />
-              )}
             </label>
             <label className="block space-y-2 text-sm">
               <span className="font-medium">Describe el problema</span>
