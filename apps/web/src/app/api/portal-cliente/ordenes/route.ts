@@ -335,26 +335,6 @@ export async function POST(request: Request) {
     const now = new Date();
     try {
       const clientRequest = await dbModule.db.transaction(async (tx) => {
-        if (verifiedUploads.length) {
-          const claimed = await tx
-            .update(dbModule.schema.clientPortalUploads)
-            .set({ requestId: id })
-            .where(
-              and(
-                inArray(
-                  dbModule.schema.clientPortalUploads.id,
-                  verifiedUploads.map((upload) => upload.id),
-                ),
-                eq(dbModule.schema.clientPortalUploads.clientId, session.identity.client.id),
-                isNull(dbModule.schema.clientPortalUploads.requestId),
-                isNull(dbModule.schema.clientPortalUploads.workOrderId),
-              ),
-            )
-            .returning({ id: dbModule.schema.clientPortalUploads.id });
-          if (claimed.length !== verifiedUploads.length) {
-            throw new Error("Un archivo ya fue usado en otro reporte");
-          }
-        }
         const [created] = await tx
           .insert(dbModule.schema.clientWorkOrderRequests)
           .values({
@@ -379,6 +359,26 @@ export async function POST(request: Request) {
             createdAt: dbModule.schema.clientWorkOrderRequests.createdAt,
           });
         if (!created) throw new Error("No se pudo guardar la solicitud de mantenimiento");
+        if (verifiedUploads.length) {
+          const claimed = await tx
+            .update(dbModule.schema.clientPortalUploads)
+            .set({ requestId: id })
+            .where(
+              and(
+                inArray(
+                  dbModule.schema.clientPortalUploads.id,
+                  verifiedUploads.map((upload) => upload.id),
+                ),
+                eq(dbModule.schema.clientPortalUploads.clientId, session.identity.client.id),
+                isNull(dbModule.schema.clientPortalUploads.requestId),
+                isNull(dbModule.schema.clientPortalUploads.workOrderId),
+              ),
+            )
+            .returning({ id: dbModule.schema.clientPortalUploads.id });
+          if (claimed.length !== verifiedUploads.length) {
+            throw new Error("Un archivo ya fue usado en otro reporte");
+          }
+        }
         const [activeUsers, additionalWorkOrderReaders] = await Promise.all([
           tx
             .select({
