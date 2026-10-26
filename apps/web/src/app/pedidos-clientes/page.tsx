@@ -200,11 +200,12 @@ export default function ClientRequestsPage() {
                         return (
                           <span
                             key={attachment.id}
-                            title="El archivo no está disponible en Storage"
-                            className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 text-center text-xs text-amber-900 sm:h-28 sm:w-28"
+                            title={`${attachment.fileName}: el archivo no está disponible en Storage`}
+                            className="flex h-24 w-24 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border border-amber-300 bg-amber-50 px-2 text-center text-xs text-amber-900 sm:h-28 sm:w-28"
                           >
                             <ClipboardList aria-hidden className="h-5 w-5" />
-                            Archivo no disponible
+                            <span>Archivo no disponible</span>
+                            <span className="w-full truncate font-medium">{attachment.fileName}</span>
                           </span>
                         );
                       }
