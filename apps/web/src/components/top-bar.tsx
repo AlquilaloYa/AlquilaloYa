@@ -1,17 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api";
 import { useTheme } from "@/lib/theme-provider";
+import { playNotificationChime } from "@/lib/notification-sound";
 import { Button } from "@contract/ui/components/button";
 import { ThemeToggle } from "@contract/ui/components/theme-toggle";
-import { Bell, LogOut, Menu } from "lucide-react";
+import { Bell, ExternalLink, LogOut, Menu, Wrench, X } from "lucide-react";
 import { CommandPalette } from "@/components/command-palette";
 
 interface InboxNotification {
   id: string;
+  type?: string;
   title: string;
   body: string;
   href: string;
@@ -39,6 +41,12 @@ export function TopBar({
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationError, setNotificationError] = useState("");
+  const [popups, setPopups] = useState<InboxNotification[]>([]);
+  const knownNotificationIds = useRef<Set<string> | null>(null);
+
+  const dismissPopup = useCallback((id: string) => {
+    setPopups((prev) => prev.filter((p) => p.id !== id));
+  }, []);
 
   const refreshNotifications = useCallback(async () => {
     try {
@@ -55,11 +63,36 @@ export function TopBar({
         items?: InboxNotification[];
         unreadCount?: number;
       };
-      setNotifications(Array.isArray(data.items) ? data.items : []);
+
+      const rawItems = Array.isArray(data.items) ? data.items : [];
+      // Solo notificaciones de los últimos 15 días para la campanita
+      const fifteenDaysAgo = Date.now() - 15 * 24 * 60 * 60 * 1000;
+      const recentItems = rawItems.filter(
+        (item) => new Date(item.createdAt).getTime() >= fifteenDaysAgo,
+      );
+
+      setNotifications(recentItems);
       setUnreadCount(
         typeof data.unreadCount === "number" ? data.unreadCount : 0,
       );
       setNotificationError("");
+
+      if (knownNotificationIds.current === null) {
+        // Carga inicial: registrar IDs conocidos sin sonar ni abrir popups
+        knownNotificationIds.current = new Set(recentItems.map((n) => n.id));
+      } else {
+        // En sondeos posteriores: detectar si entraron notificaciones nuevas sin leer
+        const incoming = recentItems.filter(
+          (item) => !item.isRead && !knownNotificationIds.current!.has(item.id),
+        );
+        if (incoming.length > 0) {
+          playNotificationChime();
+          setPopups((prev) => [...prev, ...incoming].slice(-4));
+        }
+        for (const item of recentItems) {
+          knownNotificationIds.current.add(item.id);
+        }
+      }
     } catch (error) {
       setNotificationError(
         error instanceof Error
@@ -73,9 +106,18 @@ export function TopBar({
     void refreshNotifications();
     const interval = window.setInterval(() => {
       void refreshNotifications();
-    }, 60_000);
+    }, 15_000);
     return () => window.clearInterval(interval);
   }, [refreshNotifications]);
+
+  // Cierre automático secuencial de notificaciones flotantes (8 seg)
+  useEffect(() => {
+    if (!popups.length) return;
+    const timer = setTimeout(() => {
+      setPopups((prev) => prev.slice(1));
+    }, 8_000);
+    return () => clearTimeout(timer);
+  }, [popups]);
 
   async function openNotification(notification: InboxNotification) {
     if (!notification.isRead) {
@@ -106,6 +148,7 @@ export function TopBar({
       }
     }
     setNotificationsOpen(false);
+    dismissPopup(notification.id);
     if (notification.href.startsWith("/") && !notification.href.startsWith("//")) {
       router.push(notification.href);
     }
@@ -120,129 +163,240 @@ export function TopBar({
       .toUpperCase() ?? "?";
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 2xl:px-6">
-      {onMenuClick ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onMenuClick}
-          className="lg:hidden"
-          aria-label="Abrir menú"
-          title="Abrir menú"
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
-      ) : null}
-      <div className="max-w-md flex-1">
-        <CommandPalette navItems={results} />
-      </div>
+    <>
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 2xl:px-6">
+        {onMenuClick ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onMenuClick}
+            className="lg:hidden"
+            aria-label="Abrir menú"
+            title="Abrir menú"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+        ) : null}
+        <div className="max-w-md flex-1">
+          <CommandPalette navItems={results} />
+        </div>
 
-      <div className="ml-auto flex items-center gap-2">
-        <ThemeToggle
-          theme={theme}
-          onToggle={toggleTheme}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        />
+        <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle
+            theme={theme}
+            onToggle={toggleTheme}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          />
 
-        <div className="relative">
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setNotificationsOpen((open) => !open);
+                void refreshNotifications();
+              }}
+              aria-label={
+                unreadCount
+                  ? `Notificaciones, ${unreadCount} sin leer`
+                  : "Notificaciones"
+              }
+              aria-expanded={notificationsOpen}
+            >
+              <Bell className="h-4 w-4" />
+              {unreadCount > 0 ? (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              ) : null}
+            </Button>
+            {notificationsOpen ? (
+              <div className="absolute right-0 top-12 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-xl">
+                <div className="border-b px-4 py-3">
+                  <p className="text-sm font-semibold">Notificaciones</p>
+                  <p className="text-xs text-muted-foreground">
+                    Últimos 15 días · {unreadCount} sin leer
+                  </p>
+                </div>
+                {notificationError ? (
+                  <p role="alert" className="px-4 py-3 text-sm text-destructive">
+                    {notificationError}
+                  </p>
+                ) : notifications.length ? (
+                  <div className="max-h-[min(65vh,28rem)] overflow-y-auto">
+                    {notifications.map((notification) => {
+                      const isMaintenance =
+                        notification.type?.startsWith("WORK_ORDER") ||
+                        notification.title.toLowerCase().includes("mantenimiento") ||
+                        notification.title.toLowerCase().includes("orden");
+                      return (
+                        <button
+                          key={notification.id}
+                          type="button"
+                          onClick={() => void openNotification(notification)}
+                          className={`block w-full border-b px-4 py-3 text-left transition hover:bg-muted ${
+                            notification.isRead ? "" : "bg-primary/5"
+                          }`}
+                        >
+                          <span className="flex items-start gap-2.5">
+                            {!notification.isRead ? (
+                              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
+                            ) : null}
+                            <span
+                              className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
+                                isMaintenance
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                                  : "bg-surface-container-high text-muted-foreground"
+                              }`}
+                            >
+                              {isMaintenance ? (
+                                <Wrench className="h-3.5 w-3.5" />
+                              ) : (
+                                <Bell className="h-3.5 w-3.5" />
+                              )}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-medium">
+                                {notification.title}
+                              </span>
+                              <span className="mt-0.5 block text-xs text-muted-foreground line-clamp-2">
+                                {notification.body}
+                              </span>
+                              <span className="mt-1 block text-[11px] text-muted-foreground">
+                                {new Date(notification.createdAt).toLocaleString(
+                                  "es-PE",
+                                )}
+                              </span>
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    No hay notificaciones en los últimos 15 días.
+                  </p>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mx-1 h-6 w-px bg-border" />
+
+          <div className="flex items-center gap-3">
+            <div className="hidden text-right sm:block">
+              <p className="text-sm font-medium leading-tight">{user?.name}</p>
+              <p className="text-xs text-muted-foreground">{user?.role}</p>
+            </div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+              {initials}
+            </div>
+          </div>
+
           <Button
             variant="ghost"
             size="icon"
             onClick={() => {
-              setNotificationsOpen((open) => !open);
-              void refreshNotifications();
+              logout();
+              router.replace("/login");
             }}
-            aria-label={
-              unreadCount
-                ? `Notificaciones, ${unreadCount} sin leer`
-                : "Notificaciones"
-            }
-            aria-expanded={notificationsOpen}
+            aria-label="Cerrar sesión"
           >
-            <Bell className="h-4 w-4" />
-            {unreadCount > 0 ? (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
-            ) : null}
+            <LogOut className="h-4 w-4" />
           </Button>
-          {notificationsOpen ? (
-            <div className="absolute right-0 top-12 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-xl">
-              <div className="border-b px-4 py-3">
-                <p className="text-sm font-semibold">Notificaciones</p>
-                <p className="text-xs text-muted-foreground">
-                  {unreadCount} sin leer
-                </p>
-              </div>
-              {notificationError ? (
-                <p role="alert" className="px-4 py-3 text-sm text-destructive">
-                  {notificationError}
-                </p>
-              ) : notifications.length ? (
-                <div className="max-h-[min(65vh,28rem)] overflow-y-auto">
-                  {notifications.map((notification) => (
-                    <button
-                      key={notification.id}
-                      type="button"
-                      onClick={() => void openNotification(notification)}
-                      className={`block w-full border-b px-4 py-3 text-left transition hover:bg-muted ${
-                        notification.isRead ? "" : "bg-primary/5"
+        </div>
+      </header>
+
+      {/* POP-ups de notificaciones en la esquina inferior derecha */}
+      {popups.length > 0 ? (
+        <aside
+          aria-label="Avisos recientes"
+          className="pointer-events-auto fixed bottom-4 right-4 z-50 flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2.5"
+        >
+          {popups.map((popup) => {
+            const isMaintenance =
+              popup.type?.startsWith("WORK_ORDER") ||
+              popup.title.toLowerCase().includes("mantenimiento") ||
+              popup.title.toLowerCase().includes("orden");
+
+            return (
+              <div
+                key={popup.id}
+                role="status"
+                className={`flex items-start gap-3 rounded-xl border p-4 shadow-2xl backdrop-blur-md transition-all duration-300 ${
+                  isMaintenance
+                    ? "border-amber-500/50 bg-amber-50/95 text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/90 dark:text-amber-100"
+                    : "border-primary/40 bg-card/95 text-card-foreground"
+                }`}
+              >
+                <div
+                  className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                    isMaintenance
+                      ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                      : "bg-primary/15 text-primary"
+                  }`}
+                >
+                  {isMaintenance ? (
+                    <Wrench className="h-5 w-5" />
+                  ) : (
+                    <Bell className="h-5 w-5" />
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                        isMaintenance
+                          ? "bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200"
+                          : "bg-primary/20 text-primary"
                       }`}
                     >
-                      <span className="flex items-start gap-2">
-                        {!notification.isRead ? (
-                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
-                        ) : null}
-                        <span className="min-w-0">
-                          <span className="block text-sm font-medium">
-                            {notification.title}
-                          </span>
-                          <span className="mt-1 block text-xs text-muted-foreground">
-                            {notification.body}
-                          </span>
-                          <span className="mt-1 block text-[11px] text-muted-foreground">
-                            {new Date(notification.createdAt).toLocaleString(
-                              "es-PE",
-                            )}
-                          </span>
-                        </span>
-                      </span>
+                      {isMaintenance ? "Mantenimiento" : "Aviso"}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Nuevo
+                    </span>
+                  </div>
+
+                  <p className="mt-1 text-sm font-semibold leading-tight line-clamp-1">
+                    {popup.title}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                    {popup.body}
+                  </p>
+
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void openNotification(popup)}
+                      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold shadow-sm transition hover:opacity-90 ${
+                        isMaintenance
+                          ? "bg-amber-600 text-white dark:bg-amber-500 dark:text-amber-950"
+                          : "bg-primary text-primary-foreground"
+                      }`}
+                    >
+                      {isMaintenance ? "Ver orden" : "Ver detalle"}
+                      <ExternalLink className="h-3 w-3" />
                     </button>
-                  ))}
+                  </div>
                 </div>
-              ) : (
-                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  No hay notificaciones para mostrar.
-                </p>
-              )}
-            </div>
-          ) : null}
-        </div>
 
-        <div className="mx-1 h-6 w-px bg-border" />
-
-        <div className="flex items-center gap-3">
-          <div className="hidden text-right sm:block">
-            <p className="text-sm font-medium leading-tight">{user?.name}</p>
-            <p className="text-xs text-muted-foreground">{user?.role}</p>
-          </div>
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-            {initials}
-          </div>
-        </div>
-
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => {
-            logout();
-            router.replace("/login");
-          }}
-          aria-label="Cerrar sesión"
-        >
-          <LogOut className="h-4 w-4" />
-        </Button>
-      </div>
-    </header>
+                <button
+                  type="button"
+                  onClick={() => dismissPopup(popup.id)}
+                  className="rounded-md p-1 text-muted-foreground transition hover:bg-black/5 dark:hover:bg-white/10"
+                  title="Cerrar notificación"
+                  aria-label="Cerrar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            );
+          })}
+        </aside>
+      ) : null}
+    </>
   );
 }

@@ -658,6 +658,7 @@ function App() {
         const nextTasks = []
         const newUrgentTasks = []
         let hasNewTasks = false
+        let hasUpdatedTasks = false
 
         for (const summary of summaries) {
           const previous = previousVersions?.get(summary.id)
@@ -700,7 +701,7 @@ function App() {
         tasksRef.current = nextTasks
         knownOrderVersionsRef.current = nextVersions
         setTasks(nextTasks)
-        if (hasNewTasks || newUrgentTasks.length) playNotificationChime()
+        if (hasNewTasks || newUrgentTasks.length || hasUpdatedTasks) playNotificationChime()
         if (newUrgentTasks.length) setUrgentNotice(newUrgentTasks[0])
       } catch (error) {
         if (active) {
@@ -992,6 +993,7 @@ function App() {
       }))
       listeners.push(await PushNotifications.addListener('registrationError', handlePushError))
       listeners.push(await PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        playNotificationChime()
         void handleUrgentNotification(notification.data, false)
         if (
           notification.data?.type === 'urgent_work_order' &&

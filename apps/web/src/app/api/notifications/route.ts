@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
@@ -34,10 +34,14 @@ export async function GET(req: Request) {
     }
 
     const { db, schema } = dbModule;
+    // Solo notificaciones de los últimos 15 días para la campanita
+    const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
+
     const [items, [unread]] = await Promise.all([
       db
         .select({
           id: schema.notifications.id,
+          type: schema.notifications.type,
           title: schema.notifications.title,
           body: schema.notifications.body,
           href: schema.notifications.href,
@@ -50,6 +54,7 @@ export async function GET(req: Request) {
             eq(schema.notifications.userId, auth.user.id),
             eq(schema.notifications.isActive, true),
             inArray(schema.notifications.type, visibleTypes),
+            gte(schema.notifications.createdAt, fifteenDaysAgo),
           ),
         )
         .orderBy(desc(schema.notifications.createdAt))
@@ -63,6 +68,7 @@ export async function GET(req: Request) {
             eq(schema.notifications.isActive, true),
             eq(schema.notifications.isRead, false),
             inArray(schema.notifications.type, visibleTypes),
+            gte(schema.notifications.createdAt, fifteenDaysAgo),
           ),
         ),
     ]);

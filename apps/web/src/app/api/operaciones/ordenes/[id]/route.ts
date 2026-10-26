@@ -5,6 +5,7 @@ import {
   desc,
   eq,
   getTableColumns,
+  inArray,
   ilike,
   isNotNull,
   isNull,
@@ -1123,7 +1124,13 @@ export async function PATCH(
         });
       }
 
+      const isReportUpdate =
+        diagnosis !== undefined ||
+        resolution !== undefined ||
+        nextStatus === "RESOLVED" ||
+        nextStatus === "COMPLETED";
       const hasRelevantChange =
+        isReportUpdate ||
         hasAssigneeChange ||
         nextStatus !== current.status ||
         nextPriority !== current.priority ||
@@ -1134,22 +1141,46 @@ export async function PATCH(
         observations !== undefined ||
         body.materialsConfirmed !== undefined ||
         body.canResolveToday !== undefined;
-      if (
-        hasRelevantChange &&
-        current.createdBy &&
-        current.createdBy !== auth.user.id
-      ) {
-        await tx.insert(schema.notifications).values(
-          notificationRows([current.createdBy], {
-            type: "WORK_ORDER_UPDATE",
-            title: "Actualización de orden de trabajo",
-            body: `${current.code}: ${current.title} · Estado: ${nextStatus}`,
-            href: "/operaciones",
-            entityType: "WORK_ORDER",
-            entityId: current.id,
-            dedupeKey: `work-order-update:${notificationEventId}`,
-          }),
-        );
+      if (hasRelevantChange) {
+        const staffToNotify = await tx
+          .select({ id: schema.users.id })
+          .from(schema.users)
+          .where(
+            and(
+              eq(schema.users.active, true),
+              inArray(schema.users.role, [
+                "ADMIN",
+                "DEVELOPER",
+                "ASISTENTE_ADMINISTRATIVO",
+              ]),
+            ),
+          );
+        const targetUserIds = new Set<string>();
+        if (current.createdBy) targetUserIds.add(current.createdBy);
+        for (const u of staffToNotify) targetUserIds.add(u.id);
+        targetUserIds.delete(auth.user.id);
+
+        if (targetUserIds.size > 0) {
+          const notifTitle = isReportUpdate
+            ? `Reporte de mantenimiento: ${current.code}`
+            : "Actualización de orden de trabajo";
+          const detailsSnippet = diagnosis
+            ? ` · Diag: ${diagnosis.slice(0, 50)}`
+            : resolution
+              ? ` · Res: ${resolution.slice(0, 50)}`
+              : ` · Estado: ${nextStatus}`;
+          await tx.insert(schema.notifications).values(
+            notificationRows(Array.from(targetUserIds), {
+              type: "WORK_ORDER_UPDATE",
+              title: notifTitle,
+              body: `${current.code}: ${current.title}${detailsSnippet}`,
+              href: "/operaciones",
+              entityType: "WORK_ORDER",
+              entityId: current.id,
+              dedupeKey: `work-order-update:${notificationEventId}`,
+            }),
+          );
+        }
       }
     });
 

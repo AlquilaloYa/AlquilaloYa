@@ -22,6 +22,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Search,
   ShieldCheck,
   Trash2,
   UserPlus,
@@ -761,6 +762,18 @@ function ClientAccountsPanel({
   onCreate: (clientId: string) => void;
   onRotate: (clientId: string) => void;
 }) {
+  const [search, setSearch] = useState("");
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(
+      (item) =>
+        item.name.toLowerCase().includes(q) ||
+        (item.departmentCode && item.departmentCode.toLowerCase().includes(q)),
+    );
+  }, [items, search]);
+
   return (
     <section className="space-y-4 rounded-lg border border-outline-variant/50 bg-surface-container-lowest p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -788,18 +801,45 @@ function ClientAccountsPanel({
         </div>
       ) : null}
 
+      {/* Buscador de clientes */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por cliente o departamento…"
+            className="w-full rounded-md border border-outline bg-surface-container-lowest pl-9 pr-8 py-2 font-body-sm text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          {search ? (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface"
+              title="Limpiar búsqueda"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
+        <p className="font-body-sm text-on-surface-variant">
+          Mostrando {filteredItems.length} de {items.length} clientes (4 visibles a la vez)
+        </p>
+      </div>
+
       {loading ? (
         <div className="py-8 text-center font-body-sm text-on-surface-variant">
           Cargando y sincronizando vigencia de cuentas…
         </div>
       ) : items.length === 0 ? (
         <div className="rounded-lg bg-surface-container-low p-8 text-center font-body-sm text-on-surface-variant">
-          No hay clientes que coincidan con la búsqueda.
+          No hay cuentas de clientes registradas.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-outline-variant/40">
+        <div className="max-h-[290px] overflow-y-auto overflow-x-auto rounded-lg border border-outline-variant/40 shadow-inner">
           <table className="w-full min-w-[850px] text-left">
-            <thead className="bg-surface-container-high font-label-md text-on-surface-variant">
+            <thead className="sticky top-0 z-10 bg-surface-container-high font-label-md text-on-surface-variant shadow-sm">
               <tr>
                 <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Usuario / departamento</th>
@@ -810,69 +850,77 @@ function ClientAccountsPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/50">
-              {items.map((item) => (
-                <tr key={item.clientId} className="align-top hover:bg-surface-container-high">
-                  <td className="px-4 py-3 font-body-sm text-on-surface">{item.name}</td>
-                  <td className="px-4 py-3 font-mono-label text-on-surface-variant">
-                    {item.departmentCode || "Sin código"}
-                  </td>
-                  <td className="px-4 py-3 font-body-sm text-on-surface-variant">
-                    {item.contractActive
-                      ? `Vigente hasta ${item.contractEndsAt ?? "—"}`
-                      : "Sin contrato vigente"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-0.5 font-mono-label ${
-                        item.account?.active
-                        ? "bg-secondary-container text-secondary-container-foreground"
-                        : "bg-error-container text-error-container-foreground"
-                      }`}
-                    >
-                      {item.account?.active
-                        ? "Activo"
-                        : item.account?.credentialPending && item.contractActive
-                          ? "Pendiente de nueva contraseña"
-                          : "Bloqueado"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {!item.account ? (
-                      <span className="font-body-sm text-on-surface-variant">Sin cuenta</span>
-                    ) : item.account.credentialPending && item.contractActive ? (
-                      <span className="font-body-sm text-on-surface-variant">Emisión requerida</span>
-                    ) : (
-                      <span className="font-body-sm text-on-surface-variant">
-                        No se almacena ni se puede consultar
-                      </span>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right">
-                    {!item.account ? (
-                      <button
-                        type="button"
-                        onClick={() => onCreate(item.clientId)}
-                        disabled={busyId === item.clientId || !item.departmentCode || !item.contractActive}
-                        title={!item.contractActive ? "Requiere un contrato vigente" : undefined}
-                        className="rounded-md bg-primary px-3 py-1.5 font-label-md text-primary-foreground hover:opacity-90 disabled:opacity-40"
-                      >
-                        {busyId === item.clientId ? "Creando…" : "Crear cuenta"}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => onRotate(item.clientId)}
-                        disabled={busyId === item.clientId || !item.contractActive}
-                        className="inline-flex items-center gap-1 rounded-md bg-surface-container-low px-3 py-1.5 font-label-md text-on-surface hover:bg-surface-variant disabled:opacity-40"
-                        title={item.contractActive ? "Emitir contraseña nueva" : "Requiere un contrato vigente"}
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                        {busyId === item.clientId ? "Guardando…" : "Cambiar contraseña"}
-                      </button>
-                    )}
+              {filteredItems.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center font-body-sm text-on-surface-variant">
+                    No se encontraron clientes que coincidan con &ldquo;{search}&rdquo;.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredItems.map((item) => (
+                  <tr key={item.clientId} className="align-top hover:bg-surface-container-high">
+                    <td className="px-4 py-3 font-body-sm text-on-surface">{item.name}</td>
+                    <td className="px-4 py-3 font-mono-label text-on-surface-variant">
+                      {item.departmentCode || "Sin código"}
+                    </td>
+                    <td className="px-4 py-3 font-body-sm text-on-surface-variant">
+                      {item.contractActive
+                        ? `Vigente hasta ${item.contractEndsAt ?? "—"}`
+                        : "Sin contrato vigente"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`rounded-full px-2 py-0.5 font-mono-label ${
+                          item.account?.active
+                            ? "bg-secondary-container text-secondary-container-foreground"
+                            : "bg-error-container text-error-container-foreground"
+                        }`}
+                      >
+                        {item.account?.active
+                          ? "Activo"
+                          : item.account?.credentialPending && item.contractActive
+                            ? "Pendiente de nueva contraseña"
+                            : "Bloqueado"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {!item.account ? (
+                        <span className="font-body-sm text-on-surface-variant">Sin cuenta</span>
+                      ) : item.account.credentialPending && item.contractActive ? (
+                        <span className="font-body-sm text-on-surface-variant">Emisión requerida</span>
+                      ) : (
+                        <span className="font-body-sm text-on-surface-variant">
+                          No se almacena ni se puede consultar
+                        </span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
+                      {!item.account ? (
+                        <button
+                          type="button"
+                          onClick={() => onCreate(item.clientId)}
+                          disabled={busyId === item.clientId || !item.departmentCode || !item.contractActive}
+                          title={!item.contractActive ? "Requiere un contrato vigente" : undefined}
+                          className="rounded-md bg-primary px-3 py-1.5 font-label-md text-primary-foreground hover:opacity-90 disabled:opacity-40"
+                        >
+                          {busyId === item.clientId ? "Creando…" : "Crear cuenta"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onRotate(item.clientId)}
+                          disabled={busyId === item.clientId || !item.contractActive}
+                          className="inline-flex items-center gap-1 rounded-md bg-surface-container-low px-3 py-1.5 font-label-md text-on-surface hover:bg-surface-variant disabled:opacity-40"
+                          title={item.contractActive ? "Emitir contraseña nueva" : "Requiere un contrato vigente"}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          {busyId === item.clientId ? "Guardando…" : "Cambiar contraseña"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
