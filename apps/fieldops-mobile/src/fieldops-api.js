@@ -79,9 +79,19 @@ function mapTask(order, materials = []) {
   const attachments = (order.attachments || []).map((attachment) => ({
     id: attachment.id,
     name: attachment.fileName,
-    kind: attachment.kind || 'EVIDENCIA',
+    kind: attachment.kind === 'CLIENT_REPORT'
+      ? attachment.mimeType?.startsWith('video/') ? 'VIDEO DEL CLIENTE' : 'FOTO DEL CLIENTE'
+      : attachment.kind || 'EVIDENCIA',
+    mimeType: attachment.mimeType || '',
     description: attachment.description || '',
     url: attachment.url,
+  }))
+  const availabilityOptions = (order.availability || []).map((option) => ({
+    id: option.id,
+    optionNumber: Number(option.optionNumber),
+    startsAt: option.startsAt,
+    endsAt: option.endsAt,
+    selectedAt: option.selectedAt || null,
   }))
   const customerAppointments = allVisits
     .filter((visit) => visit.isCustomerAppointment)
@@ -123,6 +133,7 @@ function mapTask(order, materials = []) {
     resolution: order.resolution || '',
     observations: order.observations || '',
     attachments,
+    availabilityOptions,
     customerAppointments,
     events: (order.events || []).map(formatEvent),
   }
@@ -198,6 +209,13 @@ export const fieldopsApi = {
     return request(`/operaciones/ordenes/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(changes),
+    })
+  },
+
+  async confirmAvailability(id, optionId) {
+    return request(`/operaciones/ordenes/${id}/availability`, {
+      method: 'POST',
+      body: JSON.stringify({ optionId }),
     })
   },
 

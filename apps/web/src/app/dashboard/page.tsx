@@ -64,6 +64,9 @@ interface DepartamentoDashboard {
   enMantenimiento?: boolean;
   bloqueado?: boolean;
   estadoManual?: string | null;
+  maintenanceReason?: string | null;
+  maintenanceEstimatedDays?: number | null;
+  maintenanceStage?: string;
   disponibilidad: { disponible: false; fechaFin: string; dias: number } | null;
   ocupante?: { nombres: string; apellidos: string | null; telefono: string | null } | null;
 }
@@ -97,6 +100,8 @@ type DashboardPanel =
   | "ocupadas"
   | "disponibles"
   | "ocupacion"
+  | "mantenimiento"
+  | "egresos"
   | "finalizan"
   | "unidades"
   | "renovados"
@@ -281,7 +286,7 @@ function StatCard({
       </div>
     </>
   );
-  if (["unidadesTotales", "morosidad", "ocupadas", "disponibles", "tasaOcupacion", "aPuntoDeFinalizar", "contratosRenovadosMes", "personasNoAlquilar", "incidencias", "clientesReportados"].includes(s.valueKey)) {
+  if (["unidadesTotales", "morosidad", "ocupadas", "disponibles", "tasaOcupacion", "mantenimiento", "egresos", "aPuntoDeFinalizar", "contratosRenovadosMes", "personasNoAlquilar", "incidencias", "clientesReportados"].includes(s.valueKey)) {
     return (
       <button
         type="button"
@@ -864,6 +869,319 @@ function DisponiblesPopup({ onCerrar }: { onCerrar: () => void }) {
   );
 }
 
+const ETAPAS_MANTENIMIENTO = [
+  { value: "PENDIENTE", label: "Pendiente" },
+  { value: "DIAGNOSTICO", label: "Diagnóstico" },
+  { value: "REPARACION", label: "En reparación" },
+  { value: "VERIFICACION", label: "Verificación" },
+] as const;
+
+function MantenimientoPopup({ onCerrar }: { onCerrar: () => void }) {
+  const { data, loading, error, reload } = useDashboardJson<DepartamentoDashboard[]>("/api/departamentos");
+  const [selectedId, setSelectedId] = useState("");
+  const [reason, setReason] = useState("");
+  const [estimatedDays, setEstimatedDays] = useState("");
+  const [stage, setStage] = useState<(typeof ETAPAS_MANTENIMIENTO)[number]["value"]>("PENDIENTE");
+  const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const departments = data ?? [];
+  const selected = departments.find((department) => department.id === selectedId) ?? null;
+
+  useEffect(() => {
+    if (departments.length > 0 && !departments.some((department) => department.id === selectedId)) {
+      const first = departments.find((department) => department.activo) ?? departments[0]!;
+      setSelectedId(first.id);
+    }
+  }, [departments, selectedId]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setReason(selected.maintenanceReason ?? "");
+    setEstimatedDays(selected.maintenanceEstimatedDays == null ? "" : String(selected.maintenanceEstimatedDays));
+    setStage(
+      ETAPAS_MANTENIMIENTO.some((item) => item.value === selected.maintenanceStage)
+        ? (selected.maintenanceStage as (typeof ETAPAS_MANTENIMIENTO)[number]["value"])
+        : "PENDIENTE",
+    );
+    setActionError(null);
+  }, [selected]);
+
+  async function guardar(estadoManual: "MANTENIMIENTO" | "DISPONIBLE") {
+    if (!selected) return;
+    setSaving(true);
+    setActionError(null);
+    try {
+      const response = await apiFetch(`/api/departamentos/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          estadoManual === "MANTENIMIENTO"
+            ? {
+                estadoManual,
+                maintenanceReason: reason,
+                maintenanceEstimatedDays: estimatedDays === "" ? null : Number(estimatedDays),
+                maintenanceStage: stage,
+              }
+            : { estadoManual },
+        ),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? "No se pudo actualizar el mantenimiento");
+      }
+      reload();
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : "No se pudo actualizar el mantenimiento");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function estado(department: DepartamentoDashboard) {
+    if (department.disponibilidad) return "Ocupado";
+    if (department.bloqueado) return "Bloqueado";
+    if (department.enMantenimiento) return "Mantenimiento";
+    return "Disponible";
+  }
+
+  const etapaActual = ETAPAS_MANTENIMIENTO.findIndex((item) => item.value === stage);
+  const ocupado = Boolean(selected?.disponibilidad);
+
+  return (
+    <DashboardPanel
+      titulo="Mantenimiento de departamentos"
+      subtitulo="Selecciona una unidad, documenta el motivo y actualiza la etapa del trabajo."
+      onCerrar={onCerrar}
+      panelClassName="max-w-5xl"
+    >
+      <EstadoCarga loading={loading} error={error} />
+      {!loading && !error ? (
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <section>
+            <h3 className="mb-2 font-label-lg text-on-surface">Todos los departamentos ({departments.length})</h3>
+            <ul className="max-h-[55vh] space-y-1 overflow-y-auto rounded-lg border border-outline-variant p-2">
+              {departments.map((department) => (
+                <li key={department.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(department.id)}
+                    aria-pressed={selectedId === department.id}
+                    className={`flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                      selectedId === department.id
+                        ? "bg-primary text-white"
+                        : "text-on-surface hover:bg-surface-container-high"
+                    }`}
+                  >
+                    <span className="min-w-0 truncate font-medium">{department.codigo} · {department.nombre}</span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+                      selectedId === department.id ? "bg-white/20" : "bg-surface-container-high"
+                    }`}>{estado(department)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+          {selected ? (
+            <section className="space-y-4">
+              <div>
+                <h3 className="font-label-lg text-on-surface">{selected.codigo} · {selected.nombre}</h3>
+                {ocupado ? (
+                  <p className="mt-1 text-sm text-amber-700">Tiene un contrato vigente; no se puede poner en mantenimiento hasta que quede libre.</p>
+                ) : null}
+              </div>
+              {actionError ? <p className="rounded bg-error-container p-3 text-sm text-error-container-foreground">{actionError}</p> : null}
+              <label className="block text-sm font-medium text-on-surface">
+                Motivo del mantenimiento
+                <textarea
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  maxLength={1000}
+                  rows={3}
+                  placeholder="Describe por qué se realizará el mantenimiento"
+                  className="mt-1 w-full rounded-md border border-outline-variant bg-surface-container-lowest px-3 py-2 font-normal text-on-surface focus:border-primary focus:outline-none"
+                />
+              </label>
+              <label className="block text-sm font-medium text-on-surface">
+                Demora estimada (días)
+                <input
+                  type="number"
+                  min={0}
+                  max={3650}
+                  value={estimatedDays}
+                  onChange={(event) => setEstimatedDays(event.target.value)}
+                  placeholder="Ej. 3"
+                  className="mt-1 h-10 w-full rounded-md border border-outline-variant bg-surface-container-lowest px-3 font-normal text-on-surface focus:border-primary focus:outline-none"
+                />
+              </label>
+              <div>
+                <h4 className="mb-3 text-sm font-medium text-on-surface">Etapa del mantenimiento</h4>
+                <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {ETAPAS_MANTENIMIENTO.map((item, index) => {
+                    const actual = index === etapaActual;
+                    const completada = index < etapaActual;
+                    return (
+                      <li key={item.value}>
+                        <button
+                          type="button"
+                          aria-current={actual ? "step" : undefined}
+                          onClick={() => setStage(item.value)}
+                          className={`flex min-h-12 w-full items-center gap-2 rounded-md border px-2 py-2 text-left text-xs font-medium ${
+                            actual
+                              ? "border-primary bg-primary text-white"
+                              : completada
+                                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                                : "border-outline-variant text-on-surface-variant hover:bg-surface-container-high"
+                          }`}
+                        >
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-current">{index + 1}</span>
+                          {item.label}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={saving || ocupado || !reason.trim()}
+                  onClick={() => void guardar("MANTENIMIENTO")}
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving ? "Guardando…" : "Guardar mantenimiento"}
+                </button>
+                {selected.enMantenimiento ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void guardar("DISPONIBLE")}
+                    className="rounded-md border border-outline-variant px-4 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container-high disabled:opacity-50"
+                  >
+                    Marcar disponible
+                  </button>
+                ) : null}
+              </div>
+            </section>
+          ) : (
+            <p className="py-8 text-center text-sm text-on-surface-variant">No hay departamentos registrados.</p>
+          )}
+        </div>
+      ) : null}
+    </DashboardPanel>
+  );
+}
+
+interface GastoDashboard {
+  id: string;
+  dia: string;
+  tipo: "SERVICIO" | "PRODUCTO";
+  producto: string;
+  monto: number;
+  nota: string;
+  creadoPor: string;
+}
+
+interface GastosDashboardData {
+  gastos: GastoDashboard[];
+  total: number;
+}
+
+function EgresosPopup({
+  onCerrar,
+  egresosYTD,
+}: {
+  onCerrar: () => void;
+  egresosYTD: number;
+}) {
+  const year = new Date().getFullYear();
+  const today = localDateStr(new Date());
+  const [month, setMonth] = useState(today.slice(0, 7));
+  const [yearPart, monthPart] = month.split("-");
+  const selectedYear = Number(yearPart) || year;
+  const selectedMonth = Number(monthPart) || new Date().getMonth() + 1;
+  const lastDay = localDateStr(new Date(selectedYear, selectedMonth, 0));
+  const monthEnd = month === today.slice(0, 7) ? today : lastDay;
+  const { data, loading, error } = useDashboardJson<GastosDashboardData>(
+    `/api/gastos?desde=${month}-01&hasta=${monthEnd}`,
+  );
+  const monthExpenses = data?.gastos ?? [];
+  const formatMoney = (amount: number) =>
+    amount.toLocaleString("es-PE", { style: "currency", currency: "PEN", minimumFractionDigits: 2 });
+
+  return (
+    <DashboardPanel
+      titulo="Egresos"
+      subtitulo="Consulta los gastos registrados por mes y el acumulado del año."
+      onCerrar={onCerrar}
+      panelClassName="max-w-5xl"
+    >
+      <EstadoCarga loading={loading} error={error} />
+      {!loading && !error ? (
+        <div className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg bg-blue-50 p-4 text-blue-950">
+              <p className="text-sm font-semibold uppercase tracking-wide">Egresos del año · {year}</p>
+              <p className="mt-2 text-2xl font-bold">{formatMoney(egresosYTD)}</p>
+              <p className="mt-1 text-sm">Acumulado desde enero hasta hoy</p>
+            </div>
+            <div className="rounded-lg bg-amber-50 p-4 text-amber-950">
+              <label className="block text-sm font-semibold uppercase tracking-wide" htmlFor="dashboard-gasto-mes">Egresos del mes</label>
+              <input
+                id="dashboard-gasto-mes"
+                type="month"
+                min={`${year}-01`}
+                max={today.slice(0, 7)}
+                value={month}
+                onChange={(event) => {
+                  if (/^\d{4}-\d{2}$/.test(event.target.value)) setMonth(event.target.value);
+                }}
+                className="mt-2 h-9 rounded border border-amber-200 bg-white px-2 text-sm text-amber-950"
+              />
+              <p className="mt-2 text-2xl font-bold">{formatMoney(data?.total ?? 0)}</p>
+              <p className="mt-1 text-sm">{monthExpenses.length} gastos en el mes</p>
+            </div>
+          </div>
+          <section>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-label-lg text-on-surface">Gastos de {month}</h3>
+              <Link href="/contabilidad/gastos" className="text-sm font-medium text-primary hover:underline">Administrar gastos</Link>
+            </div>
+            {monthExpenses.length === 0 ? (
+              <p className="rounded-lg border border-outline-variant py-8 text-center text-sm text-on-surface-variant">No hay gastos registrados para este mes.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-outline-variant">
+                <table className="w-full min-w-[560px] text-left text-sm">
+                  <thead className="bg-white text-on-surface-variant">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">Fecha</th>
+                      <th className="px-3 py-2 font-semibold">Gasto</th>
+                      <th className="px-3 py-2 font-semibold">Tipo</th>
+                      <th className="px-3 py-2 text-right font-semibold">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant bg-white">
+                    {monthExpenses.map((expense) => (
+                      <tr key={expense.id}>
+                        <td className="whitespace-nowrap px-3 py-2">{fechaLegible(expense.dia)}</td>
+                        <td className="px-3 py-2">
+                          <p className="font-medium text-on-surface">{expense.producto}</p>
+                          {expense.nota ? <p className="text-xs text-on-surface-variant">{expense.nota}</p> : null}
+                        </td>
+                        <td className="px-3 py-2">{expense.tipo === "SERVICIO" ? "Servicio" : "Producto"}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right font-medium">{formatMoney(expense.monto)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      ) : null}
+    </DashboardPanel>
+  );
+}
+
 function OcupacionAnualPopup({ onCerrar }: { onCerrar: () => void }) {
   const { data: departamentos, loading: cargandoDeptos, error: errorDeptos } = useDashboardJson<DepartamentoDashboard[]>("/api/departamentos");
   const { data: contratos, loading: cargandoContratos, error: errorContratos } = useDashboardJson<ContratoDashboard[]>("/api/contracts");
@@ -950,14 +1268,14 @@ function OcupacionAnualPopup({ onCerrar }: { onCerrar: () => void }) {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg bg-[#171a20] p-2 sm:p-4">
+          <div className="overflow-x-auto rounded-lg bg-white p-2 sm:p-4">
             <svg viewBox="0 0 900 340" role="img" aria-label={`Tendencia mensual de ocupación entre ${anios[0]} y ${año}`} className="h-auto min-w-[640px] w-full">
               {[0, 25, 50, 75, 100].map((nivel) => {
                 const y = 286 - (nivel / 100) * 238;
                 return (
                   <g key={nivel}>
-                    <text x="50" y={y + 4} textAnchor="end" fill="#9ca3af" fontSize="11">{nivel}%</text>
-                    <line x1="64" x2="872" y1={y} y2={y} stroke="#ffffff" strokeOpacity="0.1" strokeDasharray="3 5" />
+                    <text x="50" y={y + 4} textAnchor="end" fill="#475569" fontSize="11">{nivel}%</text>
+                    <line x1="64" x2="872" y1={y} y2={y} stroke="#64748b" strokeOpacity="0.2" strokeDasharray="3 5" />
                   </g>
                 );
               })}
@@ -971,7 +1289,7 @@ function OcupacionAnualPopup({ onCerrar }: { onCerrar: () => void }) {
                     <path d={`${linea} L ${ultimo.x} 286 L ${primero.x} 286 Z`} fill={serie.color} fillOpacity="0.12" />
                     <path d={linea} fill="none" stroke={serie.color} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
                     {serie.puntos.map((punto) => (
-                      <circle key={`${anio}-${punto.mes}`} cx={punto.x} cy={punto.y} r="3.5" fill={serie.color} stroke="#171a20" strokeWidth="2">
+                      <circle key={`${anio}-${punto.mes}`} cx={punto.x} cy={punto.y} r="3.5" fill={serie.color} stroke="#ffffff" strokeWidth="2">
                         <title>{`${anio} ${punto.mes}: ${punto.ocupadas} departamentos · ${punto.porcentaje}%`}</title>
                       </circle>
                     ))}
@@ -979,7 +1297,7 @@ function OcupacionAnualPopup({ onCerrar }: { onCerrar: () => void }) {
                 );
               })}
               {series[0]!.puntos.map((punto) => (
-                <text key={punto.mes} x={punto.x} y="320" textAnchor="middle" fill="#d1d5db" fontSize="11" className="capitalize">{punto.mes}</text>
+                <text key={punto.mes} x={punto.x} y="320" textAnchor="middle" fill="#475569" fontSize="11" className="capitalize">{punto.mes}</text>
               ))}
             </svg>
           </div>
@@ -2053,6 +2371,8 @@ return (
                     ocupadas: "ocupadas",
                     disponibles: "disponibles",
                     tasaOcupacion: "ocupacion",
+                    mantenimiento: "mantenimiento",
+                    egresos: "egresos",
                     aPuntoDeFinalizar: "finalizan",
                     contratosRenovadosMes: "renovados",
                     personasNoAlquilar: "noalquilar",
@@ -2166,6 +2486,8 @@ return (
       {panelAbierto === "ocupadas" ? <OcupadasPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "disponibles" ? <DisponiblesPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "ocupacion" ? <OcupacionAnualPopup onCerrar={() => setPanelAbierto(null)} /> : null}
+      {panelAbierto === "mantenimiento" ? <MantenimientoPopup onCerrar={() => setPanelAbierto(null)} /> : null}
+      {panelAbierto === "egresos" ? <EgresosPopup onCerrar={() => setPanelAbierto(null)} egresosYTD={resumen!.egresos} /> : null}
       {panelAbierto === "finalizan" ? <FinalizanPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "renovados" ? <RenovadosMesPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "noalquilar" ? <NoAlquilarPopup onCerrar={() => setPanelAbierto(null)} /> : null}

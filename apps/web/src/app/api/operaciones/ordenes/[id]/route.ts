@@ -260,7 +260,9 @@ export async function GET(
         createdAt: attachment.createdAt,
         url: await createSignedObjectUrlIfPresent(
           attachment.storageKey,
-          "work-order-evidence",
+          attachment.kind === "CLIENT_REPORT"
+            ? "client-work-order-evidence"
+            : "work-order-evidence",
         ),
       })),
     );

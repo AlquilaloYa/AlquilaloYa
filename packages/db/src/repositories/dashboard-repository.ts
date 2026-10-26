@@ -106,14 +106,17 @@ export class DrizzleDashboardRepository {
 
   /** Portafolio: ocupación, cobranza, incidencias y pipeline contractual. */
   async getResumenPortafolio(): Promise<ResumenPortafolio> {
-    const [deptRow] = await db.select({ value: count() }).from(schema.departments);
-    const unidadesTotales = deptRow?.value ?? 0;
+    const departments = await db
+      .select({
+        id: schema.departments.id,
+        activo: schema.departments.activo,
+        estadoManual: schema.departments.estadoManual,
+      })
+      .from(schema.departments);
+    const unidadesTotales = departments.length;
 
     const hoy = new Date();
     const hoyStr = toDateStr(hoy);
-    const finMantenimiento = new Date(hoy);
-    finMantenimiento.setDate(hoy.getDate() + 7);
-    const finMantenimientoStr = toDateStr(finMantenimiento);
     const finProximo = new Date(hoy);
     finProximo.setDate(hoy.getDate() + 30);
     const finProximoStr = toDateStr(finProximo);
@@ -130,10 +133,18 @@ export class DrizzleDashboardRepository {
       })
       .from(schema.contracts)
       .where(
-        inArray(schema.contracts.estado, ["FIRMADO", "NOTARIADO", "RESUELTO"])
+        inArray(schema.contracts.estado, [
+          "EMITIDO",
+          "PENDIENTE_FIRMA",
+          "FIRMADO",
+          "NOTARIADO",
+          "ACTIVO",
+          "VIGENTE",
+          "RESUELTO",
+        ])
       );
 
-    const ocupadas = new Set(
+    const departamentosOcupados = new Set(
       firmas
         .filter(
           (c) =>
@@ -142,22 +153,34 @@ export class DrizzleDashboardRepository {
             (c.fechaFin ?? "") >= hoyStr
         )
         .map((c) => c.departamentoId)
-    ).size;
+    );
+    const ocupadas = departamentosOcupados.size;
 
-    let mantenimiento = 0;
     let aPuntoDeFinalizar = 0;
     for (const c of firmas) {
       if (
         c.estado === "RESUELTO" ||
         !(c.fechaInicio <= hoyStr && (c.fechaFin ?? "") >= hoyStr)
       ) continue;
-      if (c.fechaFin && c.fechaFin <= finMantenimientoStr) {
-        mantenimiento++;
-      }
       if (c.fechaFin && c.fechaFin <= finProximoStr) {
         aPuntoDeFinalizar++;
       }
     }
+    const ultimaFechaFinPorDepartamento = new Map<string, string>();
+    for (const contrato of firmas) {
+      if (contrato.fechaFin && contrato.fechaFin > (ultimaFechaFinPorDepartamento.get(contrato.departamentoId) ?? "")) {
+        ultimaFechaFinPorDepartamento.set(contrato.departamentoId, contrato.fechaFin);
+      }
+    }
+    const mantenimiento = departments.filter((department) => {
+      if (!department.activo || departamentosOcupados.has(department.id)) return false;
+      if (department.estadoManual === "MANTENIMIENTO") return true;
+      return (
+        department.estadoManual == null &&
+        Boolean(ultimaFechaFinPorDepartamento.get(department.id)) &&
+        ultimaFechaFinPorDepartamento.get(department.id)! < hoyStr
+      );
+    }).length;
 
     const porVencer = await db
       .select({
@@ -386,7 +409,19 @@ export class DrizzleDashboardRepository {
       ingresosYTD += Number(p.monto) + Number(p.mantenimiento);
     }
     ingresosYTD = Math.round(ingresosYTD * 100) / 100;
-    const egresos = 0;
+    const [egresosRow] = await db
+      .select({
+        value: sql<string>`coalesce(sum(${schema.gastos.monto}), 0)`,
+      })
+      .from(schema.gastos)
+      .where(
+        and(
+          isNull(schema.gastos.eliminadoEn),
+          gte(schema.gastos.dia, hoyInicioAnioStr),
+          lte(schema.gastos.dia, hoyStr)
+        )
+      );
+    const egresos = Math.round(Number(egresosRow?.value ?? 0) * 100) / 100;
     const resultadosYTD = Math.round((ingresosYTD - egresos) * 100) / 100;
 
     const [enProcesoRow] = await db

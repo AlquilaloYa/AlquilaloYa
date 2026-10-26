@@ -72,10 +72,13 @@ visitas, confirmación de llegada, diagnóstico, materiales, costos y tiempo,
 resolución, evidencias y cierre. Las órdenes, citas, materiales y evidencias se
 guardan mediante las API autenticadas del ERP.
 
-La visita inicial conserva la fecha y hora definidas en la orden; el trabajador
-solo puede modificarlas mediante la acción explícita de reprogramación, que
-exige motivo y guarda el horario anterior en el historial. Una visita de
-seguimiento y las citas con el cliente se registran por separado.
+Al abrir una orden, el trabajador puede consultar las fotos o videos que adjuntó
+el cliente. Si el reporte incluye opciones de horario, puede confirmar una de
+ellas desde la app y programar la visita con la disponibilidad elegida por el
+cliente. La visita inicial conserva el horario confirmado; el trabajador solo
+puede modificarlo mediante la acción explícita de reprogramación, que exige
+motivo y guarda el horario anterior en el historial. Una visita de seguimiento y
+las citas con el cliente se registran por separado.
 
 ### Notificaciones push de órdenes urgentes
 

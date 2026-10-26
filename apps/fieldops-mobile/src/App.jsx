@@ -154,6 +154,7 @@ function mergeOrderSummary(current, summary) {
     observations: current.observations,
     visits: current.visits,
     attachments: current.attachments,
+    availabilityOptions: current.availabilityOptions,
     customerAppointments: current.customerAppointments,
     events: current.events,
   }
@@ -546,7 +547,8 @@ function App() {
   const isHandedOff = selectedTask?.status === 'REASSIGNED' && selectedTask.assignedEmployeeId !== user?.employeeId
   const canOpenWorkflowStep = [
     true,
-    ['ACCEPTED', 'RESCHEDULED', 'VISIT_SCHEDULED', 'ON_SITE', 'DIAGNOSIS', 'ESTIMATED', 'IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE', 'COMPLETED'].includes(selectedTask?.status),
+    (['ACCEPTED', 'RESCHEDULED', 'VISIT_SCHEDULED', 'ON_SITE', 'DIAGNOSIS', 'ESTIMATED', 'IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE', 'COMPLETED'].includes(selectedTask?.status) &&
+      !(selectedTask?.status === 'ACCEPTED' && selectedTask.availabilityOptions?.some((option) => !option.selectedAt))),
     Boolean(selectedTask?.visits.length),
     ['ON_SITE', 'DIAGNOSIS', 'RESCHEDULED'].includes(selectedTask?.status),
     completedFlowStatuses.includes(selectedTask?.status),
@@ -873,8 +875,12 @@ function App() {
   function openTask(task) {
     setUrgentNotice(null)
     setSelectedTaskId(task.id)
+    const hasPendingCustomerTime = task.status === 'ACCEPTED' &&
+      task.availabilityOptions?.some((option) => !option.selectedAt)
     const nextStep = task.status === 'ASSIGNED'
       ? 0
+      : hasPendingCustomerTime
+        ? 0
       : ['ACCEPTED', 'RESCHEDULED', 'VISIT_SCHEDULED'].includes(task.status)
         ? task.status === 'RESCHEDULED' && task.diagnosis
           ? 3
@@ -912,13 +918,20 @@ function App() {
 
   async function acceptTask() {
     if (selectedTask.status !== 'ASSIGNED') return
-    if (!selectedTask.targetAt) {
+    const hasCustomerTimes = selectedTask.availabilityOptions?.some((option) => !option.selectedAt)
+    if (!selectedTask.targetAt && !hasCustomerTimes) {
       setStorageWarning('Esta orden no tiene fecha objetivo; solicita que se programe antes de aceptarla.')
       return
     }
     setIsLoading(true)
     try {
       await fieldopsApi.updateOrder(selectedTask.id, { status: 'ACCEPTED' })
+      if (hasCustomerTimes) {
+        await reloadOrders()
+        setStorageWarning('')
+        setWorkflowStep(0)
+        return
+      }
       await fieldopsApi.updateOrder(selectedTask.id, {
         status: 'VISIT_SCHEDULED',
         scheduledAt: new Date(selectedTask.targetAt).toISOString(),
@@ -937,6 +950,30 @@ function App() {
         message = `${message} No se pudo actualizar el estado local: ${refreshError.message}`
       }
       setStorageWarning(message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function confirmCustomerTime(option) {
+    if (!selectedTask || !['ASSIGNED', 'ACCEPTED'].includes(selectedTask.status) || option.selectedAt) return
+    setIsLoading(true)
+    setStorageWarning('')
+    try {
+      if (selectedTask.status === 'ASSIGNED') {
+        await fieldopsApi.updateOrder(selectedTask.id, { status: 'ACCEPTED' })
+      }
+      await fieldopsApi.confirmAvailability(selectedTask.id, option.id)
+      await reloadOrders()
+      setWorkflowStep(1)
+    } catch (error) {
+      try {
+        await reloadOrders()
+      } catch (refreshError) {
+        setStorageWarning(`${error.message} No se pudo actualizar la orden: ${refreshError.message}`)
+        return
+      }
+      setStorageWarning(error.message || 'No se pudo confirmar el horario del cliente.')
     } finally {
       setIsLoading(false)
     }
@@ -1445,6 +1482,7 @@ function App() {
       ['Foto final adjunta', Boolean(isFinalPhotoAttached)],
     ]
     const isCompleted = selectedTask.status === 'COMPLETED'
+    const pendingCustomerTimes = (selectedTask.availabilityOptions ?? []).filter((option) => !option.selectedAt)
     const diagnosisPhotos = selectedTask.attachments.filter((item) => item.kind === 'FOTO DIAGNÓSTICO')
     return (
       <main className={`order-detail-body ${isCompleted || isHandedOff ? 'read-only-order' : ''}`}>
@@ -1470,10 +1508,15 @@ function App() {
                     className="evidence-thumbnail"
                     key={attachment.id}
                     type="button"
+                    disabled={!attachment.url}
                     onClick={() => setPreviewAttachment(attachment)}
                     aria-label={`Ver ${attachment.kind}: ${attachment.name}`}
                   >
-                    <img src={attachment.url} alt={attachment.description || attachment.name} loading="lazy" />
+                    {attachment.url ? (
+                      attachment.mimeType.startsWith('video/')
+                        ? <video src={attachment.url} aria-label={attachment.name} muted playsInline />
+                        : <img src={attachment.url} alt={attachment.description || attachment.name} loading="lazy" />
+                    ) : <span className="evidence-unavailable">Archivo no disponible</span>}
                     <span>{attachment.kind}</span>
                   </button>
                 ))}
@@ -1481,9 +1524,35 @@ function App() {
             ) : (
               <div className="empty-state">Esta orden no tiene fotos adjuntas.</div>
             )}
+            {['ASSIGNED', 'ACCEPTED'].includes(selectedTask.status) && pendingCustomerTimes.length > 0 && (
+              <section className="customer-availability-options" aria-labelledby="customer-availability-title">
+                <div>
+                  <h3 id="customer-availability-title">Elige una de las opciones de horario del cliente</h3>
+                  <p>Al confirmar, la visita quedará programada en el horario elegido.</p>
+                </div>
+                <div className="customer-availability-list">
+                  {pendingCustomerTimes.map((option) => (
+                    <article className="customer-availability-option" key={option.id}>
+                      <div>
+                        <strong>Opción {option.optionNumber}</strong>
+                        <span>{formatArrivalWindowMobile(option.startsAt, option.endsAt)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        disabled={isLoading}
+                        onClick={() => void confirmCustomerTime(option)}
+                      >
+                        {selectedTask.status === 'ASSIGNED' ? 'Aceptar orden y confirmar' : 'Confirmar horario'}
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
             <div className="detail-actions">
-              {selectedTask.status === 'ASSIGNED' && <button type="button" className="primary-btn" onClick={acceptTask}>Aceptar tarea</button>}
-              {selectedTask.status === 'ACCEPTED' && <button type="button" className="primary-btn" onClick={() => setWorkflowStep(1)}>Ver visita programada</button>}
+              {selectedTask.status === 'ASSIGNED' && pendingCustomerTimes.length === 0 && <button type="button" className="primary-btn" onClick={acceptTask}>Aceptar tarea</button>}
+              {selectedTask.status === 'ACCEPTED' && pendingCustomerTimes.length === 0 && <button type="button" className="primary-btn" onClick={() => setWorkflowStep(1)}>Ver visita programada</button>}
               {['ASSIGNED', 'ACCEPTED'].includes(selectedTask.status) && <button type="button" className="ghost-btn" onClick={() => setShowReassign(!showReassign)}>No puedo realizarla · Subasignar</button>}
             </div>
             {showReassign && <form className="form-card" onSubmit={reassignTask}><label>Nuevo responsable<select required value={reassignTo} onChange={(event) => setReassignTo(event.target.value)}><option value="">Selecciona un trabajador</option>{employees.filter((employee) => employee.id !== selectedTask.assignedEmployeeId).map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label><label>Motivo<input required value={reassignReason} onChange={(event) => setReassignReason(event.target.value)} placeholder="Ej. Se requiere especialista" /></label><button className="primary-btn" type="submit" disabled={isLoading || !employees.length}>Confirmar subasignación</button>{!employees.length && <p className="disabled-hint">No hay trabajadores disponibles para asignar.</p>}</form>}
@@ -1589,8 +1658,12 @@ function App() {
               {diagnosisPhotos.length > 0 && (
                 <div className="evidence-gallery" aria-label="Fotos de desperfectos del diagnóstico">
                   {diagnosisPhotos.map((attachment) => (
-                    <button className="evidence-thumbnail" key={attachment.id} type="button" onClick={() => setPreviewAttachment(attachment)} aria-label={`Ver ${attachment.kind}: ${attachment.name}`}>
-                      <img src={attachment.url} alt={attachment.description || attachment.name} loading="lazy" />
+                    <button className="evidence-thumbnail" key={attachment.id} type="button" disabled={!attachment.url} onClick={() => setPreviewAttachment(attachment)} aria-label={`Ver ${attachment.kind}: ${attachment.name}`}>
+                      {attachment.url ? (
+                        attachment.mimeType.startsWith('video/')
+                          ? <video src={attachment.url} aria-label={attachment.name} muted playsInline />
+                          : <img src={attachment.url} alt={attachment.description || attachment.name} loading="lazy" />
+                      ) : <span className="evidence-unavailable">Archivo no disponible</span>}
                       <span>{attachment.kind}</span>
                     </button>
                   ))}
@@ -1745,7 +1818,7 @@ function App() {
 
   if (activeTab === 'order') {
     const initials = user?.name?.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
-    return <div className="app-shell"><div className="device-frame"><header className={`topbar ${isTopBarElevated ? 'elevated' : 'plain'}`}><div className="left-header"><button className="icon-btn" aria-label="Volver" type="button" onClick={() => setActiveTab('tasks')}>←</button><div className="brand-block compact"><img className="brand-logo" src="/logo-brand-cropped.png" alt="Alquilaya" /></div></div><div className="right-header"><span className="eyebrow">DETALLE DE ORDEN</span><span className="avatar">{initials}</span></div></header>{storageWarning && <div className="storage-warning" role="status">{storageWarning}</div>}{renderOrder()}{previewAttachment && <div className="image-lightbox" role="presentation" onClick={() => setPreviewAttachment(null)}><section className="image-lightbox-panel" role="dialog" aria-modal="true" aria-label={`Vista previa ${previewAttachment.kind}`} onClick={(event) => event.stopPropagation()}><button className="image-lightbox-close" type="button" aria-label="Cerrar vista previa" onClick={() => setPreviewAttachment(null)}>×</button><img src={previewAttachment.url} alt={previewAttachment.description || previewAttachment.name} /><div><strong>{previewAttachment.kind}</strong><span>{previewAttachment.description || previewAttachment.name}</span></div></section></div>}{isLoading && <LoadingOverlay />}</div></div>
+    return <div className="app-shell"><div className="device-frame"><header className={`topbar ${isTopBarElevated ? 'elevated' : 'plain'}`}><div className="left-header"><button className="icon-btn" aria-label="Volver" type="button" onClick={() => setActiveTab('tasks')}>←</button><div className="brand-block compact"><img className="brand-logo" src="/logo-brand-cropped.png" alt="Alquilaya" /></div></div><div className="right-header"><span className="eyebrow">DETALLE DE ORDEN</span><span className="avatar">{initials}</span></div></header>{storageWarning && <div className="storage-warning" role="status">{storageWarning}</div>}{renderOrder()}{previewAttachment && <div className="image-lightbox" role="presentation" onClick={() => setPreviewAttachment(null)}><section className="image-lightbox-panel" role="dialog" aria-modal="true" aria-label={`Vista previa ${previewAttachment.kind}`} onClick={(event) => event.stopPropagation()}><button className="image-lightbox-close" type="button" aria-label="Cerrar vista previa" onClick={() => setPreviewAttachment(null)}>×</button>{previewAttachment.mimeType.startsWith('video/') ? <video src={previewAttachment.url} controls autoPlay playsInline /> : <img src={previewAttachment.url} alt={previewAttachment.description || previewAttachment.name} />}<div><strong>{previewAttachment.kind}</strong><span>{previewAttachment.description || previewAttachment.name}</span></div></section></div>}{isLoading && <LoadingOverlay />}</div></div>
   }
 
   const initials = user?.name?.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()

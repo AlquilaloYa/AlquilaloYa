@@ -122,7 +122,8 @@ Para compilar los binarios de **Windows, macOS y Linux** en paralelo se usa el b
    - Verificación de integridad por documento (`GET /api/documents/:id/verify`) y auto-reparación ante alteración.
    - Renderer por tipo de snapshot (contrato / adenda).
 5. Dashboard, workflow, actividad y auditoría ✅
-   - Dashboard con métricas reales: ocupación, pipeline, ingresos YTD, morosidad, incidencias y clientes con cuotas vencidas.
+   - Dashboard con métricas reales: ocupación, pipeline, ingresos y egresos YTD, morosidad, incidencias y clientes con cuotas vencidas.
+   - Detalle de ocupación con fondo blanco; mantenimiento por departamento con motivo, demora estimada y línea de etapas; consulta de gastos por mes y acumulado anual.
    - Tablero de workflow (`/workflow`): pendiente de emisión → emitido → pendiente de firma → por vencer.
    - Firma interna con permiso `contract.sign` (rol FIRMANTE) y eventos `CONTRACT_SIGNATURE_REQUESTED` / `CONTRACT_SIGNED`.
    - Actividad y auditoría con catálogo completo, filtros (acción, módulo, resultado, fechas) y actor de usuario.
