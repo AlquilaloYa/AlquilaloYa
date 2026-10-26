@@ -677,7 +677,8 @@ export default function ClientPortalPage() {
                               </div>
                               {!order.chat.closedAt && (
                                 <form onSubmit={sendChatMessage} className="mt-3 flex gap-2">
-                                  <select
+                                  <input
+                                    type="text"
                                     value={chatDraft}
                                     maxLength={2000}
                                     onChange={(event) => setChatDraft(event.target.value)}
