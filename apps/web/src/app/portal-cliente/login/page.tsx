@@ -37,6 +37,11 @@ export default function ClientPortalLoginPage() {
       <section className="portal-login-card">
         <header className="portal-login-brand">
           <img src="/logo-white-mode.png" alt="AlquilaYa" />
+          <div className="portal-login-aside-copy">
+            <p>ALQUILAYA REPAIR</p>
+            <h2>Tu hogar, en buenas manos.</h2>
+            <span>Reporta una incidencia y sigue cada avance de mantenimiento desde un solo lugar.</span>
+          </div>
         </header>
         <div className="portal-login-content">
           <p className="portal-login-eyebrow">ALQUILAYA REPAIR</p>
@@ -48,23 +53,23 @@ export default function ClientPortalLoginPage() {
           <form onSubmit={login} className="portal-login-form">
             <label className="portal-login-field">
               <span>Código de departamento</span>
-            <input
-              required
-              maxLength={50}
-              autoComplete="username"
-              value={departmentCode}
-              onChange={(event) => setDepartmentCode(event.target.value.toUpperCase())}
+              <input
+                required
+                maxLength={50}
+                autoComplete="username"
+                value={departmentCode}
+                onChange={(event) => setDepartmentCode(event.target.value.toUpperCase())}
                 placeholder="Ej. ANG170-1"
               />
             </label>
             <label className="portal-login-field">
               <span>Contraseña</span>
-            <input
-              required
-              type="password"
-              maxLength={128}
-              autoComplete="current-password"
-              value={password}
+              <input
+                required
+                type="password"
+                maxLength={128}
+                autoComplete="current-password"
+                value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />
             </label>

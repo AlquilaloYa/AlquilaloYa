@@ -55,6 +55,10 @@
   padding: 20px 28px 0;
 }
 
+.portal-login-aside-copy {
+  display: none;
+}
+
 .portal-login-brand img,
 .portal-dashboard-brand img {
   display: block;
@@ -786,6 +790,95 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   clip-path: inset(50%);
+}
+
+@media (min-width: 641px) and (max-width: 767px) {
+  .portal-login-card {
+    width: min(100%, 560px);
+    min-height: 0;
+  }
+}
+
+@media (min-width: 768px) {
+  .client-portal-login {
+    padding: 48px;
+  }
+
+  .portal-login-card {
+    display: grid;
+    width: min(100%, 980px);
+    min-height: 580px;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    border-radius: 30px;
+  }
+
+  .portal-login-brand {
+    min-height: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    grid-column: 1;
+    grid-row: 1;
+    padding: 48px 40px;
+    background: linear-gradient(155deg, #f5fcf7, #e6f5ec);
+  }
+
+  .portal-login-brand img {
+    width: 180px;
+  }
+
+  .portal-login-aside-copy {
+    display: block;
+    max-width: 350px;
+  }
+
+  .portal-login-aside-copy > p {
+    margin: 0 0 14px;
+    color: var(--portal-green-800);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+  }
+
+  .portal-login-aside-copy h2 {
+    margin: 0;
+    color: #111827;
+    font-size: clamp(2rem, 3.2vw, 2.8rem);
+    font-weight: 700;
+    letter-spacing: -0.045em;
+    line-height: 1.1;
+  }
+
+  .portal-login-aside-copy span {
+    display: block;
+    margin-top: 16px;
+    color: #687386;
+    font-size: 0.98rem;
+    line-height: 1.65;
+  }
+
+  .portal-login-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    grid-column: 2;
+    grid-row: 1;
+    padding: 56px clamp(36px, 6vw, 72px);
+  }
+
+  .portal-login-content h1 {
+    font-size: clamp(2rem, 3vw, 2.5rem);
+  }
+
+  .portal-login-footer {
+    justify-content: flex-start;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin: 0;
+    padding: 18px 32px;
+    border-top: 1px solid rgba(13, 91, 61, 0.1);
+  }
 }
 
 @media (max-width: 640px) {

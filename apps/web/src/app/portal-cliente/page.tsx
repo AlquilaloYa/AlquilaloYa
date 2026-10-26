@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Camera,
   LogOut,
   MessageCircle,
   Paperclip,
@@ -141,6 +142,7 @@ export default function ClientPortalPage() {
   const [chatError, setChatError] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
 
   const loadOrders = useCallback(async () => {
     const response = await fetch("/api/portal-cliente/ordenes", { cache: "no-store" });
@@ -211,6 +213,7 @@ export default function ClientPortalPage() {
     if (selectedFiles.length + next.length > 5) {
       setError("Puedes adjuntar hasta 5 archivos.");
       if (fileInput.current) fileInput.current.value = "";
+      if (cameraInput.current) cameraInput.current.value = "";
       return;
     }
     const invalid = next.find(
@@ -219,6 +222,7 @@ export default function ClientPortalPage() {
     if (invalid) {
       setError("Solo se permiten fotos JPG, PNG o WebP y videos MP4 o WebM de hasta 8 MB cada uno.");
       if (fileInput.current) fileInput.current.value = "";
+      if (cameraInput.current) cameraInput.current.value = "";
       return;
     }
     setSelectedFiles((current) => [
@@ -226,6 +230,7 @@ export default function ClientPortalPage() {
       ...next.map((file) => ({ id: crypto.randomUUID(), file })),
     ]);
     if (fileInput.current) fileInput.current.value = "";
+    if (cameraInput.current) cameraInput.current.value = "";
   }
 
   async function uploadFile(file: File): Promise<string> {
@@ -458,6 +463,15 @@ export default function ClientPortalPage() {
                 className="sr-only"
                 id="portal-evidence"
               />
+              <input
+                ref={cameraInput}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(event) => addFiles(event.target.files)}
+                className="sr-only"
+                id="portal-camera-capture"
+              />
               <label
                 htmlFor="portal-evidence"
                 className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 hover:border-cyan-400 hover:text-white"
@@ -465,6 +479,14 @@ export default function ClientPortalPage() {
                 <Paperclip aria-hidden className="h-4 w-4" />
                 Agregar fotos o videos (máx. 8 MB cada uno)
               </label>
+              <button
+                type="button"
+                onClick={() => cameraInput.current?.click()}
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 hover:border-cyan-400 hover:text-white"
+              >
+                <Camera aria-hidden className="h-4 w-4" />
+                Tomar foto
+              </button>
               {selectedFiles.length > 0 && (
                 <ul className="mt-2 space-y-1 text-xs text-slate-400">
                   {selectedFiles.map((item) => (

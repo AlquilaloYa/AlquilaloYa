@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, ClipboardList, ExternalLink, RefreshCw } from "lucide-react";
+import { CheckCircle2, ClipboardList, Play, RefreshCw, X } from "lucide-react";
 import { AccessControl, Permission } from "@contract/domain/rbac";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
@@ -45,6 +45,8 @@ export default function ClientRequestsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [previewAttachment, setPreviewAttachment] =
+    useState<ClientRequest["attachments"][number] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -64,6 +66,15 @@ export default function ClientRequestsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!previewAttachment) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setPreviewAttachment(null);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [previewAttachment]);
 
   async function convert(item: ClientRequest) {
     setBusyId(item.id);
@@ -181,18 +192,37 @@ export default function ClientRequestsPage() {
                 </div>
 
                 {item.attachments.length ? (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-3">
                     {item.attachments.map((attachment) => (
-                      <a
+                      <button
                         key={attachment.id}
-                        href={attachment.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-md border border-outline-variant px-3 py-2 font-body-sm text-primary hover:bg-surface-container-low"
+                        type="button"
+                        onClick={() => setPreviewAttachment(attachment)}
+                        aria-label={`Ver ${attachment.mimeType.startsWith("image/") ? "imagen" : "video"}: ${attachment.fileName}`}
+                        className="group relative h-24 w-24 overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:h-28 sm:w-28"
                       >
-                        {attachment.fileName}
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
+                        {attachment.mimeType.startsWith("image/") ? (
+                          <img
+                            src={attachment.url}
+                            alt={attachment.fileName}
+                            className="h-full w-full object-cover transition group-hover:scale-105"
+                          />
+                        ) : (
+                          <>
+                            <video
+                              src={attachment.url}
+                              muted
+                              playsInline
+                              preload="metadata"
+                              aria-hidden="true"
+                              className="h-full w-full object-cover"
+                            />
+                            <span className="absolute inset-0 grid place-items-center bg-black/25 text-white">
+                              <Play aria-hidden className="h-8 w-8 fill-current" />
+                            </span>
+                          </>
+                        )}
+                      </button>
                     ))}
                   </div>
                 ) : null}
@@ -215,6 +245,45 @@ export default function ClientRequestsPage() {
           </div>
         )}
       </main>
+      {previewAttachment ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 sm:p-8"
+          onClick={() => setPreviewAttachment(null)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Vista previa: ${previewAttachment.fileName}`}
+            className="relative flex max-h-full w-full max-w-5xl flex-col items-center gap-3"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewAttachment(null)}
+              aria-label="Cerrar vista previa"
+              className="absolute -top-12 right-0 rounded-full bg-white/15 p-2 text-white hover:bg-white/25"
+            >
+              <X aria-hidden className="h-6 w-6" />
+            </button>
+            {previewAttachment.mimeType.startsWith("image/") ? (
+              <img
+                src={previewAttachment.url}
+                alt={previewAttachment.fileName}
+                className="max-h-[80vh] max-w-full rounded-lg object-contain"
+              />
+            ) : (
+              <video
+                src={previewAttachment.url}
+                controls
+                autoPlay
+                playsInline
+                className="max-h-[80vh] max-w-full rounded-lg"
+              />
+            )}
+            <p className="max-w-full truncate text-sm text-white">{previewAttachment.fileName}</p>
+          </section>
+        </div>
+      ) : null}
     </DashboardShell>
   );
 }
