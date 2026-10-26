@@ -2,7 +2,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
-import { createSignedObjectUrl } from "@/lib/storage";
+import { createSignedObjectUrlIfPresent } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 const BUCKET = "client-work-order-evidence";
@@ -66,7 +66,7 @@ export async function GET(request: Request) {
           attachments: await Promise.all(
             attachments.map(async ({ storageKey, ...attachment }) => ({
               ...attachment,
-              url: await createSignedObjectUrl(storageKey, BUCKET),
+              url: await createSignedObjectUrlIfPresent(storageKey, BUCKET),
             })),
           ),
         };

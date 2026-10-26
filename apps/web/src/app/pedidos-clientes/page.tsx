@@ -25,9 +25,11 @@ type ClientRequest = {
     fileName: string;
     mimeType: string;
     sizeBytes: number;
-    url: string;
+    url: string | null;
   }>;
 };
+
+type PreviewAttachment = ClientRequest["attachments"][number] & { url: string };
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("es-PE", {
@@ -45,8 +47,7 @@ export default function ClientRequestsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [previewAttachment, setPreviewAttachment] =
-    useState<ClientRequest["attachments"][number] | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<PreviewAttachment | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -193,37 +194,53 @@ export default function ClientRequestsPage() {
 
                 {item.attachments.length ? (
                   <div className="flex flex-wrap gap-3">
-                    {item.attachments.map((attachment) => (
-                      <button
-                        key={attachment.id}
-                        type="button"
-                        onClick={() => setPreviewAttachment(attachment)}
-                        aria-label={`Ver ${attachment.mimeType.startsWith("image/") ? "imagen" : "video"}: ${attachment.fileName}`}
-                        className="group relative h-24 w-24 overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:h-28 sm:w-28"
-                      >
-                        {attachment.mimeType.startsWith("image/") ? (
-                          <img
-                            src={attachment.url}
-                            alt={attachment.fileName}
-                            className="h-full w-full object-cover transition group-hover:scale-105"
-                          />
-                        ) : (
-                          <>
-                            <video
-                              src={attachment.url}
-                              muted
-                              playsInline
-                              preload="metadata"
-                              aria-hidden="true"
-                              className="h-full w-full object-cover"
+                    {item.attachments.map((attachment) => {
+                      const url = attachment.url;
+                      if (!url) {
+                        return (
+                          <span
+                            key={attachment.id}
+                            title="El archivo no está disponible en Storage"
+                            className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 text-center text-xs text-amber-900 sm:h-28 sm:w-28"
+                          >
+                            <ClipboardList aria-hidden className="h-5 w-5" />
+                            Archivo no disponible
+                          </span>
+                        );
+                      }
+                      const preview = { ...attachment, url };
+                      return (
+                        <button
+                          key={attachment.id}
+                          type="button"
+                          onClick={() => setPreviewAttachment(preview)}
+                          aria-label={`Ver ${attachment.mimeType.startsWith("image/") ? "imagen" : "video"}: ${attachment.fileName}`}
+                          className="group relative h-24 w-24 overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:h-28 sm:w-28"
+                        >
+                          {attachment.mimeType.startsWith("image/") ? (
+                            <img
+                              src={url}
+                              alt={attachment.fileName}
+                              className="h-full w-full object-cover transition group-hover:scale-105"
                             />
-                            <span className="absolute inset-0 grid place-items-center bg-black/25 text-white">
-                              <Play aria-hidden className="h-8 w-8 fill-current" />
-                            </span>
-                          </>
-                        )}
-                      </button>
-                    ))}
+                          ) : (
+                            <>
+                              <video
+                                src={url}
+                                muted
+                                playsInline
+                                preload="metadata"
+                                aria-hidden="true"
+                                className="h-full w-full object-cover"
+                              />
+                              <span className="absolute inset-0 grid place-items-center bg-black/25 text-white">
+                                <Play aria-hidden className="h-8 w-8 fill-current" />
+                              </span>
+                            </>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
 

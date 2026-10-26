@@ -184,6 +184,27 @@ export async function createSignedObjectUrl(
   return signedUrl.toString();
 }
 
+export async function createSignedObjectUrlIfPresent(
+  key: string,
+  bucket: string,
+  expiresIn = 3600,
+): Promise<string | null> {
+  try {
+    return await createSignedObjectUrl(key, bucket, expiresIn);
+  } catch (error) {
+    if (
+      error instanceof StorageError &&
+      error.status === 400 &&
+      (/"code"\s*:\s*"NoSuchKey"/i.test(error.message) ||
+        /"message"\s*:\s*"Object not found"/i.test(error.message))
+    ) {
+      console.warn("Adjunto sin objeto correspondiente en Storage", { bucket, key });
+      return null;
+    }
+    throw error;
+  }
+}
+
 export async function createSignedUploadUrl(
   key: string,
   bucket: string,

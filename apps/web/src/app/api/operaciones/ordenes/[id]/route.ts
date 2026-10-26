@@ -14,7 +14,7 @@ import {
 } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
-import { createSignedObjectUrl, deleteObject } from "@/lib/storage";
+import { createSignedObjectUrlIfPresent, deleteObject } from "@/lib/storage";
 import { logger } from "@/lib/logger";
 import { sendUrgentWorkOrderPush } from "@/lib/fieldops-push";
 import { notificationRows } from "@/lib/notifications";
@@ -258,7 +258,7 @@ export async function GET(
         description: attachment.description,
         sizeBytes: Number(attachment.sizeBytes),
         createdAt: attachment.createdAt,
-        url: await createSignedObjectUrl(
+        url: await createSignedObjectUrlIfPresent(
           attachment.storageKey,
           "work-order-evidence",
         ),

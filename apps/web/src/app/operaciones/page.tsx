@@ -126,7 +126,7 @@ interface Evidence {
   mimeType: string;
   sizeBytes: number;
   createdAt: string;
-  url: string;
+  url: string | null;
   kind?: string;
   description?: string;
 }
@@ -2577,23 +2577,34 @@ function OrderDrawer({
             {order.attachments.length > 0 ? (
               <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {order.attachments.map((attachment) => (
-                  <a
-                    key={attachment.id}
-                    href={attachment.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="overflow-hidden rounded-lg border border-border"
-                  >
-                    <img
-                      src={attachment.url}
-                      alt={attachment.fileName}
-                      className="h-28 w-full object-cover"
-                    />
-                    <span className="block truncate px-2 py-1.5 text-xs text-on-surface-variant">
-                      {attachment.kind ? `${attachment.kind} · ` : ""}
-                      {attachment.fileName}
-                    </span>
-                  </a>
+                  attachment.url ? (
+                    <a
+                      key={attachment.id}
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="overflow-hidden rounded-lg border border-border"
+                    >
+                      <img
+                        src={attachment.url}
+                        alt={attachment.fileName}
+                        className="h-28 w-full object-cover"
+                      />
+                      <span className="block truncate px-2 py-1.5 text-xs text-on-surface-variant">
+                        {attachment.kind ? `${attachment.kind} · ` : ""}
+                        {attachment.fileName}
+                      </span>
+                    </a>
+                  ) : (
+                    <div
+                      key={attachment.id}
+                      className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-center text-xs text-amber-900"
+                    >
+                      <AlertTriangle aria-hidden className="h-5 w-5" />
+                      <span>Archivo no disponible en Storage</span>
+                      <span className="max-w-full truncate">{attachment.fileName}</span>
+                    </div>
+                  )
                 ))}
               </div>
             ) : (

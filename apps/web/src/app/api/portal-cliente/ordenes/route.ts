@@ -17,7 +17,11 @@ import {
 } from "@/lib/client-portal-auth";
 import { checkClientPortalLimit } from "@/lib/client-portal-rate-limit";
 import { clientIp } from "@/lib/rate-limit";
-import { createSignedObjectUrl, deleteObject, downloadObject } from "@/lib/storage";
+import {
+  createSignedObjectUrlIfPresent,
+  deleteObject,
+  downloadObject,
+} from "@/lib/storage";
 import { notificationRows } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
@@ -172,7 +176,7 @@ export async function GET(request: Request) {
           attachments: await Promise.all(
             attachments.map(async ({ storageKey, ...attachment }) => ({
               ...attachment,
-              url: await createSignedObjectUrl(storageKey, BUCKET),
+              url: await createSignedObjectUrlIfPresent(storageKey, BUCKET),
             })),
           ),
           chat: chat[0] ?? null,
@@ -210,7 +214,7 @@ export async function GET(request: Request) {
           attachments: await Promise.all(
             attachments.map(async ({ storageKey, ...attachment }) => ({
               ...attachment,
-              url: await createSignedObjectUrl(storageKey, BUCKET),
+              url: await createSignedObjectUrlIfPresent(storageKey, BUCKET),
             })),
           ),
         };

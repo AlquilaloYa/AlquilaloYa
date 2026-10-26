@@ -49,7 +49,7 @@ type Order = {
     fileName: string;
     mimeType: string;
     sizeBytes: string | number;
-    url: string;
+    url: string | null;
   }>;
   chat: { openedAt: string; closedAt: string | null } | null;
 };
@@ -65,7 +65,7 @@ type ClientRequest = {
   attachments: Array<{
     id: string;
     fileName: string;
-    url: string;
+    url: string | null;
   }>;
 };
 
@@ -591,18 +591,32 @@ export default function ClientPortalPage() {
                 )}
                 {clientRequest.attachments.length > 0 && (
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {clientRequest.attachments.map((attachment) => (
-                      <a
-                        key={attachment.id}
-                        href={attachment.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-cyan-400"
-                      >
-                        <Paperclip aria-hidden className="h-3 w-3" />
-                        {attachment.fileName}
-                      </a>
-                    ))}
+                    {clientRequest.attachments.map((attachment) => {
+                      if (attachment.url) {
+                        return (
+                          <a
+                            key={attachment.id}
+                            href={attachment.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-cyan-400"
+                          >
+                            <Paperclip aria-hidden className="h-3 w-3" />
+                            {attachment.fileName}
+                          </a>
+                        );
+                      }
+                      return (
+                        <span
+                          key={attachment.id}
+                          title="El archivo no está disponible en Storage"
+                          className="inline-flex items-center gap-2 rounded-md border border-amber-800 px-2 py-1 text-xs text-amber-100"
+                        >
+                          <Paperclip aria-hidden className="h-3 w-3" />
+                          {attachment.fileName} · no disponible
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
               </article>
@@ -622,18 +636,32 @@ export default function ClientPortalPage() {
                   <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{order.description}</p>
                   {order.attachments.length > 0 && (
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {order.attachments.map((attachment) => (
-                        <a
-                          key={attachment.id}
-                          href={attachment.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-cyan-400"
-                        >
-                          <Paperclip aria-hidden className="h-3 w-3" />
-                          {attachment.fileName}
-                        </a>
-                      ))}
+                      {order.attachments.map((attachment) => {
+                        if (attachment.url) {
+                          return (
+                            <a
+                              key={attachment.id}
+                              href={attachment.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-cyan-400"
+                            >
+                              <Paperclip aria-hidden className="h-3 w-3" />
+                              {attachment.fileName}
+                            </a>
+                          );
+                        }
+                        return (
+                          <span
+                            key={attachment.id}
+                            title="El archivo no está disponible en Storage"
+                            className="inline-flex items-center gap-2 rounded-md border border-amber-800 px-2 py-1 text-xs text-amber-100"
+                          >
+                            <Paperclip aria-hidden className="h-3 w-3" />
+                            {attachment.fileName} · no disponible
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
                   {order.availability.length > 0 && (
