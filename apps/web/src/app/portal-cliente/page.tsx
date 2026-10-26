@@ -128,6 +128,7 @@ export default function ClientPortalPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [issueType, setIssueType] = useState("");
+  const [manualIssueType, setManualIssueType] = useState("");
   const [description, setDescription] = useState("");
   const [customerPresentAtVisit, setCustomerPresentAtVisit] = useState(true);
   const [currentLocalDate, setCurrentLocalDate] = useState("");
@@ -268,8 +269,9 @@ export default function ClientPortalPage() {
       const response = await fetch("/api/portal-cliente/ordenes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        const finalIssueType = issueType === "Otro" ? manualIssueType : issueType;
         body: JSON.stringify({
-          issueType,
+          issueType: finalIssueType,
           description,
           customerPresentAtVisit,
           availability: options,
@@ -420,14 +422,30 @@ export default function ClientPortalPage() {
             </div>
             <label className="block space-y-2 text-sm">
               <span className="font-medium">Tipo de problema</span>
-              <input
+              <select
                 required
-                maxLength={80}
                 value={issueType}
-                onChange={(event) => setIssueType(event.target.value)}
+                onChange={(e) => setIssueType(e.target.value)}
                 className="h-11 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 outline-none focus:border-cyan-400"
-                placeholder="Ej. fuga de agua, electricidad"
-              />
+              >
+                <option value="">Selecciona un tipo</option>
+                <option value="Plomeria">Plomería</option>
+                <option value="Electricidad">Electricidad</option>
+                <option value="Cerrajeria">Cerrajería</option>
+                <option value="Limpieza">Limpieza</option>
+                <option value="Mantenimiento">Mantenimiento</option>
+                <option value="Otro">Otro</option>
+              </select>
+              {issueType === "Otro" && (
+                <input
+                  required
+                  maxLength={80}
+                  value={manualIssueType}
+                  onChange={(e) => setManualIssueType(e.target.value)}
+                  className="mt-2 h-11 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 outline-none focus:border-cyan-400"
+                  placeholder="Describe el tipo de problema"
+                />
+              )}
             </label>
             <label className="block space-y-2 text-sm">
               <span className="font-medium">Describe el problema</span>
@@ -671,7 +689,7 @@ export default function ClientPortalPage() {
                               </div>
                               {!order.chat.closedAt && (
                                 <form onSubmit={sendChatMessage} className="mt-3 flex gap-2">
-                                  <input
+                                  <select
                                     value={chatDraft}
                                     maxLength={2000}
                                     onChange={(event) => setChatDraft(event.target.value)}
