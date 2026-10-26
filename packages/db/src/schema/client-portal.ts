@@ -16,6 +16,7 @@ import {
 import { clients } from "./clients";
 import { contracts } from "./contracts";
 import { departments } from "./departments";
+import { issueTypes } from "./issue-types";
 import { users } from "./users";
 import { workOrders } from "./work-orders";
 
@@ -29,7 +30,9 @@ export const clientWorkOrderRequests = pgTable(
     departmentId: uuid("department_id").references(() => departments.id, {
       onDelete: "set null",
     }),
-    issueType: varchar("issue_type", { length: 80 }).notNull(),
+    issueTypeId: uuid("issue_type_id")
+      .notNull()
+      .references(() => issueTypes.id, { onDelete: "restrict" }),
     description: text("description").notNull(),
     customerPresentAtVisit: boolean("customer_present_at_visit")
       .notNull()

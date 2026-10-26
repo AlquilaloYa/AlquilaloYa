@@ -186,7 +186,7 @@ export async function GET(request: Request) {
     const requestRows = await dbModule.db
       .select({
         id: dbModule.schema.clientWorkOrderRequests.id,
-        issueType: dbModule.schema.clientWorkOrderRequests.issueType,
+        issueType: dbModule.schema.issueTypes.name,
         description: dbModule.schema.clientWorkOrderRequests.description,
         status: dbModule.schema.clientWorkOrderRequests.status,
         availabilityOptions: dbModule.schema.clientWorkOrderRequests.availabilityOptions,
@@ -194,6 +194,13 @@ export async function GET(request: Request) {
         createdAt: dbModule.schema.clientWorkOrderRequests.createdAt,
       })
       .from(dbModule.schema.clientWorkOrderRequests)
+      .innerJoin(
+        dbModule.schema.issueTypes,
+        eq(
+          dbModule.schema.issueTypes.id,
+          dbModule.schema.clientWorkOrderRequests.issueTypeId,
+        ),
+      )
       .where(eq(dbModule.schema.clientWorkOrderRequests.clientId, session.identity.client.id))
       .orderBy(desc(dbModule.schema.clientWorkOrderRequests.createdAt))
       .limit(50);
@@ -273,6 +280,26 @@ export async function POST(request: Request) {
       );
     }
 
+    const [selectedIssueType] = await dbModule.db
+      .select({
+        id: dbModule.schema.issueTypes.id,
+        name: dbModule.schema.issueTypes.name,
+      })
+      .from(dbModule.schema.issueTypes)
+      .where(
+        and(
+          eq(dbModule.schema.issueTypes.name, issueType),
+          eq(dbModule.schema.issueTypes.isActive, true),
+        ),
+      )
+      .limit(1);
+    if (!selectedIssueType) {
+      return NextResponse.json(
+        { error: "Selecciona un tipo de problema válido." },
+        { status: 400 },
+      );
+    }
+
     const [department] = await dbModule.db
       .select({
         id: dbModule.schema.departments.id,
@@ -345,7 +372,7 @@ export async function POST(request: Request) {
             id,
             clientId: session.identity.client.id,
             departmentId: department.id,
-            issueType,
+            issueTypeId: selectedIssueType.id,
             description,
             customerPresentAtVisit,
             availabilityOptions: availability.map((option) => ({
@@ -358,7 +385,7 @@ export async function POST(request: Request) {
           })
           .returning({
             id: dbModule.schema.clientWorkOrderRequests.id,
-            issueType: dbModule.schema.clientWorkOrderRequests.issueType,
+            issueTypeId: dbModule.schema.clientWorkOrderRequests.issueTypeId,
             status: dbModule.schema.clientWorkOrderRequests.status,
             createdAt: dbModule.schema.clientWorkOrderRequests.createdAt,
           });
@@ -435,7 +462,10 @@ export async function POST(request: Request) {
         }
         return created;
       });
-      const response = NextResponse.json({ request: clientRequest }, { status: 201 });
+      const response = NextResponse.json(
+        { request: { ...clientRequest, issueType: selectedIssueType.name } },
+        { status: 201 },
+      );
       response.headers.set("Cache-Control", "no-store");
       return addSessionCookiesIfRefreshed(response, session);
     } catch (error) {

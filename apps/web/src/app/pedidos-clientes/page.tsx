@@ -29,6 +29,17 @@ type ClientRequest = {
   }>;
 };
 
+type Employee = {
+  id: string;
+  nombres: string;
+  apellidos: string;
+  cargo: string;
+  area: string;
+  equipo: string;
+};
+
+type Priority = "BAJA" | "MEDIA" | "ALTA" | "URGENTE";
+
 type PreviewAttachment = ClientRequest["attachments"][number] & { url: string };
 
 function formatDate(value: string): string {
@@ -43,6 +54,10 @@ export default function ClientRequestsPage() {
   const canRead = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.WORK_ORDER_READ);
   const canConvert = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.WORK_ORDER_CREATE);
   const [items, setItems] = useState<ClientRequest[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [formValues, setFormValues] = useState<
+    Record<string, { priority: Priority; assignedEmployeeId: string }>
+  >({});
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -57,12 +72,28 @@ export default function ClientRequestsPage() {
       const body = (await response.json()) as { items?: ClientRequest[]; error?: string };
       if (!response.ok) throw new Error(body.error ?? `Error ${response.status}`);
       setItems(body.items ?? []);
+      if (canConvert) {
+        const employeesResponse = await apiFetch("/api/operaciones/empleados", {
+          cache: "no-store",
+        });
+        const employeesBody = (await employeesResponse.json()) as
+          | Employee[]
+          | { error?: string };
+        if (!employeesResponse.ok || !Array.isArray(employeesBody)) {
+          throw new Error(
+            !Array.isArray(employeesBody)
+              ? employeesBody.error ?? "No se pudo cargar el equipo de mantenimiento."
+              : "No se pudo cargar el equipo de mantenimiento.",
+          );
+        }
+        setEmployees(employeesBody);
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "No se pudieron cargar las solicitudes.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canConvert]);
 
   useEffect(() => {
     void load();
@@ -77,13 +108,18 @@ export default function ClientRequestsPage() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [previewAttachment]);
 
-  async function convert(item: ClientRequest) {
+  async function convert(
+    item: ClientRequest,
+    values: { priority: Priority; assignedEmployeeId: string },
+  ) {
     setBusyId(item.id);
     setError("");
     setNotice("");
     try {
       const response = await apiFetch(`/api/client-requests/${item.id}/convert`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
       });
       const body = (await response.json()) as {
         workOrder?: { code: string };
@@ -246,16 +282,73 @@ export default function ClientRequestsPage() {
                 ) : null}
 
                 {item.status === "PENDING" && canConvert ? (
-                  <div className="flex justify-end border-t border-outline-variant/50 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => void convert(item)}
-                      disabled={busyId === item.id}
-                      className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground hover:opacity-90 disabled:opacity-40"
-                    >
-                      <CheckCircle2 className="h-4 w-4" />
-                      {busyId === item.id ? "Creando orden…" : "Derivar a orden de trabajo"}
-                    </button>
+                  <div className="space-y-4 border-t border-outline-variant/50 pt-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="block space-y-1.5 font-body-sm">
+                        <span className="font-medium text-on-surface">Prioridad de la tarea</span>
+                        <select
+                          value={formValues[item.id]?.priority ?? "MEDIA"}
+                          onChange={(event) =>
+                            setFormValues((current) => ({
+                              ...current,
+                              [item.id]: {
+                                priority: event.target.value as Priority,
+                                assignedEmployeeId:
+                                  current[item.id]?.assignedEmployeeId ?? "",
+                              },
+                            }))
+                          }
+                          disabled={busyId === item.id}
+                          className="h-10 w-full rounded-md border border-outline-variant bg-surface-container-lowest px-3 text-on-surface"
+                        >
+                          <option value="BAJA">Baja</option>
+                          <option value="MEDIA">Media</option>
+                          <option value="ALTA">Alta</option>
+                          <option value="URGENTE">Urgente</option>
+                        </select>
+                      </label>
+                      <label className="block space-y-1.5 font-body-sm">
+                        <span className="font-medium text-on-surface">Asignar a mantenimiento</span>
+                        <select
+                          value={formValues[item.id]?.assignedEmployeeId ?? ""}
+                          onChange={(event) =>
+                            setFormValues((current) => ({
+                              ...current,
+                              [item.id]: {
+                                priority: current[item.id]?.priority ?? "MEDIA",
+                                assignedEmployeeId: event.target.value,
+                              },
+                            }))
+                          }
+                          disabled={busyId === item.id}
+                          className="h-10 w-full rounded-md border border-outline-variant bg-surface-container-lowest px-3 text-on-surface"
+                        >
+                          <option value="">Sin asignar</option>
+                          {employees.map((employee) => (
+                            <option key={employee.id} value={employee.id}>
+                              {`${employee.nombres} ${employee.apellidos}`.trim()}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void convert(item, {
+                            priority: formValues[item.id]?.priority ?? "MEDIA",
+                            assignedEmployeeId:
+                              formValues[item.id]?.assignedEmployeeId ?? "",
+                          })
+                        }
+                        disabled={busyId === item.id}
+                        className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground hover:opacity-90 disabled:opacity-40"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        {busyId === item.id ? "Creando orden…" : "Derivar a orden de trabajo"}
+                      </button>
+                    </div>
                   </div>
                 ) : null}
               </article>

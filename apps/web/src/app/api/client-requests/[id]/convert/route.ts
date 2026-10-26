@@ -1,12 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
+import { logger } from "@/lib/logger";
+import { sendUrgentWorkOrderPush } from "@/lib/fieldops-push";
+import { notificationRows } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const PRIORITIES = ["BAJA", "MEDIA", "ALTA", "URGENTE"] as const;
 
 type AvailabilityOption = { startsAt: Date; endsAt: Date };
 
@@ -51,6 +55,36 @@ export async function POST(
     if (!UUID_PATTERN.test(params.id)) {
       return NextResponse.json({ error: "Identificador de solicitud no válido." }, { status: 400 });
     }
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 });
+    }
+    const bodyRecord =
+      body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const priorityValue = bodyRecord.priority ?? "MEDIA";
+    const priority =
+      typeof priorityValue === "string"
+        ? PRIORITIES.find((candidate) => candidate === priorityValue)
+        : undefined;
+    if (!priority) {
+      return NextResponse.json({ error: "La prioridad seleccionada no es válida." }, { status: 400 });
+    }
+    const assignedEmployeeIdValue = bodyRecord.assignedEmployeeId;
+    if (
+      assignedEmployeeIdValue !== undefined &&
+      assignedEmployeeIdValue !== null &&
+      assignedEmployeeIdValue !== "" &&
+      (typeof assignedEmployeeIdValue !== "string" ||
+        !UUID_PATTERN.test(assignedEmployeeIdValue))
+    ) {
+      return NextResponse.json({ error: "El trabajador asignado no es válido." }, { status: 400 });
+    }
+    const requestedEmployeeId =
+      typeof assignedEmployeeIdValue === "string" && assignedEmployeeIdValue
+        ? assignedEmployeeIdValue
+        : null;
 
     const workOrderId = randomUUID();
     const now = new Date();
@@ -60,7 +94,7 @@ export async function POST(
           id: dbModule.schema.clientWorkOrderRequests.id,
           clientId: dbModule.schema.clientWorkOrderRequests.clientId,
           departmentId: dbModule.schema.clientWorkOrderRequests.departmentId,
-          issueType: dbModule.schema.clientWorkOrderRequests.issueType,
+          issueType: dbModule.schema.issueTypes.name,
           description: dbModule.schema.clientWorkOrderRequests.description,
           customerPresentAtVisit:
             dbModule.schema.clientWorkOrderRequests.customerPresentAtVisit,
@@ -75,6 +109,13 @@ export async function POST(
         .innerJoin(
           dbModule.schema.clients,
           eq(dbModule.schema.clients.id, dbModule.schema.clientWorkOrderRequests.clientId),
+        )
+        .innerJoin(
+          dbModule.schema.issueTypes,
+          eq(
+            dbModule.schema.issueTypes.id,
+            dbModule.schema.clientWorkOrderRequests.issueTypeId,
+          ),
         )
         .leftJoin(
           dbModule.schema.departments,
@@ -93,6 +134,40 @@ export async function POST(
       if (!site) throw new Error("El departamento no está habilitado para órdenes de trabajo.");
       const availability = parseAvailability(requestRow.availabilityOptions);
       if (!availability) throw new Error("La solicitud no tiene opciones de disponibilidad válidas.");
+
+      let assignee: {
+        id: string;
+        nombre: string;
+        apellido: string;
+        userId: string | null;
+      } | null = null;
+      if (requestedEmployeeId) {
+        const [employee] = await tx
+          .select({
+            id: dbModule.schema.hrEmployees.id,
+            nombre: dbModule.schema.hrEmployees.nombres,
+            apellido: dbModule.schema.hrEmployees.apellidos,
+            userId: dbModule.schema.hrEmployees.userId,
+          })
+          .from(dbModule.schema.hrEmployees)
+          .where(
+            and(
+              eq(dbModule.schema.hrEmployees.id, requestedEmployeeId),
+              eq(dbModule.schema.hrEmployees.estado, "ACTIVO"),
+              isNull(dbModule.schema.hrEmployees.deletedAt),
+              or(
+                ilike(dbModule.schema.hrEmployees.area, "%manten%"),
+                ilike(dbModule.schema.hrEmployees.cargo, "%manten%"),
+                ilike(dbModule.schema.hrEmployees.equipo, "%manten%"),
+              ),
+            ),
+          )
+          .limit(1);
+        if (!employee) {
+          throw new Error("Solo se puede asignar personal activo del área de mantenimiento.");
+        }
+        assignee = employee;
+      }
 
       const uploads = await tx
         .select({
@@ -118,8 +193,8 @@ export async function POST(
           title: `Reporte: ${requestRow.issueType}`,
           description: requestRow.description,
           issueType: requestRow.issueType,
-          priority: "MEDIA",
-          status: "CREATED",
+          priority,
+          status: assignee ? "ASSIGNED" : "CREATED",
           location: site,
           contactName: requestRow.clientName,
           customerPresentAtVisit: requestRow.customerPresentAtVisit,
@@ -127,6 +202,7 @@ export async function POST(
           departmentId: requestRow.departmentId,
           departmentCode: requestRow.departmentCode,
           clientId: requestRow.clientId,
+          assignedEmployeeId: assignee?.id ?? null,
           createdBy: auth.user.id,
           createdAt: now,
           updatedAt: now,
@@ -140,7 +216,16 @@ export async function POST(
         });
       if (!workOrder) throw new Error("No se pudo crear la orden de trabajo.");
 
-      await tx.insert(dbModule.schema.workOrderAvailabilityOptions).values(
+        const assignmentEventId = randomUUID();
+        if (assignee) {
+          await tx.insert(dbModule.schema.workOrderAssignments).values({
+            workOrderId,
+            employeeId: assignee.id,
+            assignedBy: auth.user.id,
+          });
+        }
+
+        await tx.insert(dbModule.schema.workOrderAvailabilityOptions).values(
         availability.map((option, index) => ({
           workOrderId,
           optionNumber: index + 1,
@@ -180,10 +265,32 @@ export async function POST(
         actorId: auth.user.id,
         actorName: auth.user.name,
         eventType: "CLIENT_REQUEST_CONVERTED",
-        toStatus: "CREATED",
-        details: { clientRequestId: requestRow.id },
+        toStatus: assignee ? "ASSIGNED" : "CREATED",
+        details: {
+          clientRequestId: requestRow.id,
+          priority,
+          assignedTo: assignee
+            ? `${assignee.nombre} ${assignee.apellido}`.trim()
+            : null,
+        },
         createdAt: now,
       });
+      if (assignee?.userId) {
+        await tx.insert(dbModule.schema.notifications).values(
+          notificationRows([assignee.userId], {
+            type: priority === "URGENTE" ? "WORK_ORDER_URGENT" : "WORK_ORDER_ASSIGNED",
+            title:
+              priority === "URGENTE"
+                ? "Orden urgente asignada"
+                : "Nueva orden de trabajo asignada",
+            body: `${workOrder.code}: ${workOrder.title}`,
+            href: "/operaciones",
+            entityType: "WORK_ORDER",
+            entityId: workOrder.id,
+            dedupeKey: `work-order-assignment:${assignmentEventId}`,
+          }),
+        );
+      }
       const [updatedRequest] = await tx
         .update(dbModule.schema.clientWorkOrderRequests)
         .set({
@@ -201,10 +308,26 @@ export async function POST(
         )
         .returning({ id: dbModule.schema.clientWorkOrderRequests.id });
       if (!updatedRequest) throw new Error("La solicitud dejó de estar pendiente.");
-      return workOrder;
+      return { workOrder, assignee };
     });
 
-    return NextResponse.json({ workOrder: result });
+    if (priority === "URGENTE" && result.assignee) {
+      try {
+        await sendUrgentWorkOrderPush(dbModule, {
+          employeeId: result.assignee.id,
+          workOrderId: result.workOrder.id,
+          code: result.workOrder.code,
+          title: result.workOrder.title,
+        });
+      } catch (error) {
+        logger.error("Falló el envío push de una orden urgente", {
+          workOrderId: result.workOrder.id,
+          error: error instanceof Error ? error.message : "Error desconocido",
+        });
+      }
+    }
+
+    return NextResponse.json({ workOrder: result.workOrder });
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo convertir la solicitud.";
     const status = message.includes("no se encontró") ? 404 : 400;

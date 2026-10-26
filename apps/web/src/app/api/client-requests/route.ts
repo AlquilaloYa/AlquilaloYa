@@ -23,7 +23,7 @@ export async function GET(request: Request) {
         departmentId: dbModule.schema.clientWorkOrderRequests.departmentId,
         departmentCode: dbModule.schema.departments.codigo,
         departmentName: dbModule.schema.departments.nombre,
-        issueType: dbModule.schema.clientWorkOrderRequests.issueType,
+        issueType: dbModule.schema.issueTypes.name,
         description: dbModule.schema.clientWorkOrderRequests.description,
         customerPresentAtVisit: dbModule.schema.clientWorkOrderRequests.customerPresentAtVisit,
         availabilityOptions: dbModule.schema.clientWorkOrderRequests.availabilityOptions,
@@ -37,6 +37,13 @@ export async function GET(request: Request) {
       .innerJoin(
         dbModule.schema.clients,
         eq(dbModule.schema.clients.id, dbModule.schema.clientWorkOrderRequests.clientId),
+      )
+      .innerJoin(
+        dbModule.schema.issueTypes,
+        eq(
+          dbModule.schema.issueTypes.id,
+          dbModule.schema.clientWorkOrderRequests.issueTypeId,
+        ),
       )
       .leftJoin(
         dbModule.schema.departments,
