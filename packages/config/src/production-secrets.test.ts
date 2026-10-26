@@ -11,6 +11,8 @@ const PROD: EnvLike = {
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abcdefghijklmnop",
   CONNECTOR_ENCRYPTION_KEY:
     "7f3a9c1e5b2d8f4a6c0e9b7d3a1f5c8e2b4d6a8f0c2e4b6d8a0f2c4e6b8d0a2f",
+  CLIENT_CHAT_ENCRYPTION_KEY:
+    "portal-chat-production-key-7f3a9c1e5b2d8f4a6c0e9b7d3a1f5c8e",
   DATABASE_URL: "postgresql://user:pass@db.prod.supabase.co:5432/postgres",
 };
 
@@ -24,6 +26,7 @@ describe("collectProductionSecretProblems", () => {
     expect(problems.some((p) => p.includes("SUPABASE_URL"))).toBe(true);
     expect(problems.some((p) => p.includes("SUPABASE_ANON_KEY"))).toBe(true);
     expect(problems.some((p) => p.includes("CONNECTOR_ENCRYPTION_KEY"))).toBe(true);
+    expect(problems.some((p) => p.includes("CLIENT_CHAT_ENCRYPTION_KEY"))).toBe(true);
   });
 
   it("detecta valores de plantilla/dummy (p. ej. los de CI)", () => {
@@ -40,6 +43,21 @@ describe("collectProductionSecretProblems", () => {
       CONNECTOR_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     });
     expect(problems.some((p) => p.includes("CONNECTOR_ENCRYPTION_KEY"))).toBe(true);
+  });
+
+  it("exige una clave de chat suficientemente larga y no placeholder", () => {
+    expect(
+      collectProductionSecretProblems({
+        ...PROD,
+        CLIENT_CHAT_ENCRYPTION_KEY: "short",
+      }).some((p) => p.includes("CLIENT_CHAT_ENCRYPTION_KEY"))
+    ).toBe(true);
+    expect(
+      collectProductionSecretProblems({
+        ...PROD,
+        CLIENT_CHAT_ENCRYPTION_KEY: "placeholder-chat-key-12345678901234567890",
+      }).some((p) => p.includes("CLIENT_CHAT_ENCRYPTION_KEY"))
+    ).toBe(true);
   });
 
   it("rechaza recursos locales (localhost)", () => {

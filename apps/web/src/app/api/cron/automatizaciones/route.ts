@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { evaluarReglas } from "@/lib/automatizaciones";
 import { evaluateContractExpiryNotifications } from "@/lib/contract-expiry-notifications";
+import { synchronizeClientPortalAccounts } from "@/lib/client-accounts";
 import { safeEqual } from "@/lib/secure-compare";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,9 @@ async function run(req: Request) {
     }
     const resultados = await evaluarReglas("CRON");
     const vencimientos = await evaluateContractExpiryNotifications();
-    return NextResponse.json({ ok: true, resultados, vencimientos });
+    const dbModule = await import("@contract/db");
+    const cuentasClientes = await synchronizeClientPortalAccounts(dbModule);
+    return NextResponse.json({ ok: true, resultados, vencimientos, cuentasClientes });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

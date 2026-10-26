@@ -183,3 +183,48 @@ export async function createSignedObjectUrl(
   signedUrl.hash = "";
   return signedUrl.toString();
 }
+
+export async function createSignedUploadUrl(
+  key: string,
+  bucket: string,
+): Promise<string> {
+  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  const res = await storageFetch(
+    `/object/upload/sign/${encodeURIComponent(bucket)}/${encodedKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ upsert: false }),
+    },
+    bucket,
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new StorageError(
+      `Storage signed upload falló (${res.status}): ${detail.slice(0, 300)}`,
+      res.status,
+    );
+  }
+  const result = (await res.json()) as { url?: unknown; signedURL?: unknown };
+  const rawUrl = result.url ?? result.signedURL;
+  if (typeof rawUrl !== "string" || !rawUrl) {
+    throw new StorageError("Storage no devolvió una URL firmada de carga válida");
+  }
+  let signedUrl: URL;
+  try {
+    signedUrl = new URL(rawUrl, `${SUPABASE_URL}/`);
+  } catch {
+    throw new StorageError("Storage devolvió una URL firmada no válida");
+  }
+  if (signedUrl.origin !== new URL(SUPABASE_URL).origin) {
+    throw new StorageError("Storage devolvió una URL de origen no esperado");
+  }
+  if (!signedUrl.pathname.startsWith("/storage/v1/")) {
+    if (!signedUrl.pathname.startsWith("/object/upload/sign/")) {
+      throw new StorageError("Storage devolvió una ruta firmada no válida");
+    }
+    signedUrl.pathname = `/storage/v1${signedUrl.pathname}`;
+  }
+  signedUrl.hash = "";
+  return signedUrl.toString();
+}

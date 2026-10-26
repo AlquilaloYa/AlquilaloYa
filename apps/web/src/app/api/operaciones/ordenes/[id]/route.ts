@@ -4,6 +4,7 @@ import {
   asc,
   desc,
   eq,
+  getTableColumns,
   ilike,
   isNotNull,
   isNull,
@@ -151,8 +152,21 @@ export async function GET(
       );
     }
     const [order] = await db
-      .select()
+      .select({
+        ...getTableColumns(schema.workOrders),
+        clientName: sql<string | null>`nullif(trim(coalesce(${schema.clients.nombres}, '') || ' ' || coalesce(${schema.clients.apellidos}, '')), '')`,
+        departmentName: schema.departments.nombre,
+        departmentNumber: schema.departments.numero,
+      })
       .from(schema.workOrders)
+      .leftJoin(
+        schema.clients,
+        eq(schema.workOrders.clientId, schema.clients.id),
+      )
+      .leftJoin(
+        schema.departments,
+        eq(schema.workOrders.departmentId, schema.departments.id),
+      )
       .where(eq(schema.workOrders.id, params.id))
       .limit(1);
     if (!order)
@@ -183,7 +197,7 @@ export async function GET(
       }
     }
 
-    const [events, visits, assignments, attachments, materials] =
+    const [events, visits, assignments, attachments, materials, availability] =
       await Promise.all([
         db
           .select()
@@ -222,6 +236,17 @@ export async function GET(
           .from(schema.workOrderMaterials)
           .where(eq(schema.workOrderMaterials.workOrderId, params.id))
           .orderBy(asc(schema.workOrderMaterials.createdAt)),
+        db
+          .select({
+            id: schema.workOrderAvailabilityOptions.id,
+            optionNumber: schema.workOrderAvailabilityOptions.optionNumber,
+            startsAt: schema.workOrderAvailabilityOptions.startsAt,
+            endsAt: schema.workOrderAvailabilityOptions.endsAt,
+            selectedAt: schema.workOrderAvailabilityOptions.selectedAt,
+          })
+          .from(schema.workOrderAvailabilityOptions)
+          .where(eq(schema.workOrderAvailabilityOptions.workOrderId, params.id))
+          .orderBy(asc(schema.workOrderAvailabilityOptions.optionNumber)),
       ]);
     const evidence = await Promise.all(
       attachments.map(async (attachment) => ({
@@ -249,6 +274,7 @@ export async function GET(
       })),
       attachments: evidence,
       materials,
+      availability,
     });
   } catch (error) {
     return NextResponse.json(
@@ -1005,6 +1031,17 @@ export async function PATCH(
         throw new Error(
           "La orden cambió mientras la actualizabas. Recarga e inténtalo de nuevo.",
         );
+      }
+      if (["COMPLETED", "CANCELLED"].includes(nextStatus)) {
+        await tx
+          .update(schema.workOrderChats)
+          .set({ closedAt: now, closedBy: auth.user.id })
+          .where(
+            and(
+              eq(schema.workOrderChats.workOrderId, params.id),
+              isNull(schema.workOrderChats.closedAt),
+            ),
+          );
       }
 
       if (

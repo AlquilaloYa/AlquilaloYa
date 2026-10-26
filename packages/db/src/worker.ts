@@ -29,6 +29,8 @@ function getGlobal(): GlobalPool {
 }
 
 function createPool(): PoolRef {
+  const databaseHost = new URL(env.DATABASE_URL).hostname;
+  const isLocalDatabase = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(databaseHost);
   const queryClient = postgres(env.DATABASE_URL, {
     // Pool pequeño: en serverless cada instancia abre su propio pool.
     max: 3,
@@ -40,6 +42,7 @@ function createPool(): PoolRef {
     connect_timeout: 5,
     timeout: 10,
     idle_timeout: 20,
+    ssl: isLocalDatabase ? false : "require",
     // Fuerza UTF-8 en cada conexión: sin esto, el pooler de Supabase puede
     // devolver los acentos (los bytes UTF-8 de la BD) con encoding ASCII,
     // corrompiendo "Á"/"ó" en las respuestas de la API.

@@ -62,6 +62,15 @@ export async function updateAuthEmail(
 ): Promise<void> {
   const id = await findAuthUserId(currentEmail);
   if (!id) return;
+  await updateAuthEmailById(id, newEmail);
+}
+
+export async function updateAuthEmailById(id: string, newEmail: string): Promise<void> {
+  if (!isUsersAdminConfigured()) {
+    throw new Error(
+      "Admin de usuarios no configurado: faltan SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY"
+    );
+  }
   const res = await fetch(`${supabaseUrl()}/auth/v1/admin/users/${id}`, {
     method: "PUT",
     headers: adminHeaders(),
@@ -93,6 +102,23 @@ export async function createAuthUser(
   return { created: true, ...(data.id ? { authUserId: data.id } : {}) };
 }
 
+/** Elimina una cuenta creada al revertir un aprovisionamiento fallido. */
+export async function deleteAuthUserById(id: string): Promise<void> {
+  if (!isUsersAdminConfigured()) {
+    throw new Error(
+      "Admin de usuarios no configurado: faltan SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY"
+    );
+  }
+  const res = await fetch(`${supabaseUrl()}/auth/v1/admin/users/${id}`, {
+    method: "DELETE",
+    headers: adminHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`delete auth user ${res.status}: ${await res.text()}`);
+  }
+}
+
 /**
  * Banea/desbanea la credencial en Supabase Auth (SEC-015/SEC-077).
  *
@@ -104,6 +130,15 @@ export async function createAuthUser(
 export async function setAuthUserBanned(email: string, banned: boolean): Promise<void> {
   const id = await findAuthUserId(email);
   if (!id) return;
+  await setAuthUserBannedById(id, banned);
+}
+
+export async function setAuthUserBannedById(id: string, banned: boolean): Promise<void> {
+  if (!isUsersAdminConfigured()) {
+    throw new Error(
+      "Admin de usuarios no configurado: faltan SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY"
+    );
+  }
   const res = await fetch(`${supabaseUrl()}/auth/v1/admin/users/${id}`, {
     method: "PUT",
     headers: adminHeaders(),
@@ -120,6 +155,15 @@ export async function setAuthUserBanned(email: string, banned: boolean): Promise
 export async function updateAuthPassword(email: string, password: string): Promise<void> {
   const id = await findAuthUserId(email);
   if (!id) return;
+  await updateAuthPasswordById(id, password);
+}
+
+export async function updateAuthPasswordById(id: string, password: string): Promise<void> {
+  if (!isUsersAdminConfigured()) {
+    throw new Error(
+      "Admin de usuarios no configurado: faltan SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY"
+    );
+  }
   const res = await fetch(`${supabaseUrl()}/auth/v1/admin/users/${id}`, {
     method: "PUT",
     headers: adminHeaders(),

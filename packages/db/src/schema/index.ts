@@ -29,3 +29,4 @@ export * from "./accounting";
 export * from "./gastos";
 export * from "./notifications";
 export * from "./tenant-scoring";
+export * from "./client-portal";

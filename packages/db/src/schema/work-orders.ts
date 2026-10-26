@@ -30,6 +30,9 @@ export const workOrders = pgTable(
     status: varchar("status", { length: 30 }).notNull().default("CREATED"),
     location: text("location").notNull(),
     contactName: varchar("contact_name", { length: 255 }).notNull().default(""),
+    customerPresentAtVisit: boolean("customer_present_at_visit")
+      .notNull()
+      .default(true),
     site: varchar("site", { length: 20 }).notNull(),
     departmentId: uuid("department_id").references(() => departments.id, {
       onDelete: "set null",
@@ -244,7 +247,7 @@ export const workOrderAttachments = pgTable(
   (table) => [
     check(
       "work_order_attachments_mime_type_check",
-      sql`${table.mimeType} in ('image/jpeg', 'image/png', 'image/webp')`,
+      sql`${table.mimeType} in ('image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm')`,
     ),
     check(
       "work_order_attachments_size_bytes_check",

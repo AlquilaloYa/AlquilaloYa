@@ -65,6 +65,7 @@ export function collectProductionSecretProblems(env: EnvLike = process.env): str
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
   );
   const encryptionKey = firstDefined(env, "CONNECTOR_ENCRYPTION_KEY");
+  const clientChatEncryptionKey = firstDefined(env, "CLIENT_CHAT_ENCRYPTION_KEY");
   const previousKey = firstDefined(env, "CONNECTOR_ENCRYPTION_KEY_PREVIOUS");
   const databaseUrl = firstDefined(env, "DATABASE_URL");
 
@@ -86,6 +87,14 @@ export function collectProductionSecretProblems(env: EnvLike = process.env): str
     problems.push("falta CONNECTOR_ENCRYPTION_KEY (el cifrado de credenciales no está configurado)");
   } else if (looksLikePlaceholder(encryptionKey)) {
     problems.push("CONNECTOR_ENCRYPTION_KEY parece un valor de ejemplo/plantilla");
+  }
+
+  if (!clientChatEncryptionKey) {
+    problems.push("falta CLIENT_CHAT_ENCRYPTION_KEY (el cifrado del chat del portal no está configurado)");
+  } else if (clientChatEncryptionKey.length < 32) {
+    problems.push("CLIENT_CHAT_ENCRYPTION_KEY debe tener al menos 32 caracteres");
+  } else if (looksLikePlaceholder(clientChatEncryptionKey)) {
+    problems.push("CLIENT_CHAT_ENCRYPTION_KEY parece un valor de ejemplo/plantilla");
   }
 
   if (previousKey) {

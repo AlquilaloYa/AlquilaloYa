@@ -25,6 +25,13 @@ const PUBLIC_ROUTES = new Set<string>([
   "auth/mfa/activate/route.ts",
   "auth/mfa/enroll/route.ts",
   "auth/mfa/verify/route.ts",
+  // Portal de clientes: autenticación propia y sesión validada por contrato.
+  "portal-cliente/auth/login/route.ts",
+  "portal-cliente/auth/logout/route.ts",
+  "portal-cliente/ordenes/[id]/chat/route.ts",
+  "portal-cliente/ordenes/route.ts",
+  "portal-cliente/session/route.ts",
+  "portal-cliente/uploads/route.ts",
   // Endpoints máquina-a-máquina (token/HMAC propio).
   "cron/automatizaciones/route.ts",
   "webhooks/mensajes/route.ts",

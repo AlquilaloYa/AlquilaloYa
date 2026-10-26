@@ -12,19 +12,21 @@ export async function GET(req: Request) {
     if ("error" in auth) return auth.error;
 
     const visibleTypes: string[] = [];
-    if (
-      !requirePermission(auth.user, Permission.CONTRACT_READ)
-    ) {
+    if (requirePermission(auth.user, Permission.CONTRACT_READ) === null) {
       visibleTypes.push("CONTRACT_EXPIRY");
     }
-    if (!requirePermission(auth.user, Permission.WORK_ORDER_READ)) {
+    if (requirePermission(auth.user, Permission.WORK_ORDER_READ) === null) {
       visibleTypes.push(
         "WORK_ORDER_URGENT",
         "WORK_ORDER_ASSIGNED",
         "WORK_ORDER_UPDATE",
+        "CLIENT_REQUEST_NEW",
       );
     }
-    if (!requirePermission(auth.user, Permission.PERMISSION_REQUEST_APPROVE)) {
+    if (
+      requirePermission(auth.user, Permission.PERMISSION_REQUEST_APPROVE) ===
+      null
+    ) {
       visibleTypes.push("PERMISSION_REQUEST");
     }
     if (!visibleTypes.length) {

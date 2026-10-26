@@ -107,7 +107,9 @@ export async function GET(req: Request) {
         departmentId: schema.workOrders.departmentId,
         departmentCode: schema.workOrders.departmentCode,
         clientId: schema.workOrders.clientId,
+        clientName: sql<string | null>`nullif(trim(coalesce(${schema.clients.nombres}, '') || ' ' || coalesce(${schema.clients.apellidos}, '')), '')`,
         contactName: schema.workOrders.contactName,
+        customerPresentAtVisit: schema.workOrders.customerPresentAtVisit,
         assignedEmployeeId: schema.workOrders.assignedEmployeeId,
         targetAt: schema.workOrders.targetAt,
         arrivalWindowEnd: schema.workOrders.arrivalWindowEnd,
@@ -134,6 +136,10 @@ export async function GET(req: Request) {
       .leftJoin(
         schema.departments,
         eq(schema.workOrders.departmentId, schema.departments.id),
+      )
+      .leftJoin(
+        schema.clients,
+        eq(schema.workOrders.clientId, schema.clients.id),
       )
       .where(
         employeeScope

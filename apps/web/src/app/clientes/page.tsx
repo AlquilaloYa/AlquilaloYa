@@ -227,6 +227,7 @@ export default function ClientesPage() {
                         <th onClick={() => cambiarOrden("ruc")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5 " + (sortKey === "ruc" ? "text-white" : "")}>
                           RUC{sortKey === "ruc" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                         </th>
+                        <th className="px-3 py-2 font-medium">Cuenta cliente</th>
                         <th className="px-3 py-2 font-medium">Eliminar</th>
                       </tr>
                     </thead>
@@ -268,6 +269,14 @@ export default function ClientesPage() {
                             {c.nacionalidad ?? "—"}
                           </td>
                           <td className="px-3 py-2">{c.ruc ?? "—"}</td>
+                          <td className="px-3 py-2">
+                            <Link
+                              href="/configuraciones/usuarios"
+                              className="inline-flex h-8 items-center whitespace-nowrap rounded-md border border-cyan-700 px-2 text-xs font-medium text-cyan-700 transition-colors hover:bg-cyan-700 hover:text-white"
+                            >
+                              Gestionar en Usuarios
+                            </Link>
+                          </td>
                           <td className="px-3 py-2">
                             <button
                               type="button"

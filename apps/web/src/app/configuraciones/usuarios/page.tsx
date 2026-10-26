@@ -65,6 +65,16 @@ interface CreatedResult {
   message?: string;
 }
 
+interface ClientAccountItem {
+  clientId: string;
+  name: string;
+  departmentCode: string | null;
+  clientActive: boolean;
+  contractActive: boolean;
+  contractEndsAt: string | null;
+  account: { active: boolean; credentialPending: boolean } | null;
+}
+
 export default function UsuariosConfiguracionPage() {
   const { user } = useAuth();
   const canManage = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.USER_MANAGE);
@@ -84,6 +94,10 @@ export default function UsuariosConfiguracionPage() {
   const [permissionsBusy, setPermissionsBusy] = useState(false);
   const [permissionsLoaded, setPermissionsLoaded] = useState(false);
   const [permissionsError, setPermissionsError] = useState<string | null>(null);
+  const [clientAccounts, setClientAccounts] = useState<ClientAccountItem[]>([]);
+  const [clientAccountsLoading, setClientAccountsLoading] = useState(false);
+  const [clientAccountsBusy, setClientAccountsBusy] = useState<string | null>(null);
+  const [clientAccountsError, setClientAccountsError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -116,10 +130,75 @@ export default function UsuariosConfiguracionPage() {
     }
   }, [q]);
 
+  const loadClientAccounts = useCallback(async () => {
+    if (!canManage) return;
+    setClientAccountsLoading(true);
+    setClientAccountsError(null);
+    try {
+      const response = await apiFetch("/api/client-accounts", { cache: "no-store" });
+      const body = (await response.json()) as {
+        items?: ClientAccountItem[];
+        error?: string;
+      };
+      if (!response.ok) throw new Error(body.error ?? `Error ${response.status}`);
+      setClientAccounts(body.items ?? []);
+    } catch (reason) {
+      setClientAccountsError(
+        reason instanceof Error ? reason.message : "No se pudieron cargar las cuentas de clientes.",
+      );
+    } finally {
+      setClientAccountsLoading(false);
+    }
+  }, [canManage]);
+
   useEffect(() => {
     const t = setTimeout(() => load(), q ? 250 : 0);
     return () => clearTimeout(t);
   }, [load, q]);
+
+  useEffect(() => {
+    void loadClientAccounts();
+  }, [loadClientAccounts]);
+
+  async function manageClientAccount(clientId: string, action: "create" | "rotate") {
+    setClientAccountsBusy(clientId);
+    setClientAccountsError(null);
+    try {
+      const response = await apiFetch(
+        action === "create"
+          ? "/api/client-accounts"
+          : `/api/client-accounts/${clientId}/password`,
+        {
+          method: action === "create" ? "POST" : "POST",
+          headers: { "Content-Type": "application/json" },
+          ...(action === "create"
+            ? { body: JSON.stringify({ clientId }) }
+            : {}),
+        },
+      );
+      const body = (await response.json()) as {
+        account?: { active: boolean; password: string };
+        active?: boolean;
+        password?: string;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(body.error ?? `Error ${response.status}`);
+      await loadClientAccounts();
+      if (body.password) {
+        const item = clientAccounts.find((account) => account.clientId === clientId);
+        setCreated({
+          email: `Usuario cliente: ${item?.departmentCode ?? clientId}`,
+          password: body.password,
+        });
+      }
+    } catch (reason) {
+      setClientAccountsError(
+        reason instanceof Error ? reason.message : "No se pudo actualizar la cuenta.",
+      );
+    } finally {
+      setClientAccountsBusy(null);
+    }
+  }
 
   const sorted = useMemo(
     () => [...items].sort((a, b) => a.name.localeCompare(b.name)),
@@ -312,6 +391,20 @@ export default function UsuariosConfiguracionPage() {
             ) : null}
           </div>
         </div>
+
+        {canManage ? (
+          <ClientAccountsPanel
+            items={clientAccounts.filter((item) =>
+              `${item.name} ${item.departmentCode ?? ""}`.toLowerCase().includes(q.toLowerCase()),
+            )}
+            loading={clientAccountsLoading}
+            busyId={clientAccountsBusy}
+            error={clientAccountsError}
+            onRefresh={() => void loadClientAccounts()}
+            onCreate={(clientId) => void manageClientAccount(clientId, "create")}
+            onRotate={(clientId) => void manageClientAccount(clientId, "rotate")}
+          />
+        ) : null}
 
         {error ? (
           <div className="flex items-center gap-2 rounded-lg bg-error-container p-4 font-body-sm text-error-container-foreground">
@@ -648,6 +741,147 @@ export default function UsuariosConfiguracionPage() {
         )}
       </div>
     </DashboardShell>
+  );
+}
+
+function ClientAccountsPanel({
+  items,
+  loading,
+  busyId,
+  error,
+  onRefresh,
+  onCreate,
+  onRotate,
+}: {
+  items: ClientAccountItem[];
+  loading: boolean;
+  busyId: string | null;
+  error: string | null;
+  onRefresh: () => void;
+  onCreate: (clientId: string) => void;
+  onRotate: (clientId: string) => void;
+}) {
+  return (
+    <section className="space-y-4 rounded-lg border border-outline-variant/50 bg-surface-container-lowest p-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h3 className="font-headline-md text-on-surface">Cuentas de clientes</h3>
+          <p className="font-body-sm text-on-surface-variant">
+            El código de departamento es el usuario. Las cuentas solo ingresan mientras exista un contrato vigente.
+            Las contraseñas se muestran una sola vez al crearlas o restablecerlas.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="flex items-center gap-2 rounded-md bg-surface-container-low px-4 py-2 font-label-md text-on-surface transition-colors hover:bg-surface-variant disabled:opacity-40"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Actualizar
+        </button>
+      </div>
+
+      {error ? (
+        <div role="alert" className="rounded-lg bg-error-container p-3 font-body-sm text-error-container-foreground">
+          {error}
+        </div>
+      ) : null}
+
+      {loading ? (
+        <div className="py-8 text-center font-body-sm text-on-surface-variant">
+          Cargando y sincronizando vigencia de cuentas…
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-lg bg-surface-container-low p-8 text-center font-body-sm text-on-surface-variant">
+          No hay clientes que coincidan con la búsqueda.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-outline-variant/40">
+          <table className="w-full min-w-[850px] text-left">
+            <thead className="bg-surface-container-high font-label-md text-on-surface-variant">
+              <tr>
+                <th className="px-4 py-3">Cliente</th>
+                <th className="px-4 py-3">Usuario / departamento</th>
+                <th className="px-4 py-3">Contrato</th>
+                <th className="px-4 py-3">Acceso</th>
+                <th className="px-4 py-3">Credencial</th>
+                <th className="px-4 py-3 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-outline-variant/50">
+              {items.map((item) => (
+                <tr key={item.clientId} className="align-top hover:bg-surface-container-high">
+                  <td className="px-4 py-3 font-body-sm text-on-surface">{item.name}</td>
+                  <td className="px-4 py-3 font-mono-label text-on-surface-variant">
+                    {item.departmentCode || "Sin código"}
+                  </td>
+                  <td className="px-4 py-3 font-body-sm text-on-surface-variant">
+                    {item.contractActive
+                      ? `Vigente hasta ${item.contractEndsAt ?? "—"}`
+                      : "Sin contrato vigente"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-2 py-0.5 font-mono-label ${
+                        item.account?.active
+                        ? "bg-secondary-container text-secondary-container-foreground"
+                        : "bg-error-container text-error-container-foreground"
+                      }`}
+                    >
+                      {item.account?.active
+                        ? "Activo"
+                        : item.account?.credentialPending && item.contractActive
+                          ? "Pendiente de nueva contraseña"
+                          : "Bloqueado"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {!item.account ? (
+                      <span className="font-body-sm text-on-surface-variant">Sin cuenta</span>
+                    ) : item.account.credentialPending && item.contractActive ? (
+                      <span className="font-body-sm text-on-surface-variant">Emisión requerida</span>
+                    ) : (
+                      <span className="font-body-sm text-on-surface-variant">
+                        No se almacena ni se puede consultar
+                      </span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right">
+                    {!item.account ? (
+                      <button
+                        type="button"
+                        onClick={() => onCreate(item.clientId)}
+                        disabled={busyId === item.clientId || !item.departmentCode || !item.contractActive}
+                        title={!item.contractActive ? "Requiere un contrato vigente" : undefined}
+                        className="rounded-md bg-primary px-3 py-1.5 font-label-md text-primary-foreground hover:opacity-90 disabled:opacity-40"
+                      >
+                        {busyId === item.clientId ? "Creando…" : "Crear cuenta"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onRotate(item.clientId)}
+                        disabled={busyId === item.clientId || !item.contractActive}
+                        className="inline-flex items-center gap-1 rounded-md bg-surface-container-low px-3 py-1.5 font-label-md text-on-surface hover:bg-surface-variant disabled:opacity-40"
+                        title={item.contractActive ? "Emitir contraseña nueva" : "Requiere un contrato vigente"}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        {busyId === item.clientId ? "Guardando…" : "Cambiar contraseña"}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-xs leading-5 text-on-surface-variant">
+        Solo se conserva el hash administrado por Supabase Auth. Al cambiar el período contractual, el acceso se bloquea
+        hasta que un usuario autorizado emita y entregue una nueva contraseña; no se revela nuevamente después de cerrar este aviso.
+      </p>
+    </section>
   );
 }
 

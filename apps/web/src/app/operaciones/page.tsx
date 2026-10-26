@@ -8,6 +8,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { usePathname } from "next/navigation";
 import {
   AlertCircle,
   AlertTriangle,
@@ -72,7 +73,9 @@ interface WorkOrder {
   departmentName: string | null;
   departmentNumber: string | null;
   clientId: string | null;
+  clientName: string | null;
   contactName: string;
+  customerPresentAtVisit: boolean;
   assignedEmployeeId: string | null;
   assigneeName: string | null;
   assigneeRole: string | null;
@@ -164,6 +167,13 @@ interface WorkOrderMaterial {
 interface OrderDetails extends WorkOrder {
   events: WorkEvent[];
   visits: Visit[];
+  availability: Array<{
+    id: string;
+    optionNumber: number;
+    startsAt: string;
+    endsAt: string;
+    selectedAt: string | null;
+  }>;
   attachments: Evidence[];
   materials: WorkOrderMaterial[];
   assignments: Array<{
@@ -644,6 +654,7 @@ function FieldOpsMobilePreview() {
 }
 
 export default function OperacionesPage() {
+  const clientOrdersOnly = usePathname() === "/pedidos-clientes";
   const { user } = useAuth();
   const access = user ? AccessControl.forRole(user.role, user.additionalPermissions) : null;
   const canCreate = access?.can(Permission.WORK_ORDER_CREATE) ?? false;
@@ -848,24 +859,32 @@ export default function OperacionesPage() {
     };
   }, [timelineOrderId]);
 
+  const scopedOrders = useMemo(
+    () =>
+      clientOrdersOnly
+        ? orders.filter((order) => order.clientId !== null)
+        : orders,
+    [clientOrdersOnly, orders],
+  );
+
   const stats = useMemo(
     () => ({
-      open: orders.filter(
+      open: scopedOrders.filter(
         (order) => !["COMPLETED", "CANCELLED"].includes(order.status),
       ).length,
-      onsite: orders.filter((order) => order.status === "ON_SITE").length,
-      progress: orders.filter((order) =>
+      onsite: scopedOrders.filter((order) => order.status === "ON_SITE").length,
+      progress: scopedOrders.filter((order) =>
         ["DIAGNOSIS", "ESTIMATED", "IN_PROGRESS"].includes(order.status),
       ).length,
-      overdue: orders.filter(isOverdue).length,
-      completed: orders.filter((order) => order.status === "COMPLETED").length,
+      overdue: scopedOrders.filter(isOverdue).length,
+      completed: scopedOrders.filter((order) => order.status === "COMPLETED").length,
     }),
-    [orders],
+    [scopedOrders],
   );
 
   const visibleOrders = useMemo(() => {
     const search = query.trim().toLocaleLowerCase("es");
-    return orders.filter((order) => {
+    return scopedOrders.filter((order) => {
       const matchesStatus =
         statusFilter === "TODAS" ||
         (statusFilter === "ABIERTAS"
@@ -878,11 +897,12 @@ export default function OperacionesPage() {
           order.title,
           `${order.site} ${order.departmentCode}`,
           order.assigneeName,
+          order.clientName,
           order.contactName,
         ].some((value) => value?.toLocaleLowerCase("es").includes(search));
       return matchesStatus && matchesSearch;
     });
-  }, [orders, query, statusFilter]);
+  }, [scopedOrders, query, statusFilter]);
 
   async function openOrder(order: WorkOrder) {
     setError("");
@@ -1030,6 +1050,44 @@ export default function OperacionesPage() {
     await updateOrder({ assignedEmployeeId: employeeId || null });
   }
 
+  async function selectAvailability(optionId: string) {
+    if (!selectedOrder) return;
+    setSaving(true);
+    setError("");
+    try {
+      const response = await apiFetch(
+        `/api/operaciones/ordenes/${selectedOrder.id}/availability`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ optionId }),
+        },
+      );
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "No se pudo confirmar el horario");
+      }
+      await loadData(true);
+      const detailResponse = await apiFetch(
+        `/api/operaciones/ordenes/${selectedOrder.id}`,
+        { cache: "no-store" },
+      );
+      const detailPayload = await detailResponse.json();
+      if (!detailResponse.ok) {
+        throw new Error(detailPayload.error ?? "No se pudo actualizar el pedido");
+      }
+      setSelectedOrder(detailPayload as OrderDetails);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "No se pudo confirmar el horario",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function deleteOrder(order: WorkOrder) {
     if (
       !window.confirm(
@@ -1141,11 +1199,12 @@ export default function OperacionesPage() {
                 OPERACIONES
               </div>
               <h1 className="text-3xl font-bold tracking-tight text-on-surface sm:text-4xl">
-                Órdenes de trabajo
+                {clientOrdersOnly ? "Pedidos de clientes" : "Órdenes de trabajo"}
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-on-surface-variant sm:text-base">
-                Coordina al equipo de campo, programa visitas y sigue cada
-                intervención hasta su cierre.
+                {clientOrdersOnly
+                  ? "Gestiona los reportes enviados por clientes y verifica en cada pedido el cliente, departamento y código UNI/DEP asociado."
+                  : "Coordina al equipo de campo, programa visitas y sigue cada intervención hasta su cierre."}
               </p>
             </div>
             <div className="flex gap-3">
@@ -1160,7 +1219,7 @@ export default function OperacionesPage() {
                 />
                 Actualizar
               </button>
-              {canCreate && (
+              {canCreate && !clientOrdersOnly && (
                 <button
                   type="button"
                   onClick={openCreateForm}
@@ -1292,11 +1351,13 @@ export default function OperacionesPage() {
                   {orders.length ? "No hay resultados" : "Aún no hay órdenes"}
                 </h3>
                 <p className="mx-auto mt-1 max-w-md text-sm text-on-surface-variant">
-                  {orders.length
+                  {scopedOrders.length
                     ? "Prueba con otro filtro o término de búsqueda."
-                    : "Crea una orden para coordinar la primera intervención de campo."}
+                    : clientOrdersOnly
+                      ? "Los pedidos de clientes aparecerán aquí cuando se envíen desde el portal."
+                      : "Crea una orden para coordinar la primera intervención de campo."}
                 </p>
-                {!orders.length && canCreate && (
+                {!clientOrdersOnly && !scopedOrders.length && canCreate && (
                   <button
                     type="button"
                     onClick={openCreateForm}
@@ -1336,7 +1397,7 @@ export default function OperacionesPage() {
                           <div className="mt-1 flex items-center gap-1.5 text-xs text-on-surface-variant">
                             <UserRound className="h-3.5 w-3.5 shrink-0" />
                             <span className="truncate">
-                              {order.contactName}
+                              {order.clientName || order.contactName}
                             </span>
                           </div>
                         )}
@@ -1725,6 +1786,7 @@ export default function OperacionesPage() {
             onUploadEvidence={uploadEvidence}
             onClose={() => setSelectedOrder(null)}
             onAssign={assignOrder}
+            onSelectAvailability={selectAvailability}
             canDelete={isAdmin}
             onDelete={deleteOrder}
           />
@@ -2082,6 +2144,155 @@ function Modal({
   );
 }
 
+interface ChatMessage {
+  id: string;
+  senderType: string;
+  senderName: string;
+  content: string;
+  createdAt: string;
+}
+
+function WorkOrderChat({
+  orderId,
+  enabled,
+  closed,
+}: {
+  orderId: string;
+  enabled: boolean;
+  closed: boolean;
+}) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadMessages = useCallback(async () => {
+    const response = await apiFetch(
+      `/api/operaciones/ordenes/${orderId}/chat`,
+      { cache: "no-store" },
+    );
+    const body = (await response.json()) as {
+      messages?: ChatMessage[];
+      error?: string;
+    };
+    if (!response.ok) throw new Error(body.error ?? "No se pudo consultar el chat");
+    setMessages(body.messages ?? []);
+  }, [orderId]);
+
+  useEffect(() => {
+    let alive = true;
+    async function refresh() {
+      try {
+        await loadMessages();
+        if (alive) setError("");
+      } catch (reason) {
+        if (alive) setError(reason instanceof Error ? reason.message : "No se pudo consultar el chat");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 5000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [loadMessages]);
+
+  async function sendMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const content = draft.trim();
+    if (!content || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      const response = await apiFetch(
+        `/api/operaciones/ordenes/${orderId}/chat`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        },
+      );
+      const body = (await response.json()) as {
+        message?: ChatMessage;
+        error?: string;
+      };
+      if (!response.ok || !body.message) {
+        throw new Error(body.error ?? "No se pudo enviar el mensaje");
+      }
+      setMessages((current) => [...current, body.message!]);
+      setDraft("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo enviar el mensaje");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <section className="mb-5 rounded-xl border border-violet-200 bg-violet-50/60 p-4 dark:border-violet-900 dark:bg-violet-950/20">
+      <h3 className="mb-2 text-sm font-bold text-on-surface">
+        Chat con el cliente
+      </h3>
+      {!enabled && !closed && (
+        <p className="text-sm text-on-surface-variant">
+          Se habilitará al registrar la llegada de mantenimiento al departamento.
+        </p>
+      )}
+      {closed && (
+        <p className="mb-3 text-sm text-on-surface-variant">
+          La conversación se cerró al finalizar o cancelar la orden.
+        </p>
+      )}
+      {(enabled || closed) && (
+        <>
+          <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg bg-card p-3">
+            {loading ? (
+              <p className="text-sm text-on-surface-variant">Cargando conversación…</p>
+            ) : messages.length ? (
+              messages.map((message) => (
+                <div key={message.id} className="rounded-md bg-muted px-3 py-2">
+                  <p className="text-xs font-semibold text-on-surface">
+                    {message.senderName} · {formatDate(message.createdAt)}
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-on-surface-variant">
+                    {message.content}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-on-surface-variant">
+                {enabled ? "Envía un mensaje para abrir el chat con el cliente." : "No hay mensajes."}
+              </p>
+            )}
+          </div>
+          {error && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
+          {enabled && (
+            <form onSubmit={sendMessage} className="mt-3 flex gap-2">
+              <input
+                value={draft}
+                maxLength={2000}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder="Escribe al cliente…"
+                className="h-10 min-w-0 flex-1 rounded-md border border-border bg-card px-3 text-sm"
+              />
+              <button
+                type="submit"
+                disabled={sending || !draft.trim()}
+                className="rounded-md bg-violet-700 px-4 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {sending ? "Enviando…" : "Enviar"}
+              </button>
+            </form>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 function OrderDrawer({
   order,
   employees,
@@ -2091,6 +2302,7 @@ function OrderDrawer({
   onUploadEvidence,
   onClose,
   onAssign,
+  onSelectAvailability,
   onDelete,
 }: {
   order: OrderDetails;
@@ -2106,6 +2318,7 @@ function OrderDrawer({
   ) => Promise<boolean>;
   onClose: () => void;
   onAssign: (employeeId: string) => Promise<void>;
+  onSelectAvailability: (optionId: string) => Promise<void>;
   onDelete: (order: WorkOrder) => Promise<void>;
 }) {
   const [assignee, setAssignee] = useState(order.assignedEmployeeId ?? "");
@@ -2167,7 +2380,11 @@ function OrderDrawer({
             <InfoBlock label="Tipo de incidencia" value={order.issueType} />
             <InfoBlock
               label="Departamento · UNI/DEP"
-              value={order.departmentCode}
+              value={
+                order.departmentName
+                  ? `${order.departmentName}${order.departmentNumber ? ` ${order.departmentNumber}` : ""} · ${order.departmentCode}`
+                  : order.departmentCode
+              }
             />
             <InfoBlock label="Sede" value={order.site} />
             <InfoBlock
@@ -2176,7 +2393,7 @@ function OrderDrawer({
             />
             <InfoBlock
               label="Contacto"
-              value={order.contactName || "No indicado"}
+              value={order.clientName || order.contactName || "No indicado"}
             />
           </div>
 
@@ -2188,6 +2405,59 @@ function OrderDrawer({
               {order.description || "Sin descripción adicional."}
             </p>
           </section>
+
+          {!order.customerPresentAtVisit && (
+            <WorkOrderChat
+              orderId={order.id}
+              enabled={["ON_SITE", "DIAGNOSIS", "ESTIMATED", "IN_PROGRESS", "RESOLVED", "PENDING_CLOSURE"].includes(order.status)}
+              closed={["COMPLETED", "CANCELLED"].includes(order.status)}
+            />
+          )}
+
+          {order.availability.length > 0 && (
+            <section className="mb-5 rounded-xl border border-cyan-200 bg-cyan-50/60 p-4 dark:border-cyan-900 dark:bg-cyan-950/20">
+              <div className="mb-3 flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-cyan-700 dark:text-cyan-300" />
+                <h3 className="text-sm font-bold text-on-surface">
+                  Horarios propuestos por el cliente
+                </h3>
+              </div>
+              {order.status !== "ACCEPTED" &&
+                !order.availability.some((option) => option.selectedAt) && (
+                  <p className="mb-3 text-xs leading-5 text-on-surface-variant">
+                    Acepta la orden para poder confirmar uno de estos horarios.
+                  </p>
+                )}
+              <ol className="space-y-2">
+                {order.availability.map((option) => (
+                  <li
+                    key={option.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-100 bg-card px-3 py-2 dark:border-cyan-900"
+                  >
+                    <span className="text-sm font-medium text-on-surface">
+                      Opción {option.optionNumber} ·{" "}
+                      {formatArrivalWindow(option.startsAt, option.endsAt)}
+                    </span>
+                    {option.selectedAt && (
+                      <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+                        Seleccionada
+                      </span>
+                    )}
+                    {canUpdate && !option.selectedAt && (
+                      <button
+                        type="button"
+                        disabled={saving || order.status !== "ACCEPTED"}
+                        onClick={() => void onSelectAvailability(option.id)}
+                        className="rounded-md bg-cyan-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Confirmar visita
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
 
           <section className="mb-5 rounded-xl border border-border bg-card p-4">
             <div className="mb-3 flex items-center gap-2">

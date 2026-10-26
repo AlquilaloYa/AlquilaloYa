@@ -31,7 +31,6 @@ export async function GET(req: Request) {
     }
 
     const clientIds = rows.map((c) => c.id);
-
     // Último contrato de cada cliente (por fecha de fin y creación).
     const contractsRows = await db
       .select()

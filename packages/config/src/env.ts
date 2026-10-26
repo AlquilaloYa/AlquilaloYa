@@ -18,6 +18,8 @@ export const env = createEnv({
      * arrancar en lugar de cifrar con una clave predecible.
      */
     CONNECTOR_ENCRYPTION_KEY: z.string().min(24),
+    /** Clave AES-256-GCM para mensajes privados del portal cliente. */
+    CLIENT_CHAT_ENCRYPTION_KEY: z.string().min(32).optional(),
     /**
      * Clave de cifrado anterior (solo durante una rotacion). Permite descifrar
      * credenciales cifradas con la clave previa hasta re-cifrarlas. Nunca debe

@@ -4,6 +4,10 @@ import { checkApiRateLimit, clientIp } from "@/lib/rate-limit";
 import { metrics, routeBucket } from "@/lib/metrics";
 import { logger } from "@/lib/logger";
 import { ACCESS_COOKIE } from "@/lib/session-cookies";
+const CLIENT_PORTAL_COOKIE_PREFIX =
+  process.env.NODE_ENV === "production" ? "__Host-" : "";
+const CLIENT_PORTAL_ACCESS_COOKIE = `${CLIENT_PORTAL_COOKIE_PREFIX}client_portal_at`;
+const CLIENT_PORTAL_REFRESH_COOKIE = `${CLIENT_PORTAL_COOKIE_PREFIX}client_portal_rt`;
 
 /** Rutas accesibles sin sesión (landing + login). */
 const PUBLIC_PATHS = new Set(["/", "/login"]);
@@ -45,6 +49,30 @@ export async function middleware(req: NextRequest) {
   const requestId = crypto.randomUUID();
   const log = logger.child({ requestId, path: pathname });
 
+  if (process.env.CLIENT_PORTAL_ONLY === "true") {
+    const isPortalPage =
+      pathname === "/portal-cliente" ||
+      pathname.startsWith("/portal-cliente/");
+    const isPortalApi = pathname.startsWith("/api/portal-cliente/");
+    const isHealthcheck = pathname === "/api/health";
+
+    if (pathname === "/") {
+      return withAndroidAppCors(
+        withSecurityHeaders(
+          NextResponse.redirect(new URL("/portal-cliente/login", req.nextUrl.origin)),
+          requestId,
+        ),
+        req,
+      );
+    }
+    if (!isPortalPage && !isPortalApi && !isHealthcheck) {
+      return withAndroidAppCors(
+        withSecurityHeaders(new NextResponse(null, { status: 404 }), requestId),
+        req,
+      );
+    }
+  }
+
   // Rate limiting solo para API de negocio.
   const isApi = pathname.startsWith("/api");
   if (isApi && req.method === "OPTIONS") {
@@ -83,6 +111,28 @@ export async function middleware(req: NextRequest) {
   // Guard de páginas: sin sesión, mandamos al login (solo UX; no es la frontera
   // de seguridad, que son las rutas de API con requireUser).
   if (!isApi && !PUBLIC_PATHS.has(pathname)) {
+    if (pathname === "/portal-cliente/login") {
+      return withAndroidAppCors(
+        withSecurityHeaders(NextResponse.next(), requestId),
+        req,
+      );
+    }
+    if (pathname === "/portal-cliente" || pathname.startsWith("/portal-cliente/")) {
+      if (
+        !req.cookies.get(CLIENT_PORTAL_ACCESS_COOKIE)?.value &&
+        !req.cookies.get(CLIENT_PORTAL_REFRESH_COOKIE)?.value
+      ) {
+        const loginUrl = new URL("/portal-cliente/login", req.nextUrl.origin);
+        return withAndroidAppCors(
+          withSecurityHeaders(NextResponse.redirect(loginUrl), requestId),
+          req,
+        );
+      }
+      return withAndroidAppCors(
+        withSecurityHeaders(NextResponse.next(), requestId),
+        req,
+      );
+    }
     if (!req.cookies.get(ACCESS_COOKIE)?.value) {
       const loginUrl = new URL("/login", req.nextUrl.origin);
       return withAndroidAppCors(
