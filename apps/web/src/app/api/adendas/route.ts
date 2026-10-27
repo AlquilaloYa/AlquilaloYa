@@ -5,6 +5,8 @@ import { requireUser, requirePermission } from "@/lib/session";
 import { buildContractServices } from "@/lib/contract-app";
 import { generateAdendaPdf } from "@/lib/pdf/generate-pdf";
 import { findDocumentById, registerGeneratedDocument } from "@/lib/documents";
+import { logger } from "@/lib/logger";
+import { sincronizarTareasContrato } from "@/lib/tareas-contrato";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -23,6 +25,17 @@ const MESES = [
 function dstr(v: unknown): string {
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   return String(v ?? "").slice(0, 10);
+}
+
+async function sincronizarTareasDeContrato(contractId: string): Promise<void> {
+  try {
+    await sincronizarTareasContrato(contractId);
+  } catch (error) {
+    logger.warn("No se pudieron sincronizar las tareas del contrato", {
+      contractId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 function addMonthsIso(iso: string, months: number): string {
@@ -291,6 +304,7 @@ export async function POST(request: Request) {
         .update(schema.contracts)
         .set({ fechaFin: nuevaFechaFin, actualizadoEn: new Date() })
         .where(eq(schema.contracts.id, contract.id));
+      await sincronizarTareasDeContrato(contract.id);
 
       const monto = Number(contract.montoCanonMensual).toFixed(2);
       const mant = Number(contract.mantenimiento ?? "50").toFixed(2);
@@ -457,7 +471,7 @@ function dstrDepartamento(contract: {
 
 /**
  * PATCH /api/adendas  body: { documentId, titulo?, contenido?, numeroAdenda?,
- * fechaInicioAdenda?, fechaFinAdenda? }
+ * fechaInicioAdenda?, fechaFinAdenda?, nuevaFechaFin? }
  * Edita una adenda ya generada: actualiza el snapshot de la adenda (título,
  * contenido, numeración y plazo), actualiza el contrato y sus cuotas si el
  * plazo cambió, regenera el PDF y lo reemplaza en storage (mismo documento).
@@ -477,6 +491,7 @@ export async function PATCH(request: Request) {
       numeroAdenda?: string;
       fechaInicioAdenda?: string;
       fechaFinAdenda?: string;
+      nuevaFechaFin?: string;
       documentoHtml?: string;
     };
     if (!body.documentId) {
@@ -533,9 +548,12 @@ export async function PATCH(request: Request) {
     const fechaInicioAdenda = body.fechaInicioAdenda
       ? body.fechaInicioAdenda.slice(0, 10)
       : String(contratoActual.fechaInicioAdenda ?? "").slice(0, 10);
-    const nuevaFechaFinAdenda = body.fechaFinAdenda
-      ? body.fechaFinAdenda.slice(0, 10)
+    const fechaFinAdendaActual = esExtension
+      ? String(contratoActual.fechaFin ?? "").slice(0, 10)
       : String(contratoActual.fechaFinAdenda ?? "").slice(0, 10);
+    const nuevaFechaFinAdenda = esExtension
+      ? (body.nuevaFechaFin ?? fechaFinAdendaActual).slice(0, 10)
+      : (body.fechaFinAdenda ?? fechaFinAdendaActual).slice(0, 10);
 
     if (!esExtension && nuevaFechaFinAdenda && fechaInicioAdenda && !(nuevaFechaFinAdenda > fechaInicioAdenda)) {
       return NextResponse.json(
@@ -556,7 +574,7 @@ export async function PATCH(request: Request) {
     const fechaFinActual = dstr(contract.fechaFin);
     const esAdendaConPlazo = !esExtension && Boolean(fechaInicioAdenda && nuevaFechaFinAdenda);
     const extiende = esExtension || esAdendaConPlazo;
-    if (extiende && nuevaFechaFinAdenda && nuevaFechaFinAdenda !== contratoActual.fechaFinAdenda) {
+    if (extiende && nuevaFechaFinAdenda && nuevaFechaFinAdenda !== fechaFinAdendaActual) {
       if (!(nuevaFechaFinAdenda > fechaFinActual)) {
         return NextResponse.json(
           { error: `La nueva fecha de fin debe ser posterior a la fecha de término actual (${fechaFinActual})` },
@@ -568,6 +586,7 @@ export async function PATCH(request: Request) {
         .update(schema.contracts)
         .set({ fechaFin: nuevaFechaFinAdenda, actualizadoEn: new Date() })
         .where(eq(schema.contracts.id, contract.id));
+      await sincronizarTareasDeContrato(contract.id);
       const monto = Number(contract.montoCanonMensual).toFixed(2);
       const mant = Number(contract.mantenimiento ?? "50").toFixed(2);
       if (cuotasNuevas.length > 0) {
@@ -595,6 +614,7 @@ export async function PATCH(request: Request) {
       titulo,
       numeroAdenda,
       fechaInicioAdenda: esExtension ? contratoActual.fechaInicioAdenda : fechaInicioAdenda,
+      fechaFin: esExtension ? nuevaFechaFinAdenda : contratoActual.fechaFin,
       fechaFinAdenda: esExtension ? contratoActual.fechaFinAdenda : nuevaFechaFinAdenda,
     };
     const anexos = esExtension

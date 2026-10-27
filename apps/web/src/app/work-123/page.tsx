@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
+import { work123DateKey, work123LocalDate } from "@/lib/work-123-calendar";
 import {
   AlertTriangle,
   CalendarDays,
@@ -94,6 +95,7 @@ interface Task {
   estado: TaskState;
   creadoPor: string;
   origenTipo?: string;
+  origenContratoId?: string | null;
   origenEvento?: string | null;
   createdAt: string | null;
   updatedAt: string | null;
@@ -137,7 +139,9 @@ function dayKey(d: Date): string {
 
 function fmtFecha(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("es-PE", {
+  const date = work123LocalDate(iso);
+  if (!date) return "—";
+  return date.toLocaleDateString("es-PE", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -213,17 +217,22 @@ export default function Work123Page() {
         const body = await resTareas.json().catch(() => ({}));
         throw new Error(body.error ?? `Error ${resTareas.status}`);
       }
-      setTasks((await resTareas.json()) as Task[]);
+      const taskRows = (await resTareas.json()) as Task[];
+      const contractRows = resContratos?.ok
+        ? ((await resContratos.json()) as ContractBrief[])
+        : [];
+      const contractsById = new Map(contractRows.map((contract) => [contract.id, contract]));
+      setTasks(taskRows.map((task) => {
+        if (task.origenEvento !== "CHECKOFF" || !task.origenContratoId) return task;
+        const contractEnd = contractsById.get(task.origenContratoId)?.fechaFin;
+        return contractEnd ? { ...task, fechaLimite: contractEnd } : task;
+      }));
+      setContracts(contractRows);
       if (resEmployees?.ok) {
         const staff = (await resEmployees.json()) as EmployeeBrief[];
         setEmployees(staff.filter((employee) => employee.estado === "ACTIVO"));
       } else {
         setEmployees([]);
-      }
-      if (resContratos && resContratos.ok) {
-        setContracts((await resContratos.json()) as ContractBrief[]);
-      } else {
-        setContracts([]);
       }
     } catch (e) {
       setError((e as Error).message);
@@ -240,9 +249,8 @@ export default function Work123Page() {
     const map = new Map<string, Task[]>();
     for (const t of tasks) {
       if (!t.fechaLimite) continue;
-      const d = new Date(t.fechaLimite);
-      if (Number.isNaN(d.getTime())) continue;
-      const key = dayKey(d);
+      const key = work123DateKey(t.fechaLimite);
+      if (!key) continue;
       const arr = map.get(key) ?? [];
       arr.push(t);
       map.set(key, arr);
@@ -253,6 +261,12 @@ export default function Work123Page() {
   // Fechas que generan los contratos (inicio y fin) sobre el calendario.
   const contractEventsByDay = useMemo(() => {
     const map = new Map<string, ContractEvent[]>();
+    const contractsWithCheckoutTask = new Set(
+      tasks
+        .filter((task) => task.origenTipo === "CONTRATO" && task.origenEvento === "CHECKOFF")
+        .map((task) => task.origenContratoId)
+        .filter((id): id is string => Boolean(id)),
+    );
     const push = (key: string, ev: ContractEvent) => {
       const arr = map.get(key) ?? [];
       arr.push(ev);
@@ -264,9 +278,10 @@ export default function Work123Page() {
       const label = `${c.codigoContrato}${cliente ? ` · ${cliente}` : ""}`;
       const dias = diasHastaVencimiento(c.fechaFin);
       const pushOffset = (iso: string, offsetDias: number, kind: ContractEvent["kind"]) => {
-        if (!iso) return;
-        const d = new Date(`${iso}T00:00:00`);
-        if (Number.isNaN(d.getTime())) return;
+        const key = work123DateKey(iso);
+        if (!key) return;
+        const d = work123LocalDate(key);
+        if (!d) return;
         if (offsetDias !== 0) d.setDate(d.getDate() + offsetDias);
         push(dayKey(d), { kind, label, estado: c.estado, departamento: c.departamentoNombre, diasParaVencer: dias });
       };
@@ -276,10 +291,10 @@ export default function Work123Page() {
       pushOffset(inicio, -2, "REVISION");
       pushOffset(inicio, -1, "LIMPIEZA");
       pushOffset(inicio, 0, "INICIO");
-      pushOffset(fin, 0, "FIN");
+      if (!contractsWithCheckoutTask.has(c.id)) pushOffset(fin, 0, "FIN");
     }
     return map;
-  }, [contracts]);
+  }, [contracts, tasks]);
 
   const contractsOfDay = useMemo(
     () => contractEventsByDay.get(selectedDay) ?? [],
@@ -319,7 +334,7 @@ export default function Work123Page() {
       descripcion: task.descripcion,
       asignadoA: task.asignadoA,
       empleadoId: task.empleadoId ?? "",
-      fechaLimite: task.fechaLimite ? dayKey(new Date(task.fechaLimite)) : "",
+      fechaLimite: work123DateKey(task.fechaLimite) ?? "",
       estado: task.estado,
     });
     setModalOpen(true);
