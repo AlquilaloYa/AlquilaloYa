@@ -437,8 +437,6 @@ function PhotoField({ multiple = false, value = [], onChange, disabled = false }
 function App() {
   const [tasks, setTasks] = useState([])
   const tasksRef = useRef(tasks)
-  const reloadOrdersRef = useRef(null)
-  const openTaskRef = useRef(null)
   const pushTokenRef = useRef('')
   const knownOrderVersionsRef = useRef(null)
   const [user, setUser] = useState(null)
@@ -501,6 +499,13 @@ function App() {
   const [showReassign, setShowReassign] = useState(false)
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId)
+  const activeWarning = storageWarning || (
+    sessionState === 'authenticated' &&
+    Capacitor.isNativePlatform() &&
+    import.meta.env.VITE_FCM_CONFIGURED !== 'true'
+      ? 'Las notificaciones push aún no están configuradas. Las órdenes se actualizarán mientras la app esté abierta.'
+      : ''
+  )
   const openTasks = tasks.filter((task) => task.status !== 'COMPLETED' && task.status !== 'CANCELLED')
   const pendingTasks = openTasks.filter((task) => !['ON_SITE', 'IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE'].includes(task.status))
   const urgentTasks = openTasks.filter((task) => task.priority === 'URGENTE')
@@ -554,7 +559,12 @@ function App() {
     completedFlowStatuses.includes(selectedTask?.status),
     ['IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE', 'COMPLETED'].includes(selectedTask?.status),
   ]
-  const workStartedAtMs = selectedTask?.workStartedAt ? new Date(selectedTask.workStartedAt).getTime() : 0
+  const firstArrivalAt = selectedTask?.visits.find((visit) => visit.arrivedAtIso)?.arrivedAtIso
+  const workStartedAtMs = firstArrivalAt
+    ? new Date(firstArrivalAt).getTime()
+    : selectedTask?.workStartedAt
+      ? new Date(selectedTask.workStartedAt).getTime()
+      : 0
   const completedAtMs = selectedTask?.completedAt ? new Date(selectedTask.completedAt).getTime() : 0
   const isWorkTimerRunning = Boolean(workStartedAtMs) && selectedTask?.status !== 'COMPLETED'
   const workTimerEndMs = isWorkTimerRunning ? clockNow : completedAtMs || clockNow
@@ -571,17 +581,16 @@ function App() {
         : 'Aún no iniciado'
 
   useEffect(() => {
-    if (!selectedTask?.workStartedAt || selectedTask.status === 'COMPLETED') return undefined
-    setClockNow(Date.now())
+    if (!workStartedAtMs || selectedTask?.status === 'COMPLETED') return undefined
     const interval = setInterval(() => setClockNow(Date.now()), 1000)
     return () => clearInterval(interval)
-  }, [selectedTask?.workStartedAt, selectedTask?.status])
+  }, [workStartedAtMs, selectedTask?.status])
 
   useEffect(() => {
     tasksRef.current = tasks
   }, [tasks])
 
-  async function reloadOrders() {
+  const reloadOrders = useCallback(async () => {
     const rows = await fieldopsApi.loadOrders()
     tasksRef.current = rows
     knownOrderVersionsRef.current = new Map(rows.map((task) => [task.id, {
@@ -591,8 +600,7 @@ function App() {
     }]))
     setTasks(rows)
     return rows
-  }
-  reloadOrdersRef.current = reloadOrders
+  }, [])
 
   async function loadTeam() {
     try {
@@ -872,7 +880,7 @@ function App() {
     }
   }
 
-  function openTask(task) {
+  const openTask = useCallback((task) => {
     setUrgentNotice(null)
     setSelectedTaskId(task.id)
     const hasPendingCustomerTime = task.status === 'ACCEPTED' &&
@@ -914,7 +922,7 @@ function App() {
     setResolutionDraft(task.resolution)
     setObservationsDraft(task.observations)
     setActiveTab('order')
-  }
+  }, [])
 
   async function acceptTask() {
     if (selectedTask.status !== 'ASSIGNED') return
@@ -992,14 +1000,9 @@ function App() {
       { note: reassignReason.trim() },
     )) setShowReassign(false)
   }
-  openTaskRef.current = openTask
-
   useEffect(() => {
     if (sessionState !== 'authenticated' || !Capacitor.isNativePlatform()) return undefined
-    if (import.meta.env.VITE_FCM_CONFIGURED !== 'true') {
-      setStorageWarning('Las notificaciones push aún no están configuradas. Las órdenes se actualizarán mientras la app esté abierta.')
-      return undefined
-    }
+    if (import.meta.env.VITE_FCM_CONFIGURED !== 'true') return undefined
 
     let active = true
     const listeners = []
@@ -1011,11 +1014,11 @@ function App() {
     const handleUrgentNotification = async (data, openImmediately) => {
       if (data?.type !== 'urgent_work_order' || typeof data.workOrderId !== 'string') return
       try {
-        const orders = await reloadOrdersRef.current()
+        const orders = await reloadOrders()
         if (!active) return
         const task = orders.find((order) => order.id === data.workOrderId)
         if (!task) return
-        if (openImmediately) openTaskRef.current(task)
+        if (openImmediately) openTask(task)
         else setUrgentNotice(task)
       } catch (error) {
         handlePushError(error)
@@ -1086,7 +1089,7 @@ function App() {
       active = false
       for (const listener of listeners) void listener.remove()
     }
-  }, [sessionState])
+  }, [sessionState, reloadOrders, openTask])
 
   async function rescheduleVisit(event) {
     event.preventDefault()
@@ -1133,12 +1136,19 @@ function App() {
       addEvent(task, `Trabajador confirmó llegada a visita ${task.visits.length}`, {
         status: 'ON_SITE',
       }, arrivalTime)
-    )) setWorkflowStep(3)
+    )) {
+      setClockNow(Date.parse(currentTimestamp().iso))
+      setWorkflowStep(3)
+    }
   }
 
   async function saveDiagnosis(event) {
     event.preventDefault()
     if (!diagnosisDraft.trim() || !['ON_SITE', 'DIAGNOSIS'].includes(selectedTask.status)) return
+    if (!selectedTask.attachments.some((attachment) => attachment.kind === 'FOTO DIAGNÓSTICO')) {
+      setStorageWarning('Adjunta al menos una foto del desperfecto antes de guardar el diagnóstico.')
+      return
+    }
     const eventTime = currentTimeLabel()
     if (await updateTask(selectedTask.id, (task) =>
       addEvent(task, 'Registró diagnóstico', {
@@ -1197,7 +1207,12 @@ function App() {
   async function startWork() {
     if (selectedTask.status !== 'ESTIMATED') return
     const eventTime = currentTimeLabel()
-    await updateTask(selectedTask.id, (task) => addEvent(task, 'Inició trabajo de reparación', { status: 'IN_PROGRESS' }, eventTime))
+    if (await updateTask(selectedTask.id, (task) => addEvent(task, 'Inició trabajo de reparación', { status: 'IN_PROGRESS' }, eventTime))) {
+      setWorkflowStep(5)
+      window.requestAnimationFrame(() => {
+        document.querySelector('.order-detail-body')?.scrollTo({ top: 0, behavior: 'smooth' })
+      })
+    }
   }
 
   async function saveResolution(event) {
@@ -1630,31 +1645,9 @@ function App() {
         {workflowStep === 3 && (
           <section className="workflow-card">
             <div className="section-heading"><h2>Diagnóstico</h2><span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
-            {selectedTask.status === 'RESCHEDULED' && (
-              <div className="scheduled-visit-card">
-                <span className="eyebrow">DIAGNÓSTICO REGISTRADO</span>
-                <strong>{selectedTask.diagnosis}</strong>
-                {selectedTask.cause && <span>Causa probable: {selectedTask.cause}</span>}
-                <span>La visita inicial queda registrada y puedes programar una visita de seguimiento.</span>
-              </div>
-            )}
-            {selectedTask.status !== 'RESCHEDULED' && (
-              <form className="form-card" onSubmit={saveDiagnosis}>
-                <div className="field-block">
-                  <label>Problema encontrado<textarea rows="3" required value={diagnosisDraft} onChange={(event) => setDiagnosisDraft(event.target.value)} placeholder="Describe el estado del problema encontrado" /></label>
-                  <DictateButton supported={dictation.supported} active={dictation.activeField === 'diagnosis'} onClick={() => dictation.start('diagnosis', (text) => setDiagnosisDraft((current) => (current ? `${current} ${text}` : text)))} />
-                </div>
-                <div className="field-block">
-                  <label>Causa probable<textarea rows="2" value={causeDraft} onChange={(event) => setCauseDraft(event.target.value)} placeholder="¿Qué originó el problema?" /></label>
-                  <DictateButton supported={dictation.supported} active={dictation.activeField === 'cause'} onClick={() => dictation.start('cause', (text) => setCauseDraft((current) => (current ? `${current} ${text}` : text)))} />
-                </div>
-                <fieldset className="choice-group"><legend>¿Puede resolverse hoy?</legend><label><input type="radio" checked={canResolveToday} onChange={() => setCanResolveToday(true)} /> Sí, puedo resolverlo</label><label><input type="radio" checked={!canResolveToday} onChange={() => setCanResolveToday(false)} /> No, requiere otra visita</label></fieldset>
-                <button type="submit" className="primary-btn">Guardar diagnóstico</button>
-              </form>
-            )}
             <div className="diagnosis-photos">
               <h3>Fotos de los desperfectos</h3>
-              <p className="prototype-note">Adjunta fotos de los daños o desperfectos que observes durante el diagnóstico.</p>
+              <p className="prototype-note">Adjunta al menos una foto de los daños antes de guardar el diagnóstico.</p>
               {diagnosisPhotos.length > 0 && (
                 <div className="evidence-gallery" aria-label="Fotos de desperfectos del diagnóstico">
                   {diagnosisPhotos.map((attachment) => (
@@ -1675,6 +1668,29 @@ function App() {
                 <button type="submit" className="ghost-btn" disabled={selectedTask.status === 'COMPLETED' || diagnosisPhotoFiles.length === 0}>Adjuntar foto</button>
               </form>
             </div>
+            {selectedTask.status === 'RESCHEDULED' && (
+              <div className="scheduled-visit-card">
+                <span className="eyebrow">DIAGNÓSTICO REGISTRADO</span>
+                <strong>{selectedTask.diagnosis}</strong>
+                {selectedTask.cause && <span>Causa probable: {selectedTask.cause}</span>}
+                <span>La visita inicial queda registrada y puedes programar una visita de seguimiento.</span>
+              </div>
+            )}
+            {selectedTask.status !== 'RESCHEDULED' && (
+              <form className="form-card" onSubmit={saveDiagnosis}>
+                <div className="field-block">
+                  <label>Problema encontrado<textarea rows="3" required value={diagnosisDraft} onChange={(event) => setDiagnosisDraft(event.target.value)} placeholder="Describe el estado del problema encontrado" /></label>
+                  <DictateButton supported={dictation.supported} active={dictation.activeField === 'diagnosis'} onClick={() => dictation.start('diagnosis', (text) => setDiagnosisDraft((current) => (current ? `${current} ${text}` : text)))} />
+                </div>
+                <div className="field-block">
+                  <label>Causa probable<textarea rows="2" value={causeDraft} onChange={(event) => setCauseDraft(event.target.value)} placeholder="¿Qué originó el problema?" /></label>
+                  <DictateButton supported={dictation.supported} active={dictation.activeField === 'cause'} onClick={() => dictation.start('cause', (text) => setCauseDraft((current) => (current ? `${current} ${text}` : text)))} />
+                </div>
+                <fieldset className="choice-group"><legend>¿Puede resolverse hoy?</legend><label><input type="radio" checked={canResolveToday} onChange={() => setCanResolveToday(true)} /> Sí, puedo resolverlo</label><label><input type="radio" checked={!canResolveToday} onChange={() => setCanResolveToday(false)} /> No, requiere otra visita</label></fieldset>
+                <button type="submit" className="primary-btn" disabled={!diagnosisPhotos.length}>Guardar diagnóstico</button>
+                {!diagnosisPhotos.length && <p className="disabled-hint">Adjunta primero una foto del desperfecto.</p>}
+              </form>
+            )}
             {!canResolveToday && <form className="form-card secondary-form" onSubmit={scheduleFollowUpVisit}><h3>Programar visita de seguimiento</h3><div className="form-grid"><label>Fecha de la nueva visita<input type="date" required value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} /></label><label>Desde<input type="time" required value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} /></label><label>Hasta<input type="time" value={followUpEnd} onChange={(event) => setFollowUpEnd(event.target.value)} /></label></div><p className="prototype-note">Define el rango esperado de llegada; si el fin queda vacío, se conserva la duración de la ventana anterior.</p><label>Duración estimada (minutos)<input type="number" min="1" value={visitDuration} onChange={(event) => setVisitDuration(event.target.value)} /></label><label>Indicaciones para la visita<textarea rows="2" value={scheduleNote} onChange={(event) => setScheduleNote(event.target.value)} placeholder="Acceso, coordinación o materiales necesarios" /></label><button type="submit" className="ghost-btn" disabled={!['RESCHEDULED', 'DIAGNOSIS'].includes(selectedTask.status) || !followUpDate || !followUpTime || (followUpEnd && followUpEnd <= followUpTime) || selectedTask.visits.some((visit) => toLocalDateTime(visit.scheduledAt) === `${followUpDate}T${followUpTime}`)}>Guardar nueva visita</button></form>}
           </section>
         )}
@@ -1689,8 +1705,8 @@ function App() {
             {!selectedTask.materials.length && <label className="no-materials-control"><input type="checkbox" checked={materialsConfirmed} onChange={confirmNoMaterials} />No se requieren materiales para esta orden</label>}
             {selectedTask.materials.map((material, index) => <div className="material-row" key={`${material.name}-${index}`}><span>{material.name}</span><strong>{material.quantity}</strong></div>)}
             <form className="form-card" onSubmit={saveEstimate}>
-              <div className="form-grid"><label>Tiempo estimado (min)<input type="number" min="1" required value={estimatedMinutesDraft} onChange={(event) => setEstimatedMinutesDraft(event.target.value)} /></label><div className="time-readout"><span>Tiempo real (cronómetro)</span><strong>{elapsedWorkLabel || (currentVisit?.arrivedAt ? 'En curso' : 'Se inicia en el diagnóstico')}</strong><small>{selectedTask.estimatedMinutes > 0 ? `Objetivo: ${selectedTask.estimatedMinutes} min${isOverEstimate ? ' · excedido' : ''}` : 'Define el tiempo estimado para comparar'}</small></div></div>
-              <p className="prototype-note">El cronómetro inicia automáticamente al registrar el diagnóstico y compara el tiempo real con el tiempo estimado.</p>
+              <div className="form-grid"><label>Tiempo estimado (min)<input type="number" min="1" required value={estimatedMinutesDraft} onChange={(event) => setEstimatedMinutesDraft(event.target.value)} /></label><div className="time-readout"><span>Tiempo desde la llegada</span><strong>{elapsedWorkLabel || (currentVisit?.arrivedAt ? 'En curso' : 'Empieza al confirmar llegada')}</strong><small>{selectedTask.estimatedMinutes > 0 ? `Objetivo: ${selectedTask.estimatedMinutes} min${isOverEstimate ? ' · excedido' : ''}` : 'Define el tiempo estimado para comparar'}</small></div></div>
+              <p className="prototype-note">El tiempo real corre automáticamente desde que confirmas la llegada; no hace falta iniciar un cronómetro manual.</p>
               <button type="submit" className="primary-btn" disabled={!(selectedTask.materials.length || materialsConfirmed)}>Guardar estimación</button>
               {!(selectedTask.materials.length || materialsConfirmed) && <p className="disabled-hint">Agrega materiales o confirma que no se requieren.</p>}
             </form>
@@ -1701,6 +1717,17 @@ function App() {
         {workflowStep === 5 && (
           <section className="workflow-card">
             <div className="section-heading"><h2>Resolución, evidencia y cierre</h2><span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
+            {selectedTask.status !== 'COMPLETED' && (
+              <label className="no-materials-control appointment-toggle">
+                <input
+                  type="checkbox"
+                  checked={customerAppointmentRequested || Boolean(selectedTask.customerAppointments?.length)}
+                  disabled={Boolean(selectedTask.customerAppointments?.length)}
+                  onChange={(event) => setCustomerAppointmentRequested(event.target.checked)}
+                />
+                Se necesita nueva visita
+              </label>
+            )}
             <form className="form-card" onSubmit={saveResolution}>
               <div className="field-block">
                 <label>Resolución técnica<textarea required rows="4" value={resolutionDraft} onChange={(event) => setResolutionDraft(event.target.value)} placeholder="Qué se hizo, cómo quedó el problema y qué pruebas se realizaron" /></label>
@@ -1725,17 +1752,6 @@ function App() {
             {selectedTask.attachments.map((attachment, index) => <div className="material-row" key={`${attachment.name}-${index}`}><span>{attachment.kind} · {attachment.name}<small>{attachment.description}</small></span><strong>Adjunta</strong></div>)}
             <div className="completion-requirements"><strong>Validación para finalizar</strong>{checklist.map(([label, done]) => <span className={done ? 'requirement-done' : ''} key={label}>{done ? '✓' : '○'} {label}</span>)}</div>
             <button type="button" className="primary-btn" disabled={isCompleted || !checklist.every(([, done]) => done) || (customerAppointmentRequested && !(selectedTask.customerAppointments?.length))} onClick={completeTask}>{isCompleted ? 'Tarea finalizada' : 'FINALIZAR TAREA'}</button>
-            {selectedTask.status !== 'COMPLETED' && (
-              <label className="no-materials-control appointment-toggle">
-                <input
-                  type="checkbox"
-                  checked={customerAppointmentRequested || Boolean(selectedTask.customerAppointments?.length)}
-                  disabled={Boolean(selectedTask.customerAppointments?.length)}
-                  onChange={(event) => setCustomerAppointmentRequested(event.target.checked)}
-                />
-                Se necesita nueva visita
-              </label>
-            )}
             {customerAppointmentRequested && !selectedTask.customerAppointments?.length && selectedTask.status !== 'COMPLETED' && (
               <form className="form-card secondary-form" onSubmit={scheduleCustomerAppointment}>
                 <h3>Programar cita con el cliente</h3>
@@ -1833,7 +1849,7 @@ function App() {
           </div>
           <div className="right-header"><button className="icon-btn" aria-label="Notificaciones" type="button" onClick={() => setActiveTab('notifications')}><NavigationIcon name="bell" /></button><div className="avatar">{initials}</div></div>
         </header>
-        {storageWarning && <div className="storage-warning" role="status">{storageWarning}</div>}
+        {activeWarning && <div className="storage-warning" role="status">{activeWarning}</div>}
         {urgentNotice && (
           <div className="urgent-task-notice" role="alert">
             <button className="urgent-task-notice-open" type="button" onClick={() => openTask(urgentNotice)}>

@@ -975,47 +975,51 @@ export async function PATCH(
       if (estimatedCost !== null) update.estimatedCost = estimatedCost;
       if (estimatedMinutes !== null) update.estimatedMinutes = estimatedMinutes;
       if (actualCost !== null) update.actualCost = actualCost;
-      if (nextStatus === "DIAGNOSIS" && !current.workStartedAt) {
+      if (nextStatus === "ON_SITE" && !current.workStartedAt) {
         update.workStartedAt = now;
       }
       if (nextStatus === "COMPLETED") {
-        if (current.workStartedAt) {
-          update.actualMinutes = String(
+        const workVisits = await tx
+          .select({
+            arrivedAt: schema.workOrderVisits.arrivedAt,
+            completedAt: schema.workOrderVisits.completedAt,
+          })
+          .from(schema.workOrderVisits)
+          .where(
+            and(
+              eq(schema.workOrderVisits.workOrderId, params.id),
+              eq(schema.workOrderVisits.isCustomerAppointment, false),
+            ),
+          )
+          .orderBy(asc(schema.workOrderVisits.visitNumber));
+        const hasArrivedVisit = workVisits.some((visit) => visit.arrivedAt);
+        const elapsedMinutes = workVisits.reduce((total, visit, index) => {
+          if (!visit.arrivedAt) return total;
+          const nextArrival = workVisits
+            .slice(index + 1)
+            .find((nextVisit) => nextVisit.arrivedAt)?.arrivedAt;
+          const endedAt = visit.completedAt ?? nextArrival ?? now;
+          return (
+            total +
             Math.max(
+              0,
+              Math.round(
+                (endedAt.getTime() - visit.arrivedAt.getTime()) / 60000,
+              ),
+            )
+          );
+        }, 0);
+        const elapsedFromStart = current.workStartedAt
+          ? Math.max(
               0,
               Math.round(
                 (now.getTime() - current.workStartedAt.getTime()) / 60000,
               ),
-            ),
-          );
-        } else {
-          const workVisits = await tx
-            .select({
-              arrivedAt: schema.workOrderVisits.arrivedAt,
-              completedAt: schema.workOrderVisits.completedAt,
-            })
-            .from(schema.workOrderVisits)
-            .where(
-              and(
-                eq(schema.workOrderVisits.workOrderId, params.id),
-                eq(schema.workOrderVisits.isCustomerAppointment, false),
-              ),
-            );
-          const elapsedMinutes = workVisits.reduce((total, visit) => {
-            if (!visit.arrivedAt) return total;
-            const endedAt = visit.completedAt ?? now;
-            return (
-              total +
-              Math.max(
-                0,
-                Math.round(
-                  (endedAt.getTime() - visit.arrivedAt.getTime()) / 60000,
-                ),
-              )
-            );
-          }, 0);
-          update.actualMinutes = String(elapsedMinutes);
-        }
+            )
+          : 0;
+        update.actualMinutes = String(
+          hasArrivedVisit ? elapsedMinutes : elapsedFromStart,
+        );
       } else if (actualMinutes !== null) {
         update.actualMinutes = actualMinutes;
       }

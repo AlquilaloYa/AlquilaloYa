@@ -80,6 +80,10 @@ puede modificarlo mediante la acción explícita de reprogramación, que exige
 motivo y guarda el horario anterior en el historial. Una visita de seguimiento y
 las citas con el cliente se registran por separado.
 
+Durante el diagnóstico, se debe adjuntar al menos una foto del desperfecto
+antes de guardar. El tiempo real empieza automáticamente al confirmar la llegada;
+al iniciar el trabajo, la app abre directamente Resolución y cierre.
+
 ### Notificaciones push de órdenes urgentes
 
 La app registra su token FCM al iniciar sesión y el ERP envía una notificación
