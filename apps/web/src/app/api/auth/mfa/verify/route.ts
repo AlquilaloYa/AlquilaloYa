@@ -39,6 +39,7 @@ export async function POST(req: Request) {
         { error: "No hay un factor MFA verificado para este usuario" },
         { status: 400 }
       );
+      res.headers.set("Cache-Control", "no-store");
       return clearMfaCookies(res, native);
     }
 
@@ -46,15 +47,19 @@ export async function POST(req: Request) {
     try {
       tokens = await completeTotp(accessToken, factor.id, code);
     } catch (e) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: (e as Error).message || "Código inválido" },
         { status: 401 }
       );
+      response.headers.set("Cache-Control", "no-store");
+      return response;
     }
 
     const identity = await verifyAccessToken(tokens.access_token);
     if (!identity) {
-      return NextResponse.json({ error: "Sesión inválida" }, { status: 401 });
+      const response = NextResponse.json({ error: "Sesión inválida" }, { status: 401 });
+      response.headers.set("Cache-Control", "no-store");
+      return response;
     }
 
     const dbModule = await import("@contract/db");
@@ -64,10 +69,12 @@ export async function POST(req: Request) {
         { error: "Usuario sin acceso al sistema" },
         { status: 403 }
       );
+      res.headers.set("Cache-Control", "no-store");
       return clearMfaCookies(res, native);
     }
 
     const res = NextResponse.json({ user }, { status: 200 });
+    res.headers.set("Cache-Control", "no-store");
     return applySessionCookies(
       clearMfaCookies(res, native),
       {

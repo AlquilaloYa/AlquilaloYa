@@ -51,13 +51,31 @@ export async function POST(req: Request) {
 
     // SEC-015: si el usuario ya tiene un factor TOTP verificado, exigir el
     // segundo factor antes de emitir la sesión completa (AAL2).
-    const verifiedFactors = await listVerifiedTotp(session.access_token).catch(() => []);
+    const verifiedFactors = await listVerifiedTotp(session.access_token);
     const aal = decodeJwtPayload(session.access_token)?.aal;
     if (verifiedFactors.length > 0 && aal !== "aal2") {
       // Guardar la sesión AAL1 en cookies temporales; NO da acceso todavía.
       const res = NextResponse.json({ mfaRequired: true }, { status: 200 });
+      res.headers.set("Cache-Control", "no-store");
       return applyMfaCookies(
         clearSessionCookies(res, native),
+        {
+          access_token: session.access_token,
+          ...(session.refresh_token ? { refresh_token: session.refresh_token } : {}),
+        },
+        native,
+      );
+    }
+
+    if (
+      mfaEnforce() &&
+      isMfaPrivilegedRole(appUser.role) &&
+      verifiedFactors.length === 0
+    ) {
+      const res = NextResponse.json({ mfaSetupRequired: true }, { status: 200 });
+      res.headers.set("Cache-Control", "no-store");
+      return applySessionCookies(
+        clearMfaCookies(res, native),
         {
           access_token: session.access_token,
           ...(session.refresh_token ? { refresh_token: session.refresh_token } : {}),
@@ -72,11 +90,6 @@ export async function POST(req: Request) {
       permissionKeys.includes(permission)
     );
 
-    // Aviso (no bloqueante) si el rol es privilegiado y MFA está exigido pero
-    // el usuario aún no enroló un factor.
-    const mfaEnrollRecommended =
-      mfaEnforce() && isMfaPrivilegedRole(appUser.role) && verifiedFactors.length === 0;
-
     const res = NextResponse.json(
       {
         user: {
@@ -86,10 +99,10 @@ export async function POST(req: Request) {
           role: appUser.role,
           additionalPermissions,
         },
-        ...(mfaEnrollRecommended ? { mfaEnrollRecommended: true } : {}),
       },
       { status: 200 }
     );
+    res.headers.set("Cache-Control", "no-store");
     return applySessionCookies(
       clearMfaCookies(res, native),
       {

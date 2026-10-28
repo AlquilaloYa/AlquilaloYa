@@ -43,11 +43,7 @@ export const env = createEnv({
     ALQUILAYA_API_URL: z.string().url().optional(),
     ALQUILAYA_ADMIN_EMAIL: z.string().email().optional(),
     ALQUILAYA_ADMIN_PASSWORD: z.string().min(1).optional(),
-    /**
-     * SEC-015: exige MFA (nivel de garantía AAL2) a los roles privilegiados
-     * (ADMIN/DEVELOPER). "true" lo activa. Apagado por defecto para no bloquear
-     * cuentas que aún no hayan enrolado un factor en Supabase Auth.
-     */
+    /** SEC-015: MFA obligatorio para roles privilegiados en producción. */
     MFA_ENFORCE: z.enum(["true", "false"]).optional(),
   },
   runtimeEnv: process.env,
@@ -65,9 +61,9 @@ export function supabaseUrl(): string | undefined {
   return env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 }
 
-/** SEC-015: ¿exigir MFA (AAL2) a los roles privilegiados? */
+/** SEC-015: MFA obligatorio para roles privilegiados en producción. */
 export function mfaEnforce(): boolean {
-  return env.MFA_ENFORCE === "true";
+  return process.env.NODE_ENV === "production" || env.MFA_ENFORCE === "true";
 }
 
 /**

@@ -38,6 +38,10 @@ export default function LoginPage() {
       setMfaStep(true);
       return;
     }
+    if (result.status === "mfaSetupRequired") {
+      router.replace("/mfa-setup");
+      return;
+    }
     if (result.status === "error") {
       setError("Credenciales inválidas. Verifica tu correo y la contraseña del sistema.");
       return;

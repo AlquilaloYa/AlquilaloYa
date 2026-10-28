@@ -46,6 +46,7 @@ export async function POST(
           code: schema.workOrders.code,
           title: schema.workOrders.title,
           status: schema.workOrders.status,
+          clientId: schema.workOrders.clientId,
           assignedEmployeeId: schema.workOrders.assignedEmployeeId,
           createdBy: schema.workOrders.createdBy,
         })
@@ -154,6 +155,25 @@ export async function POST(
         },
         createdAt: now,
       });
+      if (order.clientId) {
+        const date = new Intl.DateTimeFormat("es-PE", {
+          dateStyle: "long",
+          timeZone: "America/Lima",
+        }).format(option.startsAt);
+        const time = new Intl.DateTimeFormat("es-PE", {
+          hour: "numeric",
+          minute: "2-digit",
+          timeZone: "America/Lima",
+        });
+        await tx.insert(schema.clientPortalNotifications).values({
+          clientId: order.clientId,
+          workOrderId: order.id,
+          type: "VISIT_CONFIRMED",
+          title: "Confirmamos la fecha de tu visita",
+          body: `La opción ${option.optionNumber} quedó confirmada para el ${date}, entre las ${time.format(option.startsAt)} y las ${time.format(option.endsAt)}.`,
+          dedupeKey: `visit-confirmed:${option.id}`,
+        });
+      }
       if (order.createdBy) {
         await tx.insert(schema.notifications).values(
           notificationRows([order.createdBy], {

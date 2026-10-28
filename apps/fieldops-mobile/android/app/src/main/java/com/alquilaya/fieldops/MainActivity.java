@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Required for the native WebView's cross-origin ERP API session cookies.
         CookieManager.getInstance().setAcceptThirdPartyCookies(getBridge().getWebView(), true);
     }
 }

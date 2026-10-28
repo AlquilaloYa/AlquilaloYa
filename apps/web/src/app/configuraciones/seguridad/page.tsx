@@ -24,6 +24,7 @@ interface EnrollData {
 export default function SeguridadConfiguracionPage() {
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(false);
+  const [canDisable, setCanDisable] = useState(true);
   const [factorId, setFactorId] = useState<string | null>(null);
   const [enroll, setEnroll] = useState<EnrollData | null>(null);
   const [code, setCode] = useState("");
@@ -39,9 +40,11 @@ export default function SeguridadConfiguracionPage() {
       const res = await apiFetch("/api/auth/mfa", { cache: "no-store" });
       const data = (await res.json().catch(() => ({}))) as {
         enabled?: boolean;
+        canDisable?: boolean;
         factors?: Array<{ id: string }>;
       };
       setEnabled(Boolean(data.enabled));
+      setCanDisable(data.canDisable !== false);
       setFactorId(data.factors?.[0]?.id ?? null);
     } catch {
       setError("No se pudo consultar el estado de MFA.");
@@ -192,16 +195,22 @@ export default function SeguridadConfiguracionPage() {
                 <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
               </div>
             ) : enabled ? (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy}
-                onClick={disable}
-                className="border-destructive/50 text-destructive hover:bg-destructive/10"
-              >
-                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Desactivar verificación en dos pasos
-              </Button>
+              canDisable ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={disable}
+                  className="border-destructive/50 text-destructive hover:bg-destructive/10"
+                >
+                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Desactivar verificación en dos pasos
+                </Button>
+              ) : (
+                <p className="font-body-sm text-on-surface-variant">
+                  La verificación en dos pasos es obligatoria para este rol.
+                </p>
+              )
             ) : enroll ? (
               <form onSubmit={activate} className="space-y-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start">

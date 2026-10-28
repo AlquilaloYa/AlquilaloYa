@@ -308,6 +308,14 @@ export async function POST(
         )
         .returning({ id: dbModule.schema.clientWorkOrderRequests.id });
       if (!updatedRequest) throw new Error("La solicitud dejó de estar pendiente.");
+      await tx.insert(dbModule.schema.clientPortalNotifications).values({
+        clientId: requestRow.clientId,
+        workOrderId,
+        type: "REQUEST_CONVERTED",
+        title: "Tu reporte ya es una orden de trabajo",
+        body: `Tu reporte fue convertido en la orden ${workOrder.code}. Ya puedes consultar su avance desde este portal.`,
+        dedupeKey: `request-converted:${requestRow.id}`,
+      });
       return { workOrder, assignee };
     });
 

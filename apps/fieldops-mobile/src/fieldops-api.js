@@ -166,6 +166,17 @@ export const fieldopsApi = {
     })
   },
 
+  async enrollMfa() {
+    return request('/auth/mfa/enroll', { method: 'POST' })
+  },
+
+  async activateMfa(factorId, code) {
+    return request('/auth/mfa/activate', {
+      method: 'POST',
+      body: JSON.stringify({ factorId, code }),
+    })
+  },
+
   async logout() {
     return request('/auth/logout', { method: 'POST' })
   },

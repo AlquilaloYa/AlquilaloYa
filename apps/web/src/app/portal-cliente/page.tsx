@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Bell,
   Camera,
   LogOut,
   MessageCircle,
   Paperclip,
   RefreshCw,
   Send,
+  X,
 } from "lucide-react";
 import {
   buildClientPortalAvailabilityOptions,
@@ -65,6 +67,7 @@ type ClientRequest = {
   attachments: Array<{
     id: string;
     fileName: string;
+    mimeType: string;
     url: string | null;
   }>;
 };
@@ -77,8 +80,17 @@ type ChatMessage = {
   content: string;
   createdAt: string;
 };
+type ClientPortalNotification = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  isRead: boolean;
+  createdAt: string;
+};
 
 const MAX_SIZE = 8 * 1024 * 1024;
+const COMPANY_WHATSAPP = "51937205274";
 const ALLOWED_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -141,8 +153,25 @@ export default function ClientPortalPage() {
   const [chatDraft, setChatDraft] = useState("");
   const [chatError, setChatError] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
+  const [notifications, setNotifications] = useState<ClientPortalNotification[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<{
+    fileName: string;
+    mimeType: string;
+    url: string;
+  } | null>(null);
+  const seenNotificationIds = useRef<Set<string> | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!previewAttachment) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewAttachment(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [previewAttachment]);
 
   const loadOrders = useCallback(async () => {
     const response = await fetch("/api/portal-cliente/ordenes", { cache: "no-store" });
@@ -159,6 +188,40 @@ export default function ClientPortalPage() {
     setOrders(body.orders ?? []);
     setRequests(body.requests ?? []);
   }, [router]);
+
+  const loadNotifications = useCallback(
+    async (announceNew = false) => {
+      const response = await fetch("/api/portal-cliente/notificaciones", {
+        cache: "no-store",
+      });
+      if (response.status === 401) {
+        router.replace("/portal-cliente/login");
+        return;
+      }
+      const body = (await response.json()) as {
+        notifications?: ClientPortalNotification[];
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(body.error ?? "No se pudieron consultar las notificaciones");
+      }
+      const nextNotifications = body.notifications ?? [];
+      const seenIds = seenNotificationIds.current;
+      const newUnread = announceNew && seenIds
+        ? nextNotifications.filter((item) => !item.isRead && !seenIds.has(item.id))
+        : [];
+      seenNotificationIds.current = new Set(nextNotifications.map((item) => item.id));
+      setNotifications(nextNotifications);
+      const latestNotification = newUnread.at(0);
+      if (latestNotification) {
+        setNotice(`${latestNotification.title}: ${latestNotification.body}`);
+        void loadOrders().catch((reason) =>
+          setError(reason instanceof Error ? reason.message : "No se pudieron actualizar los reportes"),
+        );
+      }
+    },
+    [loadOrders, router],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -179,6 +242,7 @@ export default function ClientPortalPage() {
         if (!alive) return;
         setClient(body.client);
         await loadOrders();
+        await loadNotifications();
       } catch (reason) {
         if (alive) {
           setError(reason instanceof Error ? reason.message : "Error al cargar el portal");
@@ -191,7 +255,43 @@ export default function ClientPortalPage() {
     return () => {
       alive = false;
     };
-  }, [loadOrders, router]);
+  }, [loadNotifications, loadOrders, router]);
+
+  useEffect(() => {
+    if (!client) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        void loadNotifications(true).catch((reason) =>
+          setError(reason instanceof Error ? reason.message : "No se pudieron actualizar las notificaciones"),
+        );
+      }
+    };
+    const intervalId = window.setInterval(refresh, 15_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [client, loadNotifications]);
+
+  async function markNotificationRead(id: string) {
+    try {
+      const response = await fetch("/api/portal-cliente/notificaciones", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const body = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(body.error ?? "No se pudo actualizar la notificación");
+      }
+      setNotifications((current) =>
+        current.map((item) => (item.id === id ? { ...item, isRead: true } : item)),
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo actualizar la notificación");
+    }
+  }
 
   function updateAvailability(
     index: number,
@@ -375,6 +475,9 @@ export default function ClientPortalPage() {
         new Date(`${currentLocalDate}T12:00:00`),
       )
     : "";
+  const urgentWhatsappUrl = `https://wa.me/${COMPANY_WHATSAPP}?text=${encodeURIComponent(
+    `Hola AlquilaYa, estoy aquí ahora y necesito atención urgente en el departamento ${client?.departmentCode ?? ""}.`,
+  )}`;
 
   if (loading) {
     return (
@@ -396,15 +499,85 @@ export default function ClientPortalPage() {
               <p className="mt-1 text-sm text-slate-400">Departamento {client?.departmentCode}</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
-          >
-            <LogOut aria-hidden className="h-4 w-4" />
-            Cerrar sesión
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen((open) => !open)}
+              aria-expanded={notificationsOpen}
+              aria-label={`Notificaciones${notifications.filter((item) => !item.isRead).length ? `, ${notifications.filter((item) => !item.isRead).length} sin leer` : ""}`}
+              className="relative inline-flex h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 transition hover:border-cyan-400 hover:text-white"
+            >
+              <Bell aria-hidden className="h-4 w-4" />
+              Notificaciones
+              {notifications.some((item) => !item.isRead) && (
+                <span className="rounded-full bg-cyan-300 px-1.5 py-0.5 text-xs font-semibold text-slate-950">
+                  {notifications.filter((item) => !item.isRead).length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+            >
+              <LogOut aria-hidden className="h-4 w-4" />
+              Cerrar sesión
+            </button>
+          </div>
         </header>
+
+        {notificationsOpen && (
+          <section
+            aria-label="Notificaciones del portal"
+            className="mb-6 rounded-2xl border border-cyan-900/70 bg-slate-900 p-5"
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="font-semibold">Notificaciones</h2>
+              <button
+                type="button"
+                onClick={() =>
+                  void loadNotifications().catch((reason) =>
+                    setError(reason instanceof Error ? reason.message : "No se pudieron actualizar las notificaciones"),
+                  )
+                }
+                className="text-sm text-cyan-300 hover:text-cyan-200"
+              >
+                Actualizar
+              </button>
+            </div>
+            {notifications.length === 0 ? (
+              <p className="text-sm text-slate-400">No tienes notificaciones todavía.</p>
+            ) : (
+              <ul className="space-y-3">
+                {notifications.map((item) => (
+                  <li
+                    key={item.id}
+                    className={`rounded-lg border p-3 ${item.isRead ? "border-slate-800" : "border-cyan-800 bg-cyan-950/30"}`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{item.title}</p>
+                        <p className="mt-1 text-sm text-slate-300">{item.body}</p>
+                        <time className="mt-2 block text-xs text-slate-500">
+                          {formatDate(item.createdAt)}
+                        </time>
+                      </div>
+                      {!item.isRead && (
+                        <button
+                          type="button"
+                          onClick={() => void markNotificationRead(item.id)}
+                          className="shrink-0 text-sm text-cyan-300 hover:text-cyan-200"
+                        >
+                          Marcar como leída
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
 
         {error && (
           <div role="alert" className="mb-6 rounded-lg border border-red-900 bg-red-950/50 p-3 text-sm text-red-200">
@@ -507,6 +680,23 @@ export default function ClientPortalPage() {
 
             <fieldset className="space-y-3">
               <legend className="text-sm font-medium">Elige tres opciones de visita</legend>
+              <div className="space-y-3 rounded-lg border border-amber-700/70 bg-amber-950/30 p-4">
+                <div>
+                  <p className="font-semibold text-amber-100">Estoy aquí ahora, trabajo urgente</p>
+                  <p className="mt-1 text-sm text-slate-300">
+                    Contacta rápidamente a mantenimiento por WhatsApp para coordinar la atención.
+                  </p>
+                </div>
+                <a
+                  href={urgentWhatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+                >
+                  <MessageCircle aria-hidden className="h-4 w-4" />
+                  Contactar por WhatsApp ahora
+                </a>
+              </div>
               <p className="portal-calendar-note">
                 El calendario abre en {currentCalendarMonth}. La hora elegida inicia una ventana de atención de dos horas.
               </p>
@@ -592,18 +782,37 @@ export default function ClientPortalPage() {
                 {clientRequest.attachments.length > 0 && (
                   <div className="mt-4 flex flex-wrap gap-2">
                     {clientRequest.attachments.map((attachment) => {
-                      if (attachment.url) {
+                      const url = attachment.url;
+                      if (url) {
+                        const isImage = attachment.mimeType.startsWith("image/");
                         return (
-                          <a
+                          <button
                             key={attachment.id}
-                            href={attachment.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-cyan-400"
+                            type="button"
+                            onClick={() =>
+                              setPreviewAttachment({
+                                fileName: attachment.fileName,
+                                mimeType: attachment.mimeType,
+                                url,
+                              })
+                            }
+                            aria-label={`Ver vista previa: ${attachment.fileName}`}
+                            className="group relative h-24 w-24 overflow-hidden rounded-lg border border-slate-700 bg-slate-950 text-left text-xs text-slate-300 hover:border-cyan-400"
                           >
-                            <Paperclip aria-hidden className="h-3 w-3" />
-                            {attachment.fileName}
-                          </a>
+                            {isImage ? (
+                              <img
+                                src={url}
+                                alt={attachment.fileName}
+                                className="h-full w-full object-cover transition group-hover:scale-105"
+                              />
+                            ) : (
+                              <span className="flex h-full flex-col items-center justify-center gap-1 px-2 text-center">
+                                <Paperclip aria-hidden className="h-4 w-4" />
+                                <span className="w-full truncate">{attachment.fileName}</span>
+                                <span>Vista previa</span>
+                              </span>
+                            )}
+                          </button>
                         );
                       }
                       return (
@@ -637,18 +846,37 @@ export default function ClientPortalPage() {
                   {order.attachments.length > 0 && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       {order.attachments.map((attachment) => {
-                        if (attachment.url) {
+                        const url = attachment.url;
+                        if (url) {
+                          const isImage = attachment.mimeType.startsWith("image/");
                           return (
-                            <a
+                            <button
                               key={attachment.id}
-                              href={attachment.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-cyan-400"
+                              type="button"
+                              onClick={() =>
+                                setPreviewAttachment({
+                                  fileName: attachment.fileName,
+                                  mimeType: attachment.mimeType,
+                                  url,
+                                })
+                              }
+                              aria-label={`Ver vista previa: ${attachment.fileName}`}
+                              className="group relative h-24 w-24 overflow-hidden rounded-lg border border-slate-700 bg-slate-950 text-left text-xs text-slate-300 hover:border-cyan-400"
                             >
-                              <Paperclip aria-hidden className="h-3 w-3" />
-                              {attachment.fileName}
-                            </a>
+                              {isImage ? (
+                                <img
+                                  src={url}
+                                  alt={attachment.fileName}
+                                  className="h-full w-full object-cover transition group-hover:scale-105"
+                                />
+                              ) : (
+                                <span className="flex h-full flex-col items-center justify-center gap-1 px-2 text-center">
+                                  <Paperclip aria-hidden className="h-4 w-4" />
+                                  <span className="w-full truncate">{attachment.fileName}</span>
+                                  <span>Vista previa</span>
+                                </span>
+                              )}
+                            </button>
                           );
                         }
                         return (
@@ -760,6 +988,47 @@ export default function ClientPortalPage() {
             ) : null}
           </section>
         </section>
+        {previewAttachment ? (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 sm:p-8"
+            onClick={() => setPreviewAttachment(null)}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Vista previa: ${previewAttachment.fileName}`}
+              className="relative flex max-h-full w-full max-w-5xl flex-col items-center gap-3"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setPreviewAttachment(null)}
+                aria-label="Cerrar vista previa"
+                className="absolute -top-12 right-0 rounded-full bg-white/15 p-2 text-white hover:bg-white/25"
+              >
+                <X aria-hidden className="h-6 w-6" />
+              </button>
+              {previewAttachment.mimeType.startsWith("image/") ? (
+                <img
+                  src={previewAttachment.url}
+                  alt={previewAttachment.fileName}
+                  className="max-h-[80vh] max-w-full rounded-lg object-contain"
+                />
+              ) : (
+                <video
+                  src={previewAttachment.url}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="max-h-[80vh] max-w-full rounded-lg"
+                />
+              )}
+              <p className="max-w-full truncate text-sm text-white">
+                {previewAttachment.fileName}
+              </p>
+            </section>
+          </div>
+        ) : null}
         <footer className="mt-10 border-t border-white/10 pt-5 text-center text-xs text-slate-500">
           Portal independiente de clientes · Acceso exclusivo a reportes del departamento
         </footer>

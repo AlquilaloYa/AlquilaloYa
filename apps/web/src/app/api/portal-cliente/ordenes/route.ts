@@ -18,7 +18,6 @@ import {
 import { checkClientPortalLimit } from "@/lib/client-portal-rate-limit";
 import { clientIp } from "@/lib/rate-limit";
 import {
-  createSignedObjectUrlIfPresent,
   deleteObject,
   downloadObject,
 } from "@/lib/storage";
@@ -155,7 +154,6 @@ export async function GET(request: Request) {
               fileName: dbModule.schema.workOrderAttachments.fileName,
               mimeType: dbModule.schema.workOrderAttachments.mimeType,
               sizeBytes: dbModule.schema.workOrderAttachments.sizeBytes,
-              storageKey: dbModule.schema.workOrderAttachments.storageKey,
             })
             .from(dbModule.schema.workOrderAttachments)
             .where(eq(dbModule.schema.workOrderAttachments.workOrderId, order.id)),
@@ -173,12 +171,10 @@ export async function GET(request: Request) {
           ...order,
           events,
           availability,
-          attachments: await Promise.all(
-            attachments.map(async ({ storageKey, ...attachment }) => ({
-              ...attachment,
-              url: await createSignedObjectUrlIfPresent(storageKey, BUCKET),
-            })),
-          ),
+          attachments: attachments.map((attachment) => ({
+            ...attachment,
+            url: `/api/portal-cliente/adjuntos/${attachment.id}`,
+          })),
           chat: chat[0] ?? null,
         };
       }),
@@ -212,18 +208,15 @@ export async function GET(request: Request) {
             fileName: dbModule.schema.clientPortalUploads.fileName,
             mimeType: dbModule.schema.clientPortalUploads.mimeType,
             sizeBytes: dbModule.schema.clientPortalUploads.sizeBytes,
-            storageKey: dbModule.schema.clientPortalUploads.storageKey,
           })
           .from(dbModule.schema.clientPortalUploads)
           .where(eq(dbModule.schema.clientPortalUploads.requestId, clientRequest.id));
         return {
           ...clientRequest,
-          attachments: await Promise.all(
-            attachments.map(async ({ storageKey, ...attachment }) => ({
-              ...attachment,
-              url: await createSignedObjectUrlIfPresent(storageKey, BUCKET),
-            })),
-          ),
+          attachments: attachments.map((attachment) => ({
+            ...attachment,
+            url: `/api/portal-cliente/adjuntos/${attachment.id}`,
+          })),
         };
       }),
     );

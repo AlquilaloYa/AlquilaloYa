@@ -62,7 +62,7 @@ async function readError(res: Response): Promise<string> {
 /** Factores TOTP verificados del usuario (los que fuerzan AAL2). */
 export async function listVerifiedTotp(accessToken: string): Promise<TotpFactor[]> {
   const res = await call(accessToken, "/user");
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error(await readError(res));
   const data = (await res.json()) as {
     factors?: Array<{ id?: string; factor_type?: string; status?: string; friendly_name?: string }>;
   };

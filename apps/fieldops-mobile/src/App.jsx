@@ -449,6 +449,9 @@ function App() {
   const [loginPassword, setLoginPassword] = useState('')
   const [mfaCode, setMfaCode] = useState('')
   const [mfaRequired, setMfaRequired] = useState(false)
+  const [mfaSetupRequired, setMfaSetupRequired] = useState(false)
+  const [mfaSetupData, setMfaSetupData] = useState(null)
+  const [mfaSetupCode, setMfaSetupCode] = useState('')
   const [employees, setEmployees] = useState([])
   const [isTopBarElevated, setIsTopBarElevated] = useState(false)
   const scrollContainerRef = useRef(null)
@@ -737,6 +740,40 @@ function App() {
     }
   }, [sessionState, user?.employeeId])
 
+  async function startMfaEnrollment() {
+    setStorageWarning('')
+    const data = await fieldopsApi.enrollMfa()
+    if (!data?.factorId || !data.qrCode || !data.secret) {
+      throw new Error('El servidor no devolvió los datos de configuración de MFA.')
+    }
+    setMfaSetupData(data)
+    setMfaSetupCode('')
+  }
+
+  async function retryMfaEnrollment() {
+    setIsLoading(true)
+    try {
+      await startMfaEnrollment()
+    } catch (error) {
+      setStorageWarning(error.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function cancelMfaEnrollment() {
+    try {
+      await fieldopsApi.logout()
+    } catch {
+      setStorageWarning('No se pudo cerrar la sesión. Inténtalo otra vez.')
+      return
+    }
+    setMfaSetupRequired(false)
+    setMfaSetupData(null)
+    setMfaSetupCode('')
+    setSessionState('signed-out')
+  }
+
   async function handleLogin(event) {
     event.preventDefault()
     setIsLoading(true)
@@ -745,11 +782,39 @@ function App() {
       const result = await fieldopsApi.login(loginEmail, loginPassword)
       setLoginPassword('')
       if (result.mfaRequired) {
+        setMfaSetupRequired(false)
         setMfaRequired(true)
+        return
+      }
+      if (result.mfaSetupRequired) {
+        setMfaRequired(false)
+        setMfaSetupRequired(true)
+        setMfaSetupData(null)
+        await startMfaEnrollment()
         return
       }
       if (!result.user) throw new Error('El servidor no devolvió la sesión del usuario.')
       setUser(await fieldopsApi.getSession())
+      setSessionState('authenticated')
+      await loadAuthorizedData()
+    } catch (error) {
+      setStorageWarning(error.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function handleMfaSetup(event) {
+    event.preventDefault()
+    if (!mfaSetupData || !/^\d{6}$/.test(mfaSetupCode)) return
+    setIsLoading(true)
+    setStorageWarning('')
+    try {
+      await fieldopsApi.activateMfa(mfaSetupData.factorId, mfaSetupCode)
+      setUser(await fieldopsApi.getSession())
+      setMfaSetupRequired(false)
+      setMfaSetupData(null)
+      setMfaSetupCode('')
       setSessionState('authenticated')
       await loadAuthorizedData()
     } catch (error) {
@@ -1793,11 +1858,43 @@ function App() {
           <div className="auth-orb" aria-hidden="true" />
           <header className="auth-brand"><img className="brand-logo" src="/logo-brand-cropped.png" alt="AlquilaYa" /></header>
           <main className="auth-content">
-            <p className="auth-eyebrow">{checkingSession ? 'ALQUILAYA REPAIR' : mfaRequired ? 'VERIFICACIÓN DE SEGURIDAD' : 'ALQUILAYA REPAIR'}</p>
-            <h1>{checkingSession ? 'Conectando' : mfaRequired ? 'Verifica tu identidad' : 'Iniciar sesión'}</h1>
-            <p className="auth-subtitle">{checkingSession ? 'Conectando con tu cuenta del ERP…' : mfaRequired ? 'Ingresa el código de autenticación de tu cuenta.' : 'Accede con las credenciales de tu cuenta del ERP.'}</p>
+            <p className="auth-eyebrow">{checkingSession ? 'ALQUILAYA REPAIR' : mfaRequired || mfaSetupRequired ? 'VERIFICACIÓN DE SEGURIDAD' : 'ALQUILAYA REPAIR'}</p>
+            <h1>{checkingSession ? 'Conectando' : mfaSetupRequired ? 'Configura verificación en dos pasos' : mfaRequired ? 'Verifica tu identidad' : 'Iniciar sesión'}</h1>
+            <p className="auth-subtitle">{checkingSession ? 'Conectando con tu cuenta del ERP…' : mfaSetupRequired ? 'Tu rol requiere configurar una aplicación autenticadora para continuar.' : mfaRequired ? 'Ingresa el código de autenticación de tu cuenta.' : 'Accede con las credenciales de tu cuenta del ERP.'}</p>
             {!checkingSession && storageWarning && <div className="storage-warning auth-warning" role="alert">{storageWarning}</div>}
-            {!checkingSession && (mfaRequired ? (
+            {!checkingSession && (mfaSetupRequired ? (
+              mfaSetupData ? (
+                <div className="mfa-setup-content">
+                  <img className="mfa-setup-qr" src={mfaSetupData.qrCode} alt="Código QR para configurar el autenticador" />
+                  <p>Escanea el código QR con Google Authenticator, Authy u otra aplicación TOTP.</p>
+                  <p className="mfa-setup-secret-label">Configuración manual</p>
+                  <code className="mfa-setup-secret">{mfaSetupData.secret}</code>
+                  <form className="auth-form" onSubmit={handleMfaSetup}>
+                    <label className="auth-field">
+                      <span className="sr-only">Código de seis dígitos</span>
+                      <input
+                        autoComplete="one-time-code"
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="Código de seis dígitos"
+                        value={mfaSetupCode}
+                        onChange={(event) => setMfaSetupCode(event.target.value.replace(/\D/g, ''))}
+                        required
+                      />
+                    </label>
+                    <button className="primary-btn auth-submit" type="submit" disabled={isLoading || mfaSetupCode.length !== 6}>
+                      {isLoading ? 'Verificando…' : 'Verificar y continuar'}
+                      <span className="auth-submit-icon" aria-hidden="true">→</span>
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                <button className="primary-btn auth-submit" type="button" onClick={retryMfaEnrollment} disabled={isLoading}>
+                  {isLoading ? 'Preparando…' : 'Reintentar configuración'}
+                  <span className="auth-submit-icon" aria-hidden="true">→</span>
+                </button>
+              )
+            ) : mfaRequired ? (
               <form className="auth-form" onSubmit={handleMfaVerify}>
                 <label className="auth-field">
                   <span className="sr-only">Código de autenticación</span>
@@ -1825,6 +1922,11 @@ function App() {
                 </button>
               </form>
             ))}
+            {!checkingSession && mfaSetupRequired && (
+              <button type="button" className="auth-cancel" onClick={cancelMfaEnrollment}>
+                Cerrar sesión
+              </button>
+            )}
           </main>
           <footer className="auth-footer"><span className="auth-footer-icon" aria-hidden="true">✓</span><span>Acceso seguro del ERP</span></footer>
         </div>

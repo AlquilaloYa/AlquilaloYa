@@ -145,6 +145,54 @@ body {
   position: relative;
   z-index: 1;
   padding: 46px 28px 24px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+.mfa-setup-content {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  margin-top: 20px;
+  color: #687386;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.mfa-setup-qr {
+  width: 160px;
+  height: 160px;
+  padding: 8px;
+  border: 1px solid #d9dee5;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.mfa-setup-secret-label {
+  margin: 4px 0 0;
+  font-weight: 700;
+}
+
+.mfa-setup-secret {
+  width: 100%;
+  overflow-wrap: anywhere;
+  padding: 10px 12px;
+  border: 1px solid #d9dee5;
+  border-radius: 10px;
+  background: #f7fbf8;
+  color: #172033;
+  font-size: 0.82rem;
+}
+
+.auth-cancel {
+  display: block;
+  margin: 20px auto 0;
+  color: #687386;
+  font: inherit;
+  font-size: 0.82rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .auth-eyebrow {

@@ -20,7 +20,9 @@ export async function POST(req: Request) {
   }
   try {
     const enrolled = await enrollTotp(accessToken);
-    return NextResponse.json(enrolled);
+    const response = NextResponse.json(enrolled);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

@@ -28,6 +28,8 @@ const PUBLIC_ROUTES = new Set<string>([
   // Portal de clientes: autenticación propia y sesión validada por contrato.
   "portal-cliente/auth/login/route.ts",
   "portal-cliente/auth/logout/route.ts",
+  "portal-cliente/adjuntos/[id]/route.ts",
+  "portal-cliente/notificaciones/route.ts",
   "portal-cliente/ordenes/[id]/chat/route.ts",
   "portal-cliente/ordenes/route.ts",
   "portal-cliente/session/route.ts",

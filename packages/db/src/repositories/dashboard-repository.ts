@@ -20,6 +20,8 @@ export interface ProximoAVencer {
   id: string;
   codigoContrato: string;
   cliente: string;
+  telefono: string | null;
+  codigoPais: string | null;
   departamento: string | null;
   fechaFin: string;
   diasRestantes: number;
@@ -190,6 +192,8 @@ export class DrizzleDashboardRepository {
         renuevaProximoMes: schema.contracts.renuevaProximoMes,
         renovacionMeses: schema.contracts.renovacionMeses,
         cliente: sql<string>`trim(coalesce(${schema.clients.nombres}, '') || ' ' || coalesce(${schema.clients.apellidos}, ''))`,
+        telefono: schema.clients.telefono,
+        codigoPais: schema.clients.codigoPais,
         departamento: schema.departments.codigo,
       })
       .from(schema.contracts)
@@ -220,6 +224,8 @@ export class DrizzleDashboardRepository {
         id: c.id,
         codigoContrato: c.codigoContrato,
         cliente: c.cliente || "—",
+        telefono: c.telefono,
+        codigoPais: c.codigoPais,
         departamento: c.departamento ?? null,
         fechaFin: c.fechaFin,
         diasRestantes: Math.max(0, dias),

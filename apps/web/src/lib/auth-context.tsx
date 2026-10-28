@@ -21,6 +21,7 @@ interface SessionUser {
 export type LoginResult =
   | { status: "ok" }
   | { status: "mfaRequired" }
+  | { status: "mfaSetupRequired" }
   | { status: "error" };
 
 export type VerifyMfaResult = { status: "ok" } | { status: "error"; message: string };
@@ -91,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = (await res.json().catch(() => ({}))) as {
         user?: SessionUser;
         mfaRequired?: boolean;
+        mfaSetupRequired?: boolean;
       };
       if (!res.ok) {
         setUser(null);
@@ -99,6 +101,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.mfaRequired) {
         setUser(null);
         return { status: "mfaRequired" };
+      }
+      if (data.mfaSetupRequired) {
+        setUser(null);
+        return { status: "mfaSetupRequired" };
       }
       setUser(data.user ?? null);
       return { status: "ok" };

@@ -56,6 +56,7 @@ export async function POST(req: Request) {
     }
 
     const res = NextResponse.json({ user }, { status: 200 });
+    res.headers.set("Cache-Control", "no-store");
     return applySessionCookies(res, {
       access_token: tokens.access_token,
       ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
