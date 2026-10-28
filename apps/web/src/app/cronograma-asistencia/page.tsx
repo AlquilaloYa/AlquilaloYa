@@ -7,10 +7,12 @@ import {
   AlarmClock,
   CalendarCheck2,
   Coffee,
+  Download,
   Fingerprint,
   LogOut,
   User,
 } from "lucide-react";
+import { mesLima } from "@/lib/attendance-day";
 
 type Registro = {
   id: string;
@@ -58,6 +60,7 @@ function fmtFecha(iso: string | null): string {
 
 export default function CronogramaAsistenciaPage() {
   const [registros, setRegistros] = useState<Registro[]>([]);
+  const [mesSeleccionado, setMesSeleccionado] = useState(() => mesLima());
   const [nombre, setNombre] = useState("");
   const [dni, setDni] = useState("");
   const [busy, setBusy] = useState(false);
@@ -71,20 +74,59 @@ export default function CronogramaAsistenciaPage() {
   }, []);
 
   const cargar = useCallback(async () => {
-    const res = await apiFetch("/api/asistencias", { cache: "no-store" });
-    if (res.ok) {
-      const rows = (await res.json()) as Registro[];
-      if (Array.isArray(rows)) setRegistros(rows);
+    const res = await apiFetch(
+      `/api/asistencias?month=${encodeURIComponent(mesSeleccionado)}`,
+      { cache: "no-store" },
+    );
+    const data = (await res.json()) as Registro[] | { error?: string };
+    if (!res.ok) {
+      throw new Error(
+        !Array.isArray(data) && data.error
+          ? data.error
+          : "No se pudieron cargar las asistencias.",
+      );
     }
-  }, []);
+    if (!Array.isArray(data)) {
+      throw new Error("La respuesta de asistencias no es válida.");
+    }
+    setRegistros(data);
+  }, [mesSeleccionado]);
 
   useEffect(() => {
-    void cargar().finally(() => setCargando(false));
-  }, [cargar]);
+    setCargando(true);
+    void cargar()
+      .catch((error: unknown) =>
+        notify(
+          error instanceof Error ? error.message : "No se pudieron cargar las asistencias.",
+          false,
+        ),
+      )
+      .finally(() => setCargando(false));
+  }, [cargar, notify]);
 
+  useEffect(() => {
+    let mesActualAnterior = mesLima();
+    const timer = window.setInterval(() => {
+      const mesActual = mesLima();
+      if (mesActual !== mesActualAnterior) {
+        setMesSeleccionado((mes) =>
+          mes === mesActualAnterior ? mesActual : mes,
+        );
+        mesActualAnterior = mesActual;
+      }
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const esMesActual = mesSeleccionado === mesLima();
   const dniLimpio = dni.trim();
   const miRegistro = dniLimpio
-    ? registros.find((r) => r.dni === dniLimpio && (r.esHoy ?? esHoy(r.createdAt)))
+    ? registros.find(
+        (r) =>
+          esMesActual &&
+          r.dni === dniLimpio &&
+          (r.esHoy ?? esHoy(r.createdAt)),
+      )
     : undefined;
 
   const datosListos = Boolean(nombre.trim()) && Boolean(dniLimpio);
@@ -193,7 +235,7 @@ export default function CronogramaAsistenciaPage() {
                 <input
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
-                  disabled={Boolean(miRegistro)}
+                  disabled={Boolean(miRegistro) || !esMesActual}
                   placeholder="Nombre y apellido"
                   className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm disabled:opacity-60"
                 />
@@ -206,7 +248,7 @@ export default function CronogramaAsistenciaPage() {
                 <input
                   value={dni}
                   onChange={(e) => setDni(e.target.value)}
-                  disabled={Boolean(miRegistro)}
+                  disabled={Boolean(miRegistro) || !esMesActual}
                   placeholder="Documento de identidad"
                   inputMode="numeric"
                   className="h-10 w-full rounded border border-outline-variant bg-transparent px-3 text-sm disabled:opacity-60"
@@ -224,7 +266,7 @@ export default function CronogramaAsistenciaPage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  disabled={busy || !puedeEntrada}
+                  disabled={busy || !esMesActual || !puedeEntrada}
                   onClick={() => void marcar("ENTRADA")}
                   className="inline-flex items-center gap-2 rounded bg-primary px-4 py-2 text-sm text-on-primary disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -233,7 +275,7 @@ export default function CronogramaAsistenciaPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={busy || !puedeSalida}
+                  disabled={busy || !esMesActual || !puedeSalida}
                   onClick={() => void marcar("SALIDA")}
                   className="inline-flex items-center gap-2 rounded border border-outline-variant px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -255,7 +297,7 @@ export default function CronogramaAsistenciaPage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  disabled={busy || !puedeRefrigerioInicio}
+                  disabled={busy || !esMesActual || !puedeRefrigerioInicio}
                   onClick={() => void marcar("REFRIGERIO_INICIO")}
                   className="inline-flex items-center gap-2 rounded border border-primary/40 bg-primary/10 px-4 py-2 text-sm text-primary disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -263,7 +305,7 @@ export default function CronogramaAsistenciaPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={busy || !puedeRefrigerioFin}
+                  disabled={busy || !esMesActual || !puedeRefrigerioFin}
                   onClick={() => void marcar("REFRIGERIO_FIN")}
                   className="inline-flex items-center gap-2 rounded border border-outline-variant px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -283,15 +325,46 @@ export default function CronogramaAsistenciaPage() {
               con &quot;Iniciar jornada&quot;.
             </p>
           ) : null}
+          {!esMesActual ? (
+            <p className="mt-4 rounded-md border border-outline-variant bg-surface-container p-2 text-xs text-on-surface-variant">
+              Estás consultando un mes anterior. Para registrar asistencia, selecciona el mes actual.
+            </p>
+          ) : null}
         </div>
 
         <div className="rounded-xl bg-surface-container-lowest p-5 shadow-sm">
-          <h3 className="font-headline-md text-on-surface">Registros de asistencia</h3>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h3 className="font-headline-md text-on-surface">Registros de asistencia</h3>
+              <p className="mt-1 text-xs text-on-surface-variant">
+                Cada mes se conserva como un período independiente.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="grid gap-1 text-sm text-on-surface-variant">
+                Mes del registro
+                <input
+                  type="month"
+                  value={mesSeleccionado}
+                  max={mesLima()}
+                  onChange={(event) => setMesSeleccionado(event.target.value)}
+                  className="h-10 rounded border border-outline-variant bg-transparent px-3 text-on-surface"
+                />
+              </label>
+              <a
+                href={`/api/asistencias/pdf?month=${encodeURIComponent(mesSeleccionado)}`}
+                className="inline-flex h-10 items-center gap-2 rounded bg-primary px-4 text-sm text-on-primary hover:opacity-90"
+              >
+                <Download className="h-4 w-4" />
+                Descargar PDF del mes
+              </a>
+            </div>
+          </div>
           {cargando ? (
             <p className="mt-4 text-sm text-on-surface-variant">Cargando registros…</p>
           ) : registros.length === 0 ? (
             <p className="mt-4 rounded-lg border border-dashed border-outline-variant p-6 text-center text-sm text-on-surface-variant">
-              Todavía no hay registros de asistencia.
+              No hay registros de asistencia para este mes.
             </p>
           ) : (
             <div className="mt-3 overflow-x-auto">

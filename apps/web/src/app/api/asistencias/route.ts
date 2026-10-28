@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
-import { inicioDiaLima, esJornadaDeHoy } from "@/lib/attendance-day";
+import {
+  inicioDiaLima,
+  esJornadaDeHoy,
+  mesLima,
+  rangoMesLima,
+} from "@/lib/attendance-day";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +46,7 @@ function toView(row: RegistroRow) {
   };
 }
 
-/** GET /api/asistencias — todos los registros (mas recientes primero). */
+/** GET /api/asistencias?month=YYYY-MM — registros del mes (Lima). */
 export async function GET(req: Request) {
   try {
     const dbModule = await import("@contract/db");
@@ -51,11 +56,22 @@ export async function GET(req: Request) {
     if (denied) return denied;
 
     const { db, schema } = dbModule;
+    const url = new URL(req.url);
+    const month = url.searchParams.get("month") ?? mesLima();
+    const range = rangoMesLima(month);
+    if (!range) {
+      return NextResponse.json({ error: "Mes no válido; usa el formato YYYY-MM" }, { status: 400 });
+    }
     const rows = await db
       .select()
       .from(schema.attendance)
-      .orderBy(desc(schema.attendance.createdAt))
-      .limit(500);
+      .where(
+        and(
+          gte(schema.attendance.createdAt, range.start),
+          lt(schema.attendance.createdAt, range.end),
+        ),
+      )
+      .orderBy(desc(schema.attendance.createdAt));
     const ahora = Date.now();
     return NextResponse.json(
       rows.map((row) => ({ ...toView(row), esHoy: esJornadaDeHoy(row.createdAt, ahora) }))

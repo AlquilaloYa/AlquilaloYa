@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inicioDiaLima, esJornadaDeHoy } from "./attendance-day";
+import { inicioDiaLima, esJornadaDeHoy, mesLima, rangoMesLima } from "./attendance-day";
 
 const NOW = Date.parse("2026-10-12T14:06:52Z");
 
@@ -19,6 +19,25 @@ describe("inicioDiaLima", () => {
 describe("esJornadaDeHoy", () => {
   it("acepta un registro de hoy", () => {
     expect(esJornadaDeHoy(new Date("2026-10-12T14:00:00Z"), NOW)).toBe(true);
+  });
+
+  describe("rangoMesLima", () => {
+    it("uses the current month in Lima, including the UTC month boundary", () => {
+      expect(mesLima(Date.parse("2026-11-01T04:30:00Z"))).toBe("2026-10");
+      expect(mesLima(Date.parse("2026-11-01T05:00:00Z"))).toBe("2026-11");
+    });
+
+    it("returns UTC boundaries corresponding to midnight in Lima", () => {
+      expect(rangoMesLima("2026-10")).toEqual({
+        start: new Date("2026-10-01T05:00:00.000Z"),
+        end: new Date("2026-11-01T05:00:00.000Z"),
+      });
+    });
+
+    it("rejects malformed or out-of-range months", () => {
+      expect(rangoMesLima("2026-13")).toBeNull();
+      expect(rangoMesLima("October 2026")).toBeNull();
+    });
   });
 
   it("acepta el límite exacto (00:00 Lima)", () => {

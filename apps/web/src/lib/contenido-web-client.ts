@@ -195,19 +195,42 @@ export const contenidoWebApi = {
         }
       ).then(data);
 
-      const response = await fetch(signed.upload_url, {
+      if (Number.isFinite(signed.max_bytes) && file.size > signed.max_bytes) {
+        throw new ContenidoWebError(
+          "El archivo supera el límite de tamaño permitido por el bucket.",
+          413,
+        );
+      }
+
+      const uploadUrl = new URL(signed.upload_url);
+      if (!uploadUrl.searchParams.has("token")) {
+        uploadUrl.searchParams.set("token", signed.token);
+      }
+
+      const response = await fetch(uploadUrl.toString(), {
         method: "PUT",
         headers: {
-          authorization: `Bearer ${signed.token}`,
           "Content-Type": signed.content_type,
-          "cache-control": "3600",
+          "cache-control": "max-age=3600",
+          "x-upsert": "false",
         },
         body: file,
       });
 
       if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        let message = "";
+        try {
+          const parsed = JSON.parse(detail) as { message?: unknown; error?: unknown };
+          if (typeof parsed.message === "string") message = parsed.message;
+          else if (typeof parsed.error === "string") message = parsed.error;
+        } catch {
+          message = detail;
+        }
         throw new ContenidoWebError(
-          "Supabase Storage rechazó el archivo. Probá de nuevo o revisá el bucket.",
+          message
+            ? `Supabase Storage: ${message} (HTTP ${response.status}).`
+            : `Supabase Storage rechazó el archivo (HTTP ${response.status}). Revisá el formato y el límite de tamaño del bucket.`,
           response.status
         );
       }

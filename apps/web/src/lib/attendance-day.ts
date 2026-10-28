@@ -21,3 +21,22 @@ export function esJornadaDeHoy(
   if (!createdAt) return false;
   return createdAt.getTime() >= inicioDiaLima(nowMs).getTime();
 }
+
+export function mesLima(nowMs: number = Date.now()): string {
+  const lima = new Date(nowMs - 5 * 3600 * 1000);
+  return `${lima.getUTCFullYear()}-${String(lima.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export function rangoMesLima(month: string): { start: Date; end: Date } | null {
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return null;
+
+  const start = new Date(Date.UTC(year, monthIndex, 1, 5));
+  const end = new Date(Date.UTC(year, monthIndex + 1, 1, 5));
+  if (start.getUTCFullYear() !== year || start.getUTCMonth() !== monthIndex) return null;
+  return { start, end };
+}
