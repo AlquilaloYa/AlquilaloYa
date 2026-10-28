@@ -61,9 +61,9 @@ export function supabaseUrl(): string | undefined {
   return env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 }
 
-/** SEC-015: MFA obligatorio para roles privilegiados en producción. */
+/** SEC-015: MFA se activa explícitamente mediante MFA_ENFORCE=true. */
 export function mfaEnforce(): boolean {
-  return process.env.NODE_ENV === "production" || env.MFA_ENFORCE === "true";
+  return env.MFA_ENFORCE === "true";
 }
 
 /**

@@ -128,12 +128,14 @@ credenciales **distintos**. Nunca compartir base de datos, buckets ni claves.
   (SEC-077). El acceso se niega además con `active=false` en `session.ts`.
 - **MFA (TOTP)**: la app implementa el ciclo completo (enrolar, retar y
   verificar) contra Supabase Auth por REST (`apps/web/src/lib/mfa.ts`), sin
-  SDK, más la **exigencia** de MFA (AAL2) a `ADMIN` y `DEVELOPER` con la
-  variable `MFA_ENFORCE=true`.
+  SDK. La exigencia de MFA (AAL2) a `ADMIN` y `DEVELOPER` se controla
+  explícitamente con `MFA_ENFORCE=true`; actualmente está desactivada mientras
+  la variable no esté configurada en `true`.
   - **Enrolamiento**: `/configuraciones/seguridad` (visible para cualquier
     sesión; nav "Seguridad") → `POST /api/auth/mfa/enroll` (QR + secreto) →
     `POST /api/auth/mfa/activate` (código). Retirada con `DELETE /api/auth/mfa`.
-  - **Login**: si el usuario tiene un factor verificado, el login devuelve
+  - **Login**: con la exigencia activa y si el usuario tiene un factor
+    verificado, el login devuelve
     `{ mfaRequired: true }` guardando la sesión AAL1 solo en cookies temporales
     (`sb_mfa_at`/`sb_mfa_rt`, 10 min) y el segundo paso se completa en
     `POST /api/auth/mfa/verify`; solo entonces se emiten las cookies de sesión

@@ -51,9 +51,12 @@ export async function POST(req: Request) {
 
     // SEC-015: si el usuario ya tiene un factor TOTP verificado, exigir el
     // segundo factor antes de emitir la sesión completa (AAL2).
-    const verifiedFactors = await listVerifiedTotp(session.access_token);
+    const enforceMfa = mfaEnforce();
+    const verifiedFactors = enforceMfa
+      ? await listVerifiedTotp(session.access_token)
+      : [];
     const aal = decodeJwtPayload(session.access_token)?.aal;
-    if (verifiedFactors.length > 0 && aal !== "aal2") {
+    if (enforceMfa && verifiedFactors.length > 0 && aal !== "aal2") {
       // Guardar la sesión AAL1 en cookies temporales; NO da acceso todavía.
       const res = NextResponse.json({ mfaRequired: true }, { status: 200 });
       res.headers.set("Cache-Control", "no-store");
@@ -68,7 +71,7 @@ export async function POST(req: Request) {
     }
 
     if (
-      mfaEnforce() &&
+      enforceMfa &&
       isMfaPrivilegedRole(appUser.role) &&
       verifiedFactors.length === 0
     ) {
