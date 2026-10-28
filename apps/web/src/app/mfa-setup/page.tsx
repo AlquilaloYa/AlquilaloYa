@@ -20,6 +20,7 @@ export default function MfaSetupPage() {
   async function startEnrollment() {
     setBusy(true);
     setError(null);
+    setEnroll(null);
     try {
       const response = await fetch("/api/auth/mfa/enroll", {
         method: "POST",
@@ -137,6 +138,14 @@ export default function MfaSetupPage() {
                 {busy ? "Verificando…" : "Verificar y continuar"}
               </Button>
             </form>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={startEnrollment}
+            >
+              Generar un código nuevo
+            </Button>
           </>
         )}
 

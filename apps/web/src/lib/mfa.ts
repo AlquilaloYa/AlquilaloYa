@@ -1,4 +1,5 @@
 import { supabaseAnonKey, supabaseUrl } from "@contract/config/env";
+import { normalizeTotpQrCode } from "./mfa-qr";
 
 /**
  * Multi-Factor Authentication (TOTP) contra Supabase Auth por REST — sin SDK,
@@ -73,6 +74,30 @@ export async function listVerifiedTotp(accessToken: string): Promise<TotpFactor[
 
 /** Inicia el enrolamiento de un factor TOTP (devuelve QR y secreto). */
 export async function enrollTotp(accessToken: string): Promise<EnrolledTotp> {
+  const factorsResponse = await call(accessToken, "/user");
+  if (!factorsResponse.ok) throw new Error(await readError(factorsResponse));
+  const factorsData = (await factorsResponse.json()) as {
+    factors?: Array<{
+      id?: string;
+      factor_type?: string;
+      status?: string;
+    }>;
+  };
+  if (!Array.isArray(factorsData.factors)) {
+    throw new Error("Respuesta de factores MFA inválida");
+  }
+  const pendingFactors = factorsData.factors.filter(
+    (
+      factor,
+    ): factor is { id: string; factor_type?: string; status?: string } =>
+      factor.factor_type === "totp" &&
+      factor.status === "unverified" &&
+      typeof factor.id === "string",
+  );
+  for (const factor of pendingFactors) {
+    await unenrollFactor(accessToken, factor.id);
+  }
+
   const res = await call(accessToken, "/factors", {
     method: "POST",
     body: JSON.stringify({ factor_type: "totp", friendly_name: "AlquilaYa ERP" }),
@@ -85,7 +110,11 @@ export async function enrollTotp(accessToken: string): Promise<EnrolledTotp> {
   if (!data.id || !data.totp?.qr_code || !data.totp.secret) {
     throw new Error("Respuesta de enrolamiento inválida");
   }
-  return { factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret };
+  return {
+    factorId: data.id,
+    qrCode: normalizeTotpQrCode(data.totp.qr_code),
+    secret: data.totp.secret,
+  };
 }
 
 /** Crea un challenge para un factor y devuelve su id. */
