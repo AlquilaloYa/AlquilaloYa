@@ -926,3 +926,13 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.portal-follow-up-scroll {
+  max-height: 12rem;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.portal-follow-up-scroll::-webkit-scrollbar {
+  display: none;
+}

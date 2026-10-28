@@ -121,7 +121,21 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat("es-PE", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "America/Lima",
   }).format(new Date(value));
+}
+
+function formatVisitWindow(startsAt: string, endsAt: string): string {
+  const date = new Intl.DateTimeFormat("es-PE", {
+    dateStyle: "full",
+    timeZone: "America/Lima",
+  }).format(new Date(startsAt));
+  const time = new Intl.DateTimeFormat("es-PE", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Lima",
+  });
+  return `${date}, ${time.format(new Date(startsAt))}–${time.format(new Date(endsAt))}`;
 }
 
 function timelineLabel(event: Order["events"][number]): string {
@@ -478,6 +492,7 @@ export default function ClientPortalPage() {
   const urgentWhatsappUrl = `https://wa.me/${COMPANY_WHATSAPP}?text=${encodeURIComponent(
     `Hola AlquilaYa, estoy aquí ahora y necesito atención urgente en el departamento ${client?.departmentCode ?? ""}.`,
   )}`;
+  const unreadNotificationCount = notifications.filter((item) => !item.isRead).length;
 
   if (loading) {
     return (
@@ -504,24 +519,25 @@ export default function ClientPortalPage() {
               type="button"
               onClick={() => setNotificationsOpen((open) => !open)}
               aria-expanded={notificationsOpen}
-              aria-label={`Notificaciones${notifications.filter((item) => !item.isRead).length ? `, ${notifications.filter((item) => !item.isRead).length} sin leer` : ""}`}
-              className="relative inline-flex h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 transition hover:border-cyan-400 hover:text-white"
+              aria-label={`Notificaciones${unreadNotificationCount ? `, ${unreadNotificationCount} sin leer` : ""}`}
+              title="Notificaciones"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-cyan-400 hover:text-white"
             >
               <Bell aria-hidden className="h-4 w-4" />
-              Notificaciones
-              {notifications.some((item) => !item.isRead) && (
-                <span className="rounded-full bg-cyan-300 px-1.5 py-0.5 text-xs font-semibold text-slate-950">
-                  {notifications.filter((item) => !item.isRead).length}
+              {unreadNotificationCount > 0 && (
+                <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-cyan-300 px-1 text-center text-xs font-semibold leading-5 text-slate-950">
+                  {unreadNotificationCount}
                 </span>
               )}
             </button>
             <button
               type="button"
               onClick={() => void logout()}
-              className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-slate-500 hover:text-white"
             >
               <LogOut aria-hidden className="h-4 w-4" />
-              Cerrar sesión
             </button>
           </div>
         </header>
@@ -557,7 +573,13 @@ export default function ClientPortalPage() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-medium">{item.title}</p>
-                        <p className="mt-1 text-sm text-slate-300">{item.body}</p>
+                        {item.type === "VISIT_CONFIRMED" ? (
+                          <p className="mt-2 inline-block rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">
+                            {item.body}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-sm text-slate-300">{item.body}</p>
+                        )}
                         <time className="mt-2 block text-xs text-slate-500">
                           {formatDate(item.createdAt)}
                         </time>
@@ -898,8 +920,15 @@ export default function ClientPortalPage() {
                       <ul className="space-y-1 text-xs text-slate-300">
                         {order.availability.map((option) => (
                           <li key={option.optionNumber}>
-                            Opción {option.optionNumber}: {formatDate(option.startsAt)} – {formatDate(option.endsAt)}
-                            {option.selectedAt && <span className="ml-2 text-emerald-300">Seleccionada</span>}
+                            {option.selectedAt ? (
+                              <span className="inline-block rounded-md bg-emerald-700 px-3 py-2 font-semibold text-white">
+                                Visita confirmada: {formatVisitWindow(option.startsAt, option.endsAt)}
+                              </span>
+                            ) : (
+                              <>
+                                Opción {option.optionNumber}: {formatDate(option.startsAt)} – {formatDate(option.endsAt)}
+                              </>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -907,17 +936,24 @@ export default function ClientPortalPage() {
                   )}
                   <div className="mt-5 border-t border-white/10 pt-4">
                     <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Seguimiento</h4>
-                    <ol className="space-y-3">
-                      {order.events.map((event, index) => (
-                        <li key={`${event.eventType}-${event.createdAt}-${index}`} className="flex gap-3">
-                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-cyan-300" />
-                          <div className="min-w-0">
-                            <p className="text-sm text-slate-200">{timelineLabel(event)}</p>
-                            <p className="mt-0.5 text-xs text-slate-500">{formatDate(event.createdAt)}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
+                    <div
+                      className="portal-follow-up-scroll"
+                      role="region"
+                      aria-label={`Historial de seguimiento de ${order.code}`}
+                      tabIndex={0}
+                    >
+                      <ol className="space-y-3">
+                        {order.events.map((event, index) => (
+                          <li key={`${event.eventType}-${event.createdAt}-${index}`} className="flex gap-3">
+                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-cyan-300" />
+                            <div className="min-w-0">
+                              <p className="text-sm text-slate-200">{timelineLabel(event)}</p>
+                              <p className="mt-0.5 text-xs text-slate-500">{formatDate(event.createdAt)}</p>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
                   </div>
                   {order.chat?.openedAt && (
                     <div className="mt-4 rounded-lg border border-slate-700 p-3 text-xs text-slate-400">
