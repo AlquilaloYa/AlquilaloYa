@@ -118,21 +118,32 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("es-PE", {
-    dateStyle: "medium",
-    timeStyle: "short",
+  const date = new Intl.DateTimeFormat("es-PE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
     timeZone: "America/Lima",
   }).format(new Date(value));
+  const time = new Intl.DateTimeFormat("es-PE", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "America/Lima",
+  }).format(new Date(value));
+  return `${date} ${time}`;
 }
 
 function formatVisitWindow(startsAt: string, endsAt: string): string {
   const date = new Intl.DateTimeFormat("es-PE", {
-    dateStyle: "full",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
     timeZone: "America/Lima",
   }).format(new Date(startsAt));
   const time = new Intl.DateTimeFormat("es-PE", {
     hour: "2-digit",
     minute: "2-digit",
+    hourCycle: "h23",
     timeZone: "America/Lima",
   });
   return `${date}, ${time.format(new Date(startsAt))}–${time.format(new Date(endsAt))}`;

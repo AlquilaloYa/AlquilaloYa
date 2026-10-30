@@ -696,12 +696,6 @@ export async function PATCH(
         { status: 400 },
       );
     }
-    if (nextStatus === "DIAGNOSIS" && !diagnosis && !current.diagnosis) {
-      return NextResponse.json(
-        { error: "Registra el diagnóstico antes de continuar" },
-        { status: 400 },
-      );
-    }
     if (nextStatus === "RESOLVED" && !resolution && !current.resolution) {
       return NextResponse.json(
         { error: "Registra la resolución antes de marcarla resuelta" },
@@ -722,7 +716,7 @@ export async function PATCH(
           .where(
             and(
               eq(schema.workOrderAttachments.workOrderId, params.id),
-              eq(schema.workOrderAttachments.kind, "FOTO FINAL"),
+              inArray(schema.workOrderAttachments.kind, ["FOTO FINAL", "VIDEO FINAL"]),
             ),
           )
           .limit(1),
@@ -743,14 +737,6 @@ export async function PATCH(
           )
           .limit(1),
       ]);
-      const finalEstimatedMinutes =
-        estimatedMinutes ?? current.estimatedMinutes;
-      if (!diagnosis && !current.diagnosis) {
-        return NextResponse.json(
-          { error: "Registra el diagnóstico antes de cerrar la orden" },
-          { status: 400 },
-        );
-      }
       if (
         !material.length &&
         !(materialsConfirmed ?? current.materialsConfirmed)
@@ -760,15 +746,9 @@ export async function PATCH(
           { status: 400 },
         );
       }
-      if (!finalEstimatedMinutes || Number(finalEstimatedMinutes) <= 0) {
-        return NextResponse.json(
-          { error: "Registra el tiempo estimado antes de cerrar la orden" },
-          { status: 400 },
-        );
-      }
       if (!finalEvidence.length) {
         return NextResponse.json(
-          { error: "Adjunta una foto final antes de cerrar la orden" },
+          { error: "Adjunta una foto o un video final antes de cerrar la orden" },
           { status: 400 },
         );
       }
@@ -975,7 +955,10 @@ export async function PATCH(
       if (estimatedCost !== null) update.estimatedCost = estimatedCost;
       if (estimatedMinutes !== null) update.estimatedMinutes = estimatedMinutes;
       if (actualCost !== null) update.actualCost = actualCost;
-      if (nextStatus === "ON_SITE" && !current.workStartedAt) {
+      if (
+        nextStatus === "DIAGNOSIS" &&
+        (current.status === "ON_SITE" || !current.workStartedAt)
+      ) {
         update.workStartedAt = now;
       }
       if (nextStatus === "COMPLETED") {
@@ -992,7 +975,6 @@ export async function PATCH(
             ),
           )
           .orderBy(asc(schema.workOrderVisits.visitNumber));
-        const hasArrivedVisit = workVisits.some((visit) => visit.arrivedAt);
         const elapsedMinutes = workVisits.reduce((total, visit, index) => {
           if (!visit.arrivedAt) return total;
           const nextArrival = workVisits
@@ -1018,7 +1000,7 @@ export async function PATCH(
             )
           : 0;
         update.actualMinutes = String(
-          hasArrivedVisit ? elapsedMinutes : elapsedFromStart,
+          current.workStartedAt ? elapsedFromStart : elapsedMinutes,
         );
       } else if (actualMinutes !== null) {
         update.actualMinutes = actualMinutes;

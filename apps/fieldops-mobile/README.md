@@ -80,9 +80,12 @@ puede modificarlo mediante la acción explícita de reprogramación, que exige
 motivo y guarda el horario anterior en el historial. Una visita de seguimiento y
 las citas con el cliente se registran por separado.
 
-Durante el diagnóstico, se debe adjuntar al menos una foto del desperfecto
-antes de guardar. El tiempo real empieza automáticamente al confirmar la llegada;
-al iniciar el trabajo, la app abre directamente Resolución y cierre.
+Diagnóstico y mantenimiento comparten una pestaña: se adjuntan fotos o videos
+de hasta 1 minuto al guardar el diagnóstico, con una descripción opcional, y
+desde ahí se registran los materiales o se confirma que no se requieren. El
+contador comienza al guardar el diagnóstico. En Resolución y cierre se puede
+adjuntar evidencia final en foto o video y, si hace falta otra visita, indicar
+su fecha y horario.
 
 ### Notificaciones push de órdenes urgentes
 

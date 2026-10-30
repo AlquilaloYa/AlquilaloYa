@@ -10,11 +10,19 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_VIDEO_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_FILES = 5;
-const MAX_REQUEST_BYTES = 24 * 1024 * 1024;
+const MAX_REQUEST_BYTES = 100 * 1024 * 1024;
 const BUCKET = "work-order-evidence";
-const EVIDENCE_KINDS = ["FOTO INICIAL", "FOTO DIAGNÓSTICO", "FOTO FINAL"] as const;
+const EVIDENCE_KINDS = [
+  "FOTO INICIAL",
+  "FOTO DIAGNÓSTICO",
+  "FOTO FINAL",
+  "VIDEO INICIAL",
+  "VIDEO DIAGNÓSTICO",
+  "VIDEO FINAL",
+] as const;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -43,6 +51,20 @@ function matchesImageSignature(type: string, bytes: Uint8Array): boolean {
   );
 }
 
+function matchesVideoSignature(type: string, bytes: Uint8Array): boolean {
+  if (type === "video/mp4") {
+    return bytes.length >= 12 && String.fromCharCode(...bytes.slice(4, 8)) === "ftyp";
+  }
+  return (
+    type === "video/webm" &&
+    bytes.length >= 4 &&
+    bytes[0] === 0x1a &&
+    bytes[1] === 0x45 &&
+    bytes[2] === 0xdf &&
+    bytes[3] === 0xa3
+  );
+}
+
 export async function POST(
   req: Request,
   { params }: { params: { id: string } },
@@ -66,7 +88,7 @@ export async function POST(
     const contentLength = Number(req.headers.get("content-length") ?? 0);
     if (contentLength > MAX_REQUEST_BYTES) {
       return NextResponse.json(
-        { error: "Las fotos superan el límite de 24 MB por carga" },
+        { error: "Los archivos superan el límite de 100 MB por carga" },
         { status: 413 },
       );
     }
@@ -120,7 +142,7 @@ export async function POST(
       form = await req.formData();
     } catch {
       return NextResponse.json(
-        { error: "No se pudo leer la carga de fotos" },
+        { error: "No se pudo leer la carga de archivos multimedia" },
         { status: 400 },
       );
     }
@@ -128,22 +150,26 @@ export async function POST(
       .getAll("files")
       .filter((entry): entry is File => entry instanceof File);
     const kind = form.get("kind");
-    const description = form.get("description");
+    const descriptionValue = form.get("description");
+    const description = descriptionValue === null ? "" : descriptionValue;
     if (
       typeof kind !== "string" ||
-      !EVIDENCE_KINDS.includes(kind as (typeof EVIDENCE_KINDS)[number]) ||
-      typeof description !== "string" ||
-      !description.trim() ||
-      description.length > 1000
+      !EVIDENCE_KINDS.includes(kind as (typeof EVIDENCE_KINDS)[number])
     ) {
       return NextResponse.json(
-        { error: "Indica un tipo y una descripción válida para la evidencia" },
+        { error: "Indica un tipo válido para la evidencia" },
+        { status: 400 },
+      );
+    }
+    if (typeof description !== "string" || description.length > 1000) {
+      return NextResponse.json(
+        { error: "La descripción debe tener como máximo 1000 caracteres" },
         { status: 400 },
       );
     }
     if (files.length < 1 || files.length > MAX_FILES) {
       return NextResponse.json(
-        { error: `Adjunta entre 1 y ${MAX_FILES} fotos por carga` },
+        { error: `Adjunta entre 1 y ${MAX_FILES} archivos por carga` },
         { status: 400 },
       );
     }
@@ -164,25 +190,34 @@ export async function POST(
     try {
       let totalBytes = 0;
       for (const file of files) {
-        if (file.size < 1 || file.size > MAX_FILE_BYTES) {
-          throw new Error("Cada foto debe pesar entre 1 byte y 8 MB");
-        }
+        if (file.size < 1) throw new Error("Cada archivo debe pesar más de 0 bytes");
         totalBytes += file.size;
         if (totalBytes > MAX_REQUEST_BYTES) {
-          throw new Error("Las fotos superan el límite de 24 MB por carga");
+          throw new Error("Los archivos superan el límite de 100 MB por carga");
         }
         const mimeType = file.type.toLowerCase();
-        if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
-          throw new Error("Solo se permiten fotos JPG, PNG o WebP");
+        const isImage = ["image/jpeg", "image/png", "image/webp"].includes(mimeType);
+        const isVideo = ["video/mp4", "video/webm"].includes(mimeType);
+        if (!isImage && !isVideo) {
+          throw new Error("Solo se permiten fotos JPG, PNG, WebP y videos MP4 o WebM");
+        }
+        const maxFileBytes = isVideo ? MAX_VIDEO_FILE_BYTES : MAX_IMAGE_FILE_BYTES;
+        if (file.size > maxFileBytes) {
+          throw new Error(isVideo ? "Cada video debe pesar como máximo 50 MB" : "Cada foto debe pesar como máximo 8 MB");
         }
         const bytes = new Uint8Array(await file.arrayBuffer());
-        if (!matchesImageSignature(mimeType, bytes)) {
+        const matchesSignature = isImage
+          ? matchesImageSignature(mimeType, bytes)
+          : matchesVideoSignature(mimeType, bytes);
+        if (!matchesSignature) {
           throw new Error(
-            `El archivo "${file.name}" no coincide con un formato de imagen válido`,
+            `El archivo "${file.name}" no coincide con un formato multimedia válido`,
           );
         }
         const extension =
-          mimeType === "image/jpeg" ? "jpg" : mimeType.split("/")[1];
+          mimeType === "image/jpeg"
+            ? "jpg"
+            : mimeType.split("/")[1];
         const key = `${params.id}/${crypto.randomUUID()}.${extension}`;
         await uploadObject(key, bytes, mimeType, BUCKET);
         uploadedKeys.push(key);
@@ -243,10 +278,11 @@ export async function POST(
     const message =
       error instanceof Error
         ? error.message
-        : "No se pudieron adjuntar las fotos";
+        : "No se pudieron adjuntar los archivos multimedia";
     const status =
-      message.includes("entre 1 byte") ||
+      message.includes("más de 0 bytes") ||
       message.includes("superan el límite") ||
+      message.includes("como máximo") ||
       message.startsWith("Solo se permiten") ||
       message.includes("no coincide")
         ? 400

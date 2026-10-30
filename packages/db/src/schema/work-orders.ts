@@ -251,7 +251,7 @@ export const workOrderAttachments = pgTable(
     ),
     check(
       "work_order_attachments_size_bytes_check",
-      sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 8388608`,
+      sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 52428800`,
     ),
     index("work_order_attachments_order_idx").on(
       table.workOrderId,

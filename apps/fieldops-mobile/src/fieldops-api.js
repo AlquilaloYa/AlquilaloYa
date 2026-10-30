@@ -105,6 +105,7 @@ function mapTask(order, materials = []) {
     description: order.description || '',
     location: [order.site, order.departmentName, order.departmentNumber].filter(Boolean).join(' · ') || order.location,
     resident: order.contactName || '',
+    departmentCode: order.departmentCode || order.departmentNumber || '',
     priority: order.priority,
     status: order.status,
     responsible: assignedName,

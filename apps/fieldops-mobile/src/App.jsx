@@ -36,8 +36,7 @@ const workflowSteps = [
   'Recepción',
   'Visita programada',
   'Llegada',
-  'Diagnóstico',
-  'Recursos y trabajo',
+  'Diagnóstico y mantenimiento',
   'Resolución y cierre',
 ]
 
@@ -386,20 +385,58 @@ function useDictation() {
   return { supported, activeField, start, stop }
 }
 
-function PhotoField({ multiple = false, value = [], onChange, disabled = false }) {
+function getVideoDuration(file) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video')
+    const url = URL.createObjectURL(file)
+    const cleanup = () => {
+      URL.revokeObjectURL(url)
+      video.removeAttribute('src')
+    }
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      const { duration } = video
+      cleanup()
+      if (!Number.isFinite(duration) || duration <= 0) {
+        reject(new Error('No se pudo verificar la duración del video.'))
+        return
+      }
+      resolve(duration)
+    }
+    video.onerror = () => {
+      cleanup()
+      reject(new Error('No se pudo leer el video seleccionado.'))
+    }
+    video.src = url
+  })
+}
+
+function PhotoField({ multiple = false, value = [], onChange, disabled = false, allowVideo = false, onError }) {
   const cameraRef = useRef(null)
+  const videoRef = useRef(null)
   const galleryRef = useRef(null)
   const files = Array.isArray(value) ? value : value ? [value] : []
 
-  function handlePicked(event) {
+  async function handlePicked(event) {
     const picked = Array.from(event.target.files ?? [])
     event.target.value = ''
     if (!picked.length) return
+    try {
+      for (const file of picked.filter((item) => item.type.startsWith('video/'))) {
+        if (await getVideoDuration(file) > 60) {
+          throw new Error('Cada video puede durar como máximo 1 minuto.')
+        }
+      }
+    } catch (error) {
+      onError?.(error.message)
+      return
+    }
     if (multiple) {
       onChange([...files, ...picked])
     } else {
       onChange([picked[0]])
     }
+    onError?.('')
   }
 
   function removeAt(index) {
@@ -413,13 +450,20 @@ function PhotoField({ multiple = false, value = [], onChange, disabled = false }
           <CameraIcon />
           <span>Tomar foto</span>
         </button>
+        {allowVideo && (
+          <button type="button" className="photo-btn" disabled={disabled} onClick={() => videoRef.current?.click()}>
+            <CameraIcon />
+            <span>Grabar video</span>
+          </button>
+        )}
         <button type="button" className="photo-btn" disabled={disabled} onClick={() => galleryRef.current?.click()}>
           <GalleryIcon />
           <span>Elegir de galería</span>
         </button>
       </div>
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple={multiple} hidden onChange={handlePicked} />
-      <input ref={galleryRef} type="file" accept="image/jpeg,image/png,image/webp" multiple={multiple} hidden onChange={handlePicked} />
+      {allowVideo && <input ref={videoRef} type="file" accept="video/mp4,video/webm" capture="environment" hidden onChange={handlePicked} />}
+      <input ref={galleryRef} type="file" accept={allowVideo ? 'image/jpeg,image/png,image/webp,video/mp4,video/webm' : 'image/jpeg,image/png,image/webp'} multiple={multiple} hidden onChange={handlePicked} />
       {files.length > 0 && (
         <ul className="photo-file-list">
           {files.map((file, index) => (
@@ -483,17 +527,13 @@ function App() {
   const [showReschedule, setShowReschedule] = useState(false)
   const [rescheduleReason, setRescheduleReason] = useState('')
   const [diagnosisDraft, setDiagnosisDraft] = useState('')
-  const [causeDraft, setCauseDraft] = useState('')
   const [canResolveToday, setCanResolveToday] = useState(true)
   const [materialDraft, setMaterialDraft] = useState({ name: '', quantity: '' })
   const [materialsConfirmed, setMaterialsConfirmed] = useState(false)
-  const [estimatedMinutesDraft, setEstimatedMinutesDraft] = useState('')
   const [clockNow, setClockNow] = useState(() => Date.now())
   const [resolutionDraft, setResolutionDraft] = useState('')
   const [observationsDraft, setObservationsDraft] = useState('')
-  const [evidenceKind, setEvidenceKind] = useState('FOTO FINAL')
   const [evidenceDescription, setEvidenceDescription] = useState('')
-  const [diagnosisPhotoNote, setDiagnosisPhotoNote] = useState('')
   const [diagnosisPhotoFiles, setDiagnosisPhotoFiles] = useState([])
   const [evidenceFile, setEvidenceFile] = useState(null)
   const dictation = useDictation()
@@ -550,31 +590,26 @@ function App() {
   }, [calendarMonth, visits])
   const selectedDateVisits = visits.filter((visit) => toDateKey(new Date(visit.scheduledAt)) === selectedCalendarDate)
   const currentVisit = selectedTask?.visits.at(-1)
-  const isFinalPhotoAttached = selectedTask?.attachments.some((item) => item.kind === 'FOTO FINAL')
-  const completedFlowStatuses = ['DIAGNOSIS', 'ESTIMATED', 'IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE', 'COMPLETED']
+  const isFinalEvidenceAttached = selectedTask?.attachments.some((item) =>
+    ['FOTO FINAL', 'VIDEO FINAL'].includes(item.kind),
+  )
   const isHandedOff = selectedTask?.status === 'REASSIGNED' && selectedTask.assignedEmployeeId !== user?.employeeId
   const canOpenWorkflowStep = [
     true,
     (['ACCEPTED', 'RESCHEDULED', 'VISIT_SCHEDULED', 'ON_SITE', 'DIAGNOSIS', 'ESTIMATED', 'IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE', 'COMPLETED'].includes(selectedTask?.status) &&
       !(selectedTask?.status === 'ACCEPTED' && selectedTask.availabilityOptions?.some((option) => !option.selectedAt))),
     Boolean(selectedTask?.visits.length),
-    ['ON_SITE', 'DIAGNOSIS', 'RESCHEDULED'].includes(selectedTask?.status),
-    completedFlowStatuses.includes(selectedTask?.status),
+    ['ON_SITE', 'DIAGNOSIS', 'ESTIMATED', 'IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE', 'COMPLETED', 'RESCHEDULED'].includes(selectedTask?.status),
     ['IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE', 'COMPLETED'].includes(selectedTask?.status),
   ]
-  const firstArrivalAt = selectedTask?.visits.find((visit) => visit.arrivedAtIso)?.arrivedAtIso
-  const workStartedAtMs = firstArrivalAt
-    ? new Date(firstArrivalAt).getTime()
-    : selectedTask?.workStartedAt
-      ? new Date(selectedTask.workStartedAt).getTime()
-      : 0
+  const workStartedAtMs = selectedTask?.workStartedAt
+    ? new Date(selectedTask.workStartedAt).getTime()
+    : 0
   const completedAtMs = selectedTask?.completedAt ? new Date(selectedTask.completedAt).getTime() : 0
   const isWorkTimerRunning = Boolean(workStartedAtMs) && selectedTask?.status !== 'COMPLETED'
   const workTimerEndMs = isWorkTimerRunning ? clockNow : completedAtMs || clockNow
   const elapsedWorkMs = workStartedAtMs ? Math.max(0, workTimerEndMs - workStartedAtMs) : 0
   const elapsedWorkLabel = workStartedAtMs ? formatClock(elapsedWorkMs) : ''
-  const estimatedWorkMs = (selectedTask?.estimatedMinutes || 0) * 60000
-  const isOverEstimate = estimatedWorkMs > 0 && elapsedWorkMs > estimatedWorkMs
   const actualElapsedMinutes = selectedTask?.actualMinutes
     ? `${Math.floor(selectedTask.actualMinutes / 60)}h ${selectedTask.actualMinutes % 60}m`
     : elapsedWorkLabel
@@ -961,9 +996,9 @@ function App() {
         : task.status === 'ON_SITE'
           ? 2
           : ['DIAGNOSIS', 'ESTIMATED'].includes(task.status)
-            ? 4
+            ? 3
             : ['IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE', 'COMPLETED'].includes(task.status)
-              ? 5
+              ? 4
               : 0
     setWorkflowStep(nextStep)
     const localTarget = toLocalDateTime(task.targetAt)
@@ -980,10 +1015,9 @@ function App() {
     setShowReschedule(false)
     setRescheduleReason('')
     setDiagnosisDraft(task.diagnosis)
-    setCauseDraft(task.cause)
     setCanResolveToday(task.canResolveToday)
     setMaterialsConfirmed(task.materialsConfirmed)
-    setEstimatedMinutesDraft(String(task.estimatedMinutes || ''))
+    setDiagnosisPhotoFiles([])
     setResolutionDraft(task.resolution)
     setObservationsDraft(task.observations)
     setActiveTab('order')
@@ -1203,26 +1237,49 @@ function App() {
       }, arrivalTime)
     )) {
       setClockNow(Date.parse(currentTimestamp().iso))
-      setWorkflowStep(3)
+      setWorkflowStep(2)
     }
   }
 
   async function saveDiagnosis(event) {
     event.preventDefault()
-    if (!diagnosisDraft.trim() || !['ON_SITE', 'DIAGNOSIS'].includes(selectedTask.status)) return
-    if (!selectedTask.attachments.some((attachment) => attachment.kind === 'FOTO DIAGNÓSTICO')) {
-      setStorageWarning('Adjunta al menos una foto del desperfecto antes de guardar el diagnóstico.')
+    if (!['ON_SITE', 'DIAGNOSIS'].includes(selectedTask.status)) return
+    const hasExistingEvidence = selectedTask.attachments.some((attachment) =>
+      ['FOTO DIAGNÓSTICO', 'VIDEO DIAGNÓSTICO'].includes(attachment.kind),
+    )
+    if (!diagnosisPhotoFiles.length && !hasExistingEvidence) {
+      setStorageWarning('Adjunta al menos una foto o un video antes de guardar el diagnóstico.')
       return
     }
+    setIsLoading(true)
+    try {
+      for (const file of diagnosisPhotoFiles) {
+        const kind = file.type.startsWith('video/') ? 'VIDEO DIAGNÓSTICO' : 'FOTO DIAGNÓSTICO'
+        await fieldopsApi.uploadEvidence(
+          selectedTask.id,
+          file,
+          kind,
+          diagnosisDraft.trim() || 'Evidencia registrada durante el diagnóstico',
+        )
+      }
+    } catch (error) {
+      setStorageWarning(error.message)
+      return
+    } finally {
+      setIsLoading(false)
+    }
+
     const eventTime = currentTimeLabel()
     if (await updateTask(selectedTask.id, (task) =>
       addEvent(task, 'Registró diagnóstico', {
         status: 'DIAGNOSIS',
         diagnosis: diagnosisDraft.trim(),
-        cause: causeDraft.trim(),
         canResolveToday,
       }, eventTime),
-    )) setWorkflowStep(canResolveToday ? 4 : 3)
+    )) {
+      setDiagnosisPhotoFiles([])
+      setWorkflowStep(3)
+    }
   }
 
   async function addMaterial(event) {
@@ -1256,24 +1313,11 @@ function App() {
     }
   }
 
-  async function saveEstimate(event) {
-    event.preventDefault()
-    if (!(selectedTask.materials.length || materialsConfirmed) || !estimatedMinutesDraft || !['DIAGNOSIS', 'ESTIMATED', 'IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE'].includes(selectedTask.status)) return
-    const eventTime = currentTimeLabel()
-    if (await updateTask(selectedTask.id, (task) =>
-      addEvent(task, 'Registró tiempo estimado', {
-        status: ['IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE'].includes(task.status) ? task.status : 'ESTIMATED',
-        estimatedMinutes: Number(estimatedMinutesDraft) || 0,
-        materialsConfirmed,
-      }, eventTime),
-    )) setWorkflowStep(4)
-  }
-
   async function startWork() {
-    if (selectedTask.status !== 'ESTIMATED') return
+    if (!['DIAGNOSIS', 'ESTIMATED'].includes(selectedTask.status) || !(selectedTask.materials.length || materialsConfirmed)) return
     const eventTime = currentTimeLabel()
     if (await updateTask(selectedTask.id, (task) => addEvent(task, 'Inició trabajo de reparación', { status: 'IN_PROGRESS' }, eventTime))) {
-      setWorkflowStep(5)
+      setWorkflowStep(4)
       window.requestAnimationFrame(() => {
         document.querySelector('.order-detail-body')?.scrollTo({ top: 0, behavior: 'smooth' })
       })
@@ -1282,107 +1326,82 @@ function App() {
 
   async function saveResolution(event) {
     event.preventDefault()
-    if (!resolutionDraft.trim() || !['IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE'].includes(selectedTask.status)) return
-    const eventTime = currentTimeLabel()
-    if (await updateTask(selectedTask.id, (task) =>
-      addEvent(task, 'Registró resolución técnica', {
-        status: selectedTask.status === 'PENDING_CLOSURE' ? 'PENDING_CLOSURE' : 'RESOLVED',
-        resolution: resolutionDraft.trim(),
-        observations: observationsDraft.trim(),
-      }, eventTime),
-    )) setWorkflowStep(5)
-  }
-
-  async function addEvidence(event) {
-    event.preventDefault()
-    const file = evidenceFile
-    if (!file || !evidenceDescription.trim()) return
-    if (selectedTask.status === 'COMPLETED') return
-    setIsLoading(true)
-    try {
-      await fieldopsApi.uploadEvidence(selectedTask.id, file, evidenceKind, evidenceDescription.trim())
-      if (selectedTask.status === 'RESOLVED' && evidenceKind === 'FOTO FINAL') {
-        await fieldopsApi.updateOrder(selectedTask.id, { status: 'PENDING_CLOSURE' })
-      }
-      await reloadOrders()
-      setStorageWarning('')
-    } catch (error) {
-      setStorageWarning(error.message)
-      return
-    } finally {
-      setIsLoading(false)
-    }
-    setEvidenceFile(null)
-    setEvidenceDescription('')
-  }
-
-  async function addDiagnosisPhoto(event) {
-    event.preventDefault()
-    if (!diagnosisPhotoFiles.length || selectedTask.status === 'COMPLETED') return
-    setIsLoading(true)
-    try {
-      const description = diagnosisPhotoNote.trim() || 'Desperfecto detectado en el diagnóstico'
-      for (const file of diagnosisPhotoFiles) {
-        await fieldopsApi.uploadEvidence(selectedTask.id, file, 'FOTO DIAGNÓSTICO', description)
-      }
-      await reloadOrders()
-      setDiagnosisPhotoNote('')
-      setDiagnosisPhotoFiles([])
-      setStorageWarning('')
-    } catch (error) {
-      setStorageWarning(error.message)
-      return
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  async function completeTask() {
-    if (!selectedTask || selectedTask.status !== 'PENDING_CLOSURE' || (customerAppointmentRequested && !(selectedTask.customerAppointments?.length)) || !selectedTask.diagnosis || !(selectedTask.materials.length || selectedTask.materialsConfirmed) || !selectedTask.estimatedMinutes || !selectedTask.resolution || !isFinalPhotoAttached) return
-    if (await updateTask(selectedTask.id, (task) => addEvent(task, 'Tarea finalizada', {
-      status: 'COMPLETED',
-    }, currentTimeLabel()))) {
-      setActiveTab('tasks')
-      setTaskFilter('FINALIZADAS')
-    }
-  }
-
-  async function scheduleCustomerAppointment(event) {
-    event.preventDefault()
     if (
       !selectedTask ||
-      selectedTask.status === 'COMPLETED' ||
-      !customerAppointmentDate ||
-      !customerAppointmentTime ||
-      (selectedTask.customerAppointments?.length ?? 0) > 0
+      !resolutionDraft.trim() ||
+      !['IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE'].includes(selectedTask.status)
     ) return
-    const scheduledAt = `${customerAppointmentDate}T${customerAppointmentTime}`
-    const arrivalWindowEnd = customerAppointmentEnd
-      ? `${customerAppointmentDate}T${customerAppointmentEnd}`
-      : ''
-    if (selectedTask.visits.some((visit) => visit.scheduledAt === scheduledAt)) return
-    const eventTime = currentTimeLabel()
-    if (await updateTask(selectedTask.id, (task) => {
-      const appointmentNumber = (task.customerAppointments?.length ?? 0) + 1
-      return addEvent(task, `Programó cita de seguimiento con ${task.resident} para ${formatDateTime(scheduledAt)}`, {
-        customerAppointments: [
-          ...(task.customerAppointments ?? []),
-          {
-            number: appointmentNumber,
-            customer: task.resident,
-            scheduledAt,
-            arrivalWindowEnd,
-            note: customerAppointmentNote.trim(),
-            status: 'SCHEDULED',
-          },
-        ],
-      }, eventTime)
-    }, { note: customerAppointmentNote.trim() })) {
-      setCustomerAppointmentRequested(false)
-      setCustomerAppointmentDate('')
-      setCustomerAppointmentTime('')
-      setCustomerAppointmentEnd('')
-      setCustomerAppointmentNote('')
+    const needsNewVisit = customerAppointmentRequested && !selectedTask.customerAppointments?.length
+    const appointmentTime = `${customerAppointmentDate}T${customerAppointmentTime}`
+    if (
+      needsNewVisit &&
+      (
+        !customerAppointmentDate ||
+        !customerAppointmentTime ||
+        (customerAppointmentEnd && customerAppointmentEnd <= customerAppointmentTime) ||
+        selectedTask.visits.some((visit) => toLocalDateTime(visit.scheduledAt) === appointmentTime)
+      )
+    ) {
+      setStorageWarning('Indica una fecha y un horario válidos para la nueva visita.')
+      return
+    }
+    if (!needsNewVisit && !isFinalEvidenceAttached && !evidenceFile) {
+      setStorageWarning('Adjunta una foto o un video final antes de finalizar la tarea.')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const resolutionStatus = selectedTask.status === 'PENDING_CLOSURE' ? 'PENDING_CLOSURE' : 'RESOLVED'
+      await fieldopsApi.updateOrder(selectedTask.id, {
+        status: resolutionStatus,
+        resolution: resolutionDraft.trim(),
+        observations: observationsDraft.trim(),
+      })
+      if (evidenceFile) {
+        const evidenceKind = evidenceFile.type.startsWith('video/') ? 'VIDEO FINAL' : 'FOTO FINAL'
+        await fieldopsApi.uploadEvidence(
+          selectedTask.id,
+          evidenceFile,
+          evidenceKind,
+          evidenceDescription.trim() || 'Evidencia final de la orden',
+        )
+        setEvidenceFile(null)
+        setEvidenceDescription('')
+      }
+      if (needsNewVisit) {
+        await fieldopsApi.updateOrder(selectedTask.id, {
+          scheduledAt: new Date(appointmentTime).toISOString(),
+          arrivalWindowEnd: customerAppointmentEnd
+            ? new Date(`${customerAppointmentDate}T${customerAppointmentEnd}`).toISOString()
+            : null,
+          customerAppointment: true,
+          customerName: selectedTask.resident,
+          note: customerAppointmentNote.trim(),
+        })
+      } else {
+        await fieldopsApi.updateOrder(selectedTask.id, { status: 'PENDING_CLOSURE' })
+        await fieldopsApi.updateOrder(selectedTask.id, { status: 'COMPLETED' })
+      }
+      await reloadOrders()
+      setStorageWarning('')
+      if (needsNewVisit) {
+        setCustomerAppointmentRequested(false)
+        setCustomerAppointmentDate('')
+        setCustomerAppointmentTime('')
+        setCustomerAppointmentEnd('')
+        setCustomerAppointmentNote('')
+      } else {
+        setActiveTab('tasks')
+        setTaskFilter('FINALIZADAS')
+      }
+    } catch (error) {
+      setStorageWarning(error.message)
+      await reloadOrders().catch((reloadError) => {
+        setStorageWarning(`${error.message} No se pudo actualizar la orden: ${reloadError.message}`)
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -1404,7 +1423,7 @@ function App() {
           <span className={`priority-badge ${task.priority.toLowerCase()}`}>{task.priority}</span>
         </div>
         <h2>{task.title}</h2>
-        <div className="meta-line"><span className="pin">⌖</span>{task.location} · {task.resident}</div>
+        <div className="meta-line"><span className="pin">⌖</span>{task.location} · {task.resident}{task.departmentCode ? ` · Depto. ${task.departmentCode}` : ''}</div>
         <div className="badges-row">
           <span>◷ {formatDateTime(task.targetAt)}</span>
           <span>{task.visits.length + (task.customerAppointments?.length ?? 0)} {task.visits.length + (task.customerAppointments?.length ?? 0) === 1 ? 'visita' : 'visitas'}</span>
@@ -1555,24 +1574,33 @@ function App() {
   function renderOrder() {
     if (!selectedTask) return null
     const checklist = [
-      ['Diagnóstico registrado', Boolean(selectedTask.diagnosis)],
+      ['Diagnóstico registrado', ['DIAGNOSIS', 'ESTIMATED', 'IN_PROGRESS', 'RESOLVED', 'PENDING_CLOSURE', 'COMPLETED'].includes(selectedTask.status)],
       ['Materiales revisados', selectedTask.materials.length > 0 || selectedTask.materialsConfirmed],
-      ['Tiempo estimado', selectedTask.estimatedMinutes > 0],
       ['Resolución registrada', Boolean(selectedTask.resolution)],
-      ['Foto final adjunta', Boolean(isFinalPhotoAttached)],
+      ['Evidencia final adjunta', Boolean(isFinalEvidenceAttached)],
     ]
     const isCompleted = selectedTask.status === 'COMPLETED'
     const pendingCustomerTimes = (selectedTask.availabilityOptions ?? []).filter((option) => !option.selectedAt)
-    const diagnosisPhotos = selectedTask.attachments.filter((item) => item.kind === 'FOTO DIAGNÓSTICO')
+    const diagnosisPhotos = selectedTask.attachments.filter((item) =>
+      ['FOTO DIAGNÓSTICO', 'VIDEO DIAGNÓSTICO'].includes(item.kind),
+    )
+    const needsNewVisit = customerAppointmentRequested && !selectedTask.customerAppointments?.length
+    const followUpDateTime = `${customerAppointmentDate}T${customerAppointmentTime}`
+    const canScheduleFollowUp = Boolean(
+      customerAppointmentDate &&
+      customerAppointmentTime &&
+      (!customerAppointmentEnd || customerAppointmentEnd > customerAppointmentTime) &&
+      !selectedTask.visits.some((visit) => toLocalDateTime(visit.scheduledAt) === followUpDateTime),
+    )
     return (
       <main className={`order-detail-body ${isCompleted || isHandedOff ? 'read-only-order' : ''}`}>
         <div className="order-detail-heading">
           <div className="order-code">{selectedTask.code} · {selectedTask.priority}</div>
           <h1>{selectedTask.title}</h1>
           <p>{selectedTask.description}</p>
-          <div className="order-meta"><span>⌖ {selectedTask.location}</span><span>Residente: {selectedTask.resident}</span><span>Responsable actual: {selectedTask.responsible}</span>{elapsedWorkLabel && <span className={`chip chip-grey${isOverEstimate ? ' ticker-over' : ''}`}>⏱ {elapsedWorkLabel}</span>}<span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
+          <div className="order-meta"><span>⌖ {selectedTask.location}</span><span>Residente: {selectedTask.resident}{selectedTask.departmentCode ? ` · Depto. ${selectedTask.departmentCode}` : ''}</span><span>Responsable actual: {selectedTask.responsible}</span>{elapsedWorkLabel && <span className="chip chip-grey">⏱ {elapsedWorkLabel}</span>}<span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
         </div>
-        {isCompleted && <section className="workflow-card closed-summary"><div className="complete-badge">✓ Tarea finalizada</div><p>Esta orden está bloqueada para edición tras el cierre. Cualquier cambio posterior deberá registrarse como corrección auditada.</p><div className="summary-box"><div><span>Diagnóstico</span><strong>{selectedTask.diagnosis}</strong></div><div><span>Resolución</span><strong>{selectedTask.resolution}</strong></div><div><span>Tiempo estimado</span><strong>{selectedTask.estimatedMinutes ? `${selectedTask.estimatedMinutes} min` : '—'}</strong></div><div><span>Tiempo real</span><strong>{actualElapsedMinutes}</strong></div><div><span>Cierre</span><strong>{formatDateTime(selectedTask.completedAt)}</strong></div></div></section>}
+        {isCompleted && <section className="workflow-card closed-summary"><div className="complete-badge">✓ Tarea finalizada</div><p>Esta orden está bloqueada para edición tras el cierre. Cualquier cambio posterior deberá registrarse como corrección auditada.</p><div className="summary-box"><div><span>Diagnóstico</span><strong>{selectedTask.diagnosis || 'Registrado con evidencia'}</strong></div><div><span>Resolución</span><strong>{selectedTask.resolution}</strong></div><div><span>Tiempo real</span><strong>{actualElapsedMinutes}</strong></div><div><span>Cierre</span><strong>{formatDateTime(selectedTask.completedAt)}</strong></div></div></section>}
         {isHandedOff && <section className="workflow-card closed-summary"><div className="complete-badge">↗ Orden subasignada</div><p>La orden ahora está a cargo de {selectedTask.responsible}. Ya no aparece como editable para Pedro; el cambio y su motivo quedan en auditoría.</p></section>}
         <div className="workflow-strip">
           {workflowSteps.map((step, index) => <button key={step} type="button" disabled={!canOpenWorkflowStep[index]} className={`${index === workflowStep ? 'selected' : ''} ${index < workflowStep ? 'done' : ''}`} onClick={() => setWorkflowStep(index)}><span>{index < workflowStep ? '✓' : index + 1}</span>{step}</button>)}
@@ -1709,12 +1737,12 @@ function App() {
         )}
         {workflowStep === 3 && (
           <section className="workflow-card">
-            <div className="section-heading"><h2>Diagnóstico</h2><span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
+            <div className="section-heading"><h2>Diagnóstico y mantenimiento</h2><span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
             <div className="diagnosis-photos">
-              <h3>Fotos de los desperfectos</h3>
-              <p className="prototype-note">Adjunta al menos una foto de los daños antes de guardar el diagnóstico.</p>
+              <h3>Fotos y videos del desperfecto</h3>
+              <p className="prototype-note">Adjunta al menos una foto o un video. La evidencia se guardará automáticamente al registrar el diagnóstico.</p>
               {diagnosisPhotos.length > 0 && (
-                <div className="evidence-gallery" aria-label="Fotos de desperfectos del diagnóstico">
+                <div className="evidence-gallery" aria-label="Evidencia multimedia del diagnóstico">
                   {diagnosisPhotos.map((attachment) => (
                     <button className="evidence-thumbnail" key={attachment.id} type="button" disabled={!attachment.url} onClick={() => setPreviewAttachment(attachment)} aria-label={`Ver ${attachment.kind}: ${attachment.name}`}>
                       {attachment.url ? (
@@ -1727,41 +1755,26 @@ function App() {
                   ))}
                 </div>
               )}
-              <form className="form-card secondary-form" onSubmit={addDiagnosisPhoto}>
-                <PhotoField multiple value={diagnosisPhotoFiles} onChange={setDiagnosisPhotoFiles} disabled={selectedTask.status === 'COMPLETED'} />
-                <label>Descripción (opcional)<input value={diagnosisPhotoNote} onChange={(event) => setDiagnosisPhotoNote(event.target.value)} placeholder="Ej. Fuga en la tubería, golpe en la puerta" /></label>
-                <button type="submit" className="ghost-btn" disabled={selectedTask.status === 'COMPLETED' || diagnosisPhotoFiles.length === 0}>Adjuntar foto</button>
-              </form>
+              <PhotoField multiple allowVideo value={diagnosisPhotoFiles} onChange={setDiagnosisPhotoFiles} onError={setStorageWarning} disabled={selectedTask.status === 'COMPLETED'} />
+              <p className="prototype-note">Duración máxima por video: 1 minuto.</p>
             </div>
             {selectedTask.status === 'RESCHEDULED' && (
               <div className="scheduled-visit-card">
                 <span className="eyebrow">DIAGNÓSTICO REGISTRADO</span>
-                <strong>{selectedTask.diagnosis}</strong>
-                {selectedTask.cause && <span>Causa probable: {selectedTask.cause}</span>}
+                {selectedTask.diagnosis && <strong>{selectedTask.diagnosis}</strong>}
                 <span>La visita inicial queda registrada y puedes programar una visita de seguimiento.</span>
               </div>
             )}
-            {selectedTask.status !== 'RESCHEDULED' && (
-              <form className="form-card" onSubmit={saveDiagnosis}>
-                <div className="field-block">
-                  <label>Problema encontrado<textarea rows="3" required value={diagnosisDraft} onChange={(event) => setDiagnosisDraft(event.target.value)} placeholder="Describe el estado del problema encontrado" /></label>
-                  <DictateButton supported={dictation.supported} active={dictation.activeField === 'diagnosis'} onClick={() => dictation.start('diagnosis', (text) => setDiagnosisDraft((current) => (current ? `${current} ${text}` : text)))} />
-                </div>
-                <div className="field-block">
-                  <label>Causa probable<textarea rows="2" value={causeDraft} onChange={(event) => setCauseDraft(event.target.value)} placeholder="¿Qué originó el problema?" /></label>
-                  <DictateButton supported={dictation.supported} active={dictation.activeField === 'cause'} onClick={() => dictation.start('cause', (text) => setCauseDraft((current) => (current ? `${current} ${text}` : text)))} />
-                </div>
-                <fieldset className="choice-group"><legend>¿Puede resolverse hoy?</legend><label><input type="radio" checked={canResolveToday} onChange={() => setCanResolveToday(true)} /> Sí, puedo resolverlo</label><label><input type="radio" checked={!canResolveToday} onChange={() => setCanResolveToday(false)} /> No, requiere otra visita</label></fieldset>
-                <button type="submit" className="primary-btn" disabled={!diagnosisPhotos.length}>Guardar diagnóstico</button>
-                {!diagnosisPhotos.length && <p className="disabled-hint">Adjunta primero una foto del desperfecto.</p>}
-              </form>
-            )}
+            <form className="form-card" onSubmit={saveDiagnosis}>
+              <div className="field-block">
+                <label>Descripción del diagnóstico (opcional)<textarea rows="3" value={diagnosisDraft} onChange={(event) => setDiagnosisDraft(event.target.value)} placeholder="Agrega notas si lo consideras necesario" /></label>
+                <DictateButton supported={dictation.supported} active={dictation.activeField === 'diagnosis'} onClick={() => dictation.start('diagnosis', (text) => setDiagnosisDraft((current) => (current ? `${current} ${text}` : text)))} />
+              </div>
+              <fieldset className="choice-group"><legend>¿Puede resolverse hoy?</legend><label><input type="radio" checked={canResolveToday} onChange={() => setCanResolveToday(true)} /> Sí, puedo resolverlo</label><label><input type="radio" checked={!canResolveToday} onChange={() => setCanResolveToday(false)} /> No, requiere otra visita</label></fieldset>
+              <button type="submit" className="primary-btn" disabled={!['ON_SITE', 'DIAGNOSIS'].includes(selectedTask.status) || (!diagnosisPhotoFiles.length && !diagnosisPhotos.length)}>Guardar diagnóstico</button>
+              {!diagnosisPhotoFiles.length && !diagnosisPhotos.length && <p className="disabled-hint">Adjunta una foto o un video para guardar el diagnóstico.</p>}
+            </form>
             {!canResolveToday && <form className="form-card secondary-form" onSubmit={scheduleFollowUpVisit}><h3>Programar visita de seguimiento</h3><div className="form-grid"><label>Fecha de la nueva visita<input type="date" required value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} /></label><label>Desde<input type="time" required value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} /></label><label>Hasta<input type="time" value={followUpEnd} onChange={(event) => setFollowUpEnd(event.target.value)} /></label></div><p className="prototype-note">Define el rango esperado de llegada; si el fin queda vacío, se conserva la duración de la ventana anterior.</p><label>Duración estimada (minutos)<input type="number" min="1" value={visitDuration} onChange={(event) => setVisitDuration(event.target.value)} /></label><label>Indicaciones para la visita<textarea rows="2" value={scheduleNote} onChange={(event) => setScheduleNote(event.target.value)} placeholder="Acceso, coordinación o materiales necesarios" /></label><button type="submit" className="ghost-btn" disabled={!['RESCHEDULED', 'DIAGNOSIS'].includes(selectedTask.status) || !followUpDate || !followUpTime || (followUpEnd && followUpEnd <= followUpTime) || selectedTask.visits.some((visit) => toLocalDateTime(visit.scheduledAt) === `${followUpDate}T${followUpTime}`)}>Guardar nueva visita</button></form>}
-          </section>
-        )}
-        {workflowStep === 4 && (
-          <section className="workflow-card">
-            <div className="section-heading"><h2>Materiales y tiempo</h2><span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
             <form className="form-card" onSubmit={addMaterial}>
               <h3>Materiales requeridos</h3>
               <div className="form-grid"><label>Material<input required value={materialDraft.name} onChange={(event) => setMaterialDraft({ ...materialDraft, name: event.target.value })} placeholder="Ej. Tubo PVC" /></label><label>Cantidad<input required value={materialDraft.quantity} onChange={(event) => setMaterialDraft({ ...materialDraft, quantity: event.target.value })} placeholder="2" /></label></div>
@@ -1769,31 +1782,37 @@ function App() {
             </form>
             {!selectedTask.materials.length && <label className="no-materials-control"><input type="checkbox" checked={materialsConfirmed} onChange={confirmNoMaterials} />No se requieren materiales para esta orden</label>}
             {selectedTask.materials.map((material, index) => <div className="material-row" key={`${material.name}-${index}`}><span>{material.name}</span><strong>{material.quantity}</strong></div>)}
-            <form className="form-card" onSubmit={saveEstimate}>
-              <div className="form-grid"><label>Tiempo estimado (min)<input type="number" min="1" required value={estimatedMinutesDraft} onChange={(event) => setEstimatedMinutesDraft(event.target.value)} /></label><div className="time-readout"><span>Tiempo desde la llegada</span><strong>{elapsedWorkLabel || (currentVisit?.arrivedAt ? 'En curso' : 'Empieza al confirmar llegada')}</strong><small>{selectedTask.estimatedMinutes > 0 ? `Objetivo: ${selectedTask.estimatedMinutes} min${isOverEstimate ? ' · excedido' : ''}` : 'Define el tiempo estimado para comparar'}</small></div></div>
-              <p className="prototype-note">El tiempo real corre automáticamente desde que confirmas la llegada; no hace falta iniciar un cronómetro manual.</p>
-              <button type="submit" className="primary-btn" disabled={!(selectedTask.materials.length || materialsConfirmed)}>Guardar estimación</button>
-              {!(selectedTask.materials.length || materialsConfirmed) && <p className="disabled-hint">Agrega materiales o confirma que no se requieren.</p>}
-            </form>
-            {selectedTask.status === 'ESTIMATED' && <button type="button" className="primary-btn" onClick={startWork}>Iniciar reparación</button>}
+            {elapsedWorkLabel && <div className="time-readout"><span>Tiempo desde el diagnóstico</span><strong>{elapsedWorkLabel}</strong></div>}
+            {['DIAGNOSIS', 'ESTIMATED'].includes(selectedTask.status) && <button type="button" className="primary-btn" disabled={!(selectedTask.materials.length || materialsConfirmed)} onClick={startWork}>Iniciar reparación</button>}
             {selectedTask.status === 'IN_PROGRESS' && <div className="success-inline">Trabajo en proceso</div>}
           </section>
         )}
-        {workflowStep === 5 && (
+        {workflowStep === 4 && (
           <section className="workflow-card">
             <div className="section-heading"><h2>Resolución, evidencia y cierre</h2><span className="chip chip-grey">{formatStatus(selectedTask.status)}</span></div>
-            {selectedTask.status !== 'COMPLETED' && (
-              <label className="no-materials-control appointment-toggle">
-                <input
-                  type="checkbox"
-                  checked={customerAppointmentRequested || Boolean(selectedTask.customerAppointments?.length)}
-                  disabled={Boolean(selectedTask.customerAppointments?.length)}
-                  onChange={(event) => setCustomerAppointmentRequested(event.target.checked)}
-                />
-                Se necesita nueva visita
-              </label>
-            )}
             <form className="form-card" onSubmit={saveResolution}>
+              {selectedTask.status !== 'COMPLETED' && (
+                <label className="no-materials-control appointment-toggle">
+                  <input
+                    type="checkbox"
+                    checked={customerAppointmentRequested || Boolean(selectedTask.customerAppointments?.length)}
+                    disabled={Boolean(selectedTask.customerAppointments?.length)}
+                    onChange={(event) => setCustomerAppointmentRequested(event.target.checked)}
+                  />
+                  Se necesita nueva visita
+                </label>
+              )}
+              {needsNewVisit && (
+                <>
+                  <h3>Fecha para la nueva visita</h3>
+                  <div className="form-grid">
+                    <label>Fecha<input type="date" required min={todayDate} value={customerAppointmentDate} onChange={(event) => setCustomerAppointmentDate(event.target.value)} /></label>
+                    <label>Desde<input type="time" required value={customerAppointmentTime} onChange={(event) => setCustomerAppointmentTime(event.target.value)} /></label>
+                    <label>Hasta<input type="time" value={customerAppointmentEnd} onChange={(event) => setCustomerAppointmentEnd(event.target.value)} /></label>
+                  </div>
+                  <label>Indicaciones para la visita<textarea rows="2" value={customerAppointmentNote} onChange={(event) => setCustomerAppointmentNote(event.target.value)} placeholder="Acceso, coordinación o motivo de la nueva visita" /></label>
+                </>
+              )}
               <div className="field-block">
                 <label>Resolución técnica<textarea required rows="4" value={resolutionDraft} onChange={(event) => setResolutionDraft(event.target.value)} placeholder="Qué se hizo, cómo quedó el problema y qué pruebas se realizaron" /></label>
                 <DictateButton supported={dictation.supported} active={dictation.activeField === 'resolution'} onClick={() => dictation.start('resolution', (text) => setResolutionDraft((current) => (current ? `${current} ${text}` : text)))} />
@@ -1802,35 +1821,28 @@ function App() {
                 <label>Observaciones<textarea rows="2" value={observationsDraft} onChange={(event) => setObservationsDraft(event.target.value)} placeholder="Notas adicionales de la visita" /></label>
                 <DictateButton supported={dictation.supported} active={dictation.activeField === 'observations'} onClick={() => dictation.start('observations', (text) => setObservationsDraft((current) => (current ? `${current} ${text}` : text)))} />
               </div>
-              <button type="submit" className="primary-btn">Guardar resolución</button>
-            </form>
-            <form className="form-card secondary-form" onSubmit={addEvidence}>
-              <h3>Evidencia vinculada a esta orden y visita</h3>
-              <div className="form-grid"><label>Tipo<select value={evidenceKind} onChange={(event) => setEvidenceKind(event.target.value)}><option>FOTO INICIAL</option><option>FOTO DIAGNÓSTICO</option><option>FOTO FINAL</option></select></label></div>
-              <PhotoField value={evidenceFile} onChange={(files) => setEvidenceFile(files[0] ?? null)} disabled={selectedTask.status === 'COMPLETED'} />
+              <h3>Evidencia final de la orden</h3>
+              <PhotoField allowVideo value={evidenceFile} onChange={(files) => setEvidenceFile(files[0] ?? null)} onError={setStorageWarning} disabled={selectedTask.status === 'COMPLETED'} />
+              <p className="prototype-note">Duración máxima por video: 1 minuto.</p>
               <div className="field-block">
-                <label>Descripción de la evidencia<input required value={evidenceDescription} onChange={(event) => setEvidenceDescription(event.target.value)} placeholder="Ej. Conexión reparada y sin fugas" /></label>
+                <label>Descripción de la evidencia (opcional)<textarea rows="2" value={evidenceDescription} onChange={(event) => setEvidenceDescription(event.target.value)} placeholder="Agrega notas sobre la foto o el video" /></label>
                 <DictateButton supported={dictation.supported} active={dictation.activeField === 'evidence'} onClick={() => dictation.start('evidence', (text) => setEvidenceDescription((current) => (current ? `${current} ${text}` : text)))} />
               </div>
-              <button type="submit" className="ghost-btn" disabled={selectedTask.status === 'COMPLETED' || !evidenceFile || !evidenceDescription.trim()}>Adjuntar evidencia</button>
+              <div className="completion-requirements"><strong>Validación para finalizar</strong>{checklist.map(([label, done]) => <span className={done ? 'requirement-done' : ''} key={label}>{done ? '✓' : '○'} {label}</span>)}</div>
+              <button
+                type="submit"
+                className="primary-btn"
+                disabled={
+                  isCompleted ||
+                  !resolutionDraft.trim() ||
+                  !(selectedTask.materials.length || selectedTask.materialsConfirmed) ||
+                  (needsNewVisit ? !canScheduleFollowUp : !isFinalEvidenceAttached && !evidenceFile)
+                }
+              >
+                {needsNewVisit ? 'Adjuntar nueva visita' : isCompleted ? 'Tarea finalizada' : 'Finalizar tarea'}
+              </button>
             </form>
             {selectedTask.attachments.map((attachment, index) => <div className="material-row" key={`${attachment.name}-${index}`}><span>{attachment.kind} · {attachment.name}<small>{attachment.description}</small></span><strong>Adjunta</strong></div>)}
-            <div className="completion-requirements"><strong>Validación para finalizar</strong>{checklist.map(([label, done]) => <span className={done ? 'requirement-done' : ''} key={label}>{done ? '✓' : '○'} {label}</span>)}</div>
-            <button type="button" className="primary-btn" disabled={isCompleted || !checklist.every(([, done]) => done) || (customerAppointmentRequested && !(selectedTask.customerAppointments?.length))} onClick={completeTask}>{isCompleted ? 'Tarea finalizada' : 'FINALIZAR TAREA'}</button>
-            {customerAppointmentRequested && !selectedTask.customerAppointments?.length && selectedTask.status !== 'COMPLETED' && (
-              <form className="form-card secondary-form" onSubmit={scheduleCustomerAppointment}>
-                <h3>Programar cita con el cliente</h3>
-                <p className="prototype-note">La cita quedará vinculada a {selectedTask.resident} y aparecerá en Mis visitas y Calendario.</p>
-                <div className="form-grid">
-                  <label>Fecha<input type="date" required min={todayDate} value={customerAppointmentDate} onChange={(event) => setCustomerAppointmentDate(event.target.value)} /></label>
-                  <label>Desde<input type="time" required value={customerAppointmentTime} onChange={(event) => setCustomerAppointmentTime(event.target.value)} /></label>
-                  <label>Hasta<input type="time" value={customerAppointmentEnd} onChange={(event) => setCustomerAppointmentEnd(event.target.value)} /></label>
-                </div>
-                <p className="prototype-note">Indica el rango en que el cliente puede recibir la visita. Si no indicas el fin, se conserva la duración de la ventana anterior.</p>
-                <label>Indicaciones para el cliente<textarea rows="2" value={customerAppointmentNote} onChange={(event) => setCustomerAppointmentNote(event.target.value)} placeholder="Confirma disponibilidad, acceso o motivo de la nueva visita" /></label>
-                <button type="submit" className="ghost-btn" disabled={!customerAppointmentDate || !customerAppointmentTime || (customerAppointmentEnd && customerAppointmentEnd <= customerAppointmentTime) || selectedTask.visits.some((visit) => visit.scheduledAt === `${customerAppointmentDate}T${customerAppointmentTime}`)}>Programar cita con el cliente</button>
-              </form>
-            )}
             {selectedTask.customerAppointments?.map((appointment) => (
               <div className="scheduled-visit-card customer-appointment-card" key={`customer-appointment-${appointment.number}`}>
                 <span className="eyebrow">CITA DE SEGUIMIENTO · PROGRAMADA</span>
@@ -1840,8 +1852,8 @@ function App() {
                 {appointment.note && <small>{appointment.note}</small>}
               </div>
             ))}
-            {!isCompleted && customerAppointmentRequested && !selectedTask.customerAppointments?.length && <p className="disabled-hint">Programa la cita con el cliente para poder finalizar la tarea.</p>}
-            {!isCompleted && !checklist.every(([, done]) => done) && <p className="disabled-hint">Completa todos los requisitos y agrega una foto final descrita para habilitar el cierre.</p>}
+            {!isCompleted && !selectedTask.materials.length && !selectedTask.materialsConfirmed && <p className="disabled-hint">Agrega materiales o confirma que no se requieren antes de continuar.</p>}
+            {!isCompleted && !needsNewVisit && !isFinalEvidenceAttached && !evidenceFile && <p className="disabled-hint">Adjunta una foto o un video final para habilitar el cierre.</p>}
             {isCompleted && <div className="success-inline">Cierre: {formatDateTime(selectedTask.completedAt)} · Estado COMPLETED</div>}
           </section>
         )}
