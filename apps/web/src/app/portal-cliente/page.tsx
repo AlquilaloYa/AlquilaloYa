@@ -186,6 +186,7 @@ export default function ClientPortalPage() {
     url: string;
   } | null>(null);
   const seenNotificationIds = useRef<Set<string> | null>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
 
@@ -197,6 +198,31 @@ export default function ClientPortalPage() {
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [previewAttachment]);
+
+  // Cierra el popover de notificaciones tocando cualquier parte de la
+  // pantalla fuera de él (anclado a la campana) o con la tecla Escape.
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        notificationsRef.current &&
+        target instanceof Node &&
+        !notificationsRef.current.contains(target)
+      ) {
+        setNotificationsOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNotificationsOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [notificationsOpen]);
 
   const loadOrders = useCallback(async () => {
     const response = await fetch("/api/portal-cliente/ordenes", { cache: "no-store" });
@@ -507,14 +533,14 @@ export default function ClientPortalPage() {
 
   if (loading) {
     return (
-      <main className="client-portal-app flex min-h-screen items-center justify-center bg-slate-950 text-slate-300">
+      <main className="client-portal-app flex min-h-[100svh] items-center justify-center bg-slate-950 text-slate-300">
         Cargando tus reportes…
       </main>
     );
   }
 
   return (
-    <main className="client-portal-app min-h-screen bg-slate-950 px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <main className="client-portal-app min-h-[100svh] bg-slate-950 px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
           <div className="portal-dashboard-brand">
@@ -526,21 +552,86 @@ export default function ClientPortalPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setNotificationsOpen((open) => !open)}
-              aria-expanded={notificationsOpen}
-              aria-label={`Notificaciones${unreadNotificationCount ? `, ${unreadNotificationCount} sin leer` : ""}`}
-              title="Notificaciones"
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-cyan-400 hover:text-white"
-            >
-              <Bell aria-hidden className="h-4 w-4" />
-              {unreadNotificationCount > 0 && (
-                <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-cyan-300 px-1 text-center text-xs font-semibold leading-5 text-slate-950">
-                  {unreadNotificationCount}
-                </span>
+            <div className="relative" ref={notificationsRef}>
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen((open) => !open)}
+                aria-expanded={notificationsOpen}
+                aria-haspopup="dialog"
+                aria-label={`Notificaciones${unreadNotificationCount ? `, ${unreadNotificationCount} sin leer` : ""}`}
+                title="Notificaciones"
+                className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-cyan-400 hover:text-white"
+              >
+                <Bell aria-hidden className="h-4 w-4" />
+                {unreadNotificationCount > 0 && (
+                  <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-cyan-300 px-1 text-center text-xs font-semibold leading-5 text-slate-950">
+                    {unreadNotificationCount}
+                  </span>
+                )}
+              </button>
+              {notificationsOpen && (
+                <div
+                  role="dialog"
+                  aria-label="Notificaciones del portal"
+                  className="portal-notifications-popover"
+                >
+                  <div className="portal-notifications-head">
+                    <h2>Notificaciones</h2>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void loadNotifications().catch((reason) =>
+                          setError(
+                            reason instanceof Error
+                              ? reason.message
+                              : "No se pudieron actualizar las notificaciones",
+                          ),
+                        )
+                      }
+                    >
+                      Actualizar
+                    </button>
+                  </div>
+                  {notifications.length === 0 ? (
+                    <p className="portal-notifications-empty">
+                      No tienes notificaciones todavía.
+                    </p>
+                  ) : (
+                    <ul className="portal-notifications-list">
+                      {notifications.map((item) => (
+                        <li
+                          key={item.id}
+                          className={`portal-notifications-item${item.isRead ? "" : " unread"}`}
+                        >
+                          <div>
+                            <p className="portal-notifications-title">{item.title}</p>
+                            {item.type === "VISIT_CONFIRMED" ? (
+                              <p className="portal-notifications-visit">
+                                {item.body}
+                              </p>
+                            ) : (
+                              <p className="portal-notifications-body">{item.body}</p>
+                            )}
+                            <time className="portal-notifications-date">
+                              {formatDate(item.createdAt)}
+                            </time>
+                          </div>
+                          {!item.isRead && (
+                            <button
+                              type="button"
+                              onClick={() => void markNotificationRead(item.id)}
+                              className="portal-notifications-read"
+                            >
+                              Marcar como leída
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
-            </button>
+            </div>
             <button
               type="button"
               onClick={() => void logout()}
@@ -552,65 +643,6 @@ export default function ClientPortalPage() {
             </button>
           </div>
         </header>
-
-        {notificationsOpen && (
-          <section
-            aria-label="Notificaciones del portal"
-            className="mb-6 rounded-2xl border border-cyan-900/70 bg-slate-900 p-5"
-          >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="font-semibold">Notificaciones</h2>
-              <button
-                type="button"
-                onClick={() =>
-                  void loadNotifications().catch((reason) =>
-                    setError(reason instanceof Error ? reason.message : "No se pudieron actualizar las notificaciones"),
-                  )
-                }
-                className="text-sm text-cyan-300 hover:text-cyan-200"
-              >
-                Actualizar
-              </button>
-            </div>
-            {notifications.length === 0 ? (
-              <p className="text-sm text-slate-400">No tienes notificaciones todavía.</p>
-            ) : (
-              <ul className="space-y-3">
-                {notifications.map((item) => (
-                  <li
-                    key={item.id}
-                    className={`rounded-lg border p-3 ${item.isRead ? "border-slate-800" : "border-cyan-800 bg-cyan-950/30"}`}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium">{item.title}</p>
-                        {item.type === "VISIT_CONFIRMED" ? (
-                          <p className="mt-2 inline-block rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">
-                            {item.body}
-                          </p>
-                        ) : (
-                          <p className="mt-1 text-sm text-slate-300">{item.body}</p>
-                        )}
-                        <time className="mt-2 block text-xs text-slate-500">
-                          {formatDate(item.createdAt)}
-                        </time>
-                      </div>
-                      {!item.isRead && (
-                        <button
-                          type="button"
-                          onClick={() => void markNotificationRead(item.id)}
-                          className="shrink-0 text-sm text-cyan-300 hover:text-cyan-200"
-                        >
-                          Marcar como leída
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
 
         {error && (
           <div role="alert" className="mb-6 rounded-lg border border-red-900 bg-red-950/50 p-3 text-sm text-red-200">
