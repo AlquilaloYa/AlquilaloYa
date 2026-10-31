@@ -43,6 +43,32 @@ export function TopBar({
   const [notificationError, setNotificationError] = useState("");
   const [popups, setPopups] = useState<InboxNotification[]>([]);
   const knownNotificationIds = useRef<Set<string> | null>(null);
+  const bellRef = useRef<HTMLDivElement>(null);
+
+  // Cierra el popover de la campana al presionar cualquier parte de la
+  // pantalla fuera de él, o con la tecla Escape.
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        bellRef.current &&
+        target instanceof Node &&
+        !bellRef.current.contains(target)
+      ) {
+        setNotificationsOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNotificationsOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [notificationsOpen]);
 
   const dismissPopup = useCallback((id: string) => {
     setPopups((prev) => prev.filter((p) => p.id !== id));
@@ -71,12 +97,6 @@ export function TopBar({
         (item) => new Date(item.createdAt).getTime() >= fifteenDaysAgo,
       );
 
-      setNotifications(recentItems);
-      setUnreadCount(
-        typeof data.unreadCount === "number" ? data.unreadCount : 0,
-      );
-      setNotificationError("");
-
       if (knownNotificationIds.current === null) {
         // Carga inicial: registrar IDs conocidos sin sonar ni abrir popups
         knownNotificationIds.current = new Set(recentItems.map((n) => n.id));
@@ -93,6 +113,14 @@ export function TopBar({
           knownNotificationIds.current.add(item.id);
         }
       }
+
+      // La campana solo acumula pendientes: las leídas desaparecen.
+      const unreadItems = recentItems.filter((item) => !item.isRead);
+      setNotifications(unreadItems);
+      setUnreadCount(
+        typeof data.unreadCount === "number" ? data.unreadCount : 0,
+      );
+      setNotificationError("");
     } catch (error) {
       setNotificationError(
         error instanceof Error
@@ -132,10 +160,9 @@ export function TopBar({
           };
           throw new Error(data.error ?? "No se pudo marcar como leída");
         }
+        // La notificación vista se quita de la lista: no se acumula.
         setNotifications((current) =>
-          current.map((item) =>
-            item.id === notification.id ? { ...item, isRead: true } : item,
-          ),
+          current.filter((item) => item.id !== notification.id),
         );
         setUnreadCount((count) => Math.max(0, count - 1));
       } catch (error) {
@@ -188,7 +215,7 @@ export function TopBar({
             className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           />
 
-          <div className="relative">
+          <div className="relative" ref={bellRef}>
             <Button
               variant="ghost"
               size="icon"
@@ -215,7 +242,7 @@ export function TopBar({
                 <div className="border-b px-4 py-3">
                   <p className="text-sm font-semibold">Notificaciones</p>
                   <p className="text-xs text-muted-foreground">
-                    Últimos 15 días · {unreadCount} sin leer
+                    {unreadCount} sin leer
                   </p>
                 </div>
                 {notificationError ? (
@@ -275,7 +302,7 @@ export function TopBar({
                   </div>
                 ) : (
                   <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    No hay notificaciones en los últimos 15 días.
+                    No tienes notificaciones sin leer.
                   </p>
                 )}
               </div>

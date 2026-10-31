@@ -1,4 +1,4 @@
-export const CONTRACT_EXPIRY_MILESTONES = [60, 45, 30] as const;
+export const CONTRACT_EXPIRY_MILESTONES = [30] as const;
 
 export type ContractExpiryMilestone =
   (typeof CONTRACT_EXPIRY_MILESTONES)[number];

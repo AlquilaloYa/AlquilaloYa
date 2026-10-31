@@ -40,8 +40,14 @@ export async function evaluateContractExpiryNotifications() {
         code: schema.contracts.codigoContrato,
         endDate: schema.contracts.fechaFin,
         renewedFrom: schema.contracts.renovadoDe,
+        tenantNames: schema.clients.nombres,
+        tenantLastNames: schema.clients.apellidos,
       })
       .from(schema.contracts)
+      .leftJoin(
+        schema.clients,
+        eq(schema.contracts.clienteId, schema.clients.id),
+      )
       .where(
         and(
           inArray(schema.contracts.estado, ["FIRMADO", "NOTARIADO"]),
@@ -118,6 +124,14 @@ export async function evaluateContractExpiryNotifications() {
   for (const contract of effectiveContracts) {
     const endDate = String(contract.endDate).slice(0, 10);
     const daysRemaining = daysUntilDate(today, endDate);
+    const tenant =
+      [contract.tenantNames, contract.tenantLastNames]
+        .filter(
+          (part): part is string =>
+            typeof part === "string" && part.trim().length > 0,
+        )
+        .map((part) => part.trim())
+        .join(" ") || "inquilino";
     const hasExistingTask = existingExpiryTaskContracts.has(contract.id);
     if (daysRemaining <= 60 && daysRemaining >= 0) {
       taskRows.push(createExpiryTask(contract.id, contract.code, endDate));
@@ -131,7 +145,7 @@ export async function evaluateContractExpiryNotifications() {
           userId,
           type: "CONTRACT_EXPIRY",
           title: `Vencimiento de contrato en ${milestone} días`,
-          body: `El contrato ${contract.code} vence el ${endDate}.`,
+          body: `Al inquilino ${tenant} le queda ${milestone} día(s): el contrato ${contract.code} vence el ${endDate}.`,
           href: "/work-123",
           entityType: "CONTRACT",
           entityId: contract.id,

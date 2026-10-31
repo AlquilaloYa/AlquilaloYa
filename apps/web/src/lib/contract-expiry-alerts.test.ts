@@ -13,10 +13,13 @@ describe("contract expiry alert dates", () => {
   });
 
   it("returns milestone alerts as each window is entered", () => {
+    // Solo un preaviso: cuando al inquilino le queda 1 mes (30 dias).
     expect(expiryMilestonesForDays(61)).toEqual([]);
-    expect(expiryMilestonesForDays(60)).toEqual([60]);
-    expect(expiryMilestonesForDays(45)).toEqual([60, 45]);
-    expect(expiryMilestonesForDays(30)).toEqual([60, 45, 30]);
+    expect(expiryMilestonesForDays(45)).toEqual([]);
+    expect(expiryMilestonesForDays(31)).toEqual([]);
+    expect(expiryMilestonesForDays(30)).toEqual([30]);
+    expect(expiryMilestonesForDays(1)).toEqual([30]);
+    expect(expiryMilestonesForDays(0)).toEqual([30]);
     expect(expiryMilestonesForDays(-1)).toEqual([]);
   });
 
