@@ -45,6 +45,8 @@ type ContractPick = {
   fechaInicio: string | null;
   fechaFin: string | null;
   estado: string;
+  montoCanonMensual: string | null;
+  mantenimiento: string | null;
 };
 
 const TIPOS_ELIGIBLES = ["EMITIDO", "PENDIENTE_FIRMA", "FIRMADO", "NOTARIADO"];
@@ -552,6 +554,9 @@ export default function AdendasPage() {
         <AdendaModal
           contractId={selected.id}
           codigoContrato={selected.codigoContrato}
+          fechaFin={selected.fechaFin ?? undefined}
+          montoCanonMensual={selected.montoCanonMensual ?? undefined}
+          mantenimiento={selected.mantenimiento ?? undefined}
           onClose={() => {
             setShowAdenda(false);
             setSelected(null);
@@ -580,6 +585,8 @@ export default function AdendasPage() {
           contractId={selected.id}
           codigoContrato={selected.codigoContrato}
           fechaFin={selected.fechaFin}
+          montoCanonMensual={selected.montoCanonMensual ?? undefined}
+          mantenimiento={selected.mantenimiento ?? undefined}
           onClose={() => {
             setShowExtension(false);
             setSelected(null);

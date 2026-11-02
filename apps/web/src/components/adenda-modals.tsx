@@ -28,6 +28,100 @@ export type EditableAdenda = {
   anexoContenido: string | null;
 };
 
+export interface ProrrateoCuota {
+  dias: number;
+  desde: string;
+  hasta: string;
+  monto: number;
+  mantenimiento: number;
+}
+
+function addMonthsIso(base: string, months: number): string {
+  const [y, m, d] = base.split("-").map(Number);
+  const date = new Date(Date.UTC(y as number, (m as number) - 1, d as number));
+  date.setUTCMonth(date.getUTCMonth() + months);
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${mm}-${dd}`;
+}
+
+/**
+ * Calcula el prorrateo por días de la última cuota de una extensión: si el
+ * nuevo plazo no cierra un mes completo desde la fecha de fin actual, la
+ * última cuota se cobra proporcional (tarifa mensual × días / 30).
+ */
+export function calcularProrrateoUltimaCuota(
+  fechaFinActual: string,
+  nuevaFechaFin: string,
+  montoCanonMensual: number,
+  mantenimientoMensual: number
+): ProrrateoCuota | null {
+  if (!(fechaFinActual.length === 10) || !(nuevaFechaFin > fechaFinActual)) return null;
+  let cursor = fechaFinActual;
+  let ultimo: string | null = null;
+  let guard = 0;
+  while (cursor < nuevaFechaFin && guard < 240) {
+    ultimo = cursor;
+    cursor = addMonthsIso(cursor, 1);
+    guard += 1;
+  }
+  if (!ultimo) return null;
+  if (cursor <= nuevaFechaFin) return null; // cierra mes completo: no prorratea
+  const dias = Math.max(
+    1,
+    Math.round(
+      (Date.parse(`${nuevaFechaFin}T12:00:00Z`) - Date.parse(`${ultimo}T12:00:00Z`)) / 86400000
+    )
+  );
+  const monto = Math.round(((montoCanonMensual * dias) / 30) * 100) / 100;
+  const mantenimiento = Math.round(((mantenimientoMensual * dias) / 30) * 100) / 100;
+  return { dias, desde: ultimo, hasta: nuevaFechaFin, monto, mantenimiento };
+}
+
+const PEN_FMT = new Intl.NumberFormat("es-PE", {
+  style: "currency",
+  currency: "PEN",
+  minimumFractionDigits: 2,
+});
+
+export function formatPen(n: number): string {
+  return PEN_FMT.format(n);
+}
+
+/** Checkbox + vista previa del cobro prorrateado por días del último período. */
+export function CobroPorDiasField({
+  prorrateo,
+  checked,
+  onChange,
+}: {
+  prorrateo: ProrrateoCuota | null;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  if (!prorrateo) return null;
+  const total = prorrateo.monto + prorrateo.mantenimiento;
+  return (
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-outline-variant bg-surface-container-lowest p-3 dark:border-transparent">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-1 h-4 w-4"
+      />
+      <span>
+        <span className="font-label-md text-on-surface">
+          Cobrar solo los días del último período
+        </span>
+        <span className="mt-0.5 block text-xs text-on-surface-variant">
+          Última cuota prorrateada: {prorrateo.dias} días ({prorrateo.desde} → {prorrateo.hasta}) ={" "}
+          {formatPen(total)} ({formatPen(prorrateo.monto)} canon +{" "}
+          {formatPen(prorrateo.mantenimiento)} mantenimiento), en lugar del mes completo.
+        </span>
+      </span>
+    </label>
+  );
+}
+
 /** Estilos que se inyectan dentro del área editable para aproximar el PDF. */
 const EDITOR_STYLES = `
   :root { color-scheme: light; }
@@ -440,11 +534,17 @@ export function EditAdendaModal({
 export function AdendaModal({
   contractId,
   codigoContrato,
+  fechaFin,
+  montoCanonMensual,
+  mantenimiento,
   onClose,
   onCreated,
 }: {
   contractId: string;
   codigoContrato: string;
+  fechaFin?: string | undefined;
+  montoCanonMensual?: string | undefined;
+  mantenimiento?: string | undefined;
   onClose: () => void;
   onCreated: () => Promise<void>;
 }) {
@@ -455,6 +555,18 @@ export function AdendaModal({
   const [fechaFinAdenda, setFechaFinAdenda] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const fechasRecortadas = fechaFinAdenda.slice(0, 10);
+  const prorrateo = useMemo(
+    () =>
+      calcularProrrateoUltimaCuota(
+        (fechaFin ?? "").slice(0, 10),
+        fechasRecortadas,
+        Number(montoCanonMensual ?? "0"),
+        Number(mantenimiento ?? "0")
+      ),
+    [fechaFin, fechasRecortadas, montoCanonMensual, mantenimiento]
+  );
+  const [cobroPorDias, setCobroPorDias] = useState(false);
 
   async function handleSubmit() {
     setSaving(true);
@@ -470,6 +582,7 @@ export function AdendaModal({
           numeroAdenda,
           fechaInicioAdenda,
           fechaFinAdenda,
+          cobroPorDias,
         }),
       });
       if (!res.ok) {
@@ -537,6 +650,11 @@ export function AdendaModal({
             />
             <p className="mt-1 text-xs text-muted-foreground">Día/Mes/Año fin del nuevo plazo.</p>
           </div>
+          <CobroPorDiasField
+            prorrateo={prorrateo}
+            checked={cobroPorDias}
+            onChange={setCobroPorDias}
+          />
           <div>
             <label className="mb-1 block font-label-md text-on-surface-variant">Título de la adenda</label>
             <input
@@ -581,12 +699,16 @@ export function ExtensionModal({
   contractId,
   codigoContrato,
   fechaFin,
+  montoCanonMensual,
+  mantenimiento,
   onClose,
   onCreated,
 }: {
   contractId: string;
   codigoContrato: string;
   fechaFin: string;
+  montoCanonMensual?: string | undefined;
+  mantenimiento?: string | undefined;
   onClose: () => void;
   onCreated: () => Promise<void>;
 }) {
@@ -600,6 +722,19 @@ export function ExtensionModal({
   const [contenido, setContenido] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const fechaFinRecortada = fechaFin.slice(0, 10);
+  const nuevaFechaFinRecortada = nuevaFechaFin.slice(0, 10);
+  const prorrateo = useMemo(
+    () =>
+      calcularProrrateoUltimaCuota(
+        fechaFinRecortada,
+        nuevaFechaFinRecortada,
+        Number(montoCanonMensual ?? "0"),
+        Number(mantenimiento ?? "0")
+      ),
+    [fechaFinRecortada, nuevaFechaFinRecortada, montoCanonMensual, mantenimiento]
+  );
+  const [cobroPorDias, setCobroPorDias] = useState(false);
 
   async function handleSubmit() {
     setSaving(true);
@@ -614,6 +749,7 @@ export function ExtensionModal({
           titulo,
           nuevaFechaFin,
           contenido,
+          cobroPorDias,
         }),
       });
       if (!res.ok) {
@@ -666,6 +802,11 @@ export function ExtensionModal({
               onChange={(e) => setNuevaFechaFin(e.target.value)}
             />
           </div>
+          <CobroPorDiasField
+            prorrateo={prorrateo}
+            checked={cobroPorDias}
+            onChange={setCobroPorDias}
+          />
           <div>
             <label className="mb-1 block font-label-md text-on-surface-variant">Título de la adenda</label>
             <input

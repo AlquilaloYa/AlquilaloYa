@@ -1037,6 +1037,9 @@ export default function ContratoDetailPage() {
           <AdendaModal
             contractId={contract.id}
             codigoContrato={contract.codigoContrato}
+            fechaFin={contract.fechaFin}
+            montoCanonMensual={contract.montoCanonMensual}
+            mantenimiento={contract.mantenimiento}
             onClose={() => setShowAdenda(false)}
             onCreated={async () => {
               setShowAdenda(false);
@@ -1049,6 +1052,8 @@ export default function ContratoDetailPage() {
             contractId={contract.id}
             codigoContrato={contract.codigoContrato}
             fechaFin={contract.fechaFin}
+            montoCanonMensual={contract.montoCanonMensual}
+            mantenimiento={contract.mantenimiento}
             onClose={() => setShowExtension(false)}
             onCreated={async () => {
               setShowExtension(false);

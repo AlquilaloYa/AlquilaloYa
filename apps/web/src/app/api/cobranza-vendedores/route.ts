@@ -183,7 +183,7 @@ export async function GET(req: Request) {
           (s, p) => s + Number(p.monto ?? 0) + Number(p.mantenimiento ?? 0),
           0
         );
-      const montoCuota =
+      let montoCuota =
         Number(c.montoCanonMensual ?? 0) + Number(c.mantenimiento ?? 50);
       const cancelado = c.estado === "CANCELADO" || c.estado === "RESUELTO";
       let estadoCuota = "FINALIZADO";
@@ -200,6 +200,12 @@ export async function GET(req: Request) {
           const pStr = localDateStr(cuota);
           const pagoCuota = pagosDe.find((p) => toDateStr(p.periodo) === pStr);
           const pagado = pagoCuota?.estado === "PAGADO";
+          // Si la fila de pago del mes está registrada con monto (> 0), usa su
+          // total: puede estar prorrateada por días (adenda de extensión).
+          if (pagoCuota && Number(pagoCuota.monto) > 0) {
+            montoCuota =
+              Number(pagoCuota.monto) + Number(pagoCuota.mantenimiento ?? 0);
+          }
           if (pagado) {
             estadoCuota = "PAGADO";
           } else if (cuota.getTime() < inicioDia) {

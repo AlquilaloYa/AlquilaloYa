@@ -76,6 +76,76 @@ function periodosExtension(fechaFinActual: string, nuevaFechaFin: string): strin
   return periodos;
 }
 
+/** Días entre dos fechas ISO HH:MM mediodía UTC (checkout exclusivo). */
+function diffDias(desde: string, hasta: string): number {
+  return Math.round(
+    (Date.parse(`${hasta}T12:00:00Z`) - Date.parse(`${desde}T12:00:00Z`)) / 86400000
+  );
+}
+
+/** Redondea a 2 decimales el prorrateo diario (tarifa mensual / 30). */
+function montoPorDias(montoMensual: number, dias: number): string {
+  return (Math.round((montoMensual * dias / 30) * 100) / 100).toFixed(2);
+}
+
+export interface CuotaExtensionValor {
+  contractId: string;
+  periodo: string;
+  monto: string;
+  mantenimiento: string;
+  penalidad: string;
+  estado: string;
+}
+
+interface ResultadoCuotas {
+  valores: CuotaExtensionValor[];
+  diasProrrateo: number | null;
+  montoUltimaCuota: string | null;
+  mantenimientoUltimaCuota: string | null;
+}
+
+/**
+ * Valores de las cuotas de una extensión. Si cobroPorDias está activo y el
+ * último período es parcial (fin de mes completo > nueva fecha de fin), esa
+ * cuota se prorratea por días: solo se cobra los días que el inquilino ocupará.
+ */
+function valoresCuotasExtension(
+  contractId: string,
+  cuotasNuevas: string[],
+  nuevaFechaFin: string,
+  montoCanonMensual: number,
+  mantenimientoMensual: number,
+  cobroPorDias: boolean
+): ResultadoCuotas {
+  const valores: CuotaExtensionValor[] = cuotasNuevas.map((periodo) => ({
+    contractId,
+    periodo,
+    monto: montoCanonMensual.toFixed(2),
+    mantenimiento: mantenimientoMensual.toFixed(2),
+    penalidad: "0",
+    estado: "PENDIENTE",
+  }));
+  let diasProrrateo: number | null = null;
+  let montoUltimaCuota: string | null = null;
+  let mantenimientoUltimaCuota: string | null = null;
+
+  if (cobroPorDias && valores.length > 0) {
+    const ultima = valores[valores.length - 1];
+    if (ultima) {
+      const finMesCompleto = addMonthsIso(ultima.periodo, 1);
+      if (finMesCompleto > nuevaFechaFin) {
+        const dias = Math.max(1, diffDias(ultima.periodo, nuevaFechaFin));
+        ultima.monto = montoPorDias(montoCanonMensual, dias);
+        ultima.mantenimiento = montoPorDias(mantenimientoMensual, dias);
+        diasProrrateo = dias;
+        montoUltimaCuota = ultima.monto;
+        mantenimientoUltimaCuota = ultima.mantenimiento;
+      }
+    }
+  }
+  return { valores, diasProrrateo, montoUltimaCuota, mantenimientoUltimaCuota };
+}
+
 /** GET /api/adendas — lista todas las adendas (ADENDA y ADENDA_EXTENSION) con datos del contrato. */
 export async function GET(req: Request) {
   try {
@@ -193,6 +263,7 @@ export async function POST(request: Request) {
       numeroAdenda?: string;
       fechaInicioAdenda?: string;
       fechaFinAdenda?: string;
+      cobroPorDias?: boolean;
     };
 
     if (!body.contractId) {
@@ -260,6 +331,7 @@ export async function POST(request: Request) {
     let nuevaFechaFin = fechaFinActual;
     let cuotasNuevas: string[] = [];
     let camposContrato: Record<string, unknown> = {};
+    let cuotasValoresResultado: ResultadoCuotas | null = null;
 
     const fechaInicioAdenda = esExtension
       ? undefined
@@ -306,21 +378,21 @@ export async function POST(request: Request) {
         .where(eq(schema.contracts.id, contract.id));
       await sincronizarTareasDeContrato(contract.id);
 
-      const monto = Number(contract.montoCanonMensual).toFixed(2);
-      const mant = Number(contract.mantenimiento ?? "50").toFixed(2);
-      if (cuotasNuevas.length > 0) {
+      const montoCanon = Number(contract.montoCanonMensual);
+      const mantMensual = Number(contract.mantenimiento ?? "50");
+      const cobroPorDias = Boolean(body.cobroPorDias);
+      const cuotasValores = valoresCuotasExtension(
+        contract.id,
+        cuotasNuevas,
+        nuevaFechaFin,
+        montoCanon,
+        mantMensual,
+        cobroPorDias
+      );
+      if (cuotasValores.valores.length > 0) {
         await db
           .insert(schema.payments)
-          .values(
-            cuotasNuevas.map((periodo) => ({
-              contractId: contract.id,
-              periodo,
-              monto,
-              mantenimiento: mant,
-              penalidad: "0",
-              estado: "PENDIENTE",
-            }))
-          )
+          .values(cuotasValores.valores)
           .onConflictDoNothing({
             target: [schema.payments.contractId, schema.payments.periodo],
           });
@@ -329,6 +401,13 @@ export async function POST(request: Request) {
         fechaFinAnterior: fechaFinActual,
         codigoBase: contract.codigoContrato,
       };
+      if (cuotasValores.diasProrrateo !== null) {
+        camposContrato.cobroPorDias = true;
+        camposContrato.diasProrrateo = cuotasValores.diasProrrateo;
+        camposContrato.montoUltimaCuota = cuotasValores.montoUltimaCuota;
+        camposContrato.mantenimientoUltimaCuota = cuotasValores.mantenimientoUltimaCuota;
+      }
+      cuotasValoresResultado = cuotasValores;
     }
 
     const baseSnapshot = contract.snapshot;
@@ -360,6 +439,10 @@ export async function POST(request: Request) {
       const monto = Number(contract.montoCanonMensual).toFixed(2);
       const mant = Number(contract.mantenimiento ?? "50").toFixed(2);
       const total = Number(monto) + Number(mant);
+      const prorrateo =
+        cuotasValoresResultado !== null && cuotasValoresResultado.diasProrrateo !== null
+          ? cuotasValoresResultado
+          : null;
       const lineas = [
         `${titulo}\n`,
         `Por la presente, las partes acuerdan EXTENDER el plazo del Contrato de Arrendamiento ${contract.codigoContrato} sobre el inmueble ${dstrDepartamento(contract)}, en los siguientes términos:`,
@@ -374,8 +457,21 @@ export async function POST(request: Request) {
       if (cuotasNuevas.length > 0) {
         lineas.push(
           ``,
-          `Anexo: cronograma de las cuotas por el período extendido (${MONTO.format(total)} cada una, canon + mantenimiento):`,
-          ...cuotasNuevas.map((p, i) => `Cuota ${i + 1} (${fmtFechaEs(p)}): ${MONTO.format(total)}`)
+          prorrateo
+            ? `Anexo: cronograma de las cuotas por el período extendido (las cuotas mensuales son ${MONTO.format(total)} cada una, canon + mantenimiento; la última cuota se prorratea por los ${prorrateo.diasProrrateo} días restantes):`
+            : `Anexo: cronograma de las cuotas por el período extendido (${MONTO.format(total)} cada una, canon + mantenimiento):`,
+          ...cuotasNuevas.map((p, i) => {
+            const esUltima = prorrateo !== null && i === cuotasNuevas.length - 1;
+            const montoCuota =
+              prorrateo && esUltima
+                ? Number(prorrateo.montoUltimaCuota) + Number(prorrateo.mantenimientoUltimaCuota)
+                : total;
+            const detalle =
+              prorrateo && esUltima
+                ? ` (${prorrateo.diasProrrateo} días ${fmtFechaEs(p)} → ${fmtFechaEs(nuevaFechaFin)})`
+                : "";
+            return `Cuota ${i + 1} (${fmtFechaEs(p)}): ${MONTO.format(montoCuota)}${detalle}`;
+          })
         );
       }
       if (contenido) lineas.push(``, contenido);
@@ -493,6 +589,7 @@ export async function PATCH(request: Request) {
       fechaFinAdenda?: string;
       nuevaFechaFin?: string;
       documentoHtml?: string;
+      cobroPorDias?: boolean;
     };
     if (!body.documentId) {
       return NextResponse.json(
@@ -587,21 +684,18 @@ export async function PATCH(request: Request) {
         .set({ fechaFin: nuevaFechaFinAdenda, actualizadoEn: new Date() })
         .where(eq(schema.contracts.id, contract.id));
       await sincronizarTareasDeContrato(contract.id);
-      const monto = Number(contract.montoCanonMensual).toFixed(2);
-      const mant = Number(contract.mantenimiento ?? "50").toFixed(2);
-      if (cuotasNuevas.length > 0) {
+      const cuotasValores = valoresCuotasExtension(
+        contract.id,
+        cuotasNuevas,
+        nuevaFechaFinAdenda,
+        Number(contract.montoCanonMensual),
+        Number(contract.mantenimiento ?? "50"),
+        Boolean(body.cobroPorDias)
+      );
+      if (cuotasValores.valores.length > 0) {
         await db
           .insert(schema.payments)
-          .values(
-            cuotasNuevas.map((periodo) => ({
-              contractId: contract.id,
-              periodo,
-              monto,
-              mantenimiento: mant,
-              penalidad: "0",
-              estado: "PENDIENTE",
-            }))
-          )
+          .values(cuotasValores.valores)
           .onConflictDoNothing({
             target: [schema.payments.contractId, schema.payments.periodo],
           });

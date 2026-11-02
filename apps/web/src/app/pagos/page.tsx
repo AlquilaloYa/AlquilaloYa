@@ -191,12 +191,17 @@ function AbonoModal({
         ...(typeof v.monto === "number" ? { monto: v.monto } : {}),
       }));
       const vouchers = [...existentes, { nombre: voucher.nombre, url: voucher.dataUrl, monto: montoNum }];
+      // Usa los montos de la fila de pago existente (puede estar prorrateada
+      // por días) y solo cae al canon mensual del contrato cuando no hay fila.
+      const usaMontosFila = fila.pago && Number(fila.pago.monto) > 0;
       const payload = {
         id: fila.pago?.id,
         contractId: fila.contrato.id,
         periodo: fila.periodo,
-        monto: fila.contrato.montoCanonMensual,
-        mantenimiento: fila.contrato.mantenimiento ?? "50",
+        monto: usaMontosFila ? fila.pago!.monto : fila.contrato.montoCanonMensual,
+        mantenimiento: usaMontosFila
+          ? fila.pago!.mantenimiento
+          : fila.contrato.mantenimiento ?? "50",
         vouchers,
       };
       const res = fila.pago
@@ -525,8 +530,12 @@ export default function PagosPage() {
       const indulgencia = Math.max(0, Math.floor(Number(pago?.diasIndulgencia ?? 0) || 0));
       const vencimiento = new Date(cuota.getTime() + indulgencia * 86_400_000);
       const pagado = pago?.estado === "PAGADO";
+      // Cuando existe la fila de pago registrada con monto (> 0), respeta su
+      // total: puede estar prorrateada por días (adenda de extensión).
       const total =
-        Number(c.montoCanonMensual ?? 0) + Number(c.mantenimiento ?? 50);
+        pago && Number(pago.monto) > 0
+          ? Number(pago.monto) + Number(pago.mantenimiento ?? 0)
+          : Number(c.montoCanonMensual ?? 0) + Number(c.mantenimiento ?? 50);
       const montoPagado = Math.max(0, Number(pago?.montoPagado ?? 0) || 0);
       const saldo = Math.max(0, total - montoPagado);
       const parcialActivo = !pagado && montoPagado > 0 && saldo > 0.001;

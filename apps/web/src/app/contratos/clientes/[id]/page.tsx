@@ -428,6 +428,10 @@ export default function ClienteContratoPage() {
     setRegistrando(periodoStr);
     setErrorPago(null);
     try {
+      // Si la fila de pago del período ya está registrada con monto (> 0),
+      // conserva sus montos (puede estar prorrateada por días).
+      const pagoFila = pagos.find((p) => p.periodo === periodoStr) ?? null;
+      const usaMontosFila = pagoFila && Number(pagoFila.monto) > 0;
       const v0 = lista[0];
       const res = await apiFetch("/api/payments", {
         method: "POST",
@@ -435,8 +439,10 @@ export default function ClienteContratoPage() {
         body: JSON.stringify({
           contractId: contrato.id,
           periodo: periodoStr,
-          monto: contrato.montoCanonMensual,
-          mantenimiento: contrato.mantenimiento ?? "50",
+          monto: usaMontosFila ? pagoFila.monto : contrato.montoCanonMensual,
+          mantenimiento: usaMontosFila
+            ? pagoFila.mantenimiento
+            : contrato.mantenimiento ?? "50",
           estado: "PAGADO",
           fechaPago: localDateStr(new Date()),
           vouchers: lista.map((v) => ({ nombre: v.nombre, url: v.dataUrl })),
@@ -739,15 +745,21 @@ export default function ClienteContratoPage() {
                           {cliente.codigoDepartamento ?? "—"}
                         </td>
                         <td className="whitespace-nowrap px-3 py-2">
-                          {moneda(contrato?.montoCanonMensual)}
+                          {moneda(pago && Number(pago.monto) > 0 ? pago.monto : contrato?.montoCanonMensual)}
                         </td>
                         <td className="whitespace-nowrap px-3 py-2">
-                          {moneda(contrato?.mantenimiento ?? "50")}
+                          {moneda(
+                            pago && Number(pago.monto) > 0
+                              ? pago.mantenimiento
+                              : contrato?.mantenimiento ?? "50"
+                          )}
                         </td>
                         <td className="whitespace-nowrap px-3 py-2 font-semibold">
                           {moneda(
-                            Number(contrato?.montoCanonMensual ?? 0) +
-                              Number(contrato?.mantenimiento ?? "50")
+                            pago && Number(pago.monto) > 0
+                              ? Number(pago.monto) + Number(pago.mantenimiento ?? 0)
+                              : Number(contrato?.montoCanonMensual ?? 0) +
+                                Number(contrato?.mantenimiento ?? "50")
                           )}
                         </td>
                         <td className="whitespace-nowrap px-3 py-2">
