@@ -15,6 +15,7 @@ import {
   Clock3,
   DoorOpen,
   FileClock,
+  FileDown,
   House,
   RefreshCw,
   TrendingUp,
@@ -691,6 +692,62 @@ function EstadoCarga({ loading, error }: { loading: boolean; error: string | nul
   ) : null;
 }
 
+function ExportarPdfButton({
+  endpoint,
+  filename,
+}: {
+  endpoint: string;
+  filename: string;
+}) {
+  const [exportando, setExportando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function exportar() {
+    setExportando(true);
+    setError(null);
+    try {
+      const response = await apiFetch(endpoint);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? `No se pudo exportar el PDF (${response.status})`);
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo exportar el PDF");
+    } finally {
+      setExportando(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => void exportar()}
+          disabled={exportando}
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
+        >
+          <FileDown className="h-4 w-4" />
+          {exportando ? "Generando PDF…" : "Exportar a PDF"}
+        </button>
+      </div>
+      {error ? (
+        <p className="rounded-md bg-error-container p-3 text-sm text-error-container-foreground" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 interface PuntoOcupacion {
   x: number;
   y: number;
@@ -992,6 +1049,10 @@ function DisponiblesPopup({ onCerrar }: { onCerrar: () => void }) {
       {errorAccion ? <p className="mb-3 rounded bg-error-container p-3 text-sm text-error-container-foreground">{errorAccion}</p> : null}
       {!loading && !error ? (
         <div className="space-y-6">
+          <ExportarPdfButton
+            endpoint="/api/departamentos/pdf"
+            filename="disponibilidad-departamentos.pdf"
+          />
           {[
             { titulo: `Disponibles (${disponibles.length})`, elementos: disponibles, estado: "DISPONIBLE" as const },
             { titulo: `En mantenimiento (${mantenimiento.length})`, elementos: mantenimiento, estado: "MANTENIMIENTO" as const },
@@ -2473,6 +2534,10 @@ function ReporteSemanalPopup({ onCerrar }: { onCerrar: () => void }) {
       <EstadoCarga loading={loading} error={error} />
       {!loading && !error && data ? (
         <div className="space-y-6">
+          <ExportarPdfButton
+            endpoint="/api/dashboard/reporte-semanal/pdf"
+            filename={`informe-semanal-${data.inicioSemana}.pdf`}
+          />
           {secciones.map((seccion) => (
             <section key={seccion.titulo}>
               <h3 className="border-b border-outline-variant pb-2 font-label-lg text-on-surface">
