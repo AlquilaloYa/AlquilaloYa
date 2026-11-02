@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
 import { db, schema, DrizzleUserRepository } from "@contract/db";
@@ -85,7 +85,8 @@ export async function GET(req: Request) {
       .leftJoin(
         schema.departments,
         eq(schema.departments.id, schema.contracts.departamentoId)
-      );
+      )
+      .where(isNull(schema.contracts.eliminadoEn));
 
     const pagos = await db
       .select({
@@ -128,12 +129,15 @@ export async function GET(req: Request) {
         eq(schema.departments.id, schema.contracts.departamentoId)
       )
       .where(
-        inArray(schema.contracts.estado, [
-          "FIRMADO",
-          "ACTIVO",
-          "VIGENTE",
-          "NOTARIADO",
-        ])
+        and(
+          isNull(schema.contracts.eliminadoEn),
+          inArray(schema.contracts.estado, [
+            "FIRMADO",
+            "ACTIVO",
+            "VIGENTE",
+            "NOTARIADO",
+          ])
+        )
       );
 
     const hoy = new Date();

@@ -75,6 +75,7 @@ export class DrizzleDashboardRepository {
     const rows = await db
       .select({ estado: schema.contracts.estado, value: count() })
       .from(schema.contracts)
+      .where(isNull(schema.contracts.eliminadoEn))
       .groupBy(schema.contracts.estado);
 
     const byState = new Map<string, number>();
@@ -135,15 +136,18 @@ export class DrizzleDashboardRepository {
       })
       .from(schema.contracts)
       .where(
-        inArray(schema.contracts.estado, [
-          "EMITIDO",
-          "PENDIENTE_FIRMA",
-          "FIRMADO",
-          "NOTARIADO",
-          "ACTIVO",
-          "VIGENTE",
-          "RESUELTO",
-        ])
+        and(
+          isNull(schema.contracts.eliminadoEn),
+          inArray(schema.contracts.estado, [
+            "EMITIDO",
+            "PENDIENTE_FIRMA",
+            "FIRMADO",
+            "NOTARIADO",
+            "ACTIVO",
+            "VIGENTE",
+            "RESUELTO",
+          ])
+        )
       );
 
     const departamentosOcupados = new Set(
@@ -204,6 +208,7 @@ export class DrizzleDashboardRepository {
       )
       .where(
         and(
+          isNull(schema.contracts.eliminadoEn),
           inArray(schema.contracts.estado, [
             "EMITIDO",
             "PENDIENTE_FIRMA",
@@ -434,11 +439,14 @@ export class DrizzleDashboardRepository {
       .select({ value: count() })
       .from(schema.contracts)
       .where(
-        inArray(schema.contracts.estado, [
-          "PENDIENTE_EMISION",
-          "EMITIDO",
-          "PENDIENTE_FIRMA",
-        ])
+        and(
+          isNull(schema.contracts.eliminadoEn),
+          inArray(schema.contracts.estado, [
+            "PENDIENTE_EMISION",
+            "EMITIDO",
+            "PENDIENTE_FIRMA",
+          ])
+        )
       );
     const enProceso = enProcesoRow?.value ?? 0;
 
@@ -455,7 +463,11 @@ export class DrizzleDashboardRepository {
         eq(schema.contracts.id, schema.payments.contractId)
       )
       .where(
-        and(eq(schema.payments.estado, "PENDIENTE"), lt(schema.payments.periodo, hoyStr))
+        and(
+          isNull(schema.contracts.eliminadoEn),
+          eq(schema.payments.estado, "PENDIENTE"),
+          lt(schema.payments.periodo, hoyStr)
+        )
       );
 
     let montoVencido = 0;
@@ -490,6 +502,7 @@ export class DrizzleDashboardRepository {
       )
       .where(
         and(
+          isNull(schema.contracts.eliminadoEn),
           lte(schema.payments.periodo, hoyStr),
           ne(schema.payments.estado, "CANCELADO")
         )
@@ -548,6 +561,7 @@ export class DrizzleDashboardRepository {
       )
       .where(
         and(
+          isNull(schema.contracts.eliminadoEn),
           eq(schema.payments.periodo, hoyStr),
           ne(schema.payments.estado, "PAGADO"),
           ne(schema.payments.estado, "CANCELADO")
