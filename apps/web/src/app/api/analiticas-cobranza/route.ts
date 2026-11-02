@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
 import { db, schema, DrizzleUserRepository } from "@contract/db";
@@ -102,7 +102,8 @@ const params = new URL(req.url).searchParams;
       })
       .from(schema.contracts)
       .innerJoin(schema.clients, eq(schema.clients.id, schema.contracts.clienteId))
-      .leftJoin(schema.departments, eq(schema.departments.id, schema.contracts.departamentoId));
+      .leftJoin(schema.departments, eq(schema.departments.id, schema.contracts.departamentoId))
+      .where(isNull(schema.contracts.eliminadoEn));
 
     const pagos = await db
       .select({
@@ -119,7 +120,8 @@ const params = new URL(req.url).searchParams;
       .from(schema.payments)
       .innerJoin(schema.contracts, eq(schema.contracts.id, schema.payments.contractId))
       .innerJoin(schema.clients, eq(schema.clients.id, schema.contracts.clienteId))
-      .leftJoin(schema.departments, eq(schema.departments.id, schema.contracts.departamentoId));
+      .leftJoin(schema.departments, eq(schema.departments.id, schema.contracts.departamentoId))
+      .where(isNull(schema.contracts.eliminadoEn));
 
     const porMes = MESES.map((mes, indice) => ({
       mes,
