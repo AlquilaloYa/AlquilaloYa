@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { GET as getDepartamentos } from "../route";
+import { Permission } from "@contract/domain/rbac";
+import { requirePermission, requireUser } from "@/lib/session";
 import { generateHtmlPdf } from "@/lib/pdf/generate-pdf";
 import {
   renderDisponiblesHtml,
@@ -12,6 +14,12 @@ export const maxDuration = 300;
 
 export async function GET(request: Request) {
   try {
+    const dbModule = await import("@contract/db");
+    const auth = await requireUser(dbModule, request);
+    if ("error" in auth) return auth.error;
+    const denied = requirePermission(auth.user, Permission.DEPARTMENT_READ);
+    if (denied) return denied;
+
     const response = await getDepartamentos(request);
     if (!response.ok) return response;
 

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { GET as getReporteSemanal } from "../route";
+import { Permission } from "@contract/domain/rbac";
+import { requirePermission, requireUser } from "@/lib/session";
 import { generateHtmlPdf } from "@/lib/pdf/generate-pdf";
 import {
   renderReporteSemanalHtml,
@@ -12,6 +14,19 @@ export const maxDuration = 300;
 
 export async function GET(request: Request) {
   try {
+    const dbModule = await import("@contract/db");
+    const auth = await requireUser(dbModule, request);
+    if ("error" in auth) return auth.error;
+    for (const permission of [
+      Permission.CONTRACT_READ,
+      Permission.DOCUMENT_READ,
+      Permission.WORK_ORDER_READ,
+      Permission.SCORING_READ,
+    ]) {
+      const denied = requirePermission(auth.user, permission);
+      if (denied) return denied;
+    }
+
     const response = await getReporteSemanal(request);
     if (!response.ok) return response;
 
