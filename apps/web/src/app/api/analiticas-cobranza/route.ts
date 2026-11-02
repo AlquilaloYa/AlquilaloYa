@@ -204,8 +204,8 @@ const params = new URL(req.url).searchParams;
           total: 0,
         };
         deudaContrato.periodos.push(periodo);
-        deudaContrato.total += pago
-          ? Number(pago.monto ?? 0) + Number(pago.mantenimiento ?? 0)
+        deudaContrato.total += pago && Number(pago.monto ?? 0) > 0
+          ? Number(pago.monto) + Number(pago.mantenimiento ?? 0)
           : montoBase;
       }
 
