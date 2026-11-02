@@ -7,11 +7,10 @@ import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
 
 export const dynamic = "force-dynamic";
 
-const PERSONAS = ["miguel", "emely", "evelin"] as const;
+const PERSONAS = ["miguel", "emely"] as const;
 const NOMBRES: Record<(typeof PERSONAS)[number], string> = {
   miguel: "Miguel",
   emely: "Emely",
-  evelin: "Evelyn",
 };
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 const CATEGORIAS = ["mensualidad", "mantenimiento", "penalidad"] as const;
@@ -21,7 +20,7 @@ type Categoria = (typeof CATEGORIAS)[number];
 type PorPersona = Record<PersonaKey, number>;
 
 function vacio(): PorPersona {
-  return { miguel: 0, emely: 0, evelin: 0 };
+  return { miguel: 0, emely: 0 };
 }
 
 function sumarPorPersona(destino: PorPersona, origen: PorPersona): PorPersona {
@@ -39,7 +38,6 @@ function normalizarPersona(persona: string | null): (typeof PERSONAS)[number] | 
   const valor = (persona ?? "").trim().toLowerCase();
   if (valor.startsWith("miguel")) return "miguel";
   if (valor.startsWith("emely")) return "emely";
-  if (valor.startsWith("evelin") || valor.startsWith("evelyn")) return "evelin";
   return null;
 }
 

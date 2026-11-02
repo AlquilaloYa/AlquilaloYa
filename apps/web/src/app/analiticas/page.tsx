@@ -10,7 +10,6 @@ import { AlertTriangle, LoaderCircle } from "lucide-react";
 const PERSONAS = [
   { key: "miguel", nombre: "Miguel", color: "bg-emerald-600" },
   { key: "emely", nombre: "Emely", color: "bg-amber-500" },
-  { key: "evelin", nombre: "Evelyn", color: "bg-sky-600" },
 ] as const;
 
 type PersonaKey = (typeof PERSONAS)[number]["key"];
