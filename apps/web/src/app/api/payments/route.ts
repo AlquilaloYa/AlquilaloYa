@@ -156,6 +156,18 @@ export async function POST(req: Request) {
     // (días de prórroga fijados manualmente en Cobranza).
     const { and, eq } = await import("drizzle-orm");
 
+    const [contract] = await db
+      .select({
+        montoCanonMensual: schema.contracts.montoCanonMensual,
+        mantenimiento: schema.contracts.mantenimiento,
+      })
+      .from(schema.contracts)
+      .where(eq(schema.contracts.id, body.contractId))
+      .limit(1);
+    if (!contract) {
+      return NextResponse.json({ error: "Contrato no encontrado" }, { status: 404 });
+    }
+
     const per = String(body.periodo).slice(0, 10);
     const [existente] = await db
       .select({ diasIndulgencia: schema.payments.diasIndulgencia })
@@ -167,11 +179,13 @@ export async function POST(req: Request) {
         )
       )
       .limit(1);
+    const monto = body.monto ?? contract.montoCanonMensual;
+    const mantenimiento = body.mantenimiento ?? contract.mantenimiento;
     const indulgencia = Number(
       body.diasIndulgencia ?? existente?.diasIndulgencia ?? 0
     );
 
-    const total = totalDelMes(body.monto, body.mantenimiento);
+    const total = totalDelMes(monto, mantenimiento);
     const { montoPagado, estado } = derivarPago(vouchersFinal, total, estadoIn);
     const fechaPago: string | null =
       estado === "PAGADO"
@@ -189,8 +203,8 @@ export async function POST(req: Request) {
       .values({
         contractId: body.contractId,
         periodo: per,
-        monto: body.monto ?? "0",
-        mantenimiento: body.mantenimiento ?? "50",
+        monto,
+        mantenimiento,
         penalidad: penalidadEfectiva,
         montoPagado: montoPagado.toFixed(2),
         diasIndulgencia: indulgencia,
@@ -203,8 +217,8 @@ export async function POST(req: Request) {
       .onConflictDoUpdate({
         target: [schema.payments.contractId, schema.payments.periodo],
         set: {
-          monto: body.monto ?? "0",
-          mantenimiento: body.mantenimiento ?? "50",
+          monto,
+          mantenimiento,
           penalidad: penalidadEfectiva,
           montoPagado: montoPagado.toFixed(2),
           diasIndulgencia: indulgencia,

@@ -446,23 +446,48 @@ export class DrizzleDashboardRepository {
       .select({
         monto: schema.payments.monto,
         mantenimiento: schema.payments.mantenimiento,
-        contractId: schema.payments.contractId,
+        montoCanonMensual: schema.contracts.montoCanonMensual,
+        mantenimientoContrato: schema.contracts.mantenimiento,
       })
       .from(schema.payments)
+      .innerJoin(
+        schema.contracts,
+        eq(schema.contracts.id, schema.payments.contractId)
+      )
       .where(
         and(eq(schema.payments.estado, "PENDIENTE"), lt(schema.payments.periodo, hoyStr))
       );
 
     let montoVencido = 0;
     for (const p of vencidos) {
-      montoVencido += Number(p.monto) + Number(p.mantenimiento);
+      const rentaNoRegistrada = Number(p.monto) === 0;
+      montoVencido += rentaNoRegistrada
+        ? Number(p.montoCanonMensual) + Number(p.mantenimientoContrato)
+        : Number(p.monto) + Number(p.mantenimiento);
     }
 
     const [devengadoRow] = await db
       .select({
-        value: sql<number>`coalesce(sum(${schema.payments.monto} + ${schema.payments.mantenimiento}), 0)`,
+        value: sql<number>`coalesce(sum(
+          case
+            when ${schema.payments.monto} = 0
+              and ${schema.payments.estado} in ('PENDIENTE', 'PARCIAL')
+            then ${schema.contracts.montoCanonMensual}
+            else ${schema.payments.monto}
+          end
+          + case
+            when ${schema.payments.monto} = 0
+              and ${schema.payments.estado} in ('PENDIENTE', 'PARCIAL')
+            then ${schema.contracts.mantenimiento}
+            else ${schema.payments.mantenimiento}
+          end
+        ), 0)`,
       })
       .from(schema.payments)
+      .innerJoin(
+        schema.contracts,
+        eq(schema.contracts.id, schema.payments.contractId)
+      )
       .where(
         and(
           lte(schema.payments.periodo, hoyStr),
@@ -504,6 +529,8 @@ export class DrizzleDashboardRepository {
         departamento: schema.departments.codigo,
         monto: schema.payments.monto,
         mantenimiento: schema.payments.mantenimiento,
+        montoCanonMensual: schema.contracts.montoCanonMensual,
+        mantenimientoContrato: schema.contracts.mantenimiento,
         periodo: schema.payments.periodo,
       })
       .from(schema.payments)
@@ -528,14 +555,23 @@ export class DrizzleDashboardRepository {
       )
       .orderBy(schema.contracts.codigoContrato);
 
-    const pagosVencenHoy: PagoVenceHoy[] = vencenHoy.map((p) => ({
-      id: p.id,
-      codigoContrato: p.codigoContrato,
-      cliente: p.cliente || "—",
-      departamento: p.departamento ?? null,
-      monto: Number(p.monto) + Number(p.mantenimiento),
-      periodo: p.periodo,
-    }));
+    const pagosVencenHoy: PagoVenceHoy[] = vencenHoy.map((p) => {
+      const rentaNoRegistrada = Number(p.monto) === 0;
+      const monto = rentaNoRegistrada
+        ? Number(p.montoCanonMensual)
+        : Number(p.monto);
+      const mantenimiento = rentaNoRegistrada
+        ? Number(p.mantenimientoContrato)
+        : Number(p.mantenimiento);
+      return {
+        id: p.id,
+        codigoContrato: p.codigoContrato,
+        cliente: p.cliente || "—",
+        departamento: p.departamento ?? null,
+        monto: monto + mantenimiento,
+        periodo: p.periodo,
+      };
+    });
 
     return {
       unidadesTotales,

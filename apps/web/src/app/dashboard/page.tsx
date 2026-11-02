@@ -5,7 +5,29 @@ import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Ban,
+  BarChart3,
+  Building2,
+  CalendarDays,
+  CircleDollarSign,
+  Clock3,
+  DoorOpen,
+  FileClock,
+  House,
+  RefreshCw,
+  TrendingUp,
+  UserRound,
+  Wallet,
+  Wrench,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { DonutChart } from "@/components/donut-chart";
 import { CobranzaVendedores } from "@/components/cobranza-vendedores";
 import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
@@ -109,7 +131,8 @@ type DashboardPanel =
   | "renovados"
   | "noalquilar"
   | "incidencias"
-  | "clientesreportados";
+  | "clientesreportados"
+  | "reportesemanal";
 
 interface DetalleMorosidad {
   contrato: string;
@@ -227,6 +250,23 @@ const stats: StatItem[] = [
   { label: "No alquilar", valueKey: "personasNoAlquilar", tone: "black" },
 ];
 
+const statIcons: Partial<Record<keyof Resumen, LucideIcon>> = {
+  unidadesTotales: Building2,
+  ocupadas: House,
+  disponibles: DoorOpen,
+  tasaOcupacion: BarChart3,
+  mantenimiento: Wrench,
+  incidencias: AlertTriangle,
+  ingresosYTD: TrendingUp,
+  egresos: Wallet,
+  resultadosYTD: CircleDollarSign,
+  morosidad: FileClock,
+  aPuntoDeFinalizar: Clock3,
+  contratosRenovadosMes: RefreshCw,
+  clientesReportados: UserRound,
+  personasNoAlquilar: Ban,
+};
+
 function moneyCompact(n: number): string {
   const signo = n < 0 ? "-" : "";
   const abs = Math.abs(n);
@@ -270,8 +310,9 @@ function StatCard({
   onOpen: () => void;
 }) {
   const parpadea = s.valueKey === "incidencias" && r.incidenciasPendientes > 0;
+  const Icono = statIcons[s.valueKey];
   const className =
-    "col-span-12 flex flex-col justify-between rounded-lg p-4 text-left shadow-sm transition-shadow hover:shadow-md sm:col-span-6 md:col-span-4 lg:col-span-2 " +
+    "relative col-span-12 flex flex-col justify-between overflow-hidden rounded-lg p-4 text-left shadow-sm transition-shadow hover:shadow-md sm:col-span-6 md:col-span-4 lg:col-span-2 " +
     (s.tone ? toneCardClass[s.tone] : toneCardClass.default) +
     (parpadea ? " animate-parpadeo" : "");
   const contenido = (
@@ -286,6 +327,12 @@ function StatCard({
           {statValue(s, r)}
         </span>
       </div>
+      {Icono ? (
+        <Icono
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-3 right-3 h-6 w-6 opacity-25"
+        />
+      ) : null}
     </>
   );
   if (["unidadesTotales", "morosidad", "ocupadas", "disponibles", "tasaOcupacion", "mantenimiento", "egresos", "aPuntoDeFinalizar", "contratosRenovadosMes", "personasNoAlquilar", "incidencias", "clientesReportados"].includes(s.valueKey)) {
@@ -2310,6 +2357,94 @@ function ClientesReportadosPopup({ onCerrar }: { onCerrar: () => void }) {
   );
 }
 
+interface ReporteSemanalItem {
+  id: string;
+  titulo: string;
+  detalle: string;
+  fecha: string;
+}
+
+interface ReporteSemanal {
+  inicioSemana: string;
+  fechaCorte: string;
+  renovaciones: ReporteSemanalItem[];
+  reportesClientes: ReporteSemanalItem[];
+  reparaciones: ReporteSemanalItem[];
+  contratosNuevos: ReporteSemanalItem[];
+  adendasNuevas: ReporteSemanalItem[];
+}
+
+function ReporteSemanalPopup({ onCerrar }: { onCerrar: () => void }) {
+  const { data, loading, error } = useDashboardJson<ReporteSemanal>(
+    "/api/dashboard/reporte-semanal"
+  );
+  const secciones = data
+    ? [
+        { titulo: "Contratos renovados", items: data.renovaciones },
+        { titulo: "Reportes de clientes", items: data.reportesClientes },
+        { titulo: "Reparaciones hechas", items: data.reparaciones },
+        { titulo: "Nuevos contratos", items: data.contratosNuevos },
+        { titulo: "Nuevas adendas", items: data.adendasNuevas },
+      ]
+    : [];
+  const total = secciones.reduce((suma, seccion) => suma + seccion.items.length, 0);
+
+  return (
+    <DashboardPanel
+      titulo="Reporte semanal"
+      subtitulo={
+        loading
+          ? "Cargando actividad…"
+          : data
+            ? `${fechaLegible(data.inicioSemana)} al ${fechaLegible(data.fechaCorte)} · ${total} actividades`
+            : "Actividad de la semana actual"
+      }
+      onCerrar={onCerrar}
+      panelClassName="max-w-5xl"
+    >
+      <EstadoCarga loading={loading} error={error} />
+      {!loading && !error && data ? (
+        <div className="space-y-6">
+          {secciones.map((seccion) => (
+            <section key={seccion.titulo}>
+              <h3 className="border-b border-outline-variant pb-2 font-label-lg text-on-surface">
+                {seccion.titulo} ({seccion.items.length})
+              </h3>
+              {seccion.items.length === 0 ? (
+                <p className="py-3 text-sm text-on-surface-variant">
+                  No hay actividad esta semana.
+                </p>
+              ) : (
+                <ul className="divide-y divide-outline-variant">
+                  {seccion.items.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex flex-wrap justify-between gap-2 py-3 text-sm"
+                    >
+                      <span>
+                        <span className="font-medium text-on-surface">{item.titulo}</span>
+                        {item.detalle ? (
+                          <span className="text-on-surface-variant"> · {item.detalle}</span>
+                        ) : null}
+                      </span>
+                      <time
+                        className="shrink-0 text-on-surface-variant"
+                        dateTime={item.fecha}
+                      >
+                        {new Date(item.fecha).toLocaleString("es-PE")}
+                      </time>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ))}
+        </div>
+      ) : null}
+    </DashboardPanel>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -2413,6 +2548,22 @@ return (
                 }}
               />
             ))}
+
+            <button
+              type="button"
+              onClick={() => setPanelAbierto("reportesemanal")}
+              aria-label="Abrir reporte semanal"
+              className="relative col-span-12 flex min-h-28 flex-col justify-between overflow-hidden rounded-lg bg-primary p-4 text-left text-primary-foreground shadow-sm transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:col-span-6 md:col-span-4 lg:col-span-2"
+            >
+              <span className="font-label-md uppercase tracking-wider">
+                Reporte semanal
+              </span>
+              <span className="font-body-sm">Ver actividad de esta semana</span>
+              <CalendarDays
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-3 right-3 h-6 w-6 opacity-30"
+              />
+            </button>
 
             <div className="col-span-12">
               <CobranzaVendedores />
@@ -2523,6 +2674,7 @@ return (
       {panelAbierto === "noalquilar" ? <NoAlquilarPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "incidencias" ? <IncidenciasPopup onCerrar={() => setPanelAbierto(null)} /> : null}
       {panelAbierto === "clientesreportados" ? <ClientesReportadosPopup onCerrar={() => setPanelAbierto(null)} /> : null}
+      {panelAbierto === "reportesemanal" ? <ReporteSemanalPopup onCerrar={() => setPanelAbierto(null)} /> : null}
     </DashboardShell>
   );
 }
