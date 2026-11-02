@@ -5,7 +5,7 @@ import { requireUser, requirePermission } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 /**
- * PATCH /api/departamentos/:id body: { precio?, garantia?, estadoManual?, personaPago?, maintenanceReason?, maintenanceEstimatedDays?, maintenanceStage? }
+ * PATCH /api/departamentos/:id body: { precio?, precioNegociable?, garantia?, estadoManual?, motivoBloqueo?, personaPago?, maintenanceReason?, maintenanceEstimatedDays?, maintenanceStage? }
  * - precio  → mensualidad del departamento. Si no se envía garantía, esta se
  *   iguala automáticamente al precio (la garantía depende de la mensualidad).
  * - garantia→ valor independiente de la garantía (puede sobreescribirse aparte).
@@ -36,6 +36,7 @@ export async function PATCH(
 
     const body = (await req.json()) as {
       precio?: string | number;
+      precioNegociable?: boolean;
       garantia?: string | number;
       estadoManual?: string | null;
       motivoBloqueo?: string | null;
@@ -48,6 +49,7 @@ export async function PATCH(
     const values: Record<string, unknown> = {};
     const tienePrecio =
       "precio" in body && body.precio !== undefined && body.precio !== null && body.precio !== "";
+    const tienePrecioNegociable = "precioNegociable" in body;
     const tieneGarantia =
       "garantia" in body && body.garantia !== undefined && body.garantia !== null && body.garantia !== "";
     const tieneEstadoManual = "estadoManual" in body;
@@ -60,6 +62,7 @@ export async function PATCH(
 
     if (
       !tienePrecio &&
+      !tienePrecioNegociable &&
       !tieneGarantia &&
       !tieneEstadoManual &&
       !tieneMotivoBloqueo &&
@@ -82,6 +85,15 @@ export async function PATCH(
       values.precio = String(precio.toFixed(2));
       // La garantía depende de la mensualidad: si no se indica, la iguala.
       if (!tieneGarantia) values.garantia = String(precio.toFixed(2));
+    }
+    if (tienePrecioNegociable) {
+      if (typeof body.precioNegociable !== "boolean") {
+        return NextResponse.json(
+          { error: "El indicador de precio negociable debe ser verdadero o falso" },
+          { status: 400 }
+        );
+      }
+      values.precioNegociable = body.precioNegociable;
     }
     if (tieneGarantia) {
       const garantia = Number(body.garantia);
@@ -145,7 +157,9 @@ export async function PATCH(
     if (tienePersonaPago) {
       values.personaPago = String(body.personaPago).trim();
     }
-    if (tienePrecio || tieneGarantia || tienePersonaPago) values.updatedAt = new Date();
+    if (tienePrecio || tienePrecioNegociable || tieneGarantia || tienePersonaPago || tieneMotivoBloqueo) {
+      values.updatedAt = new Date();
+    }
 
     const row = await db
       .update(schema.departments)

@@ -30,7 +30,12 @@ import {
 } from "lucide-react";
 import { DonutChart } from "@/components/donut-chart";
 import { CobranzaVendedores } from "@/components/cobranza-vendedores";
-import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
+import {
+  addMonths,
+  DIAS_PRORROGA_POR_DEFECTO,
+  localDateStr,
+  parseLocalDate,
+} from "@/lib/cronograma";
 
 interface ProximoAVencer {
   id: string;
@@ -83,6 +88,7 @@ interface DepartamentoDashboard {
   numero: string;
   piso?: number;
   precio?: string;
+  precioNegociable?: boolean;
   activo: boolean;
   motivoBloqueo?: string | null;
   enMantenimiento?: boolean;
@@ -856,14 +862,17 @@ function DisponiblesPopup({ onCerrar }: { onCerrar: () => void }) {
     }
   }, [data]);
 
-  async function actualizarEstado(id: string, estadoManual: string, motivoBloqueo: string | null) {
+  async function actualizarDepartamento(
+    id: string,
+    cambios: { estadoManual?: string; motivoBloqueo?: string | null; precioNegociable?: boolean }
+  ) {
     setGuardando(id);
     setErrorAccion(null);
     try {
       const response = await apiFetch(`/api/departamentos/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estadoManual, motivoBloqueo }),
+        body: JSON.stringify(cambios),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -878,6 +887,27 @@ function DisponiblesPopup({ onCerrar }: { onCerrar: () => void }) {
     }
   }
 
+  async function guardarPrecioNegociable(id: string, precioNegociable: boolean) {
+    setGuardando(id);
+    setErrorAccion(null);
+    try {
+      const response = await apiFetch(`/api/departamentos/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ precioNegociable }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? "No se pudo actualizar la negociación del precio");
+      }
+      reload();
+    } catch (reason) {
+      setErrorAccion(reason instanceof Error ? reason.message : "No se pudo actualizar la negociación del precio");
+    } finally {
+      setGuardando(null);
+    }
+  }
+
   function fila(departamento: DepartamentoDashboard, estado: "DISPONIBLE" | "MANTENIMIENTO" | "BLOQUEADO") {
     const editando = bloqueoEnEdicion === departamento.id;
     const nombre = `${departamento.codigo} · ${departamento.nombre}`;
@@ -886,6 +916,26 @@ function DisponiblesPopup({ onCerrar }: { onCerrar: () => void }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="font-medium text-on-surface">{nombre}</p>
+            <p className="mt-1 text-sm text-on-surface-variant">
+              Precio mensual:{" "}
+              {Number(departamento.precio ?? 0).toLocaleString("es-PE", {
+                style: "currency",
+                currency: "PEN",
+                maximumFractionDigits: 2,
+              })}
+            </p>
+            <label className="mt-2 inline-flex items-center gap-2 text-sm text-on-surface-variant">
+              <input
+                type="checkbox"
+                checked={Boolean(departamento.precioNegociable)}
+                disabled={guardando === departamento.id}
+                onChange={(event) =>
+                  void guardarPrecioNegociable(departamento.id, event.target.checked)
+                }
+                className="h-4 w-4 accent-primary"
+              />
+              Precio negociable
+            </label>
             {estado === "BLOQUEADO" && departamento.motivoBloqueo ? <p className="mt-1 text-sm text-on-surface-variant">Causa: {departamento.motivoBloqueo}</p> : null}
           </div>
           {estado === "DISPONIBLE" ? (
@@ -893,7 +943,7 @@ function DisponiblesPopup({ onCerrar }: { onCerrar: () => void }) {
               {editando ? "Cancelar" : "Bloquear"}
             </button>
           ) : (
-            <button type="button" disabled={guardando === departamento.id} onClick={() => void actualizarEstado(departamento.id, "DISPONIBLE", null)} className="rounded border border-outline-variant px-3 py-1.5 text-sm font-medium text-on-surface hover:bg-surface-container-high disabled:opacity-50">
+            <button type="button" disabled={guardando === departamento.id} onClick={() => void actualizarDepartamento(departamento.id, { estadoManual: "DISPONIBLE", motivoBloqueo: null })} className="rounded border border-outline-variant px-3 py-1.5 text-sm font-medium text-on-surface hover:bg-surface-container-high disabled:opacity-50">
               {guardando === departamento.id ? "Guardando…" : "Marcar disponible"}
             </button>
           )}
@@ -907,13 +957,25 @@ function DisponiblesPopup({ onCerrar }: { onCerrar: () => void }) {
               maxLength={500}
               rows={2}
               onChange={(event) => setCausas((actuales) => ({ ...actuales, [departamento.id]: event.target.value }))}
+              disabled={guardando === departamento.id}
               placeholder="Escribe por qué se bloquea este departamento"
               className="w-full rounded-md border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none"
             />
             <button
               type="button"
-              disabled={guardando === departamento.id || !causas[departamento.id]?.trim()}
-              onClick={() => void actualizarEstado(departamento.id, "BLOQUEADO", causas[departamento.id]?.trim() ?? "")}
+              disabled={
+                guardando === departamento.id ||
+                !causas[departamento.id]?.trim() ||
+                (estado === "BLOQUEADO" && causas[departamento.id]?.trim() === departamento.motivoBloqueo?.trim())
+              }
+              onClick={() =>
+                void actualizarDepartamento(
+                  departamento.id,
+                  estado === "BLOQUEADO"
+                    ? { motivoBloqueo: causas[departamento.id]?.trim() ?? "" }
+                    : { estadoManual: "BLOQUEADO", motivoBloqueo: causas[departamento.id]?.trim() ?? "" }
+                )
+              }
               className="rounded bg-primary px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
             >
               {guardando === departamento.id ? "Guardando…" : estado === "BLOQUEADO" ? "Guardar causa" : "Bloquear departamento"}
@@ -1503,7 +1565,10 @@ function MorosidadPopup({ onCerrar }: { onCerrar: () => void }) {
       );
       if (pago?.estado === "PAGADO") continue;
 
-      const indulgencia = Math.max(0, Math.floor(Number(pago?.diasIndulgencia ?? 0) || 0));
+      const indulgencia = Math.max(
+        0,
+        Math.floor(Number(pago?.diasIndulgencia ?? DIAS_PRORROGA_POR_DEFECTO) || 0)
+      );
       const vencimiento = sumarDiasFecha(periodo, indulgencia);
       if (parseLocalDate(vencimiento).getTime() >= inicioDia.getTime()) continue;
 
@@ -1527,7 +1592,10 @@ function MorosidadPopup({ onCerrar }: { onCerrar: () => void }) {
 
       const vencimiento = sumarDiasFecha(
         pago.periodo,
-        Math.max(0, Math.floor(Number(pago.diasIndulgencia ?? 0) || 0))
+        Math.max(
+          0,
+          Math.floor(Number(pago.diasIndulgencia ?? DIAS_PRORROGA_POR_DEFECTO) || 0)
+        )
       );
       if (pago.fechaPago <= vencimiento) continue;
 

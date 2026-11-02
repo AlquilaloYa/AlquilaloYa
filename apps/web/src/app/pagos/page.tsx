@@ -9,7 +9,12 @@ import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-
 import { CobranzaVendedores } from "@/components/cobranza-vendedores";
 import { CobranzaServiciosExtras } from "@/components/cobranza-servicios-extras";
 import { apiFetch } from "@/lib/api";
-import { addMonths, localDateStr, parseLocalDate } from "@/lib/cronograma";
+import {
+  addMonths,
+  DIAS_PRORROGA_POR_DEFECTO,
+  localDateStr,
+  parseLocalDate,
+} from "@/lib/cronograma";
 
 type PaymentVoucher = { nombre: string; url: string; monto?: number };
 
@@ -527,7 +532,10 @@ export default function PagosPage() {
         payments.find(
           (p) => p.contractId === c.id && p.periodo === pStr
         ) ?? null;
-      const indulgencia = Math.max(0, Math.floor(Number(pago?.diasIndulgencia ?? 0) || 0));
+      const indulgencia = Math.max(
+        0,
+        Math.floor(Number(pago?.diasIndulgencia ?? DIAS_PRORROGA_POR_DEFECTO) || 0)
+      );
       const vencimiento = new Date(cuota.getTime() + indulgencia * 86_400_000);
       const pagado = pago?.estado === "PAGADO";
       // Cuando existe la fila de pago registrada con monto (> 0), respeta su

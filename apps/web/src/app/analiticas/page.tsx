@@ -225,11 +225,10 @@ export default function AnaliticasPage() {
           ) : null}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {PERSONAS.map((persona) => {
             const mensualidad = totalDe(persona.key, "mensualidad");
             const mantenimiento = totalDe(persona.key, "mantenimiento");
-            const penalidad = totalDe(persona.key, "penalidad");
             return (
               <Card key={persona.key}>
                 <CardHeader className="border-b border-border">
@@ -239,12 +238,17 @@ export default function AnaliticasPage() {
                       {persona.nombre}
                     </CardTitle>
                     <span className="text-right text-sm font-semibold">
-                      {money(mensualidad + mantenimiento + penalidad)}
+                      {money(mensualidad + mantenimiento)}
                     </span>
                   </div>
                   {enCurso ? (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Cobrado en {MESES[mesEnCurso - 1]} · cuotas de este mes
+                      Mensualidad y mantenimiento cobrados en {MESES[mesEnCurso - 1]} · sin penalidades
+                    </p>
+                  ) : null}
+                  {!enCurso ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Total de mensualidad y mantenimiento · sin penalidades
                     </p>
                   ) : null}
                 </CardHeader>
@@ -368,8 +372,7 @@ export default function AnaliticasPage() {
                       (suma, persona) =>
                         suma +
                         fila.mensualidad[persona.key] +
-                        fila.mantenimiento[persona.key] +
-                        fila.penalidad[persona.key],
+                        fila.mantenimiento[persona.key],
                       0
                     );
                     return (
@@ -387,15 +390,21 @@ export default function AnaliticasPage() {
                             {fila.pagos} {fila.pagos === 1 ? "cuota cobrada" : "cuotas cobradas"}
                             {" · "}
                             {PERSONAS.filter(({ key }) =>
-                              fila.mensualidad[key] + fila.mantenimiento[key] + fila.penalidad[key] > 0
+                              fila.mensualidad[key] + fila.mantenimiento[key] > 0
                             )
                               .map(({ nombre, key }) =>
                                 `${nombre} ${money(
-                                  fila.mensualidad[key] + fila.mantenimiento[key] + fila.penalidad[key]
+                                  fila.mensualidad[key] + fila.mantenimiento[key]
                                 )}`
                               )
                               .join(" · ")}
                           </p>
+                          {PERSONAS.some(({ key }) => fila.penalidad[key] > 0) ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Penalidades (fuera de ganancias):{" "}
+                              {money(PERSONAS.reduce((suma, persona) => suma + fila.penalidad[persona.key], 0))}
+                            </p>
+                          ) : null}
                         </div>
                         <span className="shrink-0 font-semibold tabular-nums">{money(total)}</span>
                       </li>
@@ -413,7 +422,7 @@ export default function AnaliticasPage() {
               Cuotas pendientes con vencimiento hasta el mes actual, acumuladas de todo el año
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {PERSONAS.map((persona) => {
               const vendedor = data?.vendedores.find(({ key }) => key === persona.key);
               const clientes = vendedor?.clientes ?? [];

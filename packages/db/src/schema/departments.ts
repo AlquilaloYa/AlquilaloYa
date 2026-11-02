@@ -20,6 +20,7 @@ export const departments = pgTable(
     personaPago: varchar("persona_pago", { length: 255 }).notNull(),
     piso: integer("piso").notNull().default(1),
     precio: numeric("precio", { precision: 15, scale: 2 }).notNull().default("0"),
+    precioNegociable: boolean("precio_negociable").notNull().default(false),
     garantia: numeric("garantia", { precision: 15, scale: 2 }).notNull().default("0"),
     mantenimiento: numeric("mantenimiento", { precision: 15, scale: 2 }).notNull().default("50"),
     servicios: varchar("servicios", { length: 255 }).notNull().default("Agua, luz"),

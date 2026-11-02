@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 import { recordAdminAction } from "@/lib/audit-log";
+import { DIAS_PRORROGA_POR_DEFECTO } from "@/lib/cronograma";
 
 export const dynamic = "force-dynamic";
 
@@ -182,7 +183,9 @@ export async function POST(req: Request) {
     const monto = body.monto ?? contract.montoCanonMensual;
     const mantenimiento = body.mantenimiento ?? contract.mantenimiento;
     const indulgencia = Number(
-      body.diasIndulgencia ?? existente?.diasIndulgencia ?? 0
+      body.diasIndulgencia ??
+        existente?.diasIndulgencia ??
+        DIAS_PRORROGA_POR_DEFECTO
     );
 
     const total = totalDelMes(monto, mantenimiento);
