@@ -224,6 +224,101 @@
   color: #172033;
 }
 
+.portal-submit-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(3px);
+}
+
+.portal-submit-card {
+  display: grid;
+  width: min(100%, 360px);
+  justify-items: center;
+  gap: 12px;
+  padding: 28px;
+  border: 1px solid rgba(13, 91, 61, 0.16);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #172033;
+  text-align: center;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.2);
+}
+
+.portal-submit-card h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.portal-submit-card p {
+  margin: 0;
+  color: #687386;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.portal-submit-spinner {
+  width: 36px;
+  height: 36px;
+  color: var(--portal-green-700);
+  animation: portal-submit-spin 0.9s linear infinite;
+}
+
+.portal-progress-ring {
+  position: relative;
+  width: 72px;
+  height: 72px;
+}
+
+.portal-progress-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.portal-progress-ring circle {
+  fill: none;
+  stroke-width: 6;
+}
+
+.portal-progress-ring-track {
+  stroke: #e5eee8;
+}
+
+.portal-progress-ring-value {
+  stroke: var(--portal-green-700);
+  stroke-dasharray: 169.65;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.15s ease-out;
+}
+
+.portal-progress-ring span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #172033;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+@keyframes portal-submit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-submit-spinner {
+    animation-duration: 2.5s;
+  }
+}
+
 .client-portal-app > div {
   padding-top: 24px;
 }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Bell,
   Camera,
+  LoaderCircle,
   LogOut,
   MessageCircle,
   Paperclip,
@@ -163,6 +164,8 @@ export default function ClientPortalPage() {
   const [requests, setRequests] = useState<ClientRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [submitStage, setSubmitStage] = useState<"uploading" | "saving" | "refreshing">("saving");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [issueType, setIssueType] = useState("");
@@ -185,6 +188,7 @@ export default function ClientPortalPage() {
     mimeType: string;
     url: string;
   } | null>(null);
+  const submittingRef = useRef(false);
   const seenNotificationIds = useRef<Set<string> | null>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -384,7 +388,10 @@ export default function ClientPortalPage() {
     if (cameraInput.current) cameraInput.current.value = "";
   }
 
-  async function uploadFile(file: File): Promise<string> {
+  async function uploadFile(
+    file: File,
+    onProgress: (loadedBytes: number) => void,
+  ): Promise<string> {
     const prepared = await fetch("/api/portal-cliente/uploads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -402,25 +409,60 @@ export default function ClientPortalPage() {
     if (!prepared.ok || !preparedBody.signedUrl || !preparedBody.uploadId) {
       throw new Error(preparedBody.error ?? `No se pudo preparar ${file.name}`);
     }
-    const uploaded = await fetch(preparedBody.signedUrl, {
-      method: "PUT",
-      headers: { "Content-Type": file.type },
-      body: file,
+    const signedUrl = preparedBody.signedUrl;
+    const uploadId = preparedBody.uploadId;
+    await new Promise<void>((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open("PUT", signedUrl);
+      request.setRequestHeader("Content-Type", file.type);
+      request.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) onProgress(event.loaded);
+      });
+      request.addEventListener("load", () => {
+        if (request.status >= 200 && request.status < 300) {
+          resolve();
+        } else {
+          reject(new Error(`No se pudo subir ${file.name}. Inténtalo de nuevo.`));
+        }
+      });
+      request.addEventListener("error", () => {
+        reject(new Error(`No se pudo subir ${file.name}. Inténtalo de nuevo.`));
+      });
+      request.addEventListener("abort", () => {
+        reject(new Error(`Se canceló la carga de ${file.name}.`));
+      });
+      request.send(file);
     });
-    if (!uploaded.ok) {
-      throw new Error(`No se pudo subir ${file.name}. Inténtalo de nuevo.`);
-    }
-    return preparedBody.uploadId;
+    onProgress(file.size);
+    return uploadId;
   }
 
   async function submitReport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setError("");
     setSubmitting(true);
     const fileIds: string[] = [];
+    const totalBytes = selectedFiles.reduce((total, item) => total + item.file.size, 0);
+    let completedBytes = 0;
+    setUploadProgress(0);
+    setSubmitStage(selectedFiles.length ? "uploading" : "saving");
     try {
       const options = buildClientPortalAvailabilityOptions(availability);
-      for (const item of selectedFiles) fileIds.push(await uploadFile(item.file));
+      for (const item of selectedFiles) {
+        fileIds.push(
+          await uploadFile(item.file, (loadedBytes) => {
+            const progress = totalBytes
+              ? Math.floor(((completedBytes + loadedBytes) / totalBytes) * 100)
+              : 100;
+            setUploadProgress(Math.min(progress, 100));
+          }),
+        );
+        completedBytes += item.file.size;
+      }
+      setUploadProgress(100);
+      setSubmitStage("saving");
       const response = await fetch("/api/portal-cliente/ordenes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -442,11 +484,13 @@ export default function ClientPortalPage() {
       setAvailability(emptyAvailabilityOptions(today));
       setSelectedFiles([]);
       setCustomerPresentAtVisit(true);
+      setSubmitStage("refreshing");
       await loadOrders();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "No se pudo enviar el reporte");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -541,7 +585,7 @@ export default function ClientPortalPage() {
 
   return (
     <main className="client-portal-app min-h-[100svh] bg-slate-950 px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-6xl" inert={submitting}>
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
           <div className="portal-dashboard-brand">
             <img src="/logo-white-mode.png" alt="AlquilaYa" />
@@ -1112,6 +1156,56 @@ export default function ClientPortalPage() {
           Portal independiente de clientes · Acceso exclusivo a reportes del departamento
         </footer>
       </div>
+      {submitting && (
+        <section
+          className="portal-submit-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="portal-submit-title"
+          aria-describedby="portal-submit-description"
+        >
+          <div className="portal-submit-card">
+            {submitStage === "uploading" ? (
+              <div
+                className="portal-progress-ring"
+                role="progressbar"
+                aria-label="Progreso de subida de archivos"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={uploadProgress}
+              >
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                  <circle className="portal-progress-ring-track" cx="32" cy="32" r="27" />
+                  <circle
+                    className="portal-progress-ring-value"
+                    cx="32"
+                    cy="32"
+                    r="27"
+                    style={{ strokeDashoffset: `${Math.PI * 54 * (1 - uploadProgress / 100)}` }}
+                  />
+                </svg>
+                <span>{uploadProgress}%</span>
+              </div>
+            ) : (
+              <LoaderCircle aria-hidden className="portal-submit-spinner" />
+            )}
+            <h2 id="portal-submit-title">
+              {submitStage === "uploading"
+                ? "Subiendo archivos"
+                : submitStage === "saving"
+                  ? "Registrando tu reporte"
+                  : "Actualizando tus reportes"}
+            </h2>
+            <p id="portal-submit-description">
+              {submitStage === "uploading"
+                ? "El porcentaje refleja la carga total de tus archivos."
+                : submitStage === "saving"
+                  ? "Estamos guardando la solicitud. No cierres esta página."
+                  : "Tu reporte fue registrado; estamos actualizando la lista."}
+            </p>
+          </div>
+        </section>
+      )}
     </main>
   );
 }
