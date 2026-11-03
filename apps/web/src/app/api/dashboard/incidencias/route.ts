@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { count, desc, eq, sql } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 
@@ -6,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 const RESUELTOS = new Set(["RESOLVED", "COMPLETED"]);
 const CERRADOS = new Set(["CANCELLED", "REJECTED"]);
+const PAGE_SIZE = 50;
 
 type Etiqueta = "Resuelta" | "Pendiente" | "Cancelada" | "Rechazada";
 
@@ -34,7 +36,30 @@ export async function GET(req: Request) {
       schema: typeof import("@contract/db").schema;
     };
 
-    const [ordenes, empleados] = await Promise.all([
+    const url = new URL(req.url);
+    const pagina = Number(url.searchParams.get("page") ?? "1");
+    if (!Number.isSafeInteger(pagina) || pagina < 1) {
+      return NextResponse.json(
+        { error: "El número de página no es válido" },
+        { status: 400 },
+      );
+    }
+
+    const offset = (pagina - 1) * PAGE_SIZE;
+    if (!Number.isSafeInteger(offset)) {
+      return NextResponse.json(
+        { error: "El número de página excede el límite" },
+        { status: 400 },
+      );
+    }
+
+    const [resumenRows, ordenes] = await Promise.all([
+      db
+        .select({
+          total: count(),
+          pendientes: sql<number>`count(*) filter (where ${schema.workOrders.status} not in ('RESOLVED', 'COMPLETED', 'CANCELLED', 'REJECTED'))`.mapWith(Number),
+        })
+        .from(schema.workOrders),
       db
         .select({
           id: schema.workOrders.id,
@@ -44,66 +69,55 @@ export async function GET(req: Request) {
           priority: schema.workOrders.priority,
           status: schema.workOrders.status,
           departmentCode: schema.workOrders.departmentCode,
-          assignedEmployeeId: schema.workOrders.assignedEmployeeId,
           createdAt: schema.workOrders.createdAt,
           completedAt: schema.workOrders.completedAt,
+          encargado: sql<string | null>`nullif(trim(coalesce(${schema.hrEmployees.nombres}, '') || ' ' || coalesce(${schema.hrEmployees.apellidos}, '')), '')`,
         })
-        .from(schema.workOrders),
-      db
-        .select({
-          id: schema.hrEmployees.id,
-          nombres: schema.hrEmployees.nombres,
-          apellidos: schema.hrEmployees.apellidos,
-        })
-        .from(schema.hrEmployees),
+        .from(schema.workOrders)
+        .leftJoin(
+          schema.hrEmployees,
+          eq(schema.workOrders.assignedEmployeeId, schema.hrEmployees.id),
+        )
+        .orderBy(
+          sql`case when ${schema.workOrders.status} in ('RESOLVED', 'COMPLETED', 'CANCELLED', 'REJECTED') then 1 else 0 end`,
+          desc(schema.workOrders.createdAt),
+          desc(schema.workOrders.id),
+        )
+        .limit(PAGE_SIZE)
+        .offset(offset),
     ]);
 
-    const encargados = new Map<string, string>(
-      empleados.map((empleado) => [
-        empleado.id,
-        `${empleado.nombres ?? ""} ${empleado.apellidos ?? ""}`.trim(),
-      ])
-    );
-
-    const incidencias = ordenes
-      .map((orden) => {
-        const estado = etiquetaEstado(String(orden.status));
-        const abierta =
-          !RESUELTOS.has(String(orden.status)) &&
-          !CERRADOS.has(String(orden.status));
-        return {
-          id: String(orden.id),
-          codigo: String(orden.code ?? ""),
-          incidencia: String(orden.title ?? ""),
-          tipo: String(orden.issueType ?? ""),
-          encargado:
-            (orden.assignedEmployeeId
-              ? encargados.get(String(orden.assignedEmployeeId))
-              : undefined) || null,
-          prioridad: String(orden.priority ?? "MEDIA"),
-          departamento: String(orden.departmentCode ?? ""),
-          estado,
-          resuelta: estado === "Resuelta",
-          abierta,
-          creadaEn: orden.createdAt
-            ? new Date(orden.createdAt).toISOString()
-            : "",
-          resueltaEn: orden.completedAt
-            ? new Date(orden.completedAt).toISOString()
-            : null,
-        };
-      })
-      .sort((a, b) =>
-        a.abierta === b.abierta
-          ? b.creadaEn.localeCompare(a.creadaEn)
-          : a.abierta
-            ? -1
-            : 1
-      );
+    const resumen = resumenRows[0] ?? { total: 0, pendientes: 0 };
+    const incidencias = ordenes.map((orden) => {
+      const estado = etiquetaEstado(String(orden.status));
+      const abierta =
+        !RESUELTOS.has(String(orden.status)) &&
+        !CERRADOS.has(String(orden.status));
+      return {
+        id: String(orden.id),
+        codigo: String(orden.code ?? ""),
+        incidencia: String(orden.title ?? ""),
+        tipo: String(orden.issueType ?? ""),
+        encargado: orden.encargado || null,
+        prioridad: String(orden.priority ?? "MEDIA"),
+        departamento: String(orden.departmentCode ?? ""),
+        estado,
+        resuelta: estado === "Resuelta",
+        abierta,
+        creadaEn: orden.createdAt
+          ? new Date(orden.createdAt).toISOString()
+          : "",
+        resueltaEn: orden.completedAt
+          ? new Date(orden.completedAt).toISOString()
+          : null,
+      };
+    });
 
     return NextResponse.json({
-      total: incidencias.length,
-      pendientes: incidencias.filter((incidencia) => incidencia.abierta).length,
+      total: resumen.total,
+      pendientes: resumen.pendientes,
+      pagina,
+      porPagina: PAGE_SIZE,
       incidencias,
     });
   } catch (error) {

@@ -2315,21 +2315,28 @@ const estadoClase: Record<string, string> = {
 };
 
 function IncidenciasPopup({ onCerrar }: { onCerrar: () => void }) {
+  const [pagina, setPagina] = useState(1);
   const { data, loading, error } = useDashboardJson<{
     total: number;
     pendientes: number;
+    pagina: number;
+    porPagina: number;
     incidencias: IncidenciaOT[];
-  }>("/api/dashboard/incidencias");
+  }>(`/api/dashboard/incidencias?page=${pagina}`);
   const lista = data?.incidencias ?? [];
   const pendientes = data?.pendientes ?? 0;
+  const total = data?.total ?? 0;
+  const totalPaginas = Math.max(1, Math.ceil(total / (data?.porPagina ?? 50)));
+  const primerResultado = total === 0 ? 0 : (pagina - 1) * (data?.porPagina ?? 50) + 1;
+  const ultimoResultado = Math.min(pagina * (data?.porPagina ?? 50), total);
   return (
     <DashboardPanel
       titulo="Incidencias"
       subtitulo={
         loading
           ? "Cargando…"
-          : `${lista.length} ${
-              lista.length === 1 ? "incidencia" : "incidencias"
+          : `${total} ${
+              total === 1 ? "incidencia" : "incidencias"
             } · ${pendientes} por resolver`
       }
       onCerrar={onCerrar}
@@ -2389,6 +2396,38 @@ function IncidenciasPopup({ onCerrar }: { onCerrar: () => void }) {
           ))}
         </ul>
       ))}
+      {!loading && !error && total > 0 ? (
+        <div className="flex items-center justify-between gap-3 border-t border-outline-variant pt-3">
+          <p className="text-sm text-on-surface-variant">
+            Mostrando {primerResultado}–{ultimoResultado} de {total}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPagina((actual) => Math.max(1, actual - 1))}
+              disabled={pagina <= 1}
+              className="rounded p-2 text-on-surface-variant transition hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Incidencias anteriores"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <span className="text-sm text-on-surface-variant">
+              Página {pagina} de {totalPaginas}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setPagina((actual) => Math.min(totalPaginas, actual + 1))
+              }
+              disabled={pagina >= totalPaginas}
+              className="rounded p-2 text-on-surface-variant transition hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Incidencias siguientes"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      ) : null}
     </DashboardPanel>
   );
 }
