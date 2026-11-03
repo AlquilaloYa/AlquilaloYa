@@ -80,12 +80,19 @@ puede modificarlo mediante la acción explícita de reprogramación, que exige
 motivo y guarda el horario anterior en el historial. Una visita de seguimiento y
 las citas con el cliente se registran por separado.
 
-Diagnóstico y mantenimiento comparten una pestaña: se adjuntan fotos o videos
-de hasta 1 minuto al guardar el diagnóstico, con una descripción opcional, y
-desde ahí se registran los materiales o se confirma que no se requieren. El
-contador comienza al guardar el diagnóstico. En Resolución y cierre se puede
-adjuntar evidencia final en foto o video y, si hace falta otra visita, indicar
-su fecha y horario.
+Diagnóstico y mantenimiento comparten una pestaña: los botones **Tomar foto**
+y **Grabar video** solicitan la cámara trasera del dispositivo Android; también
+se puede elegir un archivo existente desde la galería. Antes de adjuntarlo, cada
+video se vuelve a codificar en el dispositivo a un máximo de 720p, 30 fps y
+1.5 Mbps, manteniendo el audio cuando el WebView lo permite. El resultado se
+guarda como WebM y debe pesar menos de 50 MB; si el dispositivo no puede
+optimizarlo, se informa el error y no se adjunta el original sin limitar.
+La disponibilidad de la captura depende de que Android tenga una aplicación
+de cámara compatible. Se pueden adjuntar varios archivos de hasta 1 minuto por
+video al guardar el diagnóstico, con una descripción opcional, y desde ahí se
+registran los materiales o se confirma que no se requieren. El contador
+comienza al guardar el diagnóstico. En Resolución y cierre se puede adjuntar
+evidencia final en foto o video con las mismas opciones.
 
 ### Notificaciones push de órdenes urgentes
 

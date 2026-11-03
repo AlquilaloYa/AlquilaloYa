@@ -385,29 +385,187 @@ function useDictation() {
   return { supported, activeField, start, stop }
 }
 
-function getVideoDuration(file) {
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024
+const MAX_VIDEO_DURATION_SECONDS = 60
+const MAX_VIDEO_LONG_EDGE = 1280
+const MAX_VIDEO_SHORT_EDGE = 720
+const VIDEO_BITRATE = 1_500_000
+const VIDEO_FRAME_RATE = 30
+
+function waitForVideoMetadata(video) {
   return new Promise((resolve, reject) => {
-    const video = document.createElement('video')
-    const url = URL.createObjectURL(file)
-    const cleanup = () => {
-      URL.revokeObjectURL(url)
-      video.removeAttribute('src')
+    video.onloadedmetadata = resolve
+    video.onerror = () => reject(new Error('No se pudo abrir el video para optimizarlo.'))
+  })
+}
+
+async function optimizeVideo(file) {
+  if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) {
+    throw new Error('Este dispositivo no permite optimizar videos. Actualiza Android System WebView e inténtalo nuevamente.')
+  }
+
+  const mimeType = [
+    'video/webm;codecs=vp8,opus',
+    'video/webm;codecs=vp8',
+    'video/webm',
+  ].find((candidate) => MediaRecorder.isTypeSupported(candidate))
+  if (!mimeType) {
+    throw new Error('Este dispositivo no ofrece un formato compatible para optimizar videos.')
+  }
+
+  const sourceUrl = URL.createObjectURL(file)
+  const video = document.createElement('video')
+  const canvas = document.createElement('canvas')
+  const releaseSource = () => {
+    video.pause()
+    video.removeAttribute('src')
+    video.load()
+    URL.revokeObjectURL(sourceUrl)
+  }
+  let audioContext = null
+  let animationFrame = 0
+  let recorder = null
+  let stream = null
+  let audioSource = null
+  let audioDestination = null
+  const chunks = []
+
+  video.preload = 'auto'
+  video.playsInline = true
+  video.muted = false
+  video.volume = 1
+  const metadataReady = waitForVideoMetadata(video)
+  video.src = sourceUrl
+  try {
+    await metadataReady
+  } catch (error) {
+    releaseSource()
+    throw error
+  }
+
+  if (!Number.isFinite(video.duration) || video.duration <= 0) {
+    releaseSource()
+    throw new Error('No se pudo verificar la duración del video.')
+  }
+  if (video.duration > MAX_VIDEO_DURATION_SECONDS) {
+    releaseSource()
+    throw new Error('Cada video puede durar como máximo 1 minuto.')
+  }
+  if (!video.videoWidth || !video.videoHeight) {
+    releaseSource()
+    throw new Error('No se pudo leer la resolución del video.')
+  }
+
+  const scale = Math.min(
+    1,
+    MAX_VIDEO_LONG_EDGE / Math.max(video.videoWidth, video.videoHeight),
+    MAX_VIDEO_SHORT_EDGE / Math.min(video.videoWidth, video.videoHeight),
+  )
+  canvas.width = Math.max(2, Math.floor((video.videoWidth * scale) / 2) * 2)
+  canvas.height = Math.max(2, Math.floor((video.videoHeight * scale) / 2) * 2)
+  const context = canvas.getContext('2d')
+  if (!context || !canvas.captureStream) {
+    releaseSource()
+    throw new Error('No se pudo preparar el optimizador de video en este dispositivo.')
+  }
+
+  stream = canvas.captureStream(VIDEO_FRAME_RATE)
+  try {
+    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext
+    if (AudioContextConstructor) {
+      audioContext = new AudioContextConstructor()
+      audioSource = audioContext.createMediaElementSource(video)
+      audioDestination = audioContext.createMediaStreamDestination()
+      audioSource.connect(audioDestination)
+      stream.addTrack(audioDestination.stream.getAudioTracks()[0])
+      await audioContext.resume()
     }
-    video.preload = 'metadata'
-    video.onloadedmetadata = () => {
-      const { duration } = video
+  } catch {
+    if (audioSource) audioSource.disconnect()
+    audioSource = null
+    if (audioContext) {
+      audioContext.close().catch(() => {})
+      audioContext = null
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const cleanup = () => {
+      cancelAnimationFrame(animationFrame)
+      stream?.getTracks().forEach((track) => track.stop())
+      audioDestination?.stream.getTracks().forEach((track) => track.stop())
+      audioSource?.disconnect()
+      if (audioContext) audioContext.close().catch(() => {})
+      video.pause()
+      video.removeAttribute('src')
+      video.load()
+      URL.revokeObjectURL(sourceUrl)
+    }
+    const finishWithError = (error) => {
+      if (settled) return
+      settled = true
       cleanup()
-      if (!Number.isFinite(duration) || duration <= 0) {
-        reject(new Error('No se pudo verificar la duración del video.'))
+      reject(error)
+    }
+
+    try {
+      recorder = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: VIDEO_BITRATE,
+        audioBitsPerSecond: 96_000,
+      })
+    } catch {
+      finishWithError(new Error('No se pudo iniciar la optimización del video.'))
+      return
+    }
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size) chunks.push(event.data)
+    }
+    recorder.onerror = () => finishWithError(new Error('Falló la optimización del video.'))
+    recorder.onstop = () => {
+      if (settled) return
+      const output = new Blob(chunks, { type: recorder.mimeType || mimeType })
+      if (!output.size) {
+        finishWithError(new Error('La optimización no produjo un video válido.'))
         return
       }
-      resolve(duration)
-    }
-    video.onerror = () => {
+      if (output.size > MAX_VIDEO_BYTES) {
+        finishWithError(new Error('El video optimizado supera el límite de 50 MB. Grábalo con menor duración o calidad.'))
+        return
+      }
+
+      const optimizedName = file.name.replace(/\.[^.]+$/, '') || 'video'
+      const optimizedFile = new File([output], `${optimizedName}.webm`, {
+        type: output.type,
+        lastModified: Date.now(),
+      })
+      settled = true
       cleanup()
-      reject(new Error('No se pudo leer el video seleccionado.'))
+      resolve(optimizedFile)
     }
-    video.src = url
+    video.onended = () => {
+      if (recorder.state !== 'inactive') recorder.stop()
+    }
+    video.onerror = () => finishWithError(new Error('No se pudo leer el video seleccionado.'))
+
+    const drawFrame = () => {
+      if (!video.paused && !video.ended) {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height)
+        animationFrame = requestAnimationFrame(drawFrame)
+      }
+    }
+
+    try {
+      recorder.start(1000)
+      video.play().then(drawFrame).catch(() => {
+        if (recorder.state !== 'inactive') recorder.stop()
+        finishWithError(new Error('No se pudo reproducir el video para optimizarlo.'))
+      })
+    } catch {
+      finishWithError(new Error('No se pudo iniciar la optimización del video.'))
+    }
   })
 }
 
@@ -415,28 +573,34 @@ function PhotoField({ multiple = false, value = [], onChange, disabled = false, 
   const cameraRef = useRef(null)
   const videoRef = useRef(null)
   const galleryRef = useRef(null)
+  const [processingVideos, setProcessingVideos] = useState(false)
   const files = Array.isArray(value) ? value : value ? [value] : []
 
   async function handlePicked(event) {
     const picked = Array.from(event.target.files ?? [])
     event.target.value = ''
     if (!picked.length) return
+    setProcessingVideos(true)
     try {
-      for (const file of picked.filter((item) => item.type.startsWith('video/'))) {
-        if (await getVideoDuration(file) > 60) {
-          throw new Error('Cada video puede durar como máximo 1 minuto.')
+      const optimizedFiles = []
+      for (const file of picked) {
+        if (!file.type.startsWith('video/')) {
+          optimizedFiles.push(file)
+          continue
         }
+        optimizedFiles.push(await optimizeVideo(file))
       }
+      if (multiple) {
+        onChange([...files, ...optimizedFiles])
+      } else {
+        onChange([optimizedFiles[0]])
+      }
+      onError?.('')
     } catch (error) {
       onError?.(error.message)
-      return
+    } finally {
+      setProcessingVideos(false)
     }
-    if (multiple) {
-      onChange([...files, ...picked])
-    } else {
-      onChange([picked[0]])
-    }
-    onError?.('')
   }
 
   function removeAt(index) {
@@ -446,24 +610,25 @@ function PhotoField({ multiple = false, value = [], onChange, disabled = false, 
   return (
     <div className="photo-field">
       <div className="photo-actions">
-        <button type="button" className="photo-btn" disabled={disabled} onClick={() => cameraRef.current?.click()}>
+        <button type="button" className="photo-btn" disabled={disabled || processingVideos} onClick={() => cameraRef.current?.click()}>
           <CameraIcon />
           <span>Tomar foto</span>
         </button>
         {allowVideo && (
-          <button type="button" className="photo-btn" disabled={disabled} onClick={() => videoRef.current?.click()}>
+          <button type="button" className="photo-btn" disabled={disabled || processingVideos} onClick={() => videoRef.current?.click()}>
             <CameraIcon />
             <span>Grabar video</span>
           </button>
         )}
-        <button type="button" className="photo-btn" disabled={disabled} onClick={() => galleryRef.current?.click()}>
+        <button type="button" className="photo-btn" disabled={disabled || processingVideos} onClick={() => galleryRef.current?.click()}>
           <GalleryIcon />
           <span>Elegir de galería</span>
         </button>
       </div>
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple={multiple} hidden onChange={handlePicked} />
-      {allowVideo && <input ref={videoRef} type="file" accept="video/mp4,video/webm" capture="environment" hidden onChange={handlePicked} />}
+      {allowVideo && <input ref={videoRef} type="file" accept="video/*" capture="environment" hidden onChange={handlePicked} />}
       <input ref={galleryRef} type="file" accept={allowVideo ? 'image/jpeg,image/png,image/webp,video/mp4,video/webm' : 'image/jpeg,image/png,image/webp'} multiple={multiple} hidden onChange={handlePicked} />
+      {processingVideos && <p className="prototype-note" role="status">Optimizando video a un máximo de 720p/30 fps antes de adjuntarlo…</p>}
       {files.length > 0 && (
         <ul className="photo-file-list">
           {files.map((file, index) => (
