@@ -213,6 +213,10 @@ function canAccessPage(
   if (pathname === "/configuraciones/seguridad" || pathname.startsWith("/configuraciones/seguridad/")) {
     return true;
   }
+  if (pathname === "/exportaciones" || pathname.startsWith("/exportaciones/")) {
+    const ac = AccessControl.forRole(role, additionalPermissions);
+    return ac.can("contract.read") && ac.can("department.read");
+  }
   const pages = ROLE_PAGES[role];
   if (!pages || [...pages].some((page) => pathname === page || pathname.startsWith(`${page}/`))) {
     return true;

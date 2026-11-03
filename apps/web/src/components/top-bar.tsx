@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api";
 import { useTheme } from "@/lib/theme-provider";
 import { playNotificationChime } from "@/lib/notification-sound";
+import { AccessControl, Permission } from "@contract/domain/rbac";
 import { Button } from "@contract/ui/components/button";
 import { ThemeToggle } from "@contract/ui/components/theme-toggle";
-import { Bell, ExternalLink, LogOut, Menu, Wrench, X } from "lucide-react";
+import { Bell, ExternalLink, FileSpreadsheet, LogOut, Menu, Wrench, X } from "lucide-react";
 import { CommandPalette } from "@/components/command-palette";
 
 interface InboxNotification {
@@ -188,6 +190,15 @@ export function TopBar({
       .slice(0, 2)
       .join("")
       .toUpperCase() ?? "?";
+  const puedeExportar = Boolean(
+    user &&
+      AccessControl.forRole(user.role, user.additionalPermissions).can(
+        Permission.CONTRACT_READ,
+      ) &&
+      AccessControl.forRole(user.role, user.additionalPermissions).can(
+        Permission.DEPARTMENT_READ,
+      ),
+  );
 
   return (
     <>
@@ -214,6 +225,15 @@ export function TopBar({
             onToggle={toggleTheme}
             className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           />
+
+          {puedeExportar ? (
+            <Button asChild variant="outline" className="h-10 gap-2 px-3">
+              <Link href="/exportaciones" aria-label="Exportar información">
+                <FileSpreadsheet className="h-4 w-4" />
+                <span className="hidden sm:inline">Exportar</span>
+              </Link>
+            </Button>
+          ) : null}
 
           <div className="relative" ref={bellRef}>
             <Button

@@ -27,7 +27,8 @@
   "pnpm": {
     "overrides": {
       "react": "18.3.1",
-      "@types/react": "18.3.31"
+      "@types/react": "18.3.31",
+      "exceljs>uuid": "11.1.1"
     }
   },
   "engines": {
