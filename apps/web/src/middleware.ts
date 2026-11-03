@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { securityHeaders } from "@/lib/security-headers";
-import { checkApiRateLimit, clientIp } from "@/lib/rate-limit";
+import {
+  checkApiRateLimit,
+  clientIp,
+  rateLimitPolicyForPath,
+} from "@/lib/rate-limit";
 import { metrics, routeBucket } from "@/lib/metrics";
 import { logger } from "@/lib/logger";
 import { ACCESS_COOKIE } from "@/lib/session-cookies";
@@ -93,10 +97,19 @@ export async function middleware(req: NextRequest) {
   const skipLimit = pathname.startsWith("/api/health") || pathname.startsWith("/api/metrics");
   if (isApi && !skipLimit) {
     const ip = clientIp(req.headers);
-    const rl = await checkApiRateLimit(`${ip}:${routeBucket(pathname)}`);
+    const policy = rateLimitPolicyForPath(pathname);
+    const rl = await checkApiRateLimit(
+      `${ip}:${routeBucket(pathname)}`,
+      policy,
+    );
     if (!rl.success) {
-      metrics.recordRateLimited();
-      log.warn("rate_limited", { ip, remaining: rl.remaining });
+      metrics.recordRateLimited(pathname);
+      log.warn("rate_limited", {
+        ip,
+        policy: policy.id,
+        limit: rl.limit,
+        remaining: rl.remaining,
+      });
       const res = NextResponse.json(
         { error: "Demasiadas peticiones, inténtalo más tarde" },
         { status: 429 }

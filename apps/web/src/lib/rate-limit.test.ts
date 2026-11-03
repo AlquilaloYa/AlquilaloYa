@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { RateLimiter, clientIp } from "./rate-limit";
+import {
+  RateLimiter,
+  clientIp,
+  rateLimitPolicyForPath,
+} from "./rate-limit";
 
 describe("RateLimiter (ventana fija)", () => {
   it("permite hasta el límite y luego bloquea", () => {
@@ -48,5 +52,24 @@ describe("clientIp", () => {
       "198.51.100.2"
     );
     expect(clientIp(new Headers())).toBe("local");
+  });
+});
+
+describe("rateLimitPolicyForPath", () => {
+  it("aplica un límite más estricto a inicios de sesión y verificación MFA", () => {
+    expect(rateLimitPolicyForPath("/api/auth/login")).toEqual({
+      id: "auth-login",
+      limit: 10,
+      windowMs: 15 * 60_000,
+    });
+    expect(rateLimitPolicyForPath("/api/auth/mfa/verify").id).toBe("auth-mfa");
+    expect(rateLimitPolicyForPath("/api/portal-cliente/auth/login").id).toBe(
+      "auth-login",
+    );
+  });
+
+  it("limita por separado la generación de PDF y conserva el límite general", () => {
+    expect(rateLimitPolicyForPath("/api/documents/pdf").limit).toBe(20);
+    expect(rateLimitPolicyForPath("/api/payments").limit).toBe(300);
   });
 });

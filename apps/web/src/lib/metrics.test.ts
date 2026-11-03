@@ -27,8 +27,12 @@ describe("metrics", () => {
   });
 
   it("registra bloqueos por rate limit", () => {
-    metrics.recordRateLimited();
-    metrics.recordRateLimited();
-    expect(metrics.snapshot().rateLimited).toBe(2);
+    metrics.recordRateLimited("/api/auth/login");
+    metrics.recordRateLimited("/api/auth/login");
+    metrics.recordRateLimited("/api/payments");
+    const snapshot = metrics.snapshot();
+    expect(snapshot.rateLimited).toBe(3);
+    expect(snapshot.rateLimitedByRoute["api/auth"]).toBe(2);
+    expect(snapshot.rateLimitedByRoute["api/payments"]).toBe(1);
   });
 });

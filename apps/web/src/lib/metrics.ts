@@ -9,6 +9,7 @@ export interface MetricsSnapshot {
   requestsTotal: number;
   requestsByStatus: Record<string, number>;
   rateLimited: number;
+  rateLimitedByRoute: Record<string, number>;
   errors: number;
   byRoute: Record<string, number>;
 }
@@ -18,6 +19,7 @@ interface MetricsState {
   requestsTotal: number;
   requestsByStatus: Record<string, number>;
   rateLimited: number;
+  rateLimitedByRoute: Record<string, number>;
   errors: number;
   byRoute: Record<string, number>;
 }
@@ -32,6 +34,7 @@ function state(): MetricsState {
     requestsTotal: 0,
     requestsByStatus: {},
     rateLimited: 0,
+    rateLimitedByRoute: {},
     errors: 0,
     byRoute: {},
   };
@@ -56,8 +59,11 @@ export const metrics = {
     s.byRoute[route] = (s.byRoute[route] ?? 0) + 1;
     if (status >= 500) s.errors += 1;
   },
-  recordRateLimited(): void {
-    state().rateLimited += 1;
+  recordRateLimited(pathname: string): void {
+    const s = state();
+    s.rateLimited += 1;
+    const route = routeBucket(pathname);
+    s.rateLimitedByRoute[route] = (s.rateLimitedByRoute[route] ?? 0) + 1;
   },
   snapshot(): MetricsSnapshot {
     const s = state();
@@ -67,6 +73,7 @@ export const metrics = {
       requestsTotal: s.requestsTotal,
       requestsByStatus: { ...s.requestsByStatus },
       rateLimited: s.rateLimited,
+      rateLimitedByRoute: { ...s.rateLimitedByRoute },
       errors: s.errors,
       byRoute: { ...s.byRoute },
     };

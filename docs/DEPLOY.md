@@ -33,6 +33,54 @@ Si las variables de Upstash no están configuradas, el middleware usa un límite
 por proceso como fallback. Para producción con varias instancias se recomienda
 configurarlas; `REDIS_URL` continúa reservado para BullMQ del worker.
 
+### Rate limiting por tipo de ruta
+
+El middleware aplica límites por IP y ruta, compartidos entre instancias cuando
+Upstash está configurado:
+
+| Grupo | Límite |
+|-------|--------|
+| API general | 300 solicitudes por minuto por categoría de ruta |
+| Login (`/api/*/auth/login`) | 10 solicitudes cada 15 minutos |
+| Verificación MFA (`/api/auth/mfa/verify`) | 10 solicitudes cada 15 minutos |
+| Rutas con segmento `/pdf` | 20 solicitudes por minuto |
+
+Las rutas de login y operaciones PDF tienen contadores separados del límite general.
+Los endpoints de portal que ya tienen un limitador específico conservan también ese
+control. Una respuesta `429` incluye `Retry-After` y encabezados `X-RateLimit-*`.
+`GET /api/metrics` muestra el total de bloqueos y un desglose por categoría de ruta;
+los contadores de métricas son locales al proceso y no sustituyen la observabilidad
+persistente de Upstash.
+
+Antes de cambiar estos valores, revisar los `429` y los logs `rate_limited`; usuarios
+que comparten una IP pública también comparten el límite. Upstash debe configurarse
+como variables de entorno de runtime en el proveedor donde corre la aplicación, no
+solo como secretos del workflow de GitHub.
+
+### Cloudflare WAF (configuración externa)
+
+El repositorio no puede habilitar Cloudflare WAF por sí solo. Para que las reglas
+protejan el ERP, el dominio debe estar proxied por Cloudflare y el tráfico al origen
+debe pasar efectivamente por esa capa. En el panel de Cloudflare:
+
+1. Habilitar las reglas administradas de Cloudflare y el conjunto OWASP disponible
+   en el plan.
+2. Crear reglas de rate limiting para `POST /api/auth/login` y
+   `POST /api/auth/mfa/verify`, con umbral compatible con el límite de aplicación,
+   respuesta `429` y mitigación temporal. Mantener el login de clientes separado si
+   usa una ruta propia.
+3. Considerar reglas específicas para `/api/*/pdf` y endpoints de carga, evitando
+   bloquear webhooks legítimos o redes compartidas sin revisar primero sus patrones
+   de tráfico.
+4. Probar primero en modo de registro/preview cuando esté disponible; luego activar
+   bloqueo y revisar eventos de seguridad, falsos positivos y respuestas `429`.
+5. Confirmar que no se pueda llegar directamente al origen evitando Cloudflare.
+
+La IP de origen debe obtenerse de una cabecera que el proxy confiable sobrescriba;
+no se debe confiar en cabeceras enviadas por el cliente si el origen también es
+accesible directamente. La presencia de estas instrucciones no confirma que la zona,
+las reglas WAF o una IP de origen fija estén configuradas en producción.
+
 ## Puesta en marcha con Docker Compose (VPS / staging)
 
 ```bash

@@ -59,7 +59,7 @@ Leyenda: **✅ Cumplido** · **🟡 Parcial** · **🔴 Pendiente** · **❔ Req
 | SEC-052 Anti-manipulación logs | ✅ | Trigger `prevent_log_mutation` bloquea UPDATE/DELETE en `audit_events` y `activity_events` (también para el propietario); validado con prueba transaccional (rollback). | Migración `20261010120000_append_only_audit_logs.sql`. Export a destino separado: opcional futuro. |
 | SEC-053 Retención/eliminación | 🔴 | No existe política. | Definir por categoría. |
 | SEC-060 Validación de entradas | 🟡 | Zod en varias fronteras. `/api/health` devuelve `error.message` de la BD. | No filtrar errores internos; Zod en todas las rutas. |
-| SEC-061 Rate limiting | 🟡 | Middleware por IP (`middleware.ts:36-51`), Upstash opcional, fallback local. | Límites por endpoint (login/webhooks/PDF); confianza de proxy. |
+| SEC-061 Rate limiting | 🟡 | Límites distribuidos opcionales con Upstash y fallback local; políticas diferenciadas: API general 300/min, login y MFA 10/15 min, PDF 20/min. `/api/metrics` desglosa los bloqueos 429 por ruta. | Configurar Upstash en runtime, revisar falsos positivos; habilitar y validar Cloudflare WAF/Rate Limiting en la zona y asegurar confianza en IP del proxy. |
 | SEC-062 Worker/BullMQ | ❔ | Colas `pdf-generation`/`notifications`. Verificar Redis (TLS/auth) y payloads. | Restringir Redis; validar jobs; idempotencia. |
 | SEC-063 PDF | ❔ | Playwright/Chromium. | Aislar, limitar recursos, evitar SSRF local en plantillas. |
 | SEC-070 CI/CD | 🟡 | `ci.yml`: lint/typecheck/test/build/desktop + `permissions: contents: read` (mínimo) + job `security` con **gitleaks** (secretos, `.gitleaks.toml`) y **dependency-review**. Sin escaneo de imágenes; `deploy.yml` sigue ausente. | Añadir escaneo de imágenes y (si aplica) `deploy.yml`. |
