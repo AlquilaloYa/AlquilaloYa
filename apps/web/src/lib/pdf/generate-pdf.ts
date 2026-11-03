@@ -8,6 +8,10 @@ export interface PdfResult {
   filename: string;
 }
 
+export function isAllowedPdfResourceUrl(url: string): boolean {
+  return url === "about:blank" || url.startsWith("data:image/");
+}
+
 async function pdfFromHtml(html: string, filename: string): Promise<PdfResult> {
   const puppeteer = (await import("puppeteer-core")).default;
   const isVercel = process.env.VERCEL === "1";
@@ -30,6 +34,17 @@ async function pdfFromHtml(html: string, filename: string): Promise<PdfResult> {
     const page = await browser.newPage();
     // El HTML del contrato es editable por usuarios: no ejecutar scripts.
     await page.setJavaScriptEnabled(false);
+    await page.setRequestInterception(true);
+    page.on("request", (request) => {
+      const action = isAllowedPdfResourceUrl(request.url())
+        ? request.continue()
+        : request.abort("blockedbyclient");
+      void action.catch((error: unknown) => {
+        if (!page.isClosed()) {
+          console.error("No se pudo aplicar la política de recursos del PDF", error);
+        }
+      });
+    });
     await page.setContent(html, { waitUntil: "load" });
     const bytes = await page.pdf({
       format: "A4",

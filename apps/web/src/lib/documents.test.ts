@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { sha256Hex } from "./hash";
-import { buildDocumentStorageKey } from "./documents";
+import {
+  buildDocumentStorageKey,
+  buildUploadedDocumentStorageKey,
+} from "./documents";
 
 describe("sha256Hex", () => {
   it("calcula la huella sha256 conocida", () => {
@@ -28,5 +31,36 @@ describe("buildDocumentStorageKey", () => {
     expect(
       buildDocumentStorageKey("abc-123", "ADENDA", "ANG156-L1-ADD-1.pdf")
     ).toBe("abc-123/ADENDA/ANG156-L1-ADD-1.pdf");
+  });
+});
+
+describe("buildUploadedDocumentStorageKey", () => {
+  it("uses only validated server-side identifiers for the storage path", () => {
+    expect(
+      buildUploadedDocumentStorageKey(
+        "abc12345-1234-1234-1234-123456789012",
+        "VOUCHER_MENSUALIDAD",
+        "def12345-1234-1234-1234-123456789012"
+      )
+    ).toBe(
+      "abc12345-1234-1234-1234-123456789012/VOUCHER_MENSUALIDAD/def12345-1234-1234-1234-123456789012"
+    );
+  });
+
+  it("rejects path traversal in any storage key segment", () => {
+    expect(() =>
+      buildUploadedDocumentStorageKey(
+        "../../other-contract",
+        "VOUCHER_MENSUALIDAD",
+        "def12345-1234-1234-1234-123456789012"
+      )
+    ).toThrow("Identificador de almacenamiento no válido");
+    expect(() =>
+      buildUploadedDocumentStorageKey(
+        "abc12345-1234-1234-1234-123456789012",
+        "../CONTRATO_NOTARIADO",
+        "def12345-1234-1234-1234-123456789012"
+      )
+    ).toThrow("Tipo de documento no válido para almacenamiento");
   });
 });

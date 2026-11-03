@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 import { sha256Hex } from "@/lib/hash";
 import { uploadObject } from "@/lib/storage";
+import { buildUploadedDocumentStorageKey } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
 
@@ -43,8 +45,18 @@ export async function POST(request: Request, { params }: Ctx) {
     }
 
     const contractId = params.id;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(contractId)) {
+      return NextResponse.json(
+        { error: "Identificador de contrato no válido" },
+        { status: 400 }
+      );
+    }
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const storageKey = `${contractId}/${tipo}/${file.name}`;
+    const storageKey = buildUploadedDocumentStorageKey(
+      contractId,
+      tipo,
+      randomUUID()
+    );
     const sha = sha256Hex(bytes);
 
     let storedKey: string | null = null;

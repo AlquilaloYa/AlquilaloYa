@@ -31,6 +31,23 @@ export function buildDocumentStorageKey(
   return `${contractId}/${tipo}/${filename}`;
 }
 
+/** Clave aislada para cargas de usuarios; no incorpora el nombre del archivo. */
+export function buildUploadedDocumentStorageKey(
+  contractId: string,
+  tipo: string,
+  uploadId: string
+): string {
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(contractId) || !uuidPattern.test(uploadId)) {
+    throw new Error("Identificador de almacenamiento no válido");
+  }
+  if (!/^[A-Z_]+$/.test(tipo)) {
+    throw new Error("Tipo de documento no válido para almacenamiento");
+  }
+  return `${contractId}/${tipo}/${uploadId}`;
+}
+
 export interface RegisterDocumentInput {
   contractId: string;
   snapshotId: string;
