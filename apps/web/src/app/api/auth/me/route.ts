@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireUser } from "@/lib/session";
+import { applySessionCookies, isNativeMobileRequest } from "@/lib/supabase-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export async function GET(req: Request) {
     )
     .limit(1);
   const { id, email, name, role, additionalPermissions } = auth.user;
-  return NextResponse.json({
+  const response = NextResponse.json({
     user: {
       id,
       email,
@@ -32,4 +33,12 @@ export async function GET(req: Request) {
       additionalPermissions,
     },
   });
+  response.headers.set("Cache-Control", "no-store");
+  return auth.sessionTokens.refreshed
+    ? applySessionCookies(
+        response,
+        auth.sessionTokens.refreshed,
+        isNativeMobileRequest(req),
+      )
+    : response;
 }

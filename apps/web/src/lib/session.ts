@@ -2,7 +2,11 @@ import { AccessControl, Permission } from "@contract/domain/rbac";
 import type { UserRole } from "@contract/domain/rbac";
 import { mfaEnforce } from "@contract/config/env";
 import { NextResponse } from "next/server";
-import { resolveSession } from "@/lib/supabase-auth";
+import {
+  applySessionCookies,
+  isNativeMobileRequest,
+  resolveSession,
+} from "@/lib/supabase-auth";
 import { readSessionTokens } from "@/lib/session-cookies";
 import { isMfaPrivilegedRole } from "@/lib/mfa-policy";
 
@@ -58,30 +62,46 @@ export async function requireUser(
   if (!identity) {
     return { error: NextResponse.json({ error: "No autenticado" }, { status: 401 }) };
   }
+  const preserveRefreshedSession = (response: NextResponse) =>
+    identity.refreshed
+      ? applySessionCookies(
+          response,
+          identity.refreshed,
+          isNativeMobileRequest(req),
+        )
+      : response;
   const rawTokens = readSessionTokens(req);
   const rawAccessToken = rawTokens.accessToken;
   const accessToken = identity.refreshed?.access_token ?? rawAccessToken;
   if (!accessToken) {
-    return { error: NextResponse.json({ error: "No autenticado" }, { status: 401 }) };
+    return {
+      error: preserveRefreshedSession(
+        NextResponse.json({ error: "No autenticado" }, { status: 401 }),
+      ),
+    };
   }
   const user = await new dbModule.DrizzleUserRepository().findByEmail(identity.email);
   if (!user || user.active === false) {
     return {
-      error: NextResponse.json(
-        { error: "Usuario sin acceso al sistema" },
-        { status: 403 }
+      error: preserveRefreshedSession(
+        NextResponse.json(
+          { error: "Usuario sin acceso al sistema" },
+          { status: 403 },
+        ),
       ),
     };
   }
   // SEC-015: exigir MFA (AAL2) a roles privilegiados cuando está activado.
   if (mfaEnforce() && isMfaPrivilegedRole(user.role) && identity.aal !== "aal2") {
     return {
-      error: NextResponse.json(
-        {
-          error: "Se requiere autenticación de dos factores (MFA) para este rol",
-          code: "MFA_REQUIRED",
-        },
-        { status: 403 }
+      error: preserveRefreshedSession(
+        NextResponse.json(
+          {
+            error: "Se requiere autenticación de dos factores (MFA) para este rol",
+            code: "MFA_REQUIRED",
+          },
+          { status: 403 },
+        ),
       ),
     };
   }
