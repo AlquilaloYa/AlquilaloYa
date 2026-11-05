@@ -731,14 +731,6 @@ export default function PagosPage() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-headline-lg text-on-surface">Cobranza</h1>
-          <button
-            type="button"
-            onClick={() => setMostrarVerificacion(true)}
-            className="inline-flex items-center gap-2 rounded-md border border-primary px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
-          >
-            <ShieldCheck className="h-4 w-4" />
-            Verificación de pagos
-          </button>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -772,6 +764,17 @@ export default function PagosPage() {
             <div className="mt-1 font-headline-md text-on-surface">
               {moraGrupos.length}
             </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMostrarVerificacion(true)}
+            className="flex min-h-[116px] flex-col items-start justify-between rounded-xl border border-red-700 bg-red-600 p-4 text-left text-white transition-colors hover:bg-red-700"
+          >
+            <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
+              <ShieldCheck className="h-4 w-4" />
+              Verificación de pagos
+            </span>
+            <span className="font-headline-md">Revisar vouchers</span>
           </button>
           <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
             <div className="text-xs uppercase tracking-wider text-on-surface-variant">

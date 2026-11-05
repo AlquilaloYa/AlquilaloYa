@@ -7,6 +7,9 @@ import {
 } from "@/lib/supabase-auth";
 import { completeTotp } from "@/lib/mfa";
 import { buildSessionUser } from "@/lib/app-user";
+import { Permission } from "@contract/domain/rbac";
+import { requirePermission } from "@/lib/session";
+import { grantPaymentVerification } from "@/lib/payment-verification-session";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +30,14 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) as {
       factorId?: unknown;
       code?: unknown;
+      purpose?: unknown;
     };
     const factorId = typeof body.factorId === "string" ? body.factorId : "";
     const code = typeof body.code === "string" ? body.code.trim() : "";
+    const paymentVerification = body.purpose === "payment-verification";
+    if (body.purpose !== undefined && !paymentVerification) {
+      return NextResponse.json({ error: "Propósito de activación no válido" }, { status: 400 });
+    }
     if (!factorId || !code) {
       return NextResponse.json({ error: "Faltan factorId o código" }, { status: 400 });
     }
@@ -54,13 +62,18 @@ export async function POST(req: Request) {
     if (!user) {
       return NextResponse.json({ error: "Usuario sin acceso al sistema" }, { status: 403 });
     }
+    if (paymentVerification) {
+      const denied = requirePermission(user, Permission.CONTRACT_UPDATE);
+      if (denied) return denied;
+    }
 
     const res = NextResponse.json({ user }, { status: 200 });
     res.headers.set("Cache-Control", "no-store");
-    return applySessionCookies(res, {
+    const response = applySessionCookies(res, {
       access_token: tokens.access_token,
       ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
     }, native);
+    return paymentVerification ? grantPaymentVerification(response, user.id) : response;
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

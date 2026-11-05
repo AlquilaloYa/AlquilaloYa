@@ -3,12 +3,7 @@ import { eq } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
 import { recordAdminAction } from "@/lib/audit-log";
-import { completeTotp, listVerifiedTotp } from "@/lib/mfa";
-import {
-  applySessionCookies,
-  isNativeMobileRequest,
-  readSessionTokens,
-} from "@/lib/supabase-auth";
+import { hasPaymentVerification } from "@/lib/payment-verification-session";
 
 export const dynamic = "force-dynamic";
 
@@ -28,43 +23,21 @@ export async function POST(req: Request) {
     if ("error" in auth) return auth.error;
     const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
     if (denied) return denied;
-
-    const body = (await req.json().catch(() => ({}))) as {
-      paymentId?: unknown;
-      code?: unknown;
-    };
-    const paymentId = typeof body.paymentId === "string" ? body.paymentId : "";
-    const code = typeof body.code === "string" ? body.code.trim() : "";
-    if (!paymentId || !/^\d{6}$/.test(code)) {
+    if (!hasPaymentVerification(req, auth.user.id)) {
       return NextResponse.json(
-        { error: "Indica el pago y el código de 6 dígitos de tu app autenticadora" },
-        { status: 400 }
-      );
-    }
-
-    const { accessToken } = readSessionTokens(req);
-    if (!accessToken) {
-      return NextResponse.json({ error: "No hay una sesión activa" }, { status: 401 });
-    }
-    const factors = await listVerifiedTotp(accessToken);
-    const factor = factors[0];
-    if (!factor) {
-      return NextResponse.json(
-        {
-          error: "Activa una app autenticadora en Configuración > Seguridad para verificar pagos.",
-          code: "MFA_SETUP_REQUIRED",
-        },
+        { error: "La autorización venció. Cierra y vuelve a abrir la verificación de pagos." },
         { status: 403 }
       );
     }
 
-    let tokens;
-    try {
-      tokens = await completeTotp(accessToken, factor.id, code);
-    } catch {
+    const body = (await req.json().catch(() => ({}))) as {
+      paymentId?: unknown;
+    };
+    const paymentId = typeof body.paymentId === "string" ? body.paymentId : "";
+    if (!paymentId) {
       return NextResponse.json(
-        { error: "El código de la app autenticadora no es válido o ya venció." },
-        { status: 401 }
+        { error: "Indica el pago que deseas verificar." },
+        { status: 400 }
       );
     }
 
@@ -137,7 +110,7 @@ export async function POST(req: Request) {
       voucherVerificadoPor: auth.user.name,
     });
     response.headers.set("Cache-Control", "no-store");
-    return applySessionCookies(response, tokens, isNativeMobileRequest(req));
+    return response;
   } catch (error) {
     if (error instanceof VerificationError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
+import { hasPaymentVerification } from "@/lib/payment-verification-session";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,12 @@ export async function GET(req: Request) {
     if ("error" in auth) return auth.error;
     const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
     if (denied) return denied;
+    if (!hasPaymentVerification(req, auth.user.id)) {
+      return NextResponse.json(
+        { error: "Valida tu app autenticadora antes de ver los vouchers." },
+        { status: 403 }
+      );
+    }
 
     const month = new URL(req.url).searchParams.get("month") ?? "";
     const match = /^(\d{4})-(\d{2})$/.exec(month);

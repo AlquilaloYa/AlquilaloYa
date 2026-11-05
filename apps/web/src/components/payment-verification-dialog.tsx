@@ -8,6 +8,8 @@ import { apiFetch } from "@/lib/api";
 
 type Voucher = { nombre: string; url: string; monto?: number };
 type Responsable = "miguel" | "emely";
+type VerificationStep = "loading" | "code" | "enroll" | "payments";
+type EnrolledTotp = { factorId: string; qrCode: string; secret: string };
 
 type VerificationPayment = {
   id: string;
@@ -58,7 +60,9 @@ export function PaymentVerificationDialog({
   const [code, setCode] = useState("");
   const [busyPaymentId, setBusyPaymentId] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [mfaSetupRequired, setMfaSetupRequired] = useState(false);
+  const [step, setStep] = useState<VerificationStep>("loading");
+  const [enroll, setEnroll] = useState<EnrolledTotp | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,16 +103,81 @@ export function PaymentVerificationDialog({
   }, [month]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let active = true;
+    async function prepareVerification() {
+      try {
+        const statusResponse = await apiFetch("/api/auth/mfa", { cache: "no-store" });
+        const status: unknown = await statusResponse.json().catch(() => null);
+        if (!statusResponse.ok) {
+          throw new Error(
+            typeof status === "object" &&
+              status !== null &&
+              "error" in status &&
+              typeof status.error === "string"
+              ? status.error
+              : `Error ${statusResponse.status}`
+          );
+        }
+        if (
+          typeof status === "object" &&
+          status !== null &&
+          "enabled" in status &&
+          status.enabled === true
+        ) {
+          if (active) setStep("code");
+          return;
+        }
+
+        const enrollResponse = await apiFetch("/api/auth/mfa/enroll", { method: "POST" });
+        const enrollment: unknown = await enrollResponse.json().catch(() => null);
+        if (
+          !enrollResponse.ok ||
+          typeof enrollment !== "object" ||
+          enrollment === null ||
+          !("factorId" in enrollment) ||
+          typeof enrollment.factorId !== "string" ||
+          !("qrCode" in enrollment) ||
+          typeof enrollment.qrCode !== "string" ||
+          !("secret" in enrollment) ||
+          typeof enrollment.secret !== "string"
+        ) {
+          throw new Error(
+            typeof enrollment === "object" &&
+              enrollment !== null &&
+              "error" in enrollment &&
+              typeof enrollment.error === "string"
+              ? enrollment.error
+              : "No se pudo preparar la app autenticadora."
+          );
+        }
+        if (active) {
+          setEnroll({
+            factorId: enrollment.factorId,
+            qrCode: enrollment.qrCode,
+            secret: enrollment.secret,
+          });
+          setStep("enroll");
+        }
+      } catch (authFailure) {
+        if (active) {
+          setError(
+            authFailure instanceof Error
+              ? authFailure.message
+              : "No se pudo preparar la verificación."
+          );
+          setStep("code");
+        }
+      }
+    }
+    void prepareVerification();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+    if (step === "payments") void load();
+  }, [load, step]);
 
   const visiblePayments = useMemo(
     () => payments.filter((payment) => payment.responsable === responsable),
@@ -116,18 +185,13 @@ export function PaymentVerificationDialog({
   );
 
   async function verificar(payment: VerificationPayment) {
-    if (!/^\d{6}$/.test(code)) {
-      setError("Ingresa el código actual de 6 dígitos de tu app autenticadora.");
-      return;
-    }
     setBusyPaymentId(payment.id);
     setError("");
-    setMfaSetupRequired(false);
     try {
       const response = await apiFetch("/api/payments/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentId: payment.id, code }),
+        body: JSON.stringify({ paymentId: payment.id }),
       });
       const body: unknown = await response.json().catch(() => null);
       if (!response.ok) {
@@ -138,12 +202,6 @@ export function PaymentVerificationDialog({
           typeof body.error === "string"
             ? body.error
             : `Error ${response.status}`;
-        setMfaSetupRequired(
-          typeof body === "object" &&
-            body !== null &&
-            "code" in body &&
-            body.code === "MFA_SETUP_REQUIRED"
-        );
         throw new Error(responseError);
       }
       setPayments((current) =>
@@ -157,7 +215,6 @@ export function PaymentVerificationDialog({
             : item
         )
       );
-      setCode("");
       setActivePaymentId(null);
       onVerified();
     } catch (verificationError) {
@@ -171,17 +228,73 @@ export function PaymentVerificationDialog({
     }
   }
 
+  async function autorizar() {
+    if (!/^\d{6}$/.test(code)) {
+      setError("Ingresa el código de 6 dígitos de tu app autenticadora.");
+      return;
+    }
+    setAuthBusy(true);
+    setError("");
+    try {
+      const response = await apiFetch(
+        step === "enroll" ? "/api/auth/mfa/activate" : "/api/payments/verification/session",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            step === "enroll"
+              ? { factorId: enroll?.factorId, code, purpose: "payment-verification" }
+              : { code }
+          ),
+        }
+      );
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          typeof body === "object" &&
+            body !== null &&
+            "error" in body &&
+            typeof body.error === "string"
+            ? body.error
+            : `Error ${response.status}`
+        );
+      }
+      setCode("");
+      setStep("payments");
+    } catch (authorizationError) {
+      setError(
+        authorizationError instanceof Error
+          ? authorizationError.message
+          : "No se pudo validar el código."
+      );
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function cerrar() {
+    try {
+      const response = await apiFetch("/api/payments/verification/session", {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error(`No se pudo revocar la autorización (${response.status}).`);
+      }
+    } catch (closeError) {
+      console.error("Error al cerrar la autorización de verificación de pagos:", closeError);
+    }
+    onClose();
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-6"
-      onClick={onClose}
     >
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="payment-verification-title"
         className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-xl"
-        onClick={(event) => event.stopPropagation()}
       >
         <header className="flex flex-wrap items-start justify-between gap-3 border-b border-outline-variant/50 p-4 sm:p-5">
           <div>
@@ -189,18 +302,18 @@ export function PaymentVerificationDialog({
               Verificación de pagos
             </h2>
             <p className="mt-1 text-sm text-on-surface-variant">
-              Revisa los vouchers de los pagos registrados en el mes y confirma con tu token.
+              Revisa los vouchers de los pagos registrados en el mes.
             </p>
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => void cerrar()}
             aria-label="Cerrar"
             className="rounded p-1 text-on-surface-variant hover:bg-surface-container"
           >
             <X className="h-5 w-5" />
           </button>
-          <label className="flex items-center gap-2 text-sm font-medium">
+          {step === "payments" ? <label className="flex items-center gap-2 text-sm font-medium">
             Mes
             <input
               type="month"
@@ -214,10 +327,10 @@ export function PaymentVerificationDialog({
               }}
               className="rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-on-surface"
             />
-          </label>
+          </label> : null}
         </header>
 
-        <nav className="flex gap-2 border-b border-outline-variant/50 px-4 py-3" aria-label="Filtrar por responsable">
+        {step === "payments" ? <nav className="flex gap-2 border-b border-outline-variant/50 px-4 py-3" aria-label="Filtrar por responsable">
           {RESPONSABLES.map((item) => {
             const count = payments.filter(
               (payment) => payment.responsable === item.key
@@ -244,9 +357,75 @@ export function PaymentVerificationDialog({
               </button>
             );
           })}
-        </nav>
+        </nav> : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+          {step !== "payments" ? (
+            <div className="mx-auto max-w-md space-y-4 py-5">
+              {step === "loading" ? (
+                <p className="flex items-center justify-center gap-2 py-6 text-sm text-on-surface-variant" role="status">
+                  <RefreshCw className="h-4 w-4 animate-spin" /> Preparando la verificación...
+                </p>
+              ) : (
+                <>
+                  {step === "enroll" && enroll ? (
+                    <div className="space-y-3 text-center">
+                      <p className="text-sm text-on-surface-variant">
+                        Escanea este código QR con Google Authenticator u otra app autenticadora.
+                      </p>
+                      <Image
+                        src={enroll.qrCode}
+                        alt="Código QR para vincular la app autenticadora"
+                        width={208}
+                        height={208}
+                        unoptimized
+                        className="mx-auto h-52 w-52 rounded-md border border-outline-variant bg-white p-2"
+                      />
+                      <p className="break-all rounded-md bg-surface-container p-2 font-mono text-xs text-on-surface">
+                        Clave manual: {enroll.secret}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-on-surface-variant">
+                      Ingresa el código de tu app autenticadora para ver los vouchers del mes.
+                    </p>
+                  )}
+                  {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void autorizar();
+                    }}
+                    className="space-y-3"
+                  >
+                    <label className="block text-sm font-medium text-on-surface" htmlFor="verification-auth-code">
+                      {step === "enroll" ? "Código de activación" : "Código de verificación"}
+                    </label>
+                    <input
+                      id="verification-auth-code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      value={code}
+                      onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="000000"
+                      className="w-full rounded-md border border-outline-variant bg-surface-container-lowest px-3 py-2 font-mono tracking-widest text-on-surface"
+                    />
+                    <button
+                      type="submit"
+                      disabled={authBusy || code.length !== 6 || (step === "enroll" && !enroll)}
+                      className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {authBusy ? "Validando..." : step === "enroll" ? "Activar y continuar" : "Ver vouchers"}
+                    </button>
+                  </form>
+                </>
+              )}
+            </div>
+          ) : (
+            <>
           {loading ? (
             <p className="flex items-center justify-center gap-2 py-10 text-sm text-on-surface-variant" role="status">
               <RefreshCw className="h-4 w-4 animate-spin" /> Cargando pagos...
@@ -357,57 +536,28 @@ export function PaymentVerificationDialog({
                           : ""}
                       </p>
                     ) : selected ? (
-                      <div className="mt-4 rounded-md bg-surface-container p-3">
-                        <label className="block text-sm font-medium text-on-surface" htmlFor={`payment-code-${payment.id}`}>
-                          Token de la app autenticadora
-                        </label>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <input
-                            id={`payment-code-${payment.id}`}
-                            type="text"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            pattern="[0-9]{6}"
-                            maxLength={6}
-                            value={code}
-                            onChange={(event) =>
-                              setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                            }
-                            placeholder="000000"
-                            className="w-32 rounded-md border border-outline-variant bg-surface-container-lowest px-3 py-2 font-mono tracking-widest text-on-surface"
-                          />
+                        <div className="mt-4 rounded-md bg-surface-container p-3">
+                          {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
                           <button
                             type="button"
                             onClick={() => void verificar(payment)}
-                            disabled={busyPaymentId === payment.id || code.length !== 6}
+                            disabled={busyPaymentId === payment.id}
                             className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {busyPaymentId === payment.id ? "Verificando..." : "Confirmar"}
+                            {busyPaymentId === payment.id ? "Verificando..." : "Confirmar verificación"}
                           </button>
-                        </div>
-                        {error ? (
-                          <p role="alert" className="mt-2 text-sm text-destructive">
-                            {error}
+                          <p className="mt-2 flex items-center gap-1 text-xs text-on-surface-variant">
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                            La autorización se valida al abrir el panel.
                           </p>
-                        ) : null}
-                        {mfaSetupRequired ? (
-                          <Link
-                            href="/configuraciones/seguridad"
-                            className="mt-2 inline-block text-sm text-primary underline"
-                          >
-                            Configurar app autenticadora
-                          </Link>
-                        ) : null}
-                        <p className="mt-2 flex items-center gap-1 text-xs text-on-surface-variant">
-                          <ShieldCheck className="h-3.5 w-3.5" />
-                          El token se valida con MFA y no se almacena.
-                        </p>
                       </div>
                     ) : null}
                   </li>
                 );
               })}
             </ul>
+          )}
+            </>
           )}
         </div>
       </section>

@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
   try {
-    const enrolled = await enrollTotp(accessToken);
+    const enrolled = await enrollTotp(accessToken, identity.email);
     const response = NextResponse.json(enrolled);
     response.headers.set("Cache-Control", "no-store");
     return response;

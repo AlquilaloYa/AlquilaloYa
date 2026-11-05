@@ -1,5 +1,6 @@
 import { supabaseAnonKey, supabaseUrl } from "@contract/config/env";
-import { normalizeTotpQrCode } from "./mfa-qr";
+import QRCode from "qrcode";
+import { createTotpUri } from "./mfa-qr";
 
 /**
  * Multi-Factor Authentication (TOTP) contra Supabase Auth por REST — sin SDK,
@@ -73,7 +74,10 @@ export async function listVerifiedTotp(accessToken: string): Promise<TotpFactor[
 }
 
 /** Inicia el enrolamiento de un factor TOTP (devuelve QR y secreto). */
-export async function enrollTotp(accessToken: string): Promise<EnrolledTotp> {
+export async function enrollTotp(
+  accessToken: string,
+  accountEmail: string
+): Promise<EnrolledTotp> {
   const factorsResponse = await call(accessToken, "/user");
   if (!factorsResponse.ok) throw new Error(await readError(factorsResponse));
   const factorsData = (await factorsResponse.json()) as {
@@ -105,14 +109,19 @@ export async function enrollTotp(accessToken: string): Promise<EnrolledTotp> {
   if (!res.ok) throw new Error(await readError(res));
   const data = (await res.json()) as {
     id?: string;
-    totp?: { qr_code?: string; secret?: string };
+    totp?: { secret?: string };
   };
-  if (!data.id || !data.totp?.qr_code || !data.totp.secret) {
+  if (!data.id || !data.totp?.secret) {
     throw new Error("Respuesta de enrolamiento inválida");
   }
+  const uri = createTotpUri(accountEmail, data.totp.secret);
   return {
     factorId: data.id,
-    qrCode: normalizeTotpQrCode(data.totp.qr_code),
+    qrCode: await QRCode.toDataURL(uri, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      width: 256,
+    }),
     secret: data.totp.secret,
   };
 }
