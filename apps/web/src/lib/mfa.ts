@@ -87,10 +87,11 @@ export async function enrollTotp(
       status?: string;
     }>;
   };
-  if (!Array.isArray(factorsData.factors)) {
+  const userFactors = factorsData.factors ?? [];
+  if (!Array.isArray(userFactors)) {
     throw new Error("Respuesta de factores MFA inválida");
   }
-  const pendingFactors = factorsData.factors.filter(
+  const pendingFactors = userFactors.filter(
     (
       factor,
     ): factor is { id: string; factor_type?: string; status?: string } =>
