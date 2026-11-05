@@ -34,7 +34,7 @@ const VISTAS = [
 const CATEGORIAS: { key: Categoria; label: string; corto: string }[] = [
   { key: "mensualidad", label: "Mensualidad", corto: "Mensualidad" },
   { key: "mantenimiento", label: "Mantenimiento", corto: "Mantenimiento" },
-  { key: "penalidad", label: "Penalidades", corto: "Penal." },
+  { key: "penalidad", label: "Penalidades (aparte)", corto: "Penal. aparte" },
 ];
 
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -253,12 +253,21 @@ export default function AnaliticasPage() {
                   ) : null}
                 </CardHeader>
                 <CardContent className="space-y-1 pt-4 text-sm">
-                  {CATEGORIAS.map((item) => (
+                  {CATEGORIAS.filter((item) => item.key !== "penalidad").map((item) => (
                     <div key={item.key} className="flex items-center justify-between gap-2">
                       <span className="text-muted-foreground">{item.label}</span>
                       <span className="font-medium tabular-nums">{money(totalDe(persona.key, item.key))}</span>
                     </div>
                   ))}
+                  <div
+                    className="flex items-center justify-between gap-2 border-t border-border pt-2 text-muted-foreground"
+                    aria-label="Penalidades mostradas aparte y excluidas de las ganancias"
+                  >
+                    <span>Penalidades · no suman a ganancias</span>
+                    <span className="font-medium tabular-nums">
+                      {money(totalDe(persona.key, "penalidad"))}
+                    </span>
+                  </div>
                 </CardContent>
               </Card>
             );

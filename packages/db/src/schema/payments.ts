@@ -13,7 +13,13 @@ import {
 } from "drizzle-orm/pg-core";
 import { contracts } from "./contracts";
 
-export type PaymentVoucher = { nombre: string; url: string; monto?: number };
+export type PaymentVoucher = {
+  nombre: string;
+  url: string;
+  monto?: number;
+  verificadoEn?: string;
+  verificadoPor?: string;
+};
 
 /**
  * Registro de pagos mensuales de un contrato (Fase 3 - pagos).

@@ -98,6 +98,16 @@ export async function GET(req: Request) {
       rows.map((p) => ({
         ...p,
         voucherUrl: contractId ? p.voucherUrl : null,
+        voucherVerificadoEn:
+          p.vouchers.length > 0 &&
+          p.vouchers.every((voucher) => Boolean(voucher.verificadoEn))
+            ? p.vouchers[0]?.verificadoEn ?? null
+            : null,
+        voucherVerificadoPor:
+          p.vouchers.length > 0 &&
+          p.vouchers.every((voucher) => Boolean(voucher.verificadoEn))
+            ? p.vouchers[0]?.verificadoPor ?? null
+            : null,
         periodo: toDateStr(p.periodo),
         fechaPago: p.fechaPago ? toDateStr(p.fechaPago) : null,
       }))
@@ -330,7 +340,7 @@ export async function PATCH(req: Request) {
                 { nombre: patch.voucherNombre, url: patch.voucherUrl },
               ])
             : Array.isArray(existente?.vouchers) && existente.vouchers.length > 0
-              ? existente.vouchers
+              ? normalizarVouchers(existente.vouchers)
               : existente?.voucherUrl
                 ? normalizarVouchers([
                     { nombre: existente.voucherNombre ?? "", url: existente.voucherUrl },

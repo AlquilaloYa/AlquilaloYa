@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { RefreshCw, X } from "lucide-react";
+import { RefreshCw, ShieldCheck, X } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
+import { PaymentVerificationDialog } from "@/components/payment-verification-dialog";
 import { CobranzaVendedores } from "@/components/cobranza-vendedores";
 import { CobranzaServiciosExtras } from "@/components/cobranza-servicios-extras";
 import { apiFetch } from "@/lib/api";
@@ -31,6 +32,8 @@ type PaymentRow = {
   fechaPago: string | null;
   voucherNombre: string | null;
   vouchers?: PaymentVoucher[];
+  voucherVerificadoEn?: string | null;
+  voucherVerificadoPor?: string | null;
 };
 
 type ContractRow = {
@@ -438,6 +441,7 @@ export default function PagosPage() {
   const [busqueda, setBusqueda] = useState("");
   const [abono, setAbono] = useState<{ fila: CuotaFila; modo: AbonoModo } | null>(null);
   const [mora, setMora] = useState(false);
+  const [mostrarVerificacion, setMostrarVerificacion] = useState(false);
   const [sortKey, setSortKey] = useState<"cuota" | "contrato" | "cliente" | "departamento" | "total" | "internet" | "luzEx" | "extras" | "estado" | "morosidad" | "penalidad" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
@@ -725,7 +729,17 @@ export default function PagosPage() {
   return (
     <DashboardShell>
       <div className="space-y-6">
-        <h1 className="font-headline-lg text-on-surface">Cobranza</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="font-headline-lg text-on-surface">Cobranza</h1>
+          <button
+            type="button"
+            onClick={() => setMostrarVerificacion(true)}
+            className="inline-flex items-center gap-2 rounded-md border border-primary px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            Verificación de pagos
+          </button>
+        </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
@@ -908,10 +922,18 @@ export default function PagosPage() {
                         {f.extras > 0 ? moneda(f.extras) : "—"}
                       </td>
                       <td className="px-3 py-2">
-                        <span className="inline-flex items-center gap-1.5 font-label-md">
-                          <span className={`h-1.5 w-1.5 rounded-full ${meta.cls}`} />
-                          {meta.label}
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="inline-flex items-center gap-1.5 font-label-md">
+                            <span className={`h-1.5 w-1.5 rounded-full ${meta.cls}`} />
+                            {meta.label}
+                          </span>
+                          {f.pago?.voucherVerificadoEn ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                              <ShieldCheck className="h-3.5 w-3.5" />
+                              Pago verificado
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-3 py-2">
                         {f.estadoPago === "PAGADO" || f.estadoPago === "FINALIZADO" ? (
@@ -993,6 +1015,13 @@ export default function PagosPage() {
 
         {mora ? (
           <MoraModal grupos={moraGrupos} onClose={() => setMora(false)} />
+        ) : null}
+
+        {mostrarVerificacion ? (
+          <PaymentVerificationDialog
+            onClose={() => setMostrarVerificacion(false)}
+            onVerified={() => void load()}
+          />
         ) : null}
       </div>
     </DashboardShell>
