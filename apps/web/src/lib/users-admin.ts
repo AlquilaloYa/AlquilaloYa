@@ -55,9 +55,9 @@ export async function findAuthUserByEmail(
   return id ? { id } : null;
 }
 
-export async function replaceAuthUserTotpFactor(
+async function removeAuthUserTotpFactors(
   userId: string,
-  keepFactorId: string
+  keepFactorId?: string
 ): Promise<number> {
   const url = supabaseUrl();
   if (!url || !isUsersAdminConfigured()) {
@@ -98,6 +98,17 @@ export async function replaceAuthUserTotpFactor(
     }
   }
   return obsoleteFactorIds.length;
+}
+
+export async function removeAllAuthUserTotpFactors(userId: string): Promise<number> {
+  return removeAuthUserTotpFactors(userId);
+}
+
+export async function replaceAuthUserTotpFactor(
+  userId: string,
+  keepFactorId: string
+): Promise<number> {
+  return removeAuthUserTotpFactors(userId, keepFactorId);
 }
 
 /** Actualiza email + contraseña en Supabase Auth (si la credencial existe). */

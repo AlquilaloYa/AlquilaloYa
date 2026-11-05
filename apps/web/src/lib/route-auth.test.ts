@@ -24,6 +24,7 @@ const PUBLIC_ROUTES = new Set<string>([
   "auth/mfa/route.ts",
   "auth/mfa/activate/route.ts",
   "auth/mfa/enroll/route.ts",
+  "auth/mfa/recover/route.ts",
   "auth/mfa/verify/route.ts",
   // Portal de clientes: autenticación propia y sesión validada por contrato.
   "portal-cliente/auth/login/route.ts",

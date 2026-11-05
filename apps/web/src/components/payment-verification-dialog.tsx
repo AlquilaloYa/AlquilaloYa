@@ -8,7 +8,7 @@ import { apiFetch } from "@/lib/api";
 
 type Voucher = { nombre: string; url: string; monto?: number };
 type Responsable = "miguel" | "emely";
-type VerificationStep = "loading" | "code" | "enroll" | "payments";
+type VerificationStep = "loading" | "code" | "recover" | "enroll" | "payments";
 type EnrolledTotp = { factorId: string; qrCode: string; secret: string };
 type EnrollmentPurpose = "payment-verification" | "replace-lost-factor";
 
@@ -59,6 +59,7 @@ export function PaymentVerificationDialog({
   const [loadError, setLoadError] = useState("");
   const [activePaymentId, setActivePaymentId] = useState<string | null>(null);
   const [code, setCode] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
   const [busyPaymentId, setBusyPaymentId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [step, setStep] = useState<VerificationStep>("loading");
@@ -276,10 +277,18 @@ export function PaymentVerificationDialog({
   }
 
   async function iniciarRecuperacion() {
+    if (!recoveryPassword) {
+      setError("Ingresa tu contraseña para recuperar el autenticador.");
+      return;
+    }
     setAuthBusy(true);
     setError("");
     try {
-      const response = await apiFetch("/api/auth/mfa/enroll", { method: "POST" });
+      const response = await apiFetch("/api/auth/mfa/recover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: recoveryPassword }),
+      });
       const body: unknown = await response.json().catch(() => null);
       if (
         !response.ok ||
@@ -316,6 +325,7 @@ export function PaymentVerificationDialog({
           : "No se pudo iniciar la recuperación del autenticador."
       );
     } finally {
+      setRecoveryPassword("");
       setAuthBusy(false);
     }
   }
@@ -416,11 +426,39 @@ export function PaymentVerificationDialog({
                 </p>
               ) : (
                 <>
-                  {step === "enroll" && enroll ? (
+                  {step === "recover" ? (
+                    <div className="space-y-3">
+                      <p className="text-sm text-on-surface-variant">
+                        Para generar un QR nuevo, confirma la contraseña de tu cuenta. Esto quitará el autenticador anterior.
+                      </p>
+                      <label className="block text-sm font-medium text-on-surface" htmlFor="verification-recovery-password">
+                        Contraseña de la cuenta
+                      </label>
+                      <input
+                        id="verification-recovery-password"
+                        type="password"
+                        autoComplete="current-password"
+                        value={recoveryPassword}
+                        onChange={(event) => setRecoveryPassword(event.target.value)}
+                        className="w-full rounded-md border border-outline-variant bg-surface-container-lowest px-3 py-2 text-on-surface"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRecoveryPassword("");
+                          setError("");
+                          setStep("code");
+                        }}
+                        className="text-sm font-medium text-primary underline"
+                      >
+                        Volver
+                      </button>
+                    </div>
+                  ) : step === "enroll" && enroll ? (
                     <div className="space-y-3 text-center">
                       <p className="text-sm text-on-surface-variant">
                         {enrollmentPurpose === "replace-lost-factor"
-                          ? "Escanea este nuevo QR. Al confirmar el código, reemplazará el autenticador anterior."
+                          ? "Escanea este nuevo QR y confirma el código para activar tu autenticador."
                           : "Escanea este código QR con Google Authenticator u otra app autenticadora."}
                       </p>
                       <Image
@@ -442,16 +480,35 @@ export function PaymentVerificationDialog({
                       </p>
                       <button
                         type="button"
-                        onClick={() => void iniciarRecuperacion()}
+                        onClick={() => {
+                          setError("");
+                          setStep("recover");
+                        }}
                         disabled={authBusy}
                         className="text-sm font-medium text-primary underline disabled:opacity-50"
                       >
-                        {authBusy ? "Preparando nuevo autenticador..." : "No tengo acceso al código"}
+                        No tengo acceso al código
                       </button>
                     </div>
                   )}
                   {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-                  <form
+                  {step === "recover" ? (
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void iniciarRecuperacion();
+                      }}
+                      className="space-y-3"
+                    >
+                      <button
+                        type="submit"
+                        disabled={authBusy || !recoveryPassword}
+                        className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {authBusy ? "Generando QR nuevo..." : "Confirmar y generar QR"}
+                      </button>
+                    </form>
+                  ) : <form
                     onSubmit={(event) => {
                       event.preventDefault();
                       void autorizar();
@@ -480,7 +537,7 @@ export function PaymentVerificationDialog({
                     >
                       {authBusy ? "Validando..." : step === "enroll" ? "Activar y continuar" : "Ver vouchers"}
                     </button>
-                  </form>
+                  </form>}
                 </>
               )}
             </div>
