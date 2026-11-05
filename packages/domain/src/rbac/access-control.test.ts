@@ -28,6 +28,7 @@ describe("AccessControl", () => {
     expect(ac.can(P.WEB_CONTENT_READ)).toBe(false);
     expect(ac.can(P.MARKETING_READ)).toBe(true);
     expect(ac.can(P.WEB_CONTENT_UPDATE)).toBe(false);
+    expect(ac.can(P.AGENDA_CREATE)).toBe(true);
     expect(ac.can(P.CLIENT_CREATE)).toBe(false);
     expect(ac.can(P.CLIENT_UPDATE)).toBe(false);
     expect(ac.can(P.ATTENDANCE_READ)).toBe(false);
@@ -35,6 +36,11 @@ describe("AccessControl", () => {
     expect(ac.can(P.PERMISSION_REQUEST_CREATE)).toBe(true);
     expect(ac.can(P.WORK_ORDER_MATERIAL_RECORD)).toBe(true);
     expect(ac.can(P.WORK_ORDER_UPDATE)).toBe(false);
+  });
+
+  it("RRHH no puede agendar citas sin permiso individual", () => {
+    const ac = AccessControl.forRole("RRHH");
+    expect(ac.can(P.AGENDA_CREATE)).toBe(false);
   });
 
   it("MARKETING solo lee marketing (ningún otro módulo)", () => {

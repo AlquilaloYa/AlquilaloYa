@@ -20,19 +20,21 @@ function monthRange(): { min: Date; max: Date } {
 
 /** GET /api/agenda — estado de conexion + eventos de Google del rango indicado. */
 export async function GET(req: Request) {
+  let canCreate = false;
   try {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(auth.user, Permission.CLIENT_READ);
     if (denied) return denied;
+    canCreate = requirePermission(auth.user, Permission.AGENDA_CREATE) === null;
 
     if (!isGcalEnabled()) {
-      return NextResponse.json({ configured: false, connected: false, events: [] });
+      return NextResponse.json({ configured: false, connected: false, canCreate, events: [] });
     }
     const stored = await getToken(auth.user.email);
     if (!stored) {
-      return NextResponse.json({ configured: true, connected: false, events: [] });
+      return NextResponse.json({ configured: true, connected: false, canCreate, events: [] });
     }
 
     const url = new URL(req.url);
@@ -42,10 +44,10 @@ export async function GET(req: Request) {
 
     const { token, calendarId } = await getValidAccessToken(auth.user.email);
     const events = await listEvents(token, calendarId, timeMin, timeMax);
-    return NextResponse.json({ configured: true, connected: true, events });
+    return NextResponse.json({ configured: true, connected: true, canCreate, events });
   } catch (error) {
     if (error instanceof GcalNotConnected) {
-      return NextResponse.json({ configured: true, connected: false, events: [] });
+      return NextResponse.json({ configured: true, connected: false, canCreate, events: [] });
     }
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
@@ -57,7 +59,7 @@ export async function POST(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user, Permission.CLIENT_CREATE);
+    const denied = requirePermission(auth.user, Permission.AGENDA_CREATE);
     if (denied) return denied;
 
     const body = (await req.json()) as {

@@ -47,6 +47,7 @@ El Asistente Administrativo tiene permisos de lectura para:
 - Módulos de Marketing y consulta de Google SyS.
 
 También puede crear solicitudes propias de permisos/vacaciones de RR. HH., pedir autorización para cambios y registrar materiales en órdenes de trabajo asignadas.
+Además, puede agendar citas en su calendario personal desde **Agenda** cuando conecte su cuenta de Google. Este permiso no habilita la creación de clientes ni permite modificar o eliminar citas.
 
 ### Acciones contractuales que requieren autorización adicional
 

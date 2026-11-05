@@ -13,7 +13,7 @@ import type { UserRole } from "./role";
  * - RRHH: solo lectura sobre la operación (no crea, no edita, no elimina);
  *   si quiere modificar algo pide permiso al Developer.
  * - ASISTENTE_ADMINISTRATIVO: igual que RRHH, con acceso de lectura además a
- *   Google SyS y Marketing.
+ *   Google SyS y Marketing, y permiso para agendar citas.
  * - MARKETING: solo lectura y solo del módulo de marketing (no crea, no edita).
  */
 
@@ -48,6 +48,7 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
   ASISTENTE_ADMINISTRATIVO: new Set([
     ...BASE_OPERATIVO,
     P.MARKETING_READ,
+    P.AGENDA_CREATE,
     P.PERMISSION_REQUEST_CREATE,
     P.WORK_ORDER_MATERIAL_RECORD,
   ]),

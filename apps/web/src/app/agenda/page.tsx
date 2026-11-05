@@ -49,6 +49,7 @@ function fmtHora(ev: GEvent): string {
 export default function AgendaPage() {
   const [configured, setConfigured] = useState(true);
   const [connected, setConnected] = useState(false);
+  const [canCreate, setCanCreate] = useState(false);
   const [events, setEvents] = useState<GEvent[]>([]);
   const [, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,9 +75,15 @@ export default function AgendaPage() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? `Error ${res.status}`);
       }
-      const data = (await res.json()) as { configured: boolean; connected: boolean; events: GEvent[] };
+      const data = (await res.json()) as {
+        configured: boolean;
+        connected: boolean;
+        canCreate: boolean;
+        events: GEvent[];
+      };
       setConfigured(data.configured);
       setConnected(data.connected);
+      setCanCreate(data.canCreate);
       setEvents(data.events ?? []);
     } catch (e) {
       setError((e as Error).message);
@@ -226,13 +233,15 @@ export default function AgendaPage() {
                 <RefreshCw className="h-4 w-4" />
                 Refrescar
               </button>
-              <button
-                onClick={openCreate}
-                className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground hover:opacity-90"
-              >
-                <Plus className="h-4 w-4" />
-                Nueva cita
-              </button>
+              {canCreate ? (
+                <button
+                  onClick={openCreate}
+                  className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground hover:opacity-90"
+                >
+                  <Plus className="h-4 w-4" />
+                  Nueva cita
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>
