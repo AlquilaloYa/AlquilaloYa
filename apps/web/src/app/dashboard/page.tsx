@@ -455,7 +455,10 @@ function ProximosAVencerBox({
           const enProceso = salvando === p.id;
           const whatsapp = numeroWhatsApp(p.telefono, p.codigoPais);
           return (
-            <li key={p.id} className="flex flex-wrap items-center gap-3 py-2">
+            <li
+              key={p.id}
+              className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-4"
+            >
               {whatsapp ? (
                 <a
                   href={`https://wa.me/${whatsapp}`}
@@ -472,57 +475,59 @@ function ProximosAVencerBox({
               ) : null}
               <Link
                 href={`/contratos/${p.id}`}
-                className="min-w-0 flex-1 font-body-sm text-on-surface hover:text-primary hover:underline"
+                className="min-w-0 break-words font-body-sm text-on-surface [overflow-wrap:anywhere] hover:text-primary hover:underline"
               >
                 <span className="font-semibold">{p.codigoContrato}</span>
                 {" · "}
                 {p.cliente}
                 {p.departamento ? ` · ${p.departamento}` : ""}
               </Link>
-              <span className="text-xs text-on-surface-variant">
-                vence el{" "}
-                {new Date(`${p.fechaFin}T12:00:00`).toLocaleDateString("es-PE")}
-              </span>
-              <label className="flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                <input
-                  type="checkbox"
-                  checked={marcado}
-                  onChange={(e) =>
-                    void guardar(p.id, e.target.checked, e.target.checked ? "12" : "")
-                  }
-                  className="h-3.5 w-3.5 accent-emerald-600"
-                />
-                Renueva
-              </label>
-              <label className="flex items-center gap-1 text-xs font-medium text-destructive">
-                <input
-                  type="checkbox"
-                  checked={noMarcado}
-                  onChange={(e) =>
-                    void guardar(p.id, false, e.target.checked ? "" : "12")
-                  }
-                  className="h-3.5 w-3.5 accent-destructive"
-                />
-                No renueva
-              </label>
-              {marcado ? (
-                <label className="flex items-center gap-1 text-xs text-on-surface-variant">
-                  <span>Renueva por</span>
+              <div className="col-start-2 grid grid-cols-2 items-center gap-x-3 gap-y-2 text-xs sm:col-start-auto sm:flex sm:flex-wrap sm:justify-end">
+                <span className="col-span-2 text-on-surface-variant sm:col-span-1">
+                  Vence el{" "}
+                  {new Date(`${p.fechaFin}T12:00:00`).toLocaleDateString("es-PE")}
+                </span>
+                <label className="flex items-center gap-1 whitespace-nowrap font-medium text-emerald-700 dark:text-emerald-300">
                   <input
-                    type="number"
-                    min={1}
-                    max={60}
-                    value={meses}
-                    onChange={(e) => setGuardados((prev) => ({ ...prev, [p.id]: { renueva: true, meses: e.target.value } }))}
-                    onBlur={(e) => void guardar(p.id, true, e.target.value)}
-                    className="w-14 rounded border border-outline-variant bg-surface-container-lowest px-1 py-0.5 text-center text-xs text-on-surface focus:border-primary focus:outline-none"
+                    type="checkbox"
+                    checked={marcado}
+                    onChange={(e) =>
+                      void guardar(p.id, e.target.checked, e.target.checked ? "12" : "")
+                    }
+                    className="h-3.5 w-3.5 accent-emerald-600"
                   />
-                  <span>meses</span>
+                  Renueva
                 </label>
-              ) : null}
-              {enProceso ? (
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-outline border-t-primary" />
-              ) : null}
+                <label className="flex items-center gap-1 whitespace-nowrap font-medium text-destructive">
+                  <input
+                    type="checkbox"
+                    checked={noMarcado}
+                    onChange={(e) =>
+                      void guardar(p.id, false, e.target.checked ? "" : "12")
+                    }
+                    className="h-3.5 w-3.5 accent-destructive"
+                  />
+                  No renueva
+                </label>
+                {marcado ? (
+                  <label className="col-span-2 flex items-center gap-1 text-on-surface-variant sm:col-span-1">
+                    <span>Renueva por</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={meses}
+                      onChange={(e) => setGuardados((prev) => ({ ...prev, [p.id]: { renueva: true, meses: e.target.value } }))}
+                      onBlur={(e) => void guardar(p.id, true, e.target.value)}
+                      className="w-14 rounded border border-outline-variant bg-surface-container-lowest px-1 py-0.5 text-center text-xs text-on-surface focus:border-primary focus:outline-none"
+                    />
+                    <span>meses</span>
+                  </label>
+                ) : null}
+                {enProceso ? (
+                  <span className="col-span-2 h-3 w-3 animate-spin rounded-full border-2 border-outline border-t-primary sm:col-span-1" />
+                ) : null}
+              </div>
             </li>
           );
         })}

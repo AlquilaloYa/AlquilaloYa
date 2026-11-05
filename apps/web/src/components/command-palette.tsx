@@ -189,12 +189,15 @@ export function CommandPalette({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-10 w-full max-w-md items-center gap-2 rounded-lg border bg-surface-container-lowest px-3 text-sm text-muted-foreground transition hover:bg-muted"
+        className="flex h-10 w-full min-w-0 max-w-md items-center gap-2 overflow-hidden rounded-lg border bg-surface-container-lowest px-3 text-sm text-muted-foreground transition hover:bg-muted"
         aria-label="Buscar en el sistema"
+        title="Buscar en el sistema"
       >
-        <Search className="h-4 w-4" />
-        <span className="flex-1 text-left">Buscar en el sistema...</span>
-        <kbd className="hidden rounded border px-1.5 text-[10px] font-medium sm:inline">
+        <Search className="h-4 w-4 shrink-0" />
+        <span className="hidden min-w-0 flex-1 truncate text-left sm:block">
+          Buscar en el sistema...
+        </span>
+        <kbd className="ml-auto hidden shrink-0 rounded border px-1.5 text-[10px] font-medium sm:inline">
           Ctrl K
         </kbd>
       </button>
