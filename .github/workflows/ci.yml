@@ -144,5 +144,19 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build desktop
+        if: runner.os != 'Windows'
         working-directory: apps/desktop
         run: pnpm tauri build
+
+      - name: Build custom Windows installer
+        if: runner.os == 'Windows'
+        working-directory: apps/desktop
+        run: pnpm build:windows
+
+      - name: Upload Windows installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: alquilaya-erp-windows
+          path: apps/desktop/src-tauri/target/release/bundle/nsis/AlquilaYa ERP_instalador-personalizado.exe
+          if-no-files-found: error

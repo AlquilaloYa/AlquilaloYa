@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { desc, eq, isNull } from "drizzle-orm";
+import { desc, eq, isNull, sql } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 
@@ -503,7 +503,11 @@ export async function DELETE(req: Request) {
       const filasContratos = contratoIds.length
         ? await tx
             .update(schema.contracts)
-            .set({ eliminadoEn: ahora, actualizadoEn: ahora })
+            .set({
+              eliminadoEn: ahora,
+              actualizadoEn: ahora,
+              revision: sql`${schema.contracts.revision} + 1`,
+            })
             .where(inArray(schema.contracts.id, contratoIds))
             .returning({ id: schema.contracts.id })
         : [];

@@ -24,6 +24,11 @@ out/
 # Tauri
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
+apps/desktop/installer/src-tauri/target/
+apps/desktop/installer/src-tauri/gen/
+apps/desktop/installer/src-tauri/icons/
+apps/desktop/installer/src-tauri/resources/alquilaya-erp-core-setup.exe
+apps/desktop/installer/ui/assets/
 
 # Database
 *.sqlite

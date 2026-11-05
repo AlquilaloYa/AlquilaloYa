@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f5f7f6" />
+    <title>Sin conexión - AlquilaYa ERP</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, sans-serif;
+        background: #f5f7f6;
+        color: #17352b;
+      }
+
+      body {
+        display: grid;
+        min-height: 100vh;
+        margin: 0;
+        place-items: center;
+      }
+
+      main {
+        box-sizing: border-box;
+        width: min(100% - 32px, 520px);
+        padding: 36px;
+        border: 1px solid #dce6e1;
+        border-radius: 20px;
+        background: #fff;
+        box-shadow: 0 16px 48px rgb(23 53 43 / 8%);
+      }
+
+      .brand {
+        color: #20815b;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 20px 0 12px;
+        font-size: 28px;
+      }
+
+      p {
+        color: #52635c;
+        line-height: 1.6;
+      }
+
+      button {
+        margin-top: 12px;
+        padding: 12px 18px;
+        border: 0;
+        border-radius: 10px;
+        background: #20815b;
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">AlquilaYa ERP</div>
+      <h1>No hay conexión a internet</h1>
+      <p>
+        La versión actual requiere conexión para validar tu sesión y consultar o
+        guardar contratos. Tus datos y cambios no están disponibles sin conexión.
+        Vuelve a conectarte e inténtalo de nuevo.
+      </p>
+      <button type="button" onclick="location.reload()">Reintentar</button>
+    </main>
+  </body>
+</html>

@@ -5,6 +5,8 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
+    "build:windows": "node scripts/build-windows-installer.mjs",
+    "build:windows:core": "tauri build --bundles nsis",
     "//build": "tauri build (solo CI desktop-job; fuera de Turbo para no romper el build de Vercel)",
     "lint": "eslint src --max-warnings 0",
     "typecheck": "tsc --noEmit",

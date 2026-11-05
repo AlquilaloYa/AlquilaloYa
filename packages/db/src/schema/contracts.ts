@@ -10,7 +10,9 @@ import {
   timestamp,
   uuid,
   varchar,
+  check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { clients } from "./clients";
 import { departments } from "./departments";
 import { templateVersions } from "./templates";
@@ -68,12 +70,14 @@ export const contracts = pgTable(
     actualizadoEn: timestamp("actualizado_en", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    revision: integer("revision").notNull().default(1),
   },
   (table) => [
     index("contracts_cliente_idx").on(table.clienteId),
     index("contracts_departamento_idx").on(table.departamentoId),
     index("contracts_estado_idx").on(table.estado),
     index("contracts_renovado_de_idx").on(table.renovadoDe),
+    check("contracts_revision_positive", sql`${table.revision} > 0`),
   ]
 );
 

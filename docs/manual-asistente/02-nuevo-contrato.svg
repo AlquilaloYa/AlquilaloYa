@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="620" viewBox="0 0 1040 620">
+  <style>
+    text{font-family:Arial,sans-serif;fill:#25332e}text[fill="#fff"]{fill:#fff}.small{font-size:12px}.muted{fill:#738078}.label{font-size:12px;font-weight:700;fill:#65736b}.body{font-size:13px}.title{font-size:20px;font-weight:700}.nav{font-size:13px;fill:#d7e2db}.mark{font-size:13px;font-weight:700;fill:#fff}
+  </style>
+  <rect width="1040" height="620" rx="16" fill="#f3f6f4"/>
+  <rect width="205" height="620" rx="16" fill="#17382e"/>
+  <text x="24" y="39" font-size="18" font-weight="700" fill="#fff">AlquilaYa ERP</text>
+  <text x="26" y="128" class="nav">Dashboard</text><text x="26" y="162" class="nav">Clientes</text>
+  <text x="26" y="196" class="nav">Uni / Dep</text><rect x="12" y="241" width="181" height="34" rx="7" fill="#2b6b51"/>
+  <text x="28" y="263" font-size="13" font-weight="700" fill="#fff">Pre contrato</text>
+  <text x="26" y="303" class="nav">Contrato Final</text><text x="26" y="337" class="nav">Adendas</text><text x="26" y="371" class="nav">Plantillas</text>
+  <rect x="205" width="835" height="620" fill="#26312d" opacity=".35"/>
+  <rect x="315" y="28" width="650" height="562" rx="15" fill="#fff" stroke="#d7e1da" stroke-width="2"/>
+  <text x="345" y="66" class="title">Nuevo contrato</text>
+  <text x="345" y="91" class="small muted">Completar y validar los datos antes de crear el borrador.</text>
+  <text x="345" y="127" class="label">Depositante</text>
+  <rect x="345" y="137" width="590" height="37" rx="5" fill="#fff" stroke="#cbd7cf"/>
+  <text x="359" y="161" class="body">Cliente de demostración</text>
+  <text x="345" y="201" class="label">Departamento asignado</text>
+  <rect x="345" y="211" width="285" height="37" rx="5" fill="#f3f6f4" stroke="#cbd7cf"/>
+  <text x="359" y="235" class="body">ANG170-201</text>
+  <text x="650" y="201" class="label">Plantilla publicada</text>
+  <rect x="650" y="211" width="285" height="37" rx="5" fill="#fff" stroke="#cbd7cf"/>
+  <text x="664" y="235" class="body">Arrendamiento - v3</text>
+  <text x="345" y="275" class="label">Mensualidad (S/)</text>
+  <rect x="345" y="285" width="185" height="37" rx="5" fill="#f3f6f4" stroke="#cbd7cf"/><text x="359" y="309" class="body">1,500.00</text>
+  <text x="550" y="275" class="label">Garantía (S/)</text>
+  <rect x="550" y="285" width="185" height="37" rx="5" fill="#f3f6f4" stroke="#cbd7cf"/><text x="564" y="309" class="body">1,500.00</text>
+  <text x="755" y="275" class="label">Mantenimiento</text>
+  <rect x="755" y="285" width="180" height="37" rx="5" fill="#f3f6f4" stroke="#cbd7cf"/><text x="769" y="309" class="body">S/ 50.00 fijo</text>
+  <text x="345" y="350" class="label">Fecha inicio</text>
+  <rect x="345" y="360" width="285" height="37" rx="5" fill="#fff" stroke="#cbd7cf"/><text x="359" y="384" class="body">01 / 12 / 2026</text>
+  <text x="650" y="350" class="label">Fecha fin</text>
+  <rect x="650" y="360" width="285" height="37" rx="5" fill="#fff" stroke="#cbd7cf"/><text x="664" y="384" class="body">30 / 11 / 2027</text>
+  <rect x="345" y="416" width="590" height="63" rx="7" fill="#f1f8f3"/>
+  <text x="360" y="441" class="label">Cláusulas e inventario</text><text x="360" y="463" class="small">Separación - inventario - mascotas - documentos de identidad</text>
+  <text x="345" y="513" class="small muted">El código se asigna automáticamente según el departamento.</text>
+  <rect x="700" y="535" width="102" height="36" rx="6" fill="#fff" stroke="#cad5ce"/><text x="729" y="558" class="body">Cancelar</text>
+  <rect x="814" y="535" width="121" height="36" rx="6" fill="#17654c"/><text x="835" y="558" class="body" fill="#fff">Crear borrador</text>
+  <circle cx="924" cy="156" r="15" fill="#e77e32"/><text x="920" y="161" class="mark">1</text>
+  <circle cx="922" cy="229" r="15" fill="#e77e32"/><text x="918" y="234" class="mark">2</text>
+  <circle cx="920" cy="302" r="15" fill="#e77e32"/><text x="916" y="307" class="mark">3</text>
+  <text x="233" y="609" class="small muted">VISTA REFERENCIAL - los importes y datos de ejemplo no corresponden a clientes reales.</text>
+</svg>

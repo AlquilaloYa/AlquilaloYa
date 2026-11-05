@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="620" viewBox="0 0 1040 620">
+  <style>
+    text{font-family:Arial, sans-serif;fill:#25332e}text[fill="#fff"]{fill:#fff}.small{font-size:12px}.muted{fill:#738078}.label{font-size:12px;font-weight:700;fill:#65736b}.body{font-size:14px}.title{font-size:22px;font-weight:700}.nav{font-size:13px;fill:#d7e2db}.navactive{font-size:13px;fill:#fff;font-weight:700}.th{font-size:11px;font-weight:700;fill:#526259}.badge{font-size:11px;font-weight:700}.mark{font-size:13px;font-weight:700;fill:#fff}
+  </style>
+  <rect width="1040" height="620" rx="16" fill="#f3f6f4"/>
+  <rect width="205" height="620" rx="16" fill="#17382e"/>
+  <text x="24" y="39" font-size="18" font-weight="700" fill="#fff">AlquilaYa ERP</text>
+  <text x="24" y="70" class="small" fill="#a9c5b6">ASISTENTE ADMINISTRATIVO</text>
+  <path d="M18 94h169" stroke="#315648"/>
+  <text x="26" y="128" class="nav">Dashboard</text>
+  <text x="26" y="162" class="nav">Clientes</text>
+  <text x="26" y="196" class="nav">Uni / Dep</text>
+  <text x="26" y="230" class="small" fill="#8fb5a0">CONTRATOS</text>
+  <rect x="12" y="241" width="181" height="34" rx="7" fill="#2b6b51"/>
+  <text x="28" y="263" class="navactive">Pre contrato</text>
+  <text x="26" y="303" class="nav">Contrato Final</text>
+  <text x="26" y="337" class="nav">Adendas</text>
+  <text x="26" y="371" class="nav">Plantillas</text>
+  <text x="26" y="414" class="nav">Cobranza</text>
+  <text x="26" y="448" class="nav">Workflow</text>
+  <rect x="205" width="835" height="60" fill="#fff"/>
+  <text x="232" y="37" class="small muted">ERP AlquilaYa / Contratos</text>
+  <text x="862" y="37" class="small">Asistente Admin</text>
+  <text x="235" y="104" class="title">Pre contratos</text>
+  <text x="235" y="130" class="small muted">Separaciones, garantías y acuerdos en curso.</text>
+  <rect x="847" y="82" width="160" height="38" rx="7" fill="#17654c"/>
+  <text x="874" y="106" class="body" fill="#fff">+ Nuevo contrato</text>
+  <rect x="230" y="151" width="785" height="93" rx="10" fill="#fff" stroke="#dce5df"/>
+  <text x="251" y="177" class="label">Estado</text>
+  <rect x="251" y="187" width="235" height="38" rx="5" fill="#fff" stroke="#cad5ce"/>
+  <text x="265" y="211" class="body">Todos los estados</text>
+  <text x="508" y="177" class="label">Departamento</text>
+  <rect x="508" y="187" width="235" height="38" rx="5" fill="#fff" stroke="#cad5ce"/>
+  <text x="522" y="211" class="body">Todos los departamentos</text>
+  <rect x="230" y="260" width="785" height="328" rx="10" fill="#fff" stroke="#dce5df"/>
+  <text x="252" y="290" class="small muted">Mostrando 2 de 2 contratos</text>
+  <rect x="785" y="271" width="204" height="32" rx="5" fill="#fff" stroke="#cad5ce"/>
+  <text x="800" y="292" class="small muted">Buscar contrato...</text>
+  <rect x="245" y="318" width="755" height="38" fill="#edf3ef"/>
+  <text x="258" y="342" class="th">ID CONTRATO</text><text x="395" y="342" class="th">CLIENTE</text>
+  <text x="532" y="342" class="th">DEPARTAMENTO</text><text x="684" y="342" class="th">MENSUALIDAD</text>
+  <text x="810" y="342" class="th">ESTADO</text>
+  <path d="M245 356h755M245 410h755M245 464h755M245 518h755" stroke="#e5ebe7"/>
+  <text x="258" y="389" class="small">CTR-2026-021</text><text x="395" y="389" class="small">Cliente Demo</text>
+  <text x="532" y="389" class="small">ANG170-201</text><text x="684" y="389" class="small">S/ 1,500.00</text>
+  <rect x="805" y="371" width="120" height="25" rx="12" fill="#eaf4ed"/><text x="817" y="388" class="badge" fill="#17654c">Borrador</text>
+  <text x="258" y="443" class="small">CTR-2026-018</text><text x="395" y="443" class="small">Ejemplo Cliente</text>
+  <text x="532" y="443" class="small">BEN2195-104</text><text x="684" y="443" class="small">S/ 1,800.00</text>
+  <rect x="805" y="425" width="120" height="25" rx="12" fill="#fff4dd"/><text x="812" y="442" class="badge" fill="#8b640e">Pend. emisión</text>
+  <circle cx="181" cy="258" r="15" fill="#e77e32"/><text x="177" y="263" class="mark">1</text>
+  <circle cx="972" cy="287" r="15" fill="#e77e32"/><text x="968" y="292" class="mark">2</text>
+  <text x="233" y="609" class="small muted">VISTA REFERENCIAL - datos ficticios; no es una captura de producción.</text>
+</svg>

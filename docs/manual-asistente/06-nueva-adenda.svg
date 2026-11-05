@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="620" viewBox="0 0 1040 620">
+  <style>
+    text{font-family:Arial,sans-serif;fill:#25332e}text[fill="#fff"]{fill:#fff}.small{font-size:12px}.muted{fill:#738078}.label{font-size:12px;font-weight:700;fill:#65736b}.body{font-size:13px}.title{font-size:20px;font-weight:700}.nav{font-size:13px;fill:#d7e2db}.mark{font-size:13px;font-weight:700;fill:#fff}
+  </style>
+  <rect width="1040" height="620" rx="16" fill="#f3f6f4"/><rect width="205" height="620" rx="16" fill="#17382e"/>
+  <text x="24" y="39" font-size="18" font-weight="700" fill="#fff">AlquilaYa ERP</text><text x="26" y="128" class="nav">Dashboard</text>
+  <text x="26" y="162" class="nav">Clientes</text><text x="26" y="196" class="nav">Pre contrato</text><rect x="12" y="214" width="181" height="34" rx="7" fill="#2b6b51"/>
+  <text x="28" y="236" font-size="13" font-weight="700" fill="#fff">Adendas</text>
+  <rect x="205" width="835" height="620" fill="#26312d" opacity=".42"/>
+  <rect x="319" y="28" width="646" height="564" rx="15" fill="#fff" stroke="#d7e1da" stroke-width="2"/>
+  <text x="350" y="66" class="title">Nueva adenda</text>
+  <text x="350" y="92" class="small muted">Contrato CTR-2026-021 - Cliente Demo</text>
+  <rect x="345" y="108" width="590" height="55" rx="7" fill="#eff7f1"/>
+  <text x="360" y="132" class="small">Al confirmar, se actualiza el término y se crean cuotas</text>
+  <text x="360" y="151" class="small">de cobranza para los meses agregados.</text>
+  <text x="350" y="194" class="label">N° de adenda</text>
+  <rect x="350" y="204" width="280" height="36" rx="5" fill="#fff" stroke="#cbd7cf"/><text x="364" y="228" class="body">1</text>
+  <text x="650" y="194" class="label">Título de la adenda</text>
+  <rect x="650" y="204" width="285" height="36" rx="5" fill="#fff" stroke="#cbd7cf"/><text x="664" y="228" class="body">ADENDA</text>
+  <text x="350" y="266" class="label">Fecha de inicio</text>
+  <rect x="350" y="276" width="280" height="36" rx="5" fill="#fff" stroke="#cbd7cf"/><text x="364" y="300" class="body">01 / 12 / 2026</text>
+  <text x="650" y="266" class="label">Fecha de fin</text>
+  <rect x="650" y="276" width="285" height="36" rx="5" fill="#fff" stroke="#cbd7cf"/><text x="664" y="300" class="body">30 / 11 / 2027</text>
+  <rect x="350" y="331" width="585" height="60" rx="7" fill="#fff8e9" stroke="#eed9a4"/>
+  <rect x="366" y="350" width="17" height="17" rx="3" fill="#fff" stroke="#7b8b80"/>
+  <text x="394" y="354" class="small" font-weight="700">Cobrar solo los días del último período</text>
+  <text x="394" y="375" class="small muted">El sistema muestra el prorrateo estimado para revisar.</text>
+  <text x="350" y="418" class="label">Texto adicional (opcional)</text>
+  <rect x="350" y="428" width="585" height="64" rx="5" fill="#fff" stroke="#cbd7cf"/>
+  <text x="364" y="452" class="small muted">Ej.: Se mantienen las demás condiciones pactadas.</text>
+  <rect x="687" y="526" width="110" height="37" rx="6" fill="#fff" stroke="#cad5ce"/><text x="716" y="550" class="body">Cancelar</text>
+  <rect x="809" y="526" width="126" height="37" rx="6" fill="#17654c"/><text x="826" y="550" class="body" fill="#fff">Generar adenda</text>
+  <circle cx="620" cy="222" r="15" fill="#e77e32"/><text x="616" y="227" class="mark">1</text>
+  <circle cx="918" cy="296" r="15" fill="#e77e32"/><text x="914" y="301" class="mark">2</text>
+  <circle cx="904" cy="361" r="15" fill="#e77e32"/><text x="900" y="366" class="mark">3</text>
+  <text x="233" y="609" class="small muted">VISTA REFERENCIAL - generar requiere contract.update; validar el efecto en pagos antes de confirmar.</text>
+</svg>

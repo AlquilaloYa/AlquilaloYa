@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "cd ../web && pnpm dev",
     "devUrl": "http://localhost:3000",
-    "frontendDist": "https://REPLACE-WITH-YOUR-VERCEL-URL.vercel.app"
+    "frontendDist": "https://alquilaloya.vercel.app"
   },
   "app": {
     "windows": [
@@ -31,6 +31,22 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "headerImage": "icons/installer-header.bmp",
+        "uninstallerHeaderImage": "icons/installer-header.bmp",
+        "sidebarImage": "icons/installer-sidebar.bmp",
+        "installMode": "currentUser",
+        "startMenuFolder": "AlquilaYa ERP",
+        "languages": ["Spanish"],
+        "customLanguageFiles": {
+          "Spanish": "installer-languages/Spanish.nsh"
+        },
+        "installerHooks": "installer-hooks.nsh"
+      }
+    }
   }
 }

@@ -23,12 +23,24 @@ export interface ContractRepository {
   findWithRelations(id: UUID): Promise<ContractWithRelations | null>;
   create(input: CreateContractInput): Promise<Contract>;
   update(id: UUID, changes: UpdateDraftInput): Promise<Contract>;
+  updateIfRevision(
+    id: UUID,
+    changes: UpdateDraftInput,
+    expectedRevision: number
+  ): Promise<Contract | null>;
   updateEstado(id: UUID, estado: ContractStatus): Promise<Contract>;
   setSnapshot(id: UUID, snapshotId: UUID): Promise<Contract>;
   /** Resuelve el contrato registrando motivo y fecha. */
   resolve(id: UUID, motivo: string): Promise<Contract>;
   /** Cuenta renovaciones previas de un contrato (por prefijo de código). */
   countRenovaciones(codigoBase: string): Promise<number>;
+}
+
+export class ContractRevisionConflictError extends Error {
+  constructor(readonly current: Contract) {
+    super("El contrato cambió en el servidor. Revisa el conflicto antes de sincronizar.");
+    this.name = "ContractRevisionConflictError";
+  }
 }
 
 export interface SnapshotPort {
@@ -136,7 +148,11 @@ export class ContractService {
   }
 
   /** Solo borradores se editan. */
-  async updateDraft(id: UUID, changes: UpdateDraftInput): Promise<Contract> {
+  async updateDraft(
+    id: UUID,
+    changes: UpdateDraftInput,
+    expectedRevision?: number
+  ): Promise<Contract> {
     const current = await this.repo.findById(id);
     if (!current) {
       throw new Error("Contrato no encontrado");
@@ -157,7 +173,23 @@ export class ContractService {
     if (current.snapshotId) {
       throw new Error("El contrato ya fue emitido y no puede editarse");
     }
-    const updated = await this.repo.update(id, changes);
+    if (
+      expectedRevision !== undefined &&
+      current.revision !== expectedRevision
+    ) {
+      throw new ContractRevisionConflictError(current);
+    }
+    const updated =
+      expectedRevision === undefined
+        ? await this.repo.update(id, changes)
+        : await this.repo.updateIfRevision(id, changes, expectedRevision);
+    if (!updated) {
+      const latest = await this.repo.findById(id);
+      if (!latest) {
+        throw new Error("Contrato no encontrado");
+      }
+      throw new ContractRevisionConflictError(latest);
+    }
     await this.emit(
       EventName.CONTRACT_UPDATED,
       id,

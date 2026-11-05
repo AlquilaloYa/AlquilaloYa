@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ContractRevisionConflictError } from "@contract/domain";
 import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 import { buildContractServices } from "@/lib/contract-app";
@@ -60,12 +61,28 @@ export async function PATCH(request: Request, { params }: Ctx) {
     const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
     if (denied) return denied;
 
-    const body = (await request.json()) as UpdateDraftInput;
+    const body = (await request.json()) as UpdateDraftInput & {
+      expectedRevision?: unknown;
+    };
+    const { expectedRevision, ...changes } = body;
+    if (
+      expectedRevision !== undefined &&
+      (!Number.isSafeInteger(expectedRevision) || Number(expectedRevision) < 1)
+    ) {
+      return NextResponse.json(
+        { error: "La revisión base del contrato no es válida." },
+        { status: 400 }
+      );
+    }
     const { contractService } = await buildContractServices({
       userId: auth.user.id,
       name: auth.user.name,
     });
-    const updated = await contractService.updateDraft(params.id, body);
+    const updated = await contractService.updateDraft(
+      params.id,
+      changes,
+      typeof expectedRevision === "number" ? expectedRevision : undefined
+    );
     try {
       await sincronizarTareasContrato(params.id);
     } catch {
@@ -73,6 +90,16 @@ export async function PATCH(request: Request, { params }: Ctx) {
     }
     return NextResponse.json(updated);
 } catch (error) {
+    if (error instanceof ContractRevisionConflictError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: "CONTRACT_REVISION_CONFLICT",
+          current: error.current,
+        },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { error: (error as Error).message },
       { status: 400 }

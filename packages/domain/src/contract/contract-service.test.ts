@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ContractService,
+  ContractRevisionConflictError,
   type ContractRepository,
   type SnapshotPort,
 } from "./contract-service";
@@ -73,6 +74,7 @@ function makeRepo(initial: Contract | null = null): {
           resueltoEn: null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
+          revision: 1,
         };
         store = created;
         return created;
@@ -81,14 +83,31 @@ function makeRepo(initial: Contract | null = null): {
         if (!store || store.id !== id) {
           throw new Error("no encontrado");
         }
-        store = { ...store, ...changes, updatedAt: new Date().toISOString() };
+        store = {
+          ...store,
+          ...changes,
+          updatedAt: new Date().toISOString(),
+          revision: store.revision + 1,
+        };
+        return store;
+      },
+      async updateIfRevision(id, changes, expectedRevision) {
+        if (!store || store.id !== id || store.revision !== expectedRevision) {
+          return null;
+        }
+        store = {
+          ...store,
+          ...changes,
+          updatedAt: new Date().toISOString(),
+          revision: store.revision + 1,
+        };
         return store;
       },
       async updateEstado(id: string, estado: ContractStatus) {
         if (!store || store.id !== id) {
           throw new Error("no encontrado");
         }
-        store = { ...store, estado };
+        store = { ...store, estado, revision: store.revision + 1 };
         return store;
       },
       async setSnapshot(id: string, snapshotId: string) {
@@ -96,7 +115,7 @@ function makeRepo(initial: Contract | null = null): {
           throw new Error("no encontrado");
         }
         snapshotRefs.push(snapshotId);
-        store = { ...store, snapshotId };
+        store = { ...store, snapshotId, revision: store.revision + 1 };
         return store;
       },
       async resolve(id: string, motivo: string) {
@@ -108,6 +127,7 @@ function makeRepo(initial: Contract | null = null): {
           estado: ContractStatus.RESUELTO,
           motivoResolucion: motivo,
           resueltoEn: new Date().toISOString(),
+          revision: store.revision + 1,
         };
         return store;
       },
@@ -167,6 +187,82 @@ describe("ContractService", () => {
     });
 
     expect(updated.montoCanonMensual).toBe("2000.00");
+  });
+
+  it("updateDraft: incrementa la revisión con una edición confirmada", async () => {
+    const contract = makeDirectContract(ContractStatus.BORRADOR) as Contract;
+    const { repo } = makeRepo(contract);
+    const service = new ContractService(repo, makeSnapshotPort());
+
+    const updated = await service.updateDraft(
+      contract.id,
+      { montoCanonMensual: "2000.00" },
+      contract.revision
+    );
+
+    expect(updated.revision).toBe(contract.revision + 1);
+  });
+
+  it("updateDraft: devuelve el estado actual al recibir una revisión obsoleta", async () => {
+    const contract = makeDirectContract(ContractStatus.BORRADOR) as Contract;
+    const { repo } = makeRepo(contract);
+    const latest = {
+      ...contract,
+      montoCanonMensual: "1800.00",
+      revision: contract.revision + 1,
+    };
+    const repository = {
+      ...repo,
+      async findById(id: string) {
+        return id === latest.id ? latest : null;
+      },
+    } satisfies ContractRepository;
+    const conflictService = new ContractService(repository, makeSnapshotPort());
+
+    await expect(
+      conflictService.updateDraft(
+        contract.id,
+        { montoCanonMensual: "2000.00" },
+        contract.revision
+      )
+    ).rejects.toMatchObject({
+      name: ContractRevisionConflictError.name,
+      current: latest,
+    });
+  });
+
+  it("updateDraft: detecta un cambio concurrente entre lectura y escritura", async () => {
+    const contract = makeDirectContract(ContractStatus.BORRADOR) as Contract;
+    const { repo } = makeRepo(contract);
+    const latest = {
+      ...contract,
+      montoCanonMensual: "1800.00",
+      revision: contract.revision + 1,
+    };
+    let readCount = 0;
+    const repository = {
+      ...repo,
+      async findById(id: string) {
+        if (id !== contract.id) return null;
+        readCount += 1;
+        return readCount === 1 ? contract : latest;
+      },
+      async updateIfRevision() {
+        return null;
+      },
+    } satisfies ContractRepository;
+    const service = new ContractService(repository, makeSnapshotPort());
+
+    await expect(
+      service.updateDraft(
+        contract.id,
+        { montoCanonMensual: "2000.00" },
+        contract.revision
+      )
+    ).rejects.toMatchObject({
+      name: ContractRevisionConflictError.name,
+      current: latest,
+    });
   });
 
   it("updateDraft: rechaza editar un contrato FIRMADO", async () => {
@@ -542,5 +638,6 @@ function makeDirectContract(
     creadoPor: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    revision: 1,
   };
 }

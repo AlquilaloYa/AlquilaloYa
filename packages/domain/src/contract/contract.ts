@@ -86,6 +86,8 @@ export interface Contract extends AuditableEntity {
   motivoResolucion: string | null;
   /** Fecha en la que se resolvió el contrato. */
   resueltoEn: string | null;
+  /** Incrementa en cada modificación para detectar conflictos de sincronización. */
+  revision: number;
 }
 
 export type CreateContractInput = Omit<
@@ -100,6 +102,7 @@ export type CreateContractInput = Omit<
   | "datosArrendatario"
   | "motivoResolucion"
   | "resueltoEn"
+  | "revision"
 > & { renovadoDe?: UUID | null; datosArrendatario?: DatosArrendatario | null };
 
 export type UpdateDraftInput = Partial<

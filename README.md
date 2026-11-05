@@ -89,13 +89,15 @@ pnpm format       # formatear código con Prettier
 Tauri es **multiplataforma**: el código es portable y cada sistema operativo compila su propio binario nativo.
 
 ```bash
-# Compilar el binario de la plataforma actual
-pnpm --filter @contract/desktop build
+# En Windows, generar el instalador personalizado
+corepack pnpm --filter @contract/desktop build:windows
 ```
 
-> En Windows genera `contract-desktop.exe` + instalador NSIS. En macOS genera `.app`/`.dmg`. En Linux genera binario ELF + paquetes (deb/rpm/AppImage).
+En Windows, el archivo para distribuir es `apps/desktop/src-tauri/target/release/bundle/nsis/AlquilaYa ERP_instalador-personalizado.exe`. Incluye una interfaz propia en español, el icono oficial y el instalador del ERP, y crea accesos en el escritorio y el menú Inicio. El instalador presenta el estado del proceso y permite abrir la aplicación al terminar; requiere el runtime de WebView2 de Windows. `contract-desktop.exe` es el binario de la aplicación, no el instalador.
 
-Para compilar los binarios de **Windows, macOS y Linux** en paralelo se usa el build multiplataforma de CI (`.github/workflows/ci.yml` → job `desktop`), usando `tauri-apps/tauri-action` en `windows-latest`, `macos-latest` y `ubuntu-latest`.
+La aplicación de escritorio carga el frontend publicado en `https://alquilaloya.vercel.app`, por lo que requiere conexión a Internet. En macOS genera `.app`/`.dmg`; en Linux genera binario ELF + paquetes (deb/rpm/AppImage).
+
+Para compilar los binarios de **Windows, macOS y Linux** en paralelo se usa el build multiplataforma de CI (`.github/workflows/ci.yml` → job `desktop`). Windows genera el instalador personalizado; macOS y Linux generan sus respectivos paquetes nativos.
 
 > **Nota:** compilar el binario de macOS o Linux no es posible dentro de Windows (cada SO compila el suyo). La CI es el mecanismo estándar para obtener las tres plataformas.
 

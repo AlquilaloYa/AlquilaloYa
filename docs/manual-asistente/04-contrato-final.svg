@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="620" viewBox="0 0 1040 620">
+  <style>
+    text{font-family:Arial,sans-serif;fill:#25332e}text[fill="#fff"]{fill:#fff}.small{font-size:12px}.muted{fill:#738078}.body{font-size:13px}.title{font-size:22px;font-weight:700}.nav{font-size:13px;fill:#d7e2db}.active{font-size:13px;fill:#fff;font-weight:700}.th{font-size:11px;font-weight:700;fill:#fff}.badge{font-size:11px;font-weight:700}.mark{font-size:13px;font-weight:700;fill:#fff}
+  </style>
+  <rect width="1040" height="620" rx="16" fill="#f3f6f4"/><rect width="205" height="620" rx="16" fill="#17382e"/>
+  <text x="24" y="39" font-size="18" font-weight="700" fill="#fff">AlquilaYa ERP</text>
+  <text x="26" y="128" class="nav">Dashboard</text><text x="26" y="162" class="nav">Clientes</text><text x="26" y="196" class="nav">Uni / Dep</text>
+  <text x="26" y="230" class="small" fill="#8fb5a0">CONTRATOS</text><text x="26" y="263" class="nav">Pre contrato</text>
+  <rect x="12" y="283" width="181" height="34" rx="7" fill="#2b6b51"/><text x="28" y="305" class="active">Contrato Final</text>
+  <text x="26" y="345" class="nav">Adendas</text><text x="26" y="379" class="nav">Plantillas</text>
+  <rect x="205" width="835" height="60" fill="#fff"/><text x="232" y="37" class="small muted">ERP AlquilaYa / Contratos</text>
+  <text x="235" y="105" class="title">Contratos Finales</text>
+  <rect x="775" y="82" width="230" height="38" rx="7" fill="#17654c"/><text x="800" y="106" class="body" fill="#fff">Exportar a Drive</text>
+  <rect x="230" y="151" width="785" height="398" rx="10" fill="#fff" stroke="#dce5df"/>
+  <text x="252" y="181" class="small muted">2 de 2 contratos</text>
+  <rect x="590" y="163" width="207" height="32" rx="5" fill="#fff" stroke="#cad5ce"/><text x="605" y="184" class="small muted">Buscar contrato...</text>
+  <rect x="810" y="163" width="180" height="32" rx="5" fill="#fff" stroke="#cad5ce"/><text x="825" y="184" class="small muted">Exportar a Drive</text>
+  <rect x="245" y="211" width="755" height="39" fill="#202b27"/>
+  <text x="258" y="236" class="th">CÓDIGO</text><text x="352" y="236" class="th">CLIENTE</text><text x="465" y="236" class="th">DEPARTAMENTO</text>
+  <text x="596" y="236" class="th">CANON</text><text x="678" y="236" class="th">ESTADO</text><text x="780" y="236" class="th">DOCUMENTO</text>
+  <path d="M245 250h755M245 322h755M245 394h755" stroke="#e5ebe7"/>
+  <text x="258" y="291" class="small">CTR-2026-021</text><text x="352" y="291" class="small">Cliente Demo</text><text x="465" y="291" class="small">ANG170-201</text><text x="596" y="291" class="small">S/ 1,500</text>
+  <rect x="678" y="270" width="68" height="23" rx="11" fill="#eaf4ed"/><text x="689" y="286" class="badge" fill="#17654c">Firmado</text><text x="780" y="291" class="small" fill="#17654c">Ver PDF</text>
+  <text x="258" y="363" class="small">CTR-2026-018</text><text x="352" y="363" class="small">Ejemplo Cliente</text><text x="465" y="363" class="small">BEN2195-104</text><text x="596" y="363" class="small">S/ 1,800</text>
+  <rect x="678" y="342" width="80" height="23" rx="11" fill="#eaf4ed"/><text x="687" y="358" class="badge" fill="#17654c">Notariado</text><text x="780" y="363" class="small" fill="#17654c">Ver PDF</text>
+  <rect x="245" y="430" width="755" height="79" rx="8" fill="#eff7f1"/>
+  <text x="265" y="460" class="body" font-weight="700">Consulta del documento y seguimiento</text>
+  <text x="265" y="486" class="small">Verifique el estado y abra el PDF notariado si está adjunto al registro.</text>
+  <circle cx="814" cy="282" r="15" fill="#e77e32"/><text x="810" y="287" class="mark">1</text>
+  <circle cx="957" cy="178" r="15" fill="#e77e32"/><text x="953" y="183" class="mark">2</text>
+  <text x="233" y="609" class="small muted">VISTA REFERENCIAL - la firma y notarización deben seguir el procedimiento de la empresa.</text>
+</svg>

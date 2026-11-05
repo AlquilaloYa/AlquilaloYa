@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="620" viewBox="0 0 1040 620">
+  <style>
+    text{font-family:Arial,sans-serif;fill:#25332e}text[fill="#fff"]{fill:#fff}.small{font-size:12px}.muted{fill:#738078}.body{font-size:13px}.title{font-size:22px;font-weight:700}.nav{font-size:13px;fill:#d7e2db}.active{font-size:13px;fill:#fff;font-weight:700}.th{font-size:11px;font-weight:700;fill:#526259}.badge{font-size:11px;font-weight:700}.mark{font-size:13px;font-weight:700;fill:#fff}
+  </style>
+  <rect width="1040" height="620" rx="16" fill="#f3f6f4"/><rect width="205" height="620" rx="16" fill="#17382e"/>
+  <text x="24" y="39" font-size="18" font-weight="700" fill="#fff">AlquilaYa ERP</text>
+  <text x="26" y="128" class="nav">Dashboard</text><text x="26" y="162" class="nav">Clientes</text><text x="26" y="196" class="nav">Uni / Dep</text>
+  <text x="26" y="230" class="small" fill="#8fb5a0">CONTRATOS</text><text x="26" y="263" class="nav">Pre contrato</text><text x="26" y="303" class="nav">Contrato Final</text><text x="26" y="337" class="nav">Adendas</text>
+  <rect x="12" y="354" width="181" height="34" rx="7" fill="#2b6b51"/><text x="28" y="376" class="active">Plantillas</text>
+  <rect x="205" width="835" height="60" fill="#fff"/><text x="232" y="37" class="small muted">ERP AlquilaYa / Contratos / Plantillas</text>
+  <text x="235" y="105" class="title">Plantillas de contrato</text>
+  <text x="235" y="132" class="small muted">Versiones de arrendamiento utilizadas para generar contratos.</text>
+  <rect x="847" y="82" width="160" height="38" rx="7" fill="#dce8df"/><text x="870" y="106" class="body">+ Nueva versión</text>
+  <rect x="230" y="166" width="785" height="384" rx="10" fill="#fff" stroke="#dce5df"/>
+  <text x="252" y="196" class="small muted">2 plantillas</text>
+  <rect x="785" y="177" width="204" height="32" rx="5" fill="#fff" stroke="#cad5ce"/><text x="800" y="198" class="small muted">Buscar plantilla...</text>
+  <rect x="245" y="224" width="755" height="40" fill="#edf3ef"/>
+  <text x="263" y="249" class="th">CLAVE</text><text x="380" y="249" class="th">TIPO</text><text x="560" y="249" class="th">NOMBRE</text><text x="760" y="249" class="th">VERSIÓN PUBLICADA</text>
+  <path d="M245 264h755M245 334h755M245 404h755" stroke="#e5ebe7"/>
+  <text x="263" y="305" class="small">PLANT-01</text><text x="380" y="305" class="small">Arrendamiento</text><text x="560" y="305" class="small">Contrato estándar</text>
+  <rect x="760" y="282" width="118" height="25" rx="12" fill="#eaf4ed"/><text x="772" y="299" class="badge" fill="#17654c">v3 Publicada</text>
+  <text x="263" y="375" class="small">PLANT-02</text><text x="380" y="375" class="small">Extensión</text><text x="560" y="375" class="small">Extensión contractual</text>
+  <rect x="760" y="352" width="118" height="25" rx="12" fill="#eaf4ed"/><text x="772" y="369" class="badge" fill="#17654c">v2 Publicada</text>
+  <text x="891" y="299" class="small" fill="#17654c">Ver PDF</text><text x="891" y="369" class="small" fill="#17654c">Ver PDF</text>
+  <rect x="245" y="446" width="755" height="74" rx="8" fill="#fff8e9"/>
+  <text x="265" y="474" class="body" font-weight="700">Solo lectura para Asistente Administrativo</text>
+  <text x="265" y="498" class="small">Consulte la versión publicada. Crear o publicar versiones requiere template.manage.</text>
+  <circle cx="820" cy="294" r="15" fill="#e77e32"/><text x="816" y="299" class="mark">1</text>
+  <circle cx="924" cy="100" r="15" fill="#e77e32"/><text x="920" y="105" class="mark">2</text>
+  <text x="233" y="609" class="small muted">VISTA REFERENCIAL - datos ficticios; no es una captura de producción.</text>
+</svg>

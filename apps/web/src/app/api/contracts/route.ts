@@ -44,6 +44,7 @@ export async function GET(req: Request) {
         resueltoEn: schema.contracts.resueltoEn,
         creadoEn: schema.contracts.creadoEn,
         actualizadoEn: schema.contracts.actualizadoEn,
+        revision: schema.contracts.revision,
         clienteNombre: schema.clients.nombres,
         clienteApellido: schema.clients.apellidos,
         departamentoNombre: schema.departments.nombre,

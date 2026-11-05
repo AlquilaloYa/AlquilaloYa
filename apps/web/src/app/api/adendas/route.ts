@@ -313,7 +313,7 @@ export async function POST(request: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq, and, inArray, count } = await import("drizzle-orm");
+    const { eq, and, inArray, count, sql } = await import("drizzle-orm");
 
     const [{ value: nAdendas = 0 } = {}] = await db
       .select({ value: count() })
@@ -374,7 +374,11 @@ export async function POST(request: Request) {
       cuotasNuevas = periodosExtension(fechaFinActual, nuevaFechaFin);
       await db
         .update(schema.contracts)
-        .set({ fechaFin: nuevaFechaFin, actualizadoEn: new Date() })
+        .set({
+          fechaFin: nuevaFechaFin,
+          actualizadoEn: new Date(),
+          revision: sql`${schema.contracts.revision} + 1`,
+        })
         .where(eq(schema.contracts.id, contract.id));
       await sincronizarTareasDeContrato(contract.id);
 
@@ -602,7 +606,7 @@ export async function PATCH(request: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq } = await import("drizzle-orm");
+    const { eq, sql } = await import("drizzle-orm");
 
     const doc = await findDocumentById(db, schema, body.documentId);
     if (!doc) {
@@ -681,7 +685,11 @@ export async function PATCH(request: Request) {
       const cuotasNuevas = periodosExtension(fechaFinActual, nuevaFechaFinAdenda);
       await db
         .update(schema.contracts)
-        .set({ fechaFin: nuevaFechaFinAdenda, actualizadoEn: new Date() })
+        .set({
+          fechaFin: nuevaFechaFinAdenda,
+          actualizadoEn: new Date(),
+          revision: sql`${schema.contracts.revision} + 1`,
+        })
         .where(eq(schema.contracts.id, contract.id));
       await sincronizarTareasDeContrato(contract.id);
       const cuotasValores = valoresCuotasExtension(

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { AuthProvider } from "@/lib/auth-context";
+import { OfflineSupport } from "@/components/offline-support";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -46,7 +47,10 @@ export default function RootLayout({
       </head>
       <body className={`min-h-screen bg-surface font-sans text-on-surface antialiased ${inter.variable}`}>
         <ThemeProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <OfflineSupport />
+            {children}
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

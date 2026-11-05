@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Instalador oficial de AlquilaYa ERP"
+    />
+    <title>Instalar AlquilaYa ERP</title>
+    <link rel="icon" type="image/png" href="assets/app-icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="installer-shell">
+      <header class="titlebar" data-tauri-drag-region>
+        <div class="titlebar-brand" data-tauri-drag-region>
+          <img src="assets/app-icon.png" alt="" />
+          <span data-tauri-drag-region>AlquilaYa ERP <span class="titlebar-muted">/ Instalador</span></span>
+        </div>
+        <div class="window-controls">
+          <button class="window-control minimize-button" id="minimize-button" aria-label="Minimizar">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10" /></svg>
+          </button>
+          <button class="window-control close-button" id="close-button" aria-label="Cerrar">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="content-layout">
+        <section class="story-panel">
+          <img class="brand-logo" src="assets/brand-logo.png" alt="AlquilaYa" />
+
+          <div class="story-copy">
+            <p class="eyebrow"><span class="status-dot"></span> ALQUILAYA · PLATAFORMA INMOBILIARIA</p>
+            <h1>Tu operación,<br />en buenas manos.</h1>
+            <p class="story-description">
+              Todo tu equipo, departamentos y contratos bajo control desde un solo lugar.
+            </p>
+
+            <div class="feature-list">
+              <div class="feature">
+                <span class="feature-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.8 12 4l9 6.8M5.5 9.5V20h13V9.5M9.5 20v-6h5v6" /></svg>
+                </span>
+                <span><strong>Departamentos</strong><small>Información organizada</small></span>
+              </div>
+              <div class="feature">
+                <span class="feature-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h8l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 6 20V5a1.5 1.5 0 0 1 1-1.5ZM14 4v5h5m-9 4h6m-6 4h6" /></svg>
+                </span>
+                <span><strong>Contratos</strong><small>Seguimiento en un solo sitio</small></span>
+              </div>
+              <div class="feature">
+                <span class="feature-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5h16M6.5 16V9m5.5 7V4m5.5 12v-5M4.5 7l7-3 5.5 3 3-2" /></svg>
+                </span>
+                <span><strong>Gestión integral</strong><small>Tu operación, siempre a la vista</small></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="story-footer">
+            <span class="footer-mark">A</span>
+            <span>HECHO PARA UNA GESTIÓN MÁS SIMPLE</span>
+          </div>
+          <div class="decorative-orbit orbit-one"></div>
+          <div class="decorative-orbit orbit-two"></div>
+          <div class="decorative-dot"></div>
+        </section>
+
+        <section class="setup-panel" aria-live="polite">
+          <div class="step-indicator"><span class="step-number" id="step-number">01</span><span class="step-line"></span><span id="step-label">INSTALACIÓN</span></div>
+
+          <div class="setup-content" id="setup-content">
+            <p class="eyebrow setup-eyebrow">INSTALADOR OFICIAL</p>
+            <h2>Instala AlquilaYa ERP</h2>
+            <p class="setup-description">
+              Prepara tu espacio de trabajo en unos pocos pasos. La instalación no requiere configuración adicional.
+            </p>
+
+            <div class="app-card">
+              <div class="app-icon-wrap"><img src="assets/app-icon.png" alt="" /></div>
+              <div class="app-card-info"><strong>AlquilaYa ERP</strong><span>Aplicación de escritorio</span></div>
+              <span class="version-tag">v0.1.0</span>
+            </div>
+
+            <div class="details-block">
+              <div class="detail-row"><span>Se instalará en</span><strong id="install-location"></strong></div>
+              <div class="detail-row"><span>Tipo de instalación</span><strong>Solo para esta cuenta</strong></div>
+            </div>
+
+            <div class="secure-note">
+              <span class="secure-check">✓</span>
+              <span>Acceso seguro a tu entorno de trabajo</span>
+            </div>
+
+            <div class="action-area" id="action-area">
+              <button class="install-button" id="install-button">
+                <span>Instalar aplicación</span>
+                <span class="button-arrow" aria-hidden="true">→</span>
+              </button>
+              <p class="action-hint">Al continuar, aceptas instalar AlquilaYa ERP en este equipo.</p>
+            </div>
+          </div>
+
+          <div class="progress-view hidden" id="progress-view">
+            <div class="progress-icon" id="progress-icon">
+              <svg class="spinner" viewBox="0 0 48 48" aria-hidden="true"><circle class="spinner-track" cx="24" cy="24" r="20" /><circle class="spinner-value" cx="24" cy="24" r="20" /></svg>
+              <span id="success-check" class="success-check hidden">✓</span>
+            </div>
+            <p class="eyebrow setup-eyebrow" id="progress-eyebrow">PREPARANDO TU ESPACIO DE TRABAJO</p>
+            <h2 id="progress-title">Instalando AlquilaYa ERP</h2>
+            <p class="progress-description" id="progress-description">
+              Estamos configurando la aplicación. Puedes dejar esta ventana abierta mientras termina.
+            </p>
+            <div class="progress-track"><span class="progress-bar" id="progress-bar"></span></div>
+            <p class="progress-status" id="progress-status">Preparando la instalación...</p>
+            <button class="install-button hidden" id="launch-button">
+              <span>Abrir AlquilaYa ERP</span>
+              <span class="button-arrow" aria-hidden="true">→</span>
+            </button>
+            <button class="retry-button hidden" id="retry-button">Volver a intentarlo</button>
+          </div>
+
+          <div class="panel-footer">
+            <span class="lock-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20"><rect x="4" y="8.5" width="12" height="9" rx="2" /><path d="M6.5 8.5V6a3.5 3.5 0 1 1 7 0v2.5m-3.5 4v1.5" /></svg>
+            </span>
+            <span>TUS DATOS ESTÁN PROTEGIDOS</span>
+            <span class="footer-version">ALQUILAYA ERP · 2026</span>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script src="installer.js"></script>
+  </body>
+</html>

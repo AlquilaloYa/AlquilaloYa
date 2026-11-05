@@ -1,4 +1,4 @@
-import { eq, like } from "drizzle-orm";
+import { and, eq, like, sql } from "drizzle-orm";
 import { db, schema } from "../index";
 import type {
   Contract,
@@ -49,7 +49,39 @@ function toDomain(row: ContractRow): Contract {
     creadoPor: row.creadoPor,
     createdAt: row.creadoEn.toISOString(),
     updatedAt: row.actualizadoEn.toISOString(),
+    revision: row.revision,
   };
+}
+
+function updateValues(changes: UpdateDraftInput) {
+  const values: Partial<Omit<typeof schema.contracts.$inferInsert, "id">> = {};
+  if (changes.clienteId !== undefined) values.clienteId = changes.clienteId;
+  if (changes.departamentoId !== undefined)
+    values.departamentoId = changes.departamentoId;
+  if (changes.plantillaVersionId !== undefined)
+    values.plantillaVersionId = changes.plantillaVersionId;
+  if (changes.montoCanonMensual !== undefined)
+    values.montoCanonMensual = changes.montoCanonMensual;
+  if (changes.depositoGarantia !== undefined)
+    values.depositoGarantia = changes.depositoGarantia;
+  if (changes.mantenimiento !== undefined)
+    values.mantenimiento = changes.mantenimiento;
+  if (changes.fechaInicio !== undefined)
+    values.fechaInicio = changes.fechaInicio;
+  if (changes.fechaFin !== undefined) values.fechaFin = changes.fechaFin;
+  if (changes.separacion !== undefined) values.separacion = changes.separacion;
+  if (changes.separacionDetalle !== undefined)
+    values.separacionDetalle = changes.separacionDetalle;
+  if (changes.copiaDni !== undefined) values.copiaDni = changes.copiaDni;
+  if (changes.muebleriaItems !== undefined)
+    values.muebleriaItems = changes.muebleriaItems;
+  if (changes.mascotasItems !== undefined)
+    values.mascotasItems = changes.mascotasItems;
+  if (changes.datosArrendatario !== undefined)
+    values.datosArrendatario = changes.datosArrendatario;
+  if (changes.documentoHtml !== undefined)
+    values.documentoHtml = changes.documentoHtml;
+  return values;
 }
 
 function clientRowToDomain(
@@ -220,42 +252,41 @@ export class DrizzleContractRepository implements ContractRepository {
   }
 
   async update(id: UUID, changes: UpdateDraftInput): Promise<Contract> {
-    const values: Partial<
-      Omit<typeof schema.contracts.$inferInsert, "id">
-    > = {};
-    if (changes.clienteId !== undefined) values.clienteId = changes.clienteId;
-    if (changes.departamentoId !== undefined)
-      values.departamentoId = changes.departamentoId;
-    if (changes.plantillaVersionId !== undefined)
-      values.plantillaVersionId = changes.plantillaVersionId;
-    if (changes.montoCanonMensual !== undefined)
-      values.montoCanonMensual = changes.montoCanonMensual;
-    if (changes.depositoGarantia !== undefined)
-      values.depositoGarantia = changes.depositoGarantia;
-    if (changes.mantenimiento !== undefined)
-      values.mantenimiento = changes.mantenimiento;
-    if (changes.fechaInicio !== undefined)
-      values.fechaInicio = changes.fechaInicio;
-    if (changes.fechaFin !== undefined) values.fechaFin = changes.fechaFin;
-    if (changes.separacion !== undefined) values.separacion = changes.separacion;
-    if (changes.muebleriaItems !== undefined)
-      values.muebleriaItems = changes.muebleriaItems;
-    if (changes.mascotasItems !== undefined)
-      values.mascotasItems = changes.mascotasItems;
-    if (changes.datosArrendatario !== undefined)
-      values.datosArrendatario = changes.datosArrendatario;
-    if (changes.documentoHtml !== undefined)
-      values.documentoHtml = changes.documentoHtml;
-
     const [row] = await db
       .update(schema.contracts)
-      .set({ ...values, actualizadoEn: new Date() })
+      .set({
+        ...updateValues(changes),
+        actualizadoEn: new Date(),
+        revision: sql`${schema.contracts.revision} + 1`,
+      })
       .where(eq(schema.contracts.id, id))
       .returning();
     if (!row) {
       throw new Error("Contrato no encontrado");
     }
     return toDomain(row);
+  }
+
+  async updateIfRevision(
+    id: UUID,
+    changes: UpdateDraftInput,
+    expectedRevision: number
+  ): Promise<Contract | null> {
+    const [row] = await db
+      .update(schema.contracts)
+      .set({
+        ...updateValues(changes),
+        actualizadoEn: new Date(),
+        revision: sql`${schema.contracts.revision} + 1`,
+      })
+      .where(
+        and(
+          eq(schema.contracts.id, id),
+          eq(schema.contracts.revision, expectedRevision)
+        )
+      )
+      .returning();
+    return row ? toDomain(row) : null;
   }
 
   async resolve(id: UUID, motivo: string): Promise<Contract> {
@@ -266,6 +297,7 @@ export class DrizzleContractRepository implements ContractRepository {
         motivoResolucion: motivo,
         resueltoEn: new Date(),
         actualizadoEn: new Date(),
+        revision: sql`${schema.contracts.revision} + 1`,
       })
       .where(eq(schema.contracts.id, id))
       .returning();
@@ -286,7 +318,11 @@ export class DrizzleContractRepository implements ContractRepository {
   async updateEstado(id: UUID, estado: ContractStatus): Promise<Contract> {
     const [row] = await db
       .update(schema.contracts)
-      .set({ estado, actualizadoEn: new Date() })
+      .set({
+        estado,
+        actualizadoEn: new Date(),
+        revision: sql`${schema.contracts.revision} + 1`,
+      })
       .where(eq(schema.contracts.id, id))
       .returning();
     if (!row) {
@@ -298,7 +334,11 @@ export class DrizzleContractRepository implements ContractRepository {
   async setSnapshot(id: UUID, snapshotId: UUID): Promise<Contract> {
     const [row] = await db
       .update(schema.contracts)
-      .set({ snapshotId, actualizadoEn: new Date() })
+      .set({
+        snapshotId,
+        actualizadoEn: new Date(),
+        revision: sql`${schema.contracts.revision} + 1`,
+      })
       .where(eq(schema.contracts.id, id))
       .returning();
     if (!row) {
