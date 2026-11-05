@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
@@ -140,6 +140,25 @@ function InputIndulgencia({
 
 const moneda = (n: number) =>
   n.toLocaleString("es-PE", { style: "currency", currency: "PEN" });
+
+async function cargarLista<T>(path: string): Promise<T[]> {
+  const response = await apiFetch(path);
+  const data: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      typeof data === "object" &&
+      data !== null &&
+      "error" in data &&
+      typeof data.error === "string"
+        ? data.error
+        : `Error ${response.status}`;
+    throw new Error(`No se pudo cargar ${path}: ${message}`);
+  }
+  if (!Array.isArray(data)) {
+    throw new Error(`La respuesta de ${path} no tiene el formato esperado.`);
+  }
+  return data as T[];
+}
 
 type AbonoModo = "PARCIAL" | "TOTAL";
 
@@ -414,6 +433,7 @@ export default function PagosPage() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [serviciosExtras, setServiciosExtras] = useState<ServicioExtraRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
   const [busqueda, setBusqueda] = useState("");
   const [abono, setAbono] = useState<{ fila: CuotaFila; modo: AbonoModo } | null>(null);
@@ -423,15 +443,20 @@ export default function PagosPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [cs, ps, ss] = await Promise.all([
-        apiFetch("/api/contracts").then((r) => (r.ok ? r.json() : [])),
-        apiFetch("/api/payments").then((r) => (r.ok ? r.json() : [])),
-        apiFetch("/api/servicios-extras").then((r) => (r.ok ? r.json() : [])),
+        cargarLista<ContractRow>("/api/contracts"),
+        cargarLista<PaymentRow>("/api/payments"),
+        cargarLista<ServicioExtraRow>("/api/servicios-extras"),
       ]);
-      setContracts(cs as ContractRow[]);
-      setPayments(ps as PaymentRow[]);
-      setServiciosExtras(ss as ServicioExtraRow[]);
+      setContracts(cs);
+      setPayments(ps);
+      setServiciosExtras(ss);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "No se pudo cargar Cobranza."
+      );
     } finally {
       setLoading(false);
     }
@@ -769,7 +794,22 @@ export default function PagosPage() {
           <BusquedaInput value={busqueda} onChange={setBusqueda} placeholder="Buscar cuota…" className="w-72" />
         </div>
 
-        {filter === "SERVICIOS_EXTRAS" ? (
+        {loadError ? (
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-error-container bg-error-container p-4 text-error-container-foreground"
+            role="alert"
+          >
+            <p className="text-sm">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="inline-flex items-center gap-2 rounded-md border border-current px-3 py-1.5 text-sm"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Reintentar
+            </button>
+          </div>
+        ) : filter === "SERVICIOS_EXTRAS" ? (
           <CobranzaServiciosExtras />
         ) : loading ? (
           <p className="text-on-surface-variant">Cargando cobranza…</p>
