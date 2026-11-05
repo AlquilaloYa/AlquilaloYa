@@ -11,6 +11,8 @@ import { buildSessionUser } from "@/lib/app-user";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission } from "@/lib/session";
 import { grantPaymentVerification } from "@/lib/payment-verification-session";
+import { replaceAuthUserTotpFactor } from "@/lib/users-admin";
+import { recordAdminAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +42,8 @@ export async function POST(req: Request) {
     const factorId = typeof body.factorId === "string" ? body.factorId : "";
     const code = typeof body.code === "string" ? body.code.trim() : "";
     const paymentVerification = body.purpose === "payment-verification";
-    if (body.purpose !== undefined && !paymentVerification) {
+    const replaceLostFactor = body.purpose === "replace-lost-factor";
+    if (body.purpose !== undefined && !paymentVerification && !replaceLostFactor) {
       return NextResponse.json({ error: "Propósito de activación no válido" }, { status: 400 });
     }
     if (!factorId || !code) {
@@ -73,9 +76,21 @@ export async function POST(req: Request) {
     if (!user) {
       return NextResponse.json({ error: "Usuario sin acceso al sistema" }, { status: 403 });
     }
-    if (paymentVerification) {
+    if (paymentVerification || replaceLostFactor) {
       const denied = requirePermission(user, Permission.CONTRACT_UPDATE);
       if (denied) return denied;
+    }
+
+    let replacedFactors = 0;
+    if (replaceLostFactor) {
+      replacedFactors = await replaceAuthUserTotpFactor(refreshed.id, factorId);
+      await recordAdminAction(dbModule, user, {
+        action: "MFA_TOTP_FACTOR_RECOVERED",
+        module: "SECURITY",
+        entityType: "USER",
+        entityId: user.id,
+        current: { replacedFactors },
+      });
     }
 
     const res = NextResponse.json({ user }, { status: 200 });
@@ -84,7 +99,9 @@ export async function POST(req: Request) {
       access_token: tokens.access_token,
       ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
     }, native);
-    return paymentVerification ? grantPaymentVerification(response, user.id) : response;
+    return paymentVerification || replaceLostFactor
+      ? grantPaymentVerification(response, user.id)
+      : response;
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

@@ -55,6 +55,51 @@ export async function findAuthUserByEmail(
   return id ? { id } : null;
 }
 
+export async function replaceAuthUserTotpFactor(
+  userId: string,
+  keepFactorId: string
+): Promise<number> {
+  const url = supabaseUrl();
+  if (!url || !isUsersAdminConfigured()) {
+    throw new Error(
+      "Admin de usuarios no configurado: faltan SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY"
+    );
+  }
+
+  const factorsResponse = await fetch(
+    `${url}/auth/v1/admin/users/${encodeURIComponent(userId)}/factors`,
+    { headers: adminHeaders(), cache: "no-store" }
+  );
+  if (!factorsResponse.ok) {
+    throw new Error(`list auth user factors ${factorsResponse.status}`);
+  }
+  const data = (await factorsResponse.json()) as {
+    factors?: Array<{ id?: string; factor_type?: string }>;
+  };
+  if (!Array.isArray(data.factors)) {
+    throw new Error("Respuesta de factores MFA inválida");
+  }
+
+  const obsoleteFactorIds = data.factors.flatMap(
+    (factor) =>
+      factor.factor_type === "totp" &&
+      typeof factor.id === "string" &&
+      factor.id !== keepFactorId
+        ? [factor.id]
+        : []
+  );
+  for (const factorId of obsoleteFactorIds) {
+    const response = await fetch(
+      `${url}/auth/v1/admin/users/${encodeURIComponent(userId)}/factors/${encodeURIComponent(factorId)}`,
+      { method: "DELETE", headers: adminHeaders(), cache: "no-store" }
+    );
+    if (!response.ok) {
+      throw new Error(`delete auth user factor ${response.status}`);
+    }
+  }
+  return obsoleteFactorIds.length;
+}
+
 /** Actualiza email + contraseña en Supabase Auth (si la credencial existe). */
 export async function updateAuthEmail(
   currentEmail: string,

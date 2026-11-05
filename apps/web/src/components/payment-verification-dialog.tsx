@@ -10,6 +10,7 @@ type Voucher = { nombre: string; url: string; monto?: number };
 type Responsable = "miguel" | "emely";
 type VerificationStep = "loading" | "code" | "enroll" | "payments";
 type EnrolledTotp = { factorId: string; qrCode: string; secret: string };
+type EnrollmentPurpose = "payment-verification" | "replace-lost-factor";
 
 type VerificationPayment = {
   id: string;
@@ -62,6 +63,8 @@ export function PaymentVerificationDialog({
   const [error, setError] = useState("");
   const [step, setStep] = useState<VerificationStep>("loading");
   const [enroll, setEnroll] = useState<EnrolledTotp | null>(null);
+  const [enrollmentPurpose, setEnrollmentPurpose] =
+    useState<EnrollmentPurpose>("payment-verification");
   const [authBusy, setAuthBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -243,7 +246,7 @@ export function PaymentVerificationDialog({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(
             step === "enroll"
-              ? { factorId: enroll?.factorId, code, purpose: "payment-verification" }
+              ? { factorId: enroll?.factorId, code, purpose: enrollmentPurpose }
               : { code }
           ),
         }
@@ -266,6 +269,51 @@ export function PaymentVerificationDialog({
         authorizationError instanceof Error
           ? authorizationError.message
           : "No se pudo validar el código."
+      );
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function iniciarRecuperacion() {
+    setAuthBusy(true);
+    setError("");
+    try {
+      const response = await apiFetch("/api/auth/mfa/enroll", { method: "POST" });
+      const body: unknown = await response.json().catch(() => null);
+      if (
+        !response.ok ||
+        typeof body !== "object" ||
+        body === null ||
+        !("factorId" in body) ||
+        typeof body.factorId !== "string" ||
+        !("qrCode" in body) ||
+        typeof body.qrCode !== "string" ||
+        !("secret" in body) ||
+        typeof body.secret !== "string"
+      ) {
+        throw new Error(
+          typeof body === "object" &&
+            body !== null &&
+            "error" in body &&
+            typeof body.error === "string"
+            ? body.error
+            : "No se pudo iniciar la recuperación del autenticador."
+        );
+      }
+      setEnroll({
+        factorId: body.factorId,
+        qrCode: body.qrCode,
+        secret: body.secret,
+      });
+      setEnrollmentPurpose("replace-lost-factor");
+      setCode("");
+      setStep("enroll");
+    } catch (recoveryError) {
+      setError(
+        recoveryError instanceof Error
+          ? recoveryError.message
+          : "No se pudo iniciar la recuperación del autenticador."
       );
     } finally {
       setAuthBusy(false);
@@ -371,7 +419,9 @@ export function PaymentVerificationDialog({
                   {step === "enroll" && enroll ? (
                     <div className="space-y-3 text-center">
                       <p className="text-sm text-on-surface-variant">
-                        Escanea este código QR con Google Authenticator u otra app autenticadora.
+                        {enrollmentPurpose === "replace-lost-factor"
+                          ? "Escanea este nuevo QR. Al confirmar el código, reemplazará el autenticador anterior."
+                          : "Escanea este código QR con Google Authenticator u otra app autenticadora."}
                       </p>
                       <Image
                         src={enroll.qrCode}
@@ -386,9 +436,19 @@ export function PaymentVerificationDialog({
                       </p>
                     </div>
                   ) : (
-                    <p className="text-sm text-on-surface-variant">
-                      Ingresa el código de tu app autenticadora para ver los vouchers del mes.
-                    </p>
+                    <div className="space-y-3">
+                      <p className="text-sm text-on-surface-variant">
+                        Ingresa el código de tu app autenticadora para ver los vouchers del mes.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void iniciarRecuperacion()}
+                        disabled={authBusy}
+                        className="text-sm font-medium text-primary underline disabled:opacity-50"
+                      >
+                        {authBusy ? "Preparando nuevo autenticador..." : "No tengo acceso al código"}
+                      </button>
+                    </div>
                   )}
                   {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
                   <form
