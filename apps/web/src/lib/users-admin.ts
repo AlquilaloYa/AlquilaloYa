@@ -73,14 +73,15 @@ async function removeAuthUserTotpFactors(
   if (!factorsResponse.ok) {
     throw new Error(`list auth user factors ${factorsResponse.status}`);
   }
-  const data = (await factorsResponse.json()) as {
-    factors?: Array<{ id?: string; factor_type?: string }>;
-  };
-  if (!Array.isArray(data.factors)) {
+  const factors = (await factorsResponse.json()) as Array<{
+    id?: string;
+    factor_type?: string;
+  }>;
+  if (!Array.isArray(factors)) {
     throw new Error("Respuesta de factores MFA inválida");
   }
 
-  const obsoleteFactorIds = data.factors.flatMap(
+  const obsoleteFactorIds = factors.flatMap(
     (factor) =>
       factor.factor_type === "totp" &&
       typeof factor.id === "string" &&
