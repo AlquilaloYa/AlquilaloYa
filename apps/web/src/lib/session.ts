@@ -3,6 +3,7 @@ import type { UserRole } from "@contract/domain/rbac";
 import { mfaEnforce } from "@contract/config/env";
 import { NextResponse } from "next/server";
 import { resolveSession } from "@/lib/supabase-auth";
+import { readSessionTokens } from "@/lib/session-cookies";
 import { isMfaPrivilegedRole } from "@/lib/mfa-policy";
 
 /**
@@ -20,7 +21,14 @@ export interface ResolvedUser {
 }
 
 export type AuthResult =
-  | { user: ResolvedUser }
+  | {
+      user: ResolvedUser;
+      sessionTokens: {
+        accessToken: string;
+        refreshToken?: string;
+        refreshed?: { access_token: string; refresh_token?: string };
+      };
+    }
   | { error: NextResponse };
 
 export interface DbUserModule {
@@ -50,6 +58,12 @@ export async function requireUser(
   if (!identity) {
     return { error: NextResponse.json({ error: "No autenticado" }, { status: 401 }) };
   }
+  const rawTokens = readSessionTokens(req);
+  const rawAccessToken = rawTokens.accessToken;
+  const accessToken = identity.refreshed?.access_token ?? rawAccessToken;
+  if (!accessToken) {
+    return { error: NextResponse.json({ error: "No autenticado" }, { status: 401 }) };
+  }
   const user = await new dbModule.DrizzleUserRepository().findByEmail(identity.email);
   if (!user || user.active === false) {
     return {
@@ -76,7 +90,16 @@ export async function requireUser(
   const additionalPermissions = Object.values(Permission).filter((permission) =>
     permissionKeys.includes(permission)
   );
-  return { user: { ...user, additionalPermissions } };
+  return {
+    user: { ...user, additionalPermissions },
+    sessionTokens: {
+      accessToken,
+      ...(identity.refreshed?.refresh_token ?? rawTokens.refreshToken
+        ? { refreshToken: identity.refreshed?.refresh_token ?? rawTokens.refreshToken }
+        : {}),
+      ...(identity.refreshed ? { refreshed: identity.refreshed } : {}),
+    },
+  };
 }
 
 /** Verifica permiso del usuario autenticado; 403 si no. */

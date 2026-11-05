@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
 import { completeTotp, listVerifiedTotp } from "@/lib/mfa";
-import { readSessionTokens } from "@/lib/supabase-auth";
+import { applySessionCookies, isNativeMobileRequest } from "@/lib/supabase-auth";
 import {
   clearPaymentVerification,
   grantPaymentVerification,
@@ -16,7 +16,11 @@ export async function POST(req: Request) {
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
     const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
-    if (denied) return denied;
+    if (denied) {
+      return auth.sessionTokens.refreshed
+        ? applySessionCookies(denied, auth.sessionTokens.refreshed, isNativeMobileRequest(req))
+        : denied;
+    }
 
     const body = (await req.json().catch(() => ({}))) as { code?: unknown };
     const code = typeof body.code === "string" ? body.code.trim() : "";
@@ -24,10 +28,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Ingresa el código de 6 dígitos" }, { status: 400 });
     }
 
-    const { accessToken } = readSessionTokens(req);
-    if (!accessToken) {
-      return NextResponse.json({ error: "No hay una sesión activa" }, { status: 401 });
-    }
+    const { accessToken } = auth.sessionTokens;
     const [factor] = await listVerifiedTotp(accessToken);
     if (!factor) {
       return NextResponse.json(
@@ -36,18 +37,33 @@ export async function POST(req: Request) {
       );
     }
 
+    let tokens: Awaited<ReturnType<typeof completeTotp>>;
     try {
-      await completeTotp(accessToken, factor.id, code);
+      tokens = await completeTotp(accessToken, factor.id, code);
     } catch {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: "El código no es válido o ya venció." },
         { status: 401 }
       );
+      return auth.sessionTokens.refreshed
+        ? applySessionCookies(response, auth.sessionTokens.refreshed, isNativeMobileRequest(req))
+        : response;
     }
 
     const response = NextResponse.json({ ok: true });
     response.headers.set("Cache-Control", "no-store");
-    return grantPaymentVerification(response, auth.user.id);
+    const refreshedToken = tokens.refresh_token ?? auth.sessionTokens.refreshToken;
+    return grantPaymentVerification(
+      applySessionCookies(
+        response,
+        {
+          access_token: tokens.access_token,
+          ...(refreshedToken ? { refresh_token: refreshedToken } : {}),
+        },
+        isNativeMobileRequest(req)
+      ),
+      auth.user.id
+    );
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

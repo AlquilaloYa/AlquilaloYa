@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   applySessionCookies,
-  readSessionTokens,
-  verifyAccessToken,
   isNativeMobileRequest,
+  readSessionTokens,
+  resolveSession,
+  verifyAccessToken,
 } from "@/lib/supabase-auth";
 import { completeTotp } from "@/lib/mfa";
 import { buildSessionUser } from "@/lib/app-user";
@@ -21,9 +22,13 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     const native = isNativeMobileRequest(req);
-    const { accessToken } = readSessionTokens(req);
-    const identity = await verifyAccessToken(accessToken);
-    if (!identity || !accessToken) {
+    const identity = await resolveSession(req);
+    if (!identity) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+    const accessToken =
+      identity.refreshed?.access_token ?? readSessionTokens(req).accessToken;
+    if (!accessToken) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
@@ -46,15 +51,21 @@ export async function POST(req: Request) {
     try {
       tokens = await completeTotp(accessToken, factorId, code);
     } catch (e) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: (e as Error).message || "Código inválido" },
         { status: 400 }
       );
+      return identity.refreshed
+        ? applySessionCookies(response, identity.refreshed, native)
+        : response;
     }
 
     const refreshed = await verifyAccessToken(tokens.access_token);
     if (!refreshed) {
-      return NextResponse.json({ error: "Sesión inválida" }, { status: 401 });
+      const response = NextResponse.json({ error: "Sesión inválida" }, { status: 401 });
+      return identity.refreshed
+        ? applySessionCookies(response, identity.refreshed, native)
+        : response;
     }
 
     const dbModule = await import("@contract/db");
