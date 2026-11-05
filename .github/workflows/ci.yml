@@ -44,6 +44,12 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Validate backup scripts
+        run: |
+          bash -n scripts/backup.sh scripts/restore.sh
+          node --check scripts/backup-storage.mjs
+          node --check scripts/restore-storage.mjs
+
       - name: Test
         run: pnpm test
 

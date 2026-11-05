@@ -1,8 +1,8 @@
-name: Backup DB
+name: Encrypted DR Backup
 
-# Copia de seguridad diaria de la base de datos (Fase 8 - DR).
-# Sube el dump como artefacto del repositorio con retención de 30 días.
-# Requiere el secret DATABASE_URL (String) en la configuración del repo.
+# Respaldo diario cifrado de PostgreSQL y Supabase Storage.
+# Requiere secrets DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+# y la variable BACKUP_AGE_RECIPIENT. La clave privada age se conserva fuera de GitHub.
 
 on:
   schedule:
@@ -11,24 +11,107 @@ on:
 
 jobs:
   backup:
-    name: Volcado pg_dump
+    name: Respaldo cifrado de base de datos y Storage
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: encrypted-dr-backup
+      cancel-in-progress: false
+    env:
+      BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+      BACKUP_RETENTION: 14
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Instalar cliente PostgreSQL
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar herramientas de respaldo
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y age postgresql-client rclone
 
-      - name: Generar backup
+      - name: Validar configuración requerida
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in DATABASE_URL SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY BACKUP_AGE_RECIPIENT; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Falta configurar $name en la configuración de GitHub Actions."
+              exit 1
+            fi
+          done
+          case "$SUPABASE_URL" in
+            https://*) ;;
+            *) echo "::error::SUPABASE_URL debe ser una URL https."; exit 1 ;;
+          esac
+
+      - name: Respaldar PostgreSQL y cifrar
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: bash scripts/backup.sh backups
 
-      - name: Subir artefacto
+      - name: Respaldar archivos de Supabase Storage y cifrar
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/backup-storage.mjs backups
+
+      - name: Respaldar código fuente y cifrar
+        env:
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          temporary_bundle="$(mktemp)"
+          trap 'rm -f "$temporary_bundle"' EXIT
+          git bundle create "$temporary_bundle" --all
+          git bundle verify "$temporary_bundle"
+          age --encrypt --recipient "$BACKUP_AGE_RECIPIENT" \
+            --output "backups/source-${GITHUB_SHA}.bundle.age" "$temporary_bundle"
+          (
+            cd backups
+            sha256sum "source-${GITHUB_SHA}.bundle.age" > "source-${GITHUB_SHA}.bundle.age.sha256"
+          )
+
+      - name: Subir artefactos cifrados
         uses: actions/upload-artifact@v4
         with:
-          name: db-backup-${{ github.run_id }}
-          path: backups/*.dump*
+          name: encrypted-dr-backup-${{ github.run_id }}
+          path: |
+            backups/*.age
+            backups/*.sha256
           retention-days: 30
+          if-no-files-found: error
+
+      - name: Replicar a Google Drive
+        env:
+          RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
+          RCLONE_DRIVE_PATH: ${{ vars.RCLONE_DRIVE_PATH }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RCLONE_CONFIG:-}" ]; then
+            echo "::error::Falta configurar el secreto RCLONE_CONFIG para Google Drive."
+            exit 1
+          fi
+          if [ -z "${RCLONE_DRIVE_PATH:-}" ] || [[ "$RCLONE_DRIVE_PATH" != *:* ]]; then
+            echo "::error::Configura RCLONE_DRIVE_PATH como remote:ruta, por ejemplo gdrive:AlquilaYa/DR."
+            exit 1
+          fi
+          config_file="$RUNNER_TEMP/rclone.conf"
+          trap 'rm -f "$config_file"' EXIT
+          printf '%s\n' "$RCLONE_CONFIG" > "$config_file"
+          chmod 600 "$config_file"
+          rclone copy backups "$RCLONE_DRIVE_PATH/$GITHUB_RUN_ID" \
+            --config "$config_file" \
+            --create-empty-src-dirs \
+            --immutable \
+            --transfers 4 \
+            --checkers 8

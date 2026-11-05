@@ -2,27 +2,27 @@
 
 ## Objetivos
 
-- RPO objetivo: 24 horas como máximo hasta habilitar backups más frecuentes.
-- RTO objetivo: 4 horas.
-- Base de datos, Storage y Redis se respaldan por separado.
+- **RPO objetivo:** hasta 24 horas mediante copia diaria, sujeto a que el workflow termine correctamente.
+- **RTO objetivo:** hasta 1 hora; pendiente de demostración en simulacro.
+- Respaldar PostgreSQL y todos los buckets de Supabase Storage. Redis se reconstruye y no es fuente de verdad.
+- Los runbooks detallados, variables requeridas, claves, restauración y limitaciones están en [BACKUP-DR.md](../BACKUP-DR.md).
 
-## Backup
+## Controles
 
-1. Activar backups automáticos de Supabase para la base de datos.
-2. Mantener Storage privado y conservar objetos PDF históricos.
-3. Redis usa AOF para recuperación operativa, pero no es la fuente de verdad.
-4. Registrar fecha, alcance y resultado de cada backup.
+1. El workflow diario de GitHub Actions produce dumps cifrados con `age` y SHA-256 antes de cargarlos como artefactos (30 días).
+2. Mantener la clave privada `age` offline y separada de GitHub/Supabase; Actions solo conserva el destinatario público.
+3. Revisar el estado de cada ejecución y alertar sobre fallos para no exceder el RPO.
+4. Mantener una segunda copia cifrada e inmutable fuera de GitHub con credenciales independientes. **Este destino externo todavía no está configurado**; los artefactos de Actions pueden ser eliminados por un administrador de la cuenta.
+5. Mantener Storage privado cuando corresponda y conservar documentos históricos.
 
-## Restore
+## Recuperación
 
-1. Crear un proyecto Supabase de recuperación.
-2. Restaurar la base de datos y aplicar migraciones pendientes.
-3. Restaurar Storage conservando las claves de documentos.
-4. Crear Redis vacío y permitir que los jobs reintentables se vuelvan a encolar.
-5. Configurar secretos de recuperación, nunca copiar secretos desde el cliente.
-6. Ejecutar `GET /api/health` y una descarga de documento histórico.
-7. Documentar el tiempo real y cualquier pérdida dentro del RPO.
+1. Declarar incidente, congelar cambios y evitar escrituras concurrentes.
+2. Crear un proyecto de recuperación aislado.
+3. Descargar los artefactos, comprobar SHA-256 y descifrar con la clave custodiada.
+4. Restaurar PostgreSQL y Storage con los procedimientos de [BACKUP-DR.md](../BACKUP-DR.md).
+5. Configurar secretos de recuperación; nunca copiarlos desde el cliente.
+6. Ejecutar las verificaciones de datos, `GET /api/health`, login y descarga de documentos históricos.
+7. Registrar tiempo real, integridad verificada y pérdida de datos respecto al RPO.
 
-## Prueba
-
-El restore se prueba al menos trimestralmente con datos no productivos o una copia protegida. No se considera válido hasta verificar el SHA-256 de un documento restaurado.
+No restaurar una copia sobre producción hasta verificarla en aislamiento y autorizar explícitamente el cambio.
