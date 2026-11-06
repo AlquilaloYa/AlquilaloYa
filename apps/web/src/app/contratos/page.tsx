@@ -9,13 +9,11 @@ import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
 import {
-  leerSeparaciones,
   getTipoSeparacion,
   type SeparacionRecord,
 } from "@/lib/separaciones";
 import {
   obtenerContactoPorId,
-  obtenerContactosResumen,
   type ContactoResumen,
   type ContactSeed,
   type ArchivoAdjunto,
@@ -214,7 +212,9 @@ export default function ContratosPage() {
   const [cargandoDepositantes, setCargandoDepositantes] = useState(true);
   const [cargandoDepartamentos, setCargandoDepartamentos] = useState(true);
   const [cargandoPlantillas, setCargandoPlantillas] = useState(true);
+  const [errorCargaDepositantes, setErrorCargaDepositantes] = useState<string | null>(null);
   const [, setTick] = useState(0);
+  const selectorLoadRequest = useRef(0);
 
   const [status, setStatus] = useState("all");
   const [department, setDepartment] = useState("all");
@@ -245,32 +245,75 @@ export default function ContratosPage() {
     load();
   }, [load]);
 
+  const cargarDatosDepositante = useCallback(async () => {
+    const requestId = ++selectorLoadRequest.current;
+    setCargandoDepositantes(true);
+    setCargandoDepartamentos(true);
+    setErrorCargaDepositantes(null);
+
+    async function obtenerLista<T>(url: string, nombre: string): Promise<T[]> {
+      let ultimoError: Error = new Error(`No se pudieron cargar ${nombre}.`);
+      for (let intento = 0; intento < 3; intento += 1) {
+        try {
+          const res = await apiFetch(url);
+          if (!res.ok) {
+            const error = new Error(`No se pudieron cargar ${nombre} (${res.status}).`);
+            if (res.status < 500) throw Object.assign(error, { noReintentar: true });
+            throw error;
+          }
+          const data = (await res.json()) as T[];
+          if (!Array.isArray(data)) throw new Error(`La respuesta de ${nombre} no es válida.`);
+          return data;
+        } catch (error) {
+          ultimoError = error as Error;
+          if ((error as Error & { noReintentar?: boolean }).noReintentar) break;
+          if (intento < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 500 * (intento + 1)));
+          }
+        }
+      }
+      throw ultimoError;
+    }
+
+    const resultados = await Promise.allSettled([
+      obtenerLista<SeparacionRecord>("/api/separaciones", "las separaciones"),
+      obtenerLista<ContactoResumen>("/api/contactos?resumen=1", "los contactos"),
+      obtenerLista<DepartmentApi>("/api/departamentos", "los departamentos"),
+    ]);
+    if (requestId !== selectorLoadRequest.current) return;
+
+    const [seps, ctos, deps] = resultados;
+    const errores: string[] = [];
+    if (seps.status === "fulfilled") setSeparaciones(seps.value);
+    else errores.push("separaciones");
+    if (ctos.status === "fulfilled") setContactos(ctos.value);
+    else errores.push("contactos");
+    if (deps.status === "fulfilled") setDepartments(deps.value);
+    else errores.push("departamentos");
+
+    if (errores.length > 0) {
+      setErrorCargaDepositantes(
+        `No se pudieron cargar ${errores.join(" y ")}. Intenta volver a cargar.`
+      );
+    }
+    setCargandoDepositantes(false);
+    setCargandoDepartamentos(false);
+  }, []);
+
   useEffect(() => {
     let active = true;
-    const cargarDepositantes = async () => {
-      setCargandoDepositantes(true);
-      const [seps, ctos] = await Promise.all([
-        leerSeparaciones(),
-        obtenerContactosResumen(),
-      ]);
-      if (active) {
-        setSeparaciones(seps);
-        setContactos(ctos);
-        setCargandoDepositantes(false);
-      }
-    };
-
-    void cargarDepositantes();
+    void cargarDatosDepositante();
     void cargarInventarios(true).catch((err: Error) => {
       if (active) setError(err.message);
     });
     void migrarDatosLocales().then(() => {
-      if (active) void cargarDepositantes();
+      if (active) void cargarDatosDepositante();
     });
     return () => {
       active = false;
+      selectorLoadRequest.current += 1;
     };
-  }, []);
+  }, [cargarDatosDepositante]);
 
   useEffect(() => {
     const interval = setInterval(() => setTick((t) => t + 1), 60000);
@@ -279,21 +322,6 @@ export default function ContratosPage() {
 
   useEffect(() => {
     let active = true;
-    void apiFetch("/api/departamentos")
-      .then(async (res) => {
-        if (!res.ok) throw new Error("No se pudieron cargar los departamentos");
-        return (await res.json()) as DepartmentApi[];
-      })
-      .then((data) => {
-        if (active) setDepartments(data);
-      })
-      .catch((err: Error) => {
-        if (active) setError(err.message);
-      })
-      .finally(() => {
-        if (active) setCargandoDepartamentos(false);
-      });
-
     void apiFetch("/api/templates?selector=1")
       .then(async (res) => {
         if (!res.ok) throw new Error("No se pudieron cargar las plantillas");
@@ -813,6 +841,8 @@ res.push({
           cargandoDepositantes={cargandoDepositantes}
           cargandoDepartamentos={cargandoDepartamentos}
           cargandoPlantillas={cargandoPlantillas}
+          errorCargaDepositantes={errorCargaDepositantes}
+          onRetryDepositantes={() => void cargarDatosDepositante()}
           onClose={() => setShowCreate(false)}
           onCreated={async () => {
             setShowCreate(false);
@@ -1340,6 +1370,8 @@ function CreateContractModal({
   cargandoDepositantes,
   cargandoDepartamentos,
   cargandoPlantillas,
+  errorCargaDepositantes,
+  onRetryDepositantes,
   onClose,
   onCreated,
 }: {
@@ -1350,6 +1382,8 @@ function CreateContractModal({
   cargandoDepositantes: boolean;
   cargandoDepartamentos: boolean;
   cargandoPlantillas: boolean;
+  errorCargaDepositantes: string | null;
+  onRetryDepositantes: () => void;
   onClose: () => void;
   onCreated: () => Promise<void>;
 }) {
@@ -1583,7 +1617,21 @@ function CreateContractModal({
             {cargandoDetalle ? (
               <p className="mt-1 text-xs text-on-surface-variant">Cargando datos y documentos del solicitante…</p>
             ) : null}
-            {!cargandoDepositantes && clients.length === 0 ? (
+            {errorCargaDepositantes ? (
+              <div className="mt-1 flex items-center justify-between gap-2 text-xs text-destructive">
+                <span>{errorCargaDepositantes}</span>
+                <button
+                  type="button"
+                  onClick={onRetryDepositantes}
+                  disabled={cargandoDepositantes || cargandoDepartamentos}
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-outline-variant px-2 py-1 text-on-surface-variant disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3 w-3 ${cargandoDepositantes || cargandoDepartamentos ? "animate-spin" : ""}`} />
+                  Reintentar
+                </button>
+              </div>
+            ) : null}
+            {!errorCargaDepositantes && !cargandoDepositantes && !cargandoDepartamentos && clients.length === 0 ? (
               <p className="mt-1 text-xs text-on-surface-variant">No hay solicitantes con separación activa.</p>
             ) : null}
           </div>
