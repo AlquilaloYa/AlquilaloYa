@@ -61,6 +61,7 @@ import {
   Waves,
   LineChart,
   AppWindow,
+  MapPinned,
   type LucideIcon,
 } from "lucide-react";
 
@@ -72,7 +73,7 @@ interface NavItem {
   phase?: string;
   permission?: Permission;
   external?: boolean;
-  group?: "contratos" | "marketing" | "google" | "rrhh" | "operatividad" | "contabilidad";
+  group?: "contratos" | "marketing" | "google" | "rrhh" | "operatividad" | "contabilidad" | "sedes";
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -126,6 +127,22 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "hr.read", group: "rrhh" },
   { href: "/cronograma-asistencia", label: "Registro de asistencia", icon: AlarmClock, section: "Recursos Humanos", permission: "attendance.read", group: "rrhh" },
+  {
+    href: "/sedes/ang170",
+    label: "ANG170",
+    icon: Building2,
+    section: "Gestión de Sedes",
+    permission: "department.read",
+    group: "sedes",
+  },
+  {
+    href: "/sedes/ben2195",
+    label: "BEN2195",
+    icon: Building2,
+    section: "Gestión de Sedes",
+    permission: "department.read",
+    group: "sedes",
+  },
   {
     href: "/contabilidad/balance-general",
     label: "Balance General",
@@ -386,6 +403,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [marketingOpen, setMarketingOpen] = useState(false);
   const [googleOpen, setGoogleOpen] = useState(false);
   const [rrhhOpen, setRrhhOpen] = useState(false);
+  const [sedesOpen, setSedesOpen] = useState(false);
   const [contabilidadOpen, setContabilidadOpen] = useState(false);
   const [operatividadOpen, setOperatividadOpen] = useState(false);
 
@@ -519,6 +537,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 icon: Users,
                 open: rrhhOpen,
                 onToggle: () => setRrhhOpen((open) => !open),
+              },
+              {
+                key: "sedes",
+                label: "Gestión de Sedes",
+                icon: MapPinned,
+                open: sedesOpen,
+                onToggle: () => setSedesOpen((open) => !open),
               },
               {
                 key: "contabilidad",
