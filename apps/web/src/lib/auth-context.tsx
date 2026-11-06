@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -29,6 +30,8 @@ export type VerifyMfaResult = { status: "ok" } | { status: "error"; message: str
 interface AuthContextValue {
   user: SessionUser | null;
   loading: boolean;
+  sessionError: string | null;
+  retrySession: () => Promise<void>;
   /** Autentica en el servidor y activa la cookie httpOnly de sesión. */
   login: (email: string, password: string) => Promise<LoginResult>;
   /** Completa el reto MFA (SEC-015) tras un login que lo requiera. */
@@ -50,36 +53,60 @@ export const DEMO_EMAILS = [
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const sessionRequest = useRef<AbortController | null>(null);
+
+  const retrySession = useCallback(async () => {
+    sessionRequest.current?.abort();
+    const ctrl = new AbortController();
+    sessionRequest.current = ctrl;
+    setLoading(true);
+    setSessionError(null);
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      ctrl.abort();
+    }, 30_000);
+    try {
+      const res = await fetch("/api/auth/me", {
+        credentials: "same-origin",
+        signal: ctrl.signal,
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { user?: SessionUser };
+        setUser(data.user ?? null);
+      } else if (res.status === 401) {
+        setUser(null);
+      } else if (res.status === 429 || res.status >= 500) {
+        setSessionError("El servicio de autenticación está demorando. Tu sesión se mantiene; puedes volver a intentar.");
+      } else {
+        setUser(null);
+      }
+    } catch {
+      if (timedOut) {
+        setSessionError("La validación de sesión está demorando. Tu sesión se mantiene; puedes volver a intentar.");
+      } else if (!ctrl.signal.aborted) {
+        setSessionError("No se pudo conectar para validar tu sesión. Tu sesión se mantiene; puedes volver a intentar.");
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (sessionRequest.current === ctrl) {
+        sessionRequest.current = null;
+        setLoading(false);
+      }
+    }
+  }, []);
 
   // Resuelve la sesión real desde el servidor (cookie httpOnly).
   useEffect(() => {
-    let alive = true;
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 12_000);
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/me", {
-          credentials: "same-origin",
-          signal: ctrl.signal,
-          cache: "no-store",
-        });
-        if (res.ok && alive) {
-          const data = (await res.json()) as { user?: SessionUser };
-          setUser(data.user ?? null);
-        }
-      } catch {
-        /* sin sesión o fallo de red/timeout */
-      } finally {
-        clearTimeout(timeout);
-        if (alive) setLoading(false);
-      }
-    })();
+    void retrySession();
     return () => {
-      alive = false;
-      clearTimeout(timeout);
-      ctrl.abort();
+      const currentRequest = sessionRequest.current;
+      sessionRequest.current = null;
+      currentRequest?.abort();
     };
-  }, []);
+  }, [retrySession]);
 
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     try {
@@ -146,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, verifyMfa, logout }}>
+    <AuthContext.Provider value={{ user, loading, sessionError, retrySession, login, verifyMfa, logout }}>
       {children}
     </AuthContext.Provider>
   );

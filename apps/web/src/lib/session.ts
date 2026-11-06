@@ -6,6 +6,7 @@ import {
   applySessionCookies,
   isNativeMobileRequest,
   resolveSession,
+  SupabaseAuthUnavailableError,
 } from "@/lib/supabase-auth";
 import { readSessionTokens } from "@/lib/session-cookies";
 import { isMfaPrivilegedRole } from "@/lib/mfa-policy";
@@ -58,7 +59,22 @@ export async function requireUser(
   dbModule: DbUserModule,
   req: Request
 ): Promise<AuthResult> {
-  const identity = await resolveSession(req);
+  let identity: Awaited<ReturnType<typeof resolveSession>>;
+  try {
+    identity = await resolveSession(req);
+  } catch (error) {
+    if (!(error instanceof SupabaseAuthUnavailableError)) throw error;
+    console.warn("[auth] Supabase Auth no disponible para validar sesión");
+    const response = NextResponse.json(
+      {
+        error: "No se pudo validar la sesión por una demora temporal. Inténtalo de nuevo.",
+        code: "AUTH_PROVIDER_UNAVAILABLE",
+      },
+      { status: 503 },
+    );
+    response.headers.set("Retry-After", "5");
+    return { error: response };
+  }
   if (!identity) {
     return { error: NextResponse.json({ error: "No autenticado" }, { status: 401 }) };
   }

@@ -62,4 +62,21 @@ describe("apiFetch", () => {
     await result;
     expect(forzarCierreSesion).not.toHaveBeenCalled();
   });
+
+  it("does not close the session when the server reports a temporary outage", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ error: "Autenticación temporalmente no disponible" }),
+          { status: 503 }
+        )
+      )
+    );
+
+    const response = await apiFetch("/api/contracts");
+
+    expect(response.status).toBe(503);
+    expect(forzarCierreSesion).not.toHaveBeenCalled();
+  });
 });

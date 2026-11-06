@@ -33,6 +33,59 @@ export {
   isNativeMobileRequest,
 };
 
+export class SupabaseAuthUnavailableError extends Error {
+  constructor() {
+    super("Supabase Auth no está disponible temporalmente");
+    this.name = "SupabaseAuthUnavailableError";
+  }
+}
+
+const VERIFIED_SESSION_TTL_MS = 15_000;
+const MAX_VERIFIED_SESSIONS = 500;
+const verifiedSessionCache = new Map<
+  string,
+  { expiresAt: number; identity: { email: string; id: string; aal?: string } }
+>();
+
+async function hashAccessToken(accessToken: string): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(accessToken)
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+}
+
+function cachedSession(key: string) {
+  const cached = verifiedSessionCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    verifiedSessionCache.delete(key);
+    return null;
+  }
+  return { key, identity: cached.identity };
+}
+
+function cacheSession(
+  key: string,
+  identity: { email: string; id: string; aal?: string }
+): void {
+  const now = Date.now();
+  for (const [cacheKey, entry] of verifiedSessionCache) {
+    if (entry.expiresAt <= now) verifiedSessionCache.delete(cacheKey);
+  }
+  while (verifiedSessionCache.size >= MAX_VERIFIED_SESSIONS) {
+    const oldestKey = verifiedSessionCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    verifiedSessionCache.delete(oldestKey);
+  }
+  verifiedSessionCache.set(key, {
+    expiresAt: now + VERIFIED_SESSION_TTL_MS,
+    identity,
+  });
+}
+
 /** Cambia email+password por tokens (flujo de contraseña de Supabase). */
 export async function loginWithPassword(
   email: string,
@@ -68,23 +121,41 @@ export async function verifyAccessToken(
   accessToken: string | undefined
 ): Promise<{ email: string; id: string; aal?: string } | null> {
   if (!accessToken) return null;
+  let cacheKey: string;
+  try {
+    cacheKey = await hashAccessToken(accessToken);
+  } catch {
+    throw new SupabaseAuthUnavailableError();
+  }
+  const cached = cachedSession(cacheKey);
+  if (cached) return cached.identity;
   const url = supabaseUrl();
   const anon = supabaseAnonKey();
-  if (!url || !anon) return null;
+  if (!url || !anon) throw new SupabaseAuthUnavailableError();
+  let res: Response;
   try {
-    const res = await fetch(`${url}/auth/v1/user`, {
+    res = await fetch(`${url}/auth/v1/user`, {
       headers: { Authorization: `Bearer ${accessToken}`, apikey: anon },
       cache: "no-store",
       signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return null;
+  } catch {
+    throw new SupabaseAuthUnavailableError();
+  }
+  if (res.status === 429 || res.status >= 500) {
+    throw new SupabaseAuthUnavailableError();
+  }
+  if (!res.ok) return null;
+  try {
     const data = (await res.json()) as { email?: string; id?: string };
     if (!data.email || !data.id) return null;
     // SEC-015: el claim `aal` del access token indica si la sesión ya pasó MFA.
     const aal = decodeJwtPayload(accessToken)?.aal;
-    return { email: data.email, id: data.id, ...(aal ? { aal } : {}) };
+    const identity = { email: data.email, id: data.id, ...(aal ? { aal } : {}) };
+    cacheSession(cacheKey, identity);
+    return identity;
   } catch {
-    return null;
+    throw new SupabaseAuthUnavailableError();
   }
 }
 
@@ -94,16 +165,24 @@ export async function refreshSession(
 ): Promise<{ access_token: string; refresh_token?: string } | null> {
   const url = supabaseUrl();
   const anon = supabaseAnonKey();
-  if (!url || !anon) return null;
+  if (!url || !anon) throw new SupabaseAuthUnavailableError();
+  let res: Response;
   try {
-    const res = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
+    res = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: anon },
       body: JSON.stringify({ refresh_token: refreshToken }),
       cache: "no-store",
       signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return null;
+  } catch {
+    throw new SupabaseAuthUnavailableError();
+  }
+  if (res.status === 429 || res.status >= 500) {
+    throw new SupabaseAuthUnavailableError();
+  }
+  if (!res.ok) return null;
+  try {
     const d = (await res.json()) as { access_token?: string; refresh_token?: string };
     if (!d.access_token) return null;
     return {
@@ -111,7 +190,7 @@ export async function refreshSession(
       ...(d.refresh_token ? { refresh_token: d.refresh_token } : {}),
     };
   } catch {
-    return null;
+    throw new SupabaseAuthUnavailableError();
   }
 }
 

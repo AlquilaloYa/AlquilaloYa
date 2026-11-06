@@ -410,7 +410,7 @@ function NavGroup({
 }
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, sessionError, retrySession } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
@@ -426,10 +426,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [operatividadOpen, setOperatividadOpen] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && !sessionError) {
       router.replace("/login");
     }
-  }, [loading, user, router]);
+  }, [loading, user, sessionError, router]);
 
   useEffect(() => {
     if (
@@ -459,11 +459,25 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface text-on-surface">
-        <div className="flex items-center gap-3 font-body-md text-on-surface-variant">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-surface-variant border-t-primary" />
-          Redirigiendo al inicio de sesión…
-        </div>
+      <div className="flex min-h-screen items-center justify-center bg-surface px-4 text-on-surface">
+        {sessionError ? (
+          <div className="max-w-md space-y-4 rounded-xl border border-outline-variant bg-surface-container-lowest p-6 text-center shadow-sm">
+            <p className="font-body-md text-on-surface-variant">{sessionError}</p>
+            <button
+              type="button"
+              onClick={() => void retrySession()}
+              disabled={loading}
+              className="rounded-md bg-primary px-4 py-2 font-label-md text-on-primary disabled:opacity-60"
+            >
+              {loading ? "Verificando…" : "Reintentar"}
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 font-body-md text-on-surface-variant">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-surface-variant border-t-primary" />
+            Redirigiendo al inicio de sesión…
+          </div>
+        )}
       </div>
     );
   }
