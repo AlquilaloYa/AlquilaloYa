@@ -26,6 +26,8 @@ export interface OpcionesApi extends RequestInit {
    * Los pollers de segundo plano pueden desactivar esta gestión de 401.
    */
   sesionCritica?: boolean;
+  /** Tiempo máximo para operaciones que legítimamente tardan más que una carga normal. */
+  timeoutMs?: number;
 }
 
 /** Límite para evitar que una petición pendiente deje indefinidamente la UI cargando. */
@@ -40,8 +42,13 @@ export async function apiFetch(
   const email = currentUserEmail();
   if (email) headers.set(SESSION_HEADER, email);
 
-  const { sesionCritica: sesionCriticaConfig, ...restoInit } = init ?? {};
+  const {
+    sesionCritica: sesionCriticaConfig,
+    timeoutMs: timeoutMsConfig,
+    ...restoInit
+  } = init ?? {};
   const sesionCritica = sesionCriticaConfig ?? true;
+  const timeoutMs = timeoutMsConfig ?? TIEMPO_LIMITE_PETICION_MS;
 
   // Si el llamador trae su propio signal (p.ej. abort manual), lo respetamos:
   // no le añadimos nuestro timeout ni cerramos sesión por su cuenta.
@@ -50,7 +57,7 @@ export async function apiFetch(
   }
 
   const ctrl = new AbortController();
-  const temporizador = setTimeout(() => ctrl.abort(), TIEMPO_LIMITE_PETICION_MS);
+  const temporizador = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(input, { ...restoInit, headers, signal: ctrl.signal });
     if (sesionCritica && res.status === 401) {
@@ -62,10 +69,10 @@ export async function apiFetch(
     if (err instanceof DOMException && err.name === "AbortError") {
       if (sesionCritica) {
         throw new Error(
-          `La carga superó ${TIEMPO_LIMITE_PETICION_MS / 1000} s de espera.`
+          `La carga superó ${timeoutMs / 1000} s de espera.`
         );
       }
-      throw new Error(`La carga superó ${TIEMPO_LIMITE_PETICION_MS / 1000} s de espera.`);
+      throw new Error(`La carga superó ${timeoutMs / 1000} s de espera.`);
     }
     throw err;
   } finally {

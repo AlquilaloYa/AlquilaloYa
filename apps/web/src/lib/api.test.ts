@@ -35,4 +35,31 @@ describe("apiFetch", () => {
     await result;
     expect(forzarCierreSesion).not.toHaveBeenCalled();
   });
+
+  it("supports a longer timeout for slow contract creation requests", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => {
+              reject(new DOMException("Aborted", "AbortError"));
+            });
+          })
+      )
+    );
+
+    const request = apiFetch("/api/contracts", {
+      method: "POST",
+      timeoutMs: 120_000,
+    });
+    const result = expect(request).rejects.toThrow("120 s de espera");
+    await vi.advanceTimersByTimeAsync(119_999);
+    expect(forzarCierreSesion).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+
+    await result;
+    expect(forzarCierreSesion).not.toHaveBeenCalled();
+  });
 });

@@ -1485,6 +1485,7 @@ function CreateContractModal({
 
       const res = await apiFetch("/api/contracts", {
         method: "POST",
+        timeoutMs: 120_000,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,

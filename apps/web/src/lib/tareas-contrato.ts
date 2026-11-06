@@ -89,13 +89,23 @@ export async function sincronizarTareasContrato(
 
   let creadas = 0;
   let actualizadas = 0;
+  const nuevas: Array<typeof schema.tasks.$inferInsert> = [];
+  const actualizaciones: Array<{
+    id: string;
+    patch: {
+      fechaLimite?: Date;
+      titulo?: string;
+      descripcion?: string;
+      updatedAt: Date;
+    };
+  }> = [];
   for (const ev of eventos) {
     const limite = fechaMediodia(ev.fecha);
     if (!limite) continue;
     const descripcion = `Contrato ${c.codigoContrato} · Cliente: ${cliente} · ${depto} · ${ev.detalle}. Generada automáticamente por AlquilaYa ERP.`;
     const prev = existentes.find((t) => t.origenEvento === ev.kind);
     if (!prev) {
-      await db.insert(schema.tasks).values({
+      nuevas.push({
         titulo: ev.titulo,
         descripcion,
         asignadoA: "",
@@ -106,7 +116,6 @@ export async function sincronizarTareasContrato(
         origenContratoId: contractId,
         origenEvento: ev.kind,
       });
-      creadas += 1;
       continue;
     }
     const patch: {
@@ -129,9 +138,18 @@ export async function sincronizarTareasContrato(
       toco = true;
     }
     if (toco) {
-      await db.update(schema.tasks).set(patch).where(eq(schema.tasks.id, prev.id));
-      actualizadas += 1;
+      actualizaciones.push({ id: prev.id, patch });
     }
   }
+  if (nuevas.length > 0) {
+    await db.insert(schema.tasks).values(nuevas);
+    creadas = nuevas.length;
+  }
+  await Promise.all(
+    actualizaciones.map(({ id, patch }) =>
+      db.update(schema.tasks).set(patch).where(eq(schema.tasks.id, id))
+    )
+  );
+  actualizadas = actualizaciones.length;
   return { creadas, actualizadas };
 }

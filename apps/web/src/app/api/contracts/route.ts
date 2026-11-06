@@ -6,6 +6,7 @@ import { sincronizarTareasContrato } from "@/lib/tareas-contrato";
 import type { CreateContractInput } from "@contract/domain";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -185,14 +186,19 @@ export async function POST(request: Request) {
     const { cliente: _cliente, ...contractInput } = body;
     void _cliente;
     const { codigoContrato: codigoBase } = contractInput;
-    const existingCodes = await db
-      .select({ codigoContrato: schema.contracts.codigoContrato })
-      .from(schema.contracts);
-    const usedCodes = new Set(existingCodes.map((row) => row.codigoContrato));
     let codigoContrato = codigoBase?.trim() || `CTR-${Date.now().toString().slice(-8)}`;
     const codigoInicial = codigoContrato;
     let consecutivo = 2;
-    while (usedCodes.has(codigoContrato)) {
+    const { eq } = await import("drizzle-orm");
+    while (
+      (
+        await db
+          .select({ id: schema.contracts.id })
+          .from(schema.contracts)
+          .where(eq(schema.contracts.codigoContrato, codigoContrato))
+          .limit(1)
+      ).length > 0
+    ) {
       const sufijo = `-C${consecutivo}`;
       codigoContrato = `${codigoInicial.slice(0, 50 - sufijo.length)}${sufijo}`;
       consecutivo += 1;
