@@ -11,6 +11,7 @@ import type { Permission } from "@contract/domain/rbac";
 import { TopBar } from "@/components/top-bar";
 import { ThemeToggle } from "@contract/ui/components/theme-toggle";
 import { AppointmentReminders } from "@/components/appointment-reminders";
+import { PaymentOverdueReminders } from "@/components/payment-overdue-reminders";
 import {
   LayoutDashboard,
   Star,
@@ -62,6 +63,7 @@ import {
   LineChart,
   AppWindow,
   MapPinned,
+  QrCode,
   type LucideIcon,
 } from "lucide-react";
 
@@ -86,6 +88,22 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/workflow", label: "Workflow", icon: Workflow, section: "Workflow", permission: "contract.read", group: "operatividad" },
   { href: "/checklist", label: "Checklist", icon: ListChecks, section: "Checklist", group: "operatividad" },
   { href: "/work-123", label: "Work 123", icon: Kanban, section: "Work 123", permission: "contract.read", group: "operatividad" },
+  {
+    href: "/inventario-qr/ang170",
+    label: "Inventario QR · ANG170",
+    icon: QrCode,
+    section: "Inventario QR",
+    permission: "department.read",
+    group: "operatividad",
+  },
+  {
+    href: "/inventario-qr/ben2195",
+    label: "Inventario QR · BEN2195",
+    icon: QrCode,
+    section: "Inventario QR",
+    permission: "department.read",
+    group: "operatividad",
+  },
   { href: "/pipeline", label: "Pipeline", icon: Filter, section: "Pipeline", permission: "marketing.read", group: "marketing" },
   { href: "/mensajes", label: "Mensajes", icon: MessageSquare, section: "Mensajes", permission: "marketing.read", group: "marketing" },
   { href: "/chat-clientes", label: "Chat con clientes", icon: Star, section: "Chat con clientes", permission: "marketing.read", group: "marketing" },
@@ -646,6 +664,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <AppointmentReminders />
+      <PaymentOverdueReminders />
     </div>
   );
 }
