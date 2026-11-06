@@ -60,6 +60,7 @@ import {
   TrendingUp,
   Waves,
   LineChart,
+  AppWindow,
   type LucideIcon,
 } from "lucide-react";
 
@@ -160,6 +161,7 @@ const NAV_ITEMS: NavItem[] = [
     section: "Contabilidad",
     group: "contabilidad",
   },
+  { href: "/aplicaciones", label: "Aplicaciones", icon: AppWindow, section: "Aplicaciones" },
   { href: "/google/gmail", label: "Gmail", icon: Mail, section: "Google SyS", group: "google" },
   { href: "/google/drive", label: "Google Drive", icon: HardDrive, section: "Google SyS", group: "google" },
   { href: "/google/sheets", label: "Google Sheets", icon: Table, section: "Google SyS", group: "google" },
