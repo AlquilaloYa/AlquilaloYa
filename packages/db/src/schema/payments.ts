@@ -48,7 +48,7 @@ export const payments = pgTable(
     montoPagado: numeric("monto_pagado", { precision: 15, scale: 2 })
       .notNull()
       .default("0"),
-    diasIndulgencia: integer("dias_indulgencia").notNull().default(7),
+    diasIndulgencia: integer("dias_indulgencia").notNull().default(0),
     estado: varchar("estado", { length: 20 }).notNull().default("PENDIENTE"),
     fechaPago: date("fecha_pago"),
     voucherNombre: varchar("voucher_nombre", { length: 255 }),

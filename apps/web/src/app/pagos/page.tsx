@@ -135,7 +135,7 @@ function InputIndulgencia({
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
       }}
       placeholder="0"
-      title="Período de indulgencia (días de prórroga)"
+      title="Días de prórroga"
       className="w-20 rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-center text-sm text-on-surface focus:border-primary focus:outline-none"
     />
   );
@@ -865,8 +865,8 @@ export default function PagosPage() {
                   <th onClick={() => cambiarOrden("estado")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "estado" ? "font-semibold text-on-surface" : "")}>
                     Estado{sortKey === "estado" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                   </th>
-                  <th className="px-3 py-2 font-medium" title="Período de indulgencia">
-                    Indulgencia
+                  <th className="px-3 py-2 font-medium" title="Días de prórroga">
+                    Prórroga
                   </th>
                   <th onClick={() => cambiarOrden("morosidad")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "morosidad" ? "font-semibold text-on-surface" : "")}>
                     Morosidad{sortKey === "morosidad" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}

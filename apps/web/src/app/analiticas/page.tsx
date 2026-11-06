@@ -431,7 +431,7 @@ export default function AnaliticasPage() {
               Cuotas pendientes con vencimiento hasta el mes actual, acumuladas de todo el año
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             {PERSONAS.map((persona) => {
               const vendedor = data?.vendedores.find(({ key }) => key === persona.key);
               const clientes = vendedor?.clientes ?? [];
@@ -444,10 +444,10 @@ export default function AnaliticasPage() {
                         <CardTitle>{persona.nombre}</CardTitle>
                         <p className="mt-1 text-sm text-muted-foreground">{clientes.length} clientes</p>
                       </div>
-                      <span className="text-right text-sm font-semibold">{money(total)}</span>
+                      <span className="text-right text-base font-semibold tabular-nums">{money(total)}</span>
                     </div>
                   </CardHeader>
-                  <CardContent className="max-h-[440px] overflow-y-auto p-0">
+                  <CardContent className="max-h-[560px] overflow-y-auto p-0">
                     {loading ? (
                       <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
                         <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> Cargando...
@@ -459,7 +459,7 @@ export default function AnaliticasPage() {
                     ) : (
                       <ul className="divide-y divide-border">
                         {clientes.map((cliente) => (
-                          <li key={cliente.clienteId} className="space-y-2 p-4">
+                          <li key={cliente.clienteId} className="space-y-3 p-5">
                             <div className="flex items-start justify-between gap-3">
                               <Link
                                 href={`/contratos/clientes/${cliente.clienteId}`}
@@ -468,15 +468,15 @@ export default function AnaliticasPage() {
                               >
                                 {cliente.cliente || "Cliente sin nombre"}
                               </Link>
-                              <span className="shrink-0 text-sm font-semibold">{money(cliente.total)}</span>
+                              <span className="shrink-0 font-semibold tabular-nums">{money(cliente.total)}</span>
                             </div>
                             {cliente.contratos.map((contrato) => (
-                              <div key={contrato.codigoContrato} className="text-xs text-muted-foreground">
+                              <div key={contrato.codigoContrato} className="text-sm text-muted-foreground">
                                 <div className="flex flex-wrap justify-between gap-x-2">
-                                  <span>{contrato.codigoContrato}{contrato.departamento ? ` · ${contrato.departamento}` : ""}</span>
-                                  <span>{money(contrato.total)}</span>
+                                  <span className="font-medium text-foreground/80">{contrato.codigoContrato}{contrato.departamento ? ` · ${contrato.departamento}` : ""}</span>
+                                  <span className="tabular-nums">{money(contrato.total)}</span>
                                 </div>
-                                <p className="mt-1">Períodos: {contrato.periodos.map((periodo) => periodo.slice(0, 7)).join(", ")}</p>
+                                <p className="mt-1.5 text-xs">Períodos: {contrato.periodos.map((periodo) => periodo.slice(0, 7)).join(", ")}</p>
                               </div>
                             ))}
                           </li>

@@ -6,19 +6,24 @@ import { useParams } from "next/navigation";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { apiFetch } from "@/lib/api";
-import { AlertTriangle, LoaderCircle, MapPinned } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  LoaderCircle,
+  MapPinned,
+  Search,
+} from "lucide-react";
 
 /** Sedes registradas del sistema (prefix con el que inicia el código del departamento). */
-const SEDES: Record<string, { nombre: string; prefix: string; descripcion: string }> = {
+const SEDES: Record<string, { nombre: string; prefix: string }> = {
   ang170: {
     nombre: "ANG170",
     prefix: "ANG170-",
-    descripcion: "Departamentos de la sede ANG170",
   },
   ben2195: {
     nombre: "BEN2195",
     prefix: "BEN2195-",
-    descripcion: "Departamentos de la sede BEN2195",
   },
 };
 
@@ -45,9 +50,6 @@ interface DepartamentoRowApi {
     telefono: string | null;
   };
 }
-
-const moneda = (n: number) =>
-  n.toLocaleString("es-PE", { style: "currency", currency: "PEN", maximumFractionDigits: 0 });
 
 function fechaEs(iso: string): string {
   if (!iso || iso.length < 10) return "—";
@@ -79,6 +81,8 @@ export default function SedePage() {
   const [filas, setFilas] = useState<DepartamentoRowApi[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const [tablaContraida, setTablaContraida] = useState(false);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -98,10 +102,28 @@ export default function SedePage() {
     if (sede) void cargar();
   }, [sede, cargar]);
 
-  const departamentoDeSede = useMemo(() => {
+  const departamentosOrdenados = useMemo(() => {
     if (!filas || !sede) return [];
-    return filas.filter((f) => f.codigo.startsWith(sede.prefix));
+    const collator = new Intl.Collator("es", { numeric: true, sensitivity: "base" });
+    return filas
+      .filter((fila) => fila.codigo.startsWith(sede.prefix))
+      .sort((a, b) => collator.compare(a.codigo, b.codigo));
   }, [filas, sede]);
+
+  const departamentosFiltrados = useMemo(() => {
+    const query = busqueda.trim().toLocaleLowerCase("es");
+    if (!query) return departamentosOrdenados;
+    return departamentosOrdenados.filter((d) => {
+      const ocupante = d.ocupante
+        ? [d.ocupante.nombres, d.ocupante.apellidos].filter(Boolean).join(" ")
+        : "";
+      const estado = META_ESTADO[estadoDe(d)].label;
+      return [d.codigo, d.nombre, d.piso, estado, ocupante, d.disponible?.fechaFin]
+        .join(" ")
+        .toLocaleLowerCase("es")
+        .includes(query);
+    });
+  }, [busqueda, departamentosOrdenados]);
 
   if (!sede) {
     return (
@@ -115,7 +137,7 @@ export default function SedePage() {
   }
 
   const resumen = (estado: EstadoVisual) =>
-    departamentoDeSede.filter((f) => estadoDe(f) === estado).length;
+    departamentosOrdenados.filter((f) => estadoDe(f) === estado).length;
 
   return (
     <DashboardShell>
@@ -126,7 +148,9 @@ export default function SedePage() {
               <MapPinned className="h-4 w-4" /> Gestión de Sedes
             </div>
             <h1 className="mt-1 font-headline-lg">Sede {sede.nombre}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{sede.descripcion}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Departamentos de la sede {sede.nombre}, ordenados por código.
+            </p>
           </div>
           {!loading && !error ? (
             <div className="flex flex-wrap gap-2 text-xs">
@@ -154,65 +178,95 @@ export default function SedePage() {
           <div className="flex min-h-40 items-center justify-center gap-2 text-destructive" role="alert">
             <AlertTriangle className="h-5 w-5" /> {error}
           </div>
-        ) : departamentoDeSede.length === 0 ? (
+        ) : departamentosOrdenados.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            No hay departamentos registrados para la sede {sede.nombre}.
+            No hay departamentos registrados.
           </p>
         ) : (
-          <TableScroll>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-outline-variant text-left text-xs uppercase tracking-wider text-on-surface-variant">
-                  <th className="px-3 py-2 font-medium">Código</th>
-                  <th className="px-3 py-2 font-medium">Unidad</th>
-                  <th className="px-3 py-2 font-medium">Tipo</th>
-                  <th className="px-3 py-2 font-medium">Piso</th>
-                  <th className="px-3 py-2 font-medium">Estado</th>
-                  <th className="px-3 py-2 font-medium">Inquilino</th>
-                  <th className="px-3 py-2 font-medium">Vence</th>
-                  <th className="px-3 py-2 font-medium">Canon</th>
-                  <th className="px-3 py-2 font-medium">Garantía</th>
-                  <th className="px-3 py-2 font-medium">Persona de pago</th>
-                </tr>
-              </thead>
-              <tbody>
-                {departamentoDeSede.map((d) => {
-                  const estado = estadoDe(d);
-                  const meta = META_ESTADO[estado];
-                  return (
-                    <tr key={d.id} className="border-t border-outline-variant/50">
-                      <td className="whitespace-nowrap px-3 py-2 font-mono">{d.codigo}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{d.nombre || "—"}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{d.tipo}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{d.piso}</td>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${meta.clases}`}>
-                          {meta.label}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        {d.ocupante
-                          ? [d.ocupante.nombres, d.ocupante.apellidos].filter(Boolean).join(" ")
-                          : "—"}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        {d.disponible && !d.disponible.disponible
-                          ? fechaEs(d.disponible.fechaFin)
-                          : "—"}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
-                        {moneda(Number(d.precio))}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
-                        {moneda(Number(d.garantia))}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2">{d.personaPago}</td>
+          <div className="space-y-2">
+            <label className="relative block w-full max-w-md">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="search"
+                value={busqueda}
+                onChange={(event) => setBusqueda(event.target.value)}
+                placeholder="Buscar código, piso, estado o inquilino…"
+                className="h-10 w-full rounded-md border border-outline-variant bg-background pl-9 pr-3 text-sm outline-none focus:border-primary"
+                aria-label="Buscar departamentos"
+              />
+            </label>
+
+            {departamentosFiltrados.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No se encontraron departamentos para “{busqueda}”.
+              </p>
+            ) : (
+              <TableScroll contentClassName="max-h-80">
+                <table className="w-full min-w-[620px] text-sm">
+                  <thead className="sticky top-0 z-10 bg-background">
+                    <tr className="border-b border-outline-variant text-left text-xs uppercase tracking-wider text-on-surface-variant">
+                      <th className="px-3 py-2 font-medium">Código</th>
+                      <th className="px-3 py-2 font-medium">Piso</th>
+                      <th className="px-3 py-2 font-medium">Estado</th>
+                      <th className="px-3 py-2 font-medium">Inquilino</th>
+                      <th className="px-3 py-2 font-medium">Vence</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </TableScroll>
+                  </thead>
+                  {!tablaContraida ? (
+                    <tbody>
+                      {departamentosFiltrados.map((d) => {
+                        const estado = estadoDe(d);
+                        const meta = META_ESTADO[estado];
+                        return (
+                          <tr key={d.id} className="border-t border-outline-variant/50">
+                            <td className="whitespace-nowrap px-3 py-1.5 font-mono">{d.codigo}</td>
+                            <td className="whitespace-nowrap px-3 py-1.5">{d.piso}</td>
+                            <td className="whitespace-nowrap px-3 py-1.5">
+                              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${meta.clases}`}>
+                                {meta.label}
+                              </span>
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-1.5">
+                              {d.ocupante
+                                ? [d.ocupante.nombres, d.ocupante.apellidos].filter(Boolean).join(" ")
+                                : "—"}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-1.5">
+                              {d.disponible && !d.disponible.disponible
+                                ? fechaEs(d.disponible.fechaFin)
+                                : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  ) : null}
+                </table>
+              </TableScroll>
+            )}
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-muted-foreground">
+                {departamentosFiltrados.length} de {departamentosOrdenados.length} departamentos
+              </span>
+              <button
+                type="button"
+                onClick={() => setTablaContraida((contraida) => !contraida)}
+                aria-expanded={!tablaContraida}
+                className="inline-flex items-center gap-1 rounded-md border border-outline-variant px-3 py-1.5 text-sm font-medium hover:bg-surface-variant/50"
+              >
+                {tablaContraida ? (
+                  <>
+                    <ChevronDown className="h-4 w-4" /> Expandir tabla
+                  </>
+                ) : (
+                  <>
+                    <ChevronUp className="h-4 w-4" /> Contraer tabla
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         )}
 
         <div className="text-sm text-muted-foreground">

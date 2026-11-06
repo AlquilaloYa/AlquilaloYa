@@ -1,4 +1,4 @@
-export const DIAS_PRORROGA_POR_DEFECTO = 7;
+export const DIAS_PRORROGA_POR_DEFECTO = 0;
 
 export function parseLocalDate(iso: string): Date {
   const partes = iso.slice(0, 10).split("-");
