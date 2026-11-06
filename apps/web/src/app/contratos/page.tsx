@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DashboardShell } from "@/components/dashboard-shell";
@@ -13,7 +13,13 @@ import {
   getTipoSeparacion,
   type SeparacionRecord,
 } from "@/lib/separaciones";
-import { obtenerContactos, type ContactSeed, type ArchivoAdjunto } from "@/lib/contactos-seed";
+import {
+  obtenerContactoPorId,
+  obtenerContactosResumen,
+  type ContactoResumen,
+  type ContactSeed,
+  type ArchivoAdjunto,
+} from "@/lib/contactos-seed";
 import { MASCOTAS, etiquetasDeIds } from "@/lib/catalogos";
 import { inventarioDepartamento, cargarInventarios } from "@/lib/inventarios-departamento";
 import { migrarDatosLocales } from "@/lib/migracion-local";
@@ -79,7 +85,9 @@ type ClientApi = {
 type DepartmentApi = { id: string; nombre: string; codigo?: string | null; numero?: string | null; precio?: string | null; garantia?: string | null; mantenimiento?: string | null; personaPago?: string | null };
 type TemplateApi = { id: string; clave: string; nombre: string };
 
-type Depositante = ClientApi & {
+type Depositante = Omit<ClientApi, "id"> & {
+  id: string;
+  contactoId: string;
   departamentoId?: string;
   mensualidad?: string;
   garantia?: string;
@@ -95,7 +103,14 @@ type TemplateVersionApi = {
   id: string;
   version: number;
   publicada: boolean;
-  contenido: string;
+  contenido?: string | null;
+};
+type TemplateSelectorResponse = {
+  templates: TemplateApi[];
+  versions: Record<
+    string,
+    Pick<TemplateVersionApi, "id" | "version" | "publicada">
+  >;
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -195,7 +210,10 @@ export default function ContratosPage() {
   const [docEditor, setDocEditor] = useState<DocEditorState | null>(null);
   const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
   const [separaciones, setSeparaciones] = useState<SeparacionRecord[]>([]);
-  const [contactos, setContactos] = useState<ContactSeed[]>([]);
+  const [contactos, setContactos] = useState<ContactoResumen[]>([]);
+  const [cargandoDepositantes, setCargandoDepositantes] = useState(true);
+  const [cargandoDepartamentos, setCargandoDepartamentos] = useState(true);
+  const [cargandoPlantillas, setCargandoPlantillas] = useState(true);
   const [, setTick] = useState(0);
 
   const [status, setStatus] = useState("all");
@@ -228,13 +246,30 @@ export default function ContratosPage() {
   }, [load]);
 
   useEffect(() => {
-    void (async () => {
-      await migrarDatosLocales();
-      const [seps, ctos] = await Promise.all([leerSeparaciones(), obtenerContactos()]);
-      await cargarInventarios(true);
-      setSeparaciones(seps);
-      setContactos(ctos);
-    })();
+    let active = true;
+    const cargarDepositantes = async () => {
+      setCargandoDepositantes(true);
+      const [seps, ctos] = await Promise.all([
+        leerSeparaciones(),
+        obtenerContactosResumen(),
+      ]);
+      if (active) {
+        setSeparaciones(seps);
+        setContactos(ctos);
+        setCargandoDepositantes(false);
+      }
+    };
+
+    void cargarDepositantes();
+    void cargarInventarios(true).catch((err: Error) => {
+      if (active) setError(err.message);
+    });
+    void migrarDatosLocales().then(() => {
+      if (active) void cargarDepositantes();
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -243,30 +278,49 @@ export default function ContratosPage() {
   }, []);
 
   useEffect(() => {
-    apiFetch("/api/departamentos").then((r) => r.json())
-      .then((d) => {
-        const loadedDepartments = d as DepartmentApi[];
-        setDepartments(loadedDepartments);
+    let active = true;
+    void apiFetch("/api/departamentos")
+      .then(async (res) => {
+        if (!res.ok) throw new Error("No se pudieron cargar los departamentos");
+        return (await res.json()) as DepartmentApi[];
       })
-      .catch(() => undefined);
-    apiFetch("/api/templates").then((r) => r.json())
-      .then(async (d: TemplateApi[]) => {
-        setTemplates(d);
-        const vmap: Record<string, TemplateVersionApi | null> = {};
-        await Promise.all(
-          d.map(async (t) => {
-            try {
-              const vr = await apiFetch(`/api/templates/${t.id}/versions`);
-              const versions = (await vr.json()) as TemplateVersionApi[];
-              vmap[t.id] = versions.filter((v) => v.publicada).sort((a, b) => b.version - a.version)[0] ?? null;
-            } catch {
-              vmap[t.id] = null;
-            }
-          })
+      .then((data) => {
+        if (active) setDepartments(data);
+      })
+      .catch((err: Error) => {
+        if (active) setError(err.message);
+      })
+      .finally(() => {
+        if (active) setCargandoDepartamentos(false);
+      });
+
+    void apiFetch("/api/templates?selector=1")
+      .then(async (res) => {
+        if (!res.ok) throw new Error("No se pudieron cargar las plantillas");
+        return (await res.json()) as TemplateSelectorResponse;
+      })
+      .then((data) => {
+        if (!active) return;
+        setTemplates(data.templates);
+        setVersions(
+          Object.fromEntries(
+            data.templates.map((template) => [
+              template.id,
+              data.versions[template.id] ?? null,
+            ])
+          )
         );
-        setVersions(vmap);
       })
-      .catch(() => undefined);
+      .catch((err: Error) => {
+        if (active) setError(err.message);
+      })
+      .finally(() => {
+        if (active) setCargandoPlantillas(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function runAction(id: string, action: string) {
@@ -482,12 +536,20 @@ export default function ContratosPage() {
     return ["SEPARADO", "GARANTIA_COMPLETADA", "CONTRATO_PREVIO"].includes(s.estado);
   });
 
+  const contactoPorId = useMemo(
+    () => new Map(contactos.map((contacto) => [contacto.id, contacto])),
+    [contactos]
+  );
+  const departamentoPorId = useMemo(
+    () => new Map(departments.map((departamento) => [departamento.id, departamento])),
+    [departments]
+  );
   const depositantes = useMemo<Depositante[]>(() => {
     const res: Depositante[] = [];
     for (const sep of separacionesActivas) {
-      const contacto = contactos.find((c) => c.id === sep.contactoId);
+      const contacto = contactoPorId.get(sep.contactoId ?? "");
       if (!contacto) continue;
-      const dept = departments.find((d) => d.id === sep.departamentoId);
+      const dept = departamentoPorId.get(sep.departamentoId);
       if (!dept) continue;
       const mensualidad = dept?.precio && Number(dept.precio) > 0 ? Number(dept.precio).toFixed(2) : "";
       const garantia = dept?.garantia && Number(dept.garantia) > 0
@@ -495,9 +557,10 @@ export default function ContratosPage() {
         : mensualidad;
 res.push({
         id: `dep-${contacto.id}-${dept.id}`,
-        nombres: contacto.nombre,
-        apellidos: contacto.apellido,
-        documentoIdentidad: contacto.dni,
+  contactoId: contacto.id,
+  nombres: contacto.nombre,
+  apellidos: contacto.apellido,
+  documentoIdentidad: contacto.dni,
         tipoPersona: contacto.tipoPersona,
         email: contacto.email ?? null,
         telefono: contacto.telefono ?? null,
@@ -510,13 +573,12 @@ res.push({
         separacion: sep,
         codigoPais: contacto.codigoPais ?? "51",
         contactoEmergencia: contacto.contactoEmergencia ?? null,
-        mascotas: contacto.mascotas ?? false,
+        mascotas: contacto.mascotas,
         mascotasItems: etiquetasDeIds(MASCOTAS, contacto.mascotasItems),
-        copiaDni: contacto.copiaDni ?? [],
       });
     }
     return res;
-  }, [separacionesActivas, contactos, departments]);
+  }, [separacionesActivas, contactoPorId, departamentoPorId]);
 
   return (
     <DashboardShell>
@@ -627,7 +689,9 @@ res.push({
               <tbody className="divide-y divide-outline-variant/50">
                 {filtered.map((r) => {
                   const meta = STATUS_META[r.estado] ?? { label: r.estado, dot: "bg-outline", pill: "bg-surface-variant" };
-                  const transitions = NEXT_TRANSITIONS[r.estado] ?? [];
+                  const transitions = (NEXT_TRANSITIONS[r.estado] ?? []).filter(
+                    (transition) => transition.action !== "eliminar" || isAdmin
+                  );
                   return (
                     <tr key={r.id} className="transition-colors hover:bg-surface-container-low/30">
                       <td className="p-4 font-mono-label">
@@ -746,6 +810,9 @@ res.push({
           departments={departments}
           templates={templates}
           versions={versions}
+          cargandoDepositantes={cargandoDepositantes}
+          cargandoDepartamentos={cargandoDepartamentos}
+          cargandoPlantillas={cargandoPlantillas}
           onClose={() => setShowCreate(false)}
           onCreated={async () => {
             setShowCreate(false);
@@ -1270,6 +1337,9 @@ function CreateContractModal({
   departments,
   templates,
   versions,
+  cargandoDepositantes,
+  cargandoDepartamentos,
+  cargandoPlantillas,
   onClose,
   onCreated,
 }: {
@@ -1277,6 +1347,9 @@ function CreateContractModal({
   departments: DepartmentApi[];
   templates: TemplateApi[];
   versions: Record<string, TemplateVersionApi | null>;
+  cargandoDepositantes: boolean;
+  cargandoDepartamentos: boolean;
+  cargandoPlantillas: boolean;
   onClose: () => void;
   onCreated: () => Promise<void>;
 }) {
@@ -1296,6 +1369,12 @@ function CreateContractModal({
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [detalleDepositante, setDetalleDepositante] = useState<{
+    id: string;
+    contacto: ContactSeed;
+  } | null>(null);
+  const seleccionRequest = useRef(0);
 
   const departamentoSeleccionado = useMemo(
     () => departments.find((d) => d.id === form.departamentoId),
@@ -1334,12 +1413,68 @@ function CreateContractModal({
     };
   }
 
+  async function seleccionarDepositante(id: string) {
+    const requestId = ++seleccionRequest.current;
+    const cli = clients.find((client) => client.id === id);
+    setError(null);
+    setDetalleDepositante(null);
+    if (!cli) {
+      setCargandoDetalle(false);
+      setForm((current) => ({
+        ...current,
+        clienteId: "",
+        departamentoId: "",
+        montoCanonMensual: "0.00",
+        depositoGarantia: "0.00",
+        mascotasItems: [],
+      }));
+      return;
+    }
+
+    const info = infoDepositante(cli);
+    let deptId = departments.some((department) => department.id === info.deptId)
+      ? info.deptId
+      : "";
+    if (!deptId && cli.codigoDepartamento) {
+      deptId = departments.find((department) => department.codigo === cli.codigoDepartamento)?.id ?? "";
+    }
+    setForm((current) => ({
+      ...current,
+      clienteId: id,
+      departamentoId: deptId,
+      codigoContrato: cli.codigoDepartamento ?? current.codigoContrato,
+      montoCanonMensual: info.deptPrecio || current.montoCanonMensual,
+      depositoGarantia: info.deptGarantia || current.depositoGarantia,
+      muebleriaItems: [],
+      mascotasItems: cli.mascotasItems ?? [],
+    }));
+
+    setCargandoDetalle(true);
+    try {
+      const contacto = await obtenerContactoPorId(cli.contactoId);
+      if (seleccionRequest.current === requestId) {
+        setDetalleDepositante({ id: cli.id, contacto });
+      }
+    } catch (e) {
+      if (seleccionRequest.current === requestId) {
+        setError((e as Error).message);
+      }
+    } finally {
+      if (seleccionRequest.current === requestId) {
+        setCargandoDetalle(false);
+      }
+    }
+  }
+
   async function handleSubmit() {
     setSaving(true);
     setError(null);
     try {
       const clienteSel = clients.find((c) => c.id === form.clienteId);
       if (!clienteSel) throw new Error("Selecciona un depositante");
+      const contactoSel =
+        detalleDepositante?.id === clienteSel.id ? detalleDepositante.contacto : null;
+      if (!contactoSel) throw new Error("Espera a que terminen de cargar los datos del solicitante");
       if (!UUID_PATTERN.test(form.departamentoId) || !departments.some((d) => d.id === form.departamentoId)) {
         throw new Error("El departamento de la separación ya no existe. Asígnalo nuevamente desde Departamentos.");
       }
@@ -1356,15 +1491,15 @@ function CreateContractModal({
           codigoContrato,
           mantenimiento: "50.00",
           cliente: {
-            nombres: clienteSel.nombres,
-            apellidos: clienteSel.apellidos,
-            documentoIdentidad: clienteSel.documentoIdentidad,
-            ruc: clienteSel.ruc,
-            tipoPersona: clienteSel.tipoPersona,
-            email: clienteSel.email,
-            telefono: clienteSel.telefono,
-            domicilio: clienteSel.domicilio,
-            nacionalidad: clienteSel.nacionalidad,
+            nombres: contactoSel.nombre,
+            apellidos: contactoSel.apellido,
+            documentoIdentidad: contactoSel.dni,
+            ruc: contactoSel.ruc,
+            tipoPersona: contactoSel.tipoPersona,
+            email: contactoSel.email,
+            telefono: contactoSel.telefono,
+            domicilio: contactoSel.domicilio,
+            nacionalidad: contactoSel.nacionalidad,
             codigoDepartamento: clienteSel.codigoDepartamento,
           },
           separacionDetalle: clienteSel.separacion
@@ -1376,25 +1511,25 @@ function CreateContractModal({
                 baucherSeparacion: clienteSel.separacion.baucherSeparacion ?? null,
               }
             : null,
-          copiaDni: (clienteSel.copiaDni ?? []).map((archivo) => ({
+          copiaDni: (contactoSel.copiaDni ?? []).map((archivo) => ({
             nombre: archivo.nombre,
             tipo: archivo.tipo,
             dataUrl: archivo.dataUrl,
           })),
           datosArrendatario: {
-            nombre: clienteSel.nombres,
-            apellido: clienteSel.apellidos,
-            tipoPersona: clienteSel.tipoPersona,
-            documentoIdentidad: clienteSel.documentoIdentidad,
-            ruc: clienteSel.ruc ?? null,
-            email: clienteSel.email ?? null,
-            telefono: clienteSel.telefono ?? null,
-            codigoPais: clienteSel.codigoPais ?? "51",
-            domicilio: clienteSel.domicilio ?? null,
-            nacionalidad: clienteSel.nacionalidad ?? null,
-            contactoEmergencia: clienteSel.contactoEmergencia ?? null,
-            mascotas: clienteSel.mascotas ?? false,
-            mascotasItems: clienteSel.mascotasItems ?? [],
+            nombre: contactoSel.nombre,
+            apellido: contactoSel.apellido,
+            tipoPersona: contactoSel.tipoPersona,
+            documentoIdentidad: contactoSel.dni,
+            ruc: contactoSel.ruc ?? null,
+            email: contactoSel.email ?? null,
+            telefono: contactoSel.telefono ?? null,
+            codigoPais: contactoSel.codigoPais ?? "51",
+            domicilio: contactoSel.domicilio ?? null,
+            nacionalidad: contactoSel.nacionalidad ?? null,
+            contactoEmergencia: contactoSel.contactoEmergencia ?? null,
+            mascotas: contactoSel.mascotas ?? false,
+            mascotasItems: contactoSel.mascotasItems ?? [],
           },
         }),
       });
@@ -1423,31 +1558,19 @@ function CreateContractModal({
           <div>
             <label className="mb-1 block font-label-md text-on-surface-variant">Depositante</label>
             <div className="flex gap-2">
-<select className="h-10 w-full rounded border border-outline-variant bg-transparent text-on-surface" value={form.clienteId} onChange={(e) => {
-                const id = e.target.value;
-                const cli = clients.find((c) => c.id === id);
-                if (!cli) {
-                  setForm({ ...form, clienteId: id, departamentoId: "", montoCanonMensual: "0.00", depositoGarantia: "0.00" });
-                  return;
-                }
-                const info = infoDepositante(cli);
-                let deptId = departments.some((d) => d.id === info.deptId) ? info.deptId : "";
-                if (!deptId && cli.codigoDepartamento) {
-                  const match = departments.find((d) => d.codigo === cli.codigoDepartamento);
-                  if (match) deptId = match.id;
-                }
-                setForm({
-                  ...form,
-                  clienteId: id,
-                  departamentoId: deptId,
-                  codigoContrato: cli.codigoDepartamento ?? form.codigoContrato,
-                  montoCanonMensual: info.deptPrecio || form.montoCanonMensual,
-                  depositoGarantia: info.deptGarantia || form.depositoGarantia,
-                  muebleriaItems: [],
-                  mascotasItems: cli.mascotasItems ?? [],
-                });
-              }}>
-                <option value="">Selecciona un depositante</option>
+              <select
+                className="h-10 w-full rounded border border-outline-variant bg-transparent text-on-surface"
+                value={form.clienteId}
+                disabled={cargandoDepositantes || cargandoDepartamentos}
+                onChange={(e) => void seleccionarDepositante(e.target.value)}
+              >
+                <option value="">
+                  {cargandoDepositantes
+                    ? "Cargando solicitantes…"
+                    : cargandoDepartamentos
+                    ? "Cargando departamentos…"
+                    : "Selecciona un depositante"}
+                </option>
                 {clients.map((c) => (
                   <option key={c.id} value={c.id}>
                     {[c.nombres, c.apellidos].filter(Boolean).join(" ")}
@@ -1456,6 +1579,12 @@ function CreateContractModal({
                 ))}
               </select>
             </div>
+            {cargandoDetalle ? (
+              <p className="mt-1 text-xs text-on-surface-variant">Cargando datos y documentos del solicitante…</p>
+            ) : null}
+            {!cargandoDepositantes && clients.length === 0 ? (
+              <p className="mt-1 text-xs text-on-surface-variant">No hay solicitantes con separación activa.</p>
+            ) : null}
           </div>
           {form.clienteId && (() => {
             const cli = clients.find((c) => c.id === form.clienteId);
@@ -1518,8 +1647,15 @@ function CreateContractModal({
           </div>
           <div>
             <label className="mb-1 block font-label-md text-on-surface-variant">Plantilla</label>
-            <select className="h-10 w-full rounded border border-outline-variant bg-transparent text-on-surface" value={form.plantillaVersionId} onChange={(e) => setForm({ ...form, plantillaVersionId: e.target.value })}>
-              <option value="">Selecciona una plantilla</option>
+            <select
+              className="h-10 w-full rounded border border-outline-variant bg-transparent text-on-surface"
+              value={form.plantillaVersionId}
+              disabled={cargandoPlantillas}
+              onChange={(e) => setForm({ ...form, plantillaVersionId: e.target.value })}
+            >
+              <option value="">
+                {cargandoPlantillas ? "Cargando plantillas…" : "Selecciona una plantilla"}
+              </option>
               {plantillasDisponibles.map((t) => {
                 const v = versions[t.id];
                 return (
@@ -1572,7 +1708,17 @@ function CreateContractModal({
           <button onClick={onClose} className="rounded border border-outline-variant px-4 py-2 font-label-md text-on-surface-variant dark:border-transparent">
             Cancelar
           </button>
-          <button onClick={handleSubmit} disabled={saving || !form.clienteId || !form.departamentoId || !form.plantillaVersionId || !form.fechaInicio || !form.fechaFin}
+          <button
+            onClick={handleSubmit}
+            disabled={
+              saving ||
+              cargandoDetalle ||
+              !form.clienteId ||
+              !form.departamentoId ||
+              !form.plantillaVersionId ||
+              !form.fechaInicio ||
+              !form.fechaFin
+            }
             className="rounded bg-primary px-4 py-2 font-label-md text-on-primary disabled:cursor-not-allowed disabled:opacity-40">
             {saving ? "Creando…" : "Crear contrato"}
           </button>
@@ -1581,4 +1727,3 @@ function CreateContractModal({
     </div>
   );
 }
-

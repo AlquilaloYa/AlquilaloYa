@@ -14,6 +14,60 @@ export async function GET(req: Request) {
     const denied = requirePermission(auth.user, Permission.TEMPLATE_READ);
     if (denied) return denied;
 
+    if (new URL(req.url).searchParams.get("selector") === "1") {
+      const { db, schema } = dbModule as {
+        db: typeof import("@contract/db").db;
+        schema: typeof import("@contract/db").schema;
+      };
+      const { and, desc, eq, inArray } = await import("drizzle-orm");
+      const templates = await db
+        .select({
+          id: schema.templates.id,
+          clave: schema.templates.clave,
+          nombre: schema.templates.nombre,
+        })
+        .from(schema.templates)
+        .where(eq(schema.templates.activo, true));
+
+      if (templates.length === 0) {
+        return NextResponse.json({ templates: [], versions: {} });
+      }
+
+      const publishedVersions = await db
+        .select({
+          id: schema.templateVersions.id,
+          templateId: schema.templateVersions.templateId,
+          version: schema.templateVersions.version,
+          publicada: schema.templateVersions.publicada,
+        })
+        .from(schema.templateVersions)
+        .where(
+          and(
+            inArray(
+              schema.templateVersions.templateId,
+              templates.map((template) => template.id)
+            ),
+            eq(schema.templateVersions.publicada, true)
+          )
+        )
+        .orderBy(desc(schema.templateVersions.version));
+
+      const versions: Record<
+        string,
+        { id: string; version: number; publicada: boolean }
+      > = {};
+      for (const version of publishedVersions) {
+        if (!versions[version.templateId]) {
+          versions[version.templateId] = {
+            id: version.id,
+            version: version.version,
+            publicada: version.publicada,
+          };
+        }
+      }
+      return NextResponse.json({ templates, versions });
+    }
+
     const { templateService } = await buildContractServices();
     const templates = await templateService.listActive();
     return NextResponse.json(templates);

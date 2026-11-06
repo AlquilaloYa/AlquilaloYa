@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
-import { requireUser, requirePermission } from "@/lib/session";
+import {
+  denyAdministrativeAssistantDeletion,
+  requireUser,
+  requirePermission,
+} from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -145,6 +149,10 @@ export async function PATCH(req: Request) {
     if (denied) return denied;
 
     const { id, ...patch } = await req.json();
+    if (patch.activo === false) {
+      const deletionDenied = denyAdministrativeAssistantDeletion(auth.user);
+      if (deletionDenied) return deletionDenied;
+    }
     if (!id) {
       return NextResponse.json({ error: "Falta el id" }, { status: 400 });
     }
@@ -187,6 +195,8 @@ export async function DELETE(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
+    const deletionDenied = denyAdministrativeAssistantDeletion(auth.user);
+    if (deletionDenied) return deletionDenied;
     const denied = requirePermission(auth.user, Permission.CLIENT_UPDATE);
     if (denied) return denied;
 

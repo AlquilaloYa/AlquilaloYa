@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { eq, isNull } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
-import { requireUser, requirePermission } from "@/lib/session";
+import {
+  denyAdministrativeAssistantDeletion,
+  requireUser,
+  requirePermission,
+} from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +73,7 @@ async function dbAndSchema(permission: Permission, req: Request) {
     db: typeof import("@contract/db").db;
     schema: typeof import("@contract/db").schema;
   };
-  return { db, schema };
+  return { db, schema, user: auth.user };
 }
 
 /** GET /api/separaciones */
@@ -145,6 +149,8 @@ export async function DELETE(req: Request) {
   try {
     const ctx = await dbAndSchema(Permission.DEPARTMENT_UPDATE, req);
     if ("error" in ctx) return ctx.error;
+    const deletionDenied = denyAdministrativeAssistantDeletion(ctx.user);
+    if (deletionDenied) return deletionDenied;
     const departamentoId = new URL(req.url).searchParams.get("departamentoId");
     if (!departamentoId) {
       return NextResponse.json({ error: "Falta departamentoId" }, { status: 400 });

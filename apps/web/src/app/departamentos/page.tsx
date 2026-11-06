@@ -8,7 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@contract/ui/component
 import { Label } from "@contract/ui/components/label";
 import { apiFetch } from "@/lib/api";
 import { RefreshCw, Upload } from "lucide-react";
-import { obtenerContactos, type ContactSeed as ContactoAsig } from "@/lib/contactos-seed";
+import {
+  obtenerContactosResumen,
+  type ContactoResumen as ContactoAsig,
+} from "@/lib/contactos-seed";
 import {
   CUSTOM_ITEM_CATEGORIAS,
   guardarInventarioDepartamento,
@@ -68,6 +71,14 @@ export default function DepartamentosPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [contactos, setContactos] = useState<ContactoAsig[]>([]);
   const [separaciones, setSeparaciones] = useState<SeparacionRecord[]>([]);
+  const separacionPorDepartamento = useMemo(
+    () => new Map(separaciones.map((separacion) => [separacion.departamentoId, separacion])),
+    [separaciones]
+  );
+  const contactoPorId = useMemo(
+    () => new Map(contactos.map((contacto) => [contacto.id, contacto])),
+    [contactos]
+  );
   const [elegidoId, setElegidoId] = useState<string | null>(null);
   const [contactoAsignado, setContactoAsignado] = useState<string | null>(null);
   const [, setProtocoloSeleccionado] = useState<string>("");
@@ -152,6 +163,8 @@ export default function DepartamentosPage() {
     setLoading(true);
     setError(null);
     try {
+      // Los inventarios no dependen del resto: van en paralelo desde el inicio.
+      const inventariosPromise = cargarInventarios(true).catch(() => undefined);
       const res = await apiFetch("/api/departamentos");
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -159,15 +172,16 @@ export default function DepartamentosPage() {
       }
       const loadedDepartments = (await res.json()) as DepartmentView[];
       setDepartments(loadedDepartments);
+      setLoading(false);
 
       await migrarDatosLocales();
       const [seps, ctos] = await Promise.all([
         leerSeparaciones(),
-        obtenerContactos(),
+        obtenerContactosResumen(),
       ]);
-      await cargarInventarios(true);
       setSeparaciones(seps);
       setContactos(ctos);
+      await inventariosPromise;
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -222,7 +236,7 @@ export default function DepartamentosPage() {
 
   function estaSeparado(dept: DepartmentView): boolean {
     if (contratoAprobado(dept)) return false;
-    const sep = separaciones.find((s) => s.departamentoId === dept.id);
+    const sep = separacionPorDepartamento.get(dept.id);
     if (!sep) return false;
     const estado = getEstadoActual(sep, dept);
     return !["PERDER_TODO", "INACTIVO_48H", "INACTIVO_168H", "CONTRATO_REAL"].includes(estado);
@@ -246,8 +260,8 @@ export default function DepartamentosPage() {
     const normalizedSearch = searchTerm.trim().toLocaleLowerCase("es");
     const filtrados = normalizedSearch
       ? departments.filter((department) => {
-          const sep = separaciones.find((item) => item.departamentoId === department.id);
-          const contacto = sep ? contactos.find((item) => item.id === sep.contactoId) : null;
+          const sep = separacionPorDepartamento.get(department.id);
+          const contacto = sep ? contactoPorId.get(sep.contactoId) : null;
           const searchable = [
             department.codigo,
             department.numero,
@@ -271,10 +285,10 @@ export default function DepartamentosPage() {
         })
       : departments;
     const copia = [...filtrados].sort((a, b) => {
-      const sepA = separaciones.find((s) => s.departamentoId === a.id);
-      const sepB = separaciones.find((s) => s.departamentoId === b.id);
-      const contactoA = sepA ? contactos.find((c) => c.id === sepA.contactoId) : null;
-      const contactoB = sepB ? contactos.find((c) => c.id === sepB.contactoId) : null;
+      const sepA = separacionPorDepartamento.get(a.id);
+      const sepB = separacionPorDepartamento.get(b.id);
+      const contactoA = sepA ? contactoPorId.get(sepA.contactoId) : null;
+      const contactoB = sepB ? contactoPorId.get(sepB.contactoId) : null;
       const estadoA = estadoDepartamento(a);
       const estadoB = estadoDepartamento(b);
       const tiempoA = sepA ? new Date(getFechaLimiteActiva(sepA)).getTime() : 0;
@@ -310,7 +324,14 @@ export default function DepartamentosPage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return copia;
-  }, [departments, separaciones, contactos, searchTerm, sortKey, sortDir]);
+  }, [
+    departments,
+    separacionPorDepartamento,
+    contactoPorId,
+    searchTerm,
+    sortKey,
+    sortDir,
+  ]);
 
   function fmtPrecio(val: string): string {
     return `S/ ${Number(val).toLocaleString("es-PE", { minimumFractionDigits: 0 })}`;
@@ -406,7 +427,7 @@ export default function DepartamentosPage() {
       setError("Departamento no encontrado.");
       return;
     }
-    const contacto = contactos.find((c) => c.id === contactoAsignado);
+    const contacto = contactoPorId.get(contactoAsignado);
     if (!contacto) {
       setError("Contacto no encontrado.");
       return;
@@ -486,7 +507,7 @@ export default function DepartamentosPage() {
     if (modo === "activar") {
       setBaucherGarantiaUrl("");
     } else {
-      const sep = separaciones.find((s) => s.departamentoId === deptId);
+      const sep = separacionPorDepartamento.get(deptId);
       setBaucherGarantiaUrl(sep?.baucherGarantiaExtendida ?? "");
     }
   }
@@ -527,7 +548,7 @@ export default function DepartamentosPage() {
           : s
       )
     );
-    const actual = separaciones.find((s) => s.departamentoId === deptId);
+    const actual = separacionPorDepartamento.get(deptId);
     if (actual) {
       void guardarSeparacion({
         ...actual,
@@ -753,8 +774,8 @@ export default function DepartamentosPage() {
                     </thead>
                     <tbody>
                       {ordenados.map((d) => {
-                        const sep = separaciones.find((s) => s.departamentoId === d.id);
-                        const sepContacto = sep ? contactos.find((c) => c.id === sep.contactoId) : null;
+                        const sep = separacionPorDepartamento.get(d.id);
+                        const sepContacto = sep ? contactoPorId.get(sep.contactoId) : null;
 
                         return (
                           <tr
@@ -1090,7 +1111,7 @@ export default function DepartamentosPage() {
         {/* Modal Garantía Extendida */}
         {garantiaModalDeptId && (() => {
           const gDept = departments.find((x) => x.id === garantiaModalDeptId);
-          const gSep = separaciones.find((s) => s.departamentoId === garantiaModalDeptId);
+          const gSep = separacionPorDepartamento.get(garantiaModalDeptId);
           if (!gDept || !gSep) return null;
           const diferencia = Number(gDept.precio) - 500;
           const esVer = garantiaModalModo === "ver";
@@ -1187,10 +1208,8 @@ export default function DepartamentosPage() {
         })()}
         {confirmarQuitarDeptId && (() => {
           const departamento = departments.find((item) => item.id === confirmarQuitarDeptId);
-          const separacion = separaciones.find(
-            (item) => item.departamentoId === confirmarQuitarDeptId
-          );
-          const contacto = contactos.find((item) => item.id === separacion?.contactoId);
+          const separacion = separacionPorDepartamento.get(confirmarQuitarDeptId);
+          const contacto = separacion ? contactoPorId.get(separacion.contactoId) : null;
           return (
             <div
               className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"

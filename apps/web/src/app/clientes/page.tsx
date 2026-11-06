@@ -8,6 +8,7 @@ import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-
 import { Card, CardContent, CardHeader, CardTitle } from "@contract/ui/components/card";
 import { PersonType } from "@contract/domain/client";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 interface ClientView {
   id: string;
@@ -74,6 +75,8 @@ function WhatsAppButton({
 }
 
 export default function ClientesPage() {
+  const { user } = useAuth();
+  const puedeEliminar = user !== null && user.role !== "ASISTENTE_ADMINISTRATIVO";
   const [clients, setClients] = useState<ClientView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -228,7 +231,9 @@ export default function ClientesPage() {
                           RUC{sortKey === "ruc" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                         </th>
                         <th className="px-3 py-2 font-medium">Cuenta cliente</th>
-                        <th className="px-3 py-2 font-medium">Eliminar</th>
+                        {puedeEliminar ? (
+                          <th className="px-3 py-2 font-medium">Eliminar</th>
+                        ) : null}
                       </tr>
                     </thead>
                     <tbody>
@@ -277,15 +282,17 @@ export default function ClientesPage() {
                               Gestionar en Usuarios
                             </Link>
                           </td>
-                          <td className="px-3 py-2">
-                            <button
-                              type="button"
-                              onClick={() => void eliminarCliente(c)}
-                              className="inline-flex h-8 items-center rounded-md border border-red-600 px-2 text-xs font-medium text-red-600 transition-colors hover:bg-red-600 hover:text-white"
-                            >
-                              Eliminar
-                            </button>
-                          </td>
+                          {puedeEliminar ? (
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                onClick={() => void eliminarCliente(c)}
+                                className="inline-flex h-8 items-center rounded-md border border-red-600 px-2 text-xs font-medium text-red-600 transition-colors hover:bg-red-600 hover:text-white"
+                              >
+                                Eliminar
+                              </button>
+                            </td>
+                          ) : null}
                         </tr>
                       ))}
                     </tbody>

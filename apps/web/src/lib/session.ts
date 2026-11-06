@@ -150,3 +150,14 @@ export function requirePermission(
   }
   return null;
 }
+
+/** El rol de asistente administra datos operativos, pero no puede eliminarlos. */
+export function denyAdministrativeAssistantDeletion(
+  principal: Pick<ResolvedUser, "role">
+): NextResponse | null {
+  if (principal.role !== "ASISTENTE_ADMINISTRATIVO") return null;
+  return NextResponse.json(
+    { error: "Los asistentes administrativos no pueden eliminar registros" },
+    { status: 403 }
+  );
+}

@@ -22,15 +22,24 @@ describe("AccessControl", () => {
     expect(ac.can(P.ATTENDANCE_READ)).toBe(false);
   });
 
-  it("ASISTENTE_ADMINISTRATIVO suma Google/Marketing en solo lectura", () => {
+  it("ASISTENTE_ADMINISTRATIVO gestiona contratos sin administrar usuarios ni eliminar", () => {
     const ac = AccessControl.forRole("ASISTENTE_ADMINISTRATIVO");
     expect(ac.can(P.DEPARTMENT_READ)).toBe(true);
+    expect(ac.can(P.DEPARTMENT_CREATE)).toBe(true);
+    expect(ac.can(P.DEPARTMENT_UPDATE)).toBe(true);
+    expect(ac.can(P.CLIENT_CREATE)).toBe(true);
+    expect(ac.can(P.CLIENT_UPDATE)).toBe(true);
+    expect(ac.can(P.CONTRACT_CREATE)).toBe(true);
+    expect(ac.can(P.CONTRACT_UPDATE)).toBe(true);
+    expect(ac.can(P.CONTRACT_EMIT)).toBe(true);
+    expect(ac.can(P.CONTRACT_SIGN)).toBe(true);
+    expect(ac.can(P.CONTRACT_CANCEL)).toBe(true);
+    expect(ac.can(P.TEMPLATE_MANAGE)).toBe(true);
+    expect(ac.can(P.DOCUMENT_DOWNLOAD)).toBe(true);
     expect(ac.can(P.WEB_CONTENT_READ)).toBe(false);
     expect(ac.can(P.MARKETING_READ)).toBe(true);
     expect(ac.can(P.WEB_CONTENT_UPDATE)).toBe(false);
     expect(ac.can(P.AGENDA_CREATE)).toBe(true);
-    expect(ac.can(P.CLIENT_CREATE)).toBe(false);
-    expect(ac.can(P.CLIENT_UPDATE)).toBe(false);
     expect(ac.can(P.ATTENDANCE_READ)).toBe(false);
     expect(ac.can(P.USER_MANAGE)).toBe(false);
     expect(ac.can(P.PERMISSION_REQUEST_CREATE)).toBe(true);

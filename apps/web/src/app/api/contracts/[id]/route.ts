@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { ContractRevisionConflictError } from "@contract/domain";
 import { Permission } from "@contract/domain/rbac";
-import { requireUser, requirePermission } from "@/lib/session";
+import {
+  denyAdministrativeAssistantDeletion,
+  requireUser,
+  requirePermission,
+} from "@/lib/session";
 import { buildContractServices } from "@/lib/contract-app";
 import { ensureContractPdfDocument } from "@/lib/documents";
 import { sincronizarTareasContrato } from "@/lib/tareas-contrato";
@@ -117,6 +121,8 @@ export async function DELETE(req: Request, { params }: Ctx) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
+    const deletionDenied = denyAdministrativeAssistantDeletion(auth.user);
+    if (deletionDenied) return deletionDenied;
     const denied = requirePermission(auth.user, Permission.CONTRACT_CANCEL);
     if (denied) return denied;
 

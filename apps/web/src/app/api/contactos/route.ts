@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
-import { desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
-import { requireUser, requirePermission } from "@/lib/session";
+import {
+  denyAdministrativeAssistantDeletion,
+  requireUser,
+  requirePermission,
+} from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -225,7 +229,50 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const dni = new URL(req.url).searchParams.get("dni");
+    const searchParams = new URL(req.url).searchParams;
+    const id = searchParams.get("id");
+    if (id) {
+      const [row] = await db
+        .select()
+        .from(schema.contacts)
+        .where(
+          and(
+            eq(schema.contacts.id, id),
+            isNull(schema.contacts.eliminadoEn)
+          )
+        )
+        .limit(1);
+      if (!row) {
+        return NextResponse.json({ error: "Contacto no encontrado" }, { status: 404 });
+      }
+      return NextResponse.json(toView(row));
+    }
+
+    if (searchParams.get("resumen") === "1") {
+      const rows = await db
+        .select({
+          id: schema.contacts.id,
+          nombre: schema.contacts.nombre,
+          apellido: schema.contacts.apellido,
+          tipoPersona: schema.contacts.tipoPersona,
+          dni: schema.contacts.dni,
+          ruc: schema.contacts.ruc,
+          email: schema.contacts.email,
+          telefono: schema.contacts.telefono,
+          codigoPais: schema.contacts.codigoPais,
+          domicilio: schema.contacts.domicilio,
+          nacionalidad: schema.contacts.nacionalidad,
+          contactoEmergencia: schema.contacts.contactoEmergencia,
+          mascotas: schema.contacts.mascotas,
+          mascotasItems: schema.contacts.mascotasItems,
+        })
+        .from(schema.contacts)
+        .where(isNull(schema.contacts.eliminadoEn))
+        .orderBy(desc(schema.contacts.createdAt));
+      return NextResponse.json(rows);
+    }
+
+    const dni = searchParams.get("dni");
     const rows = await db
       .select()
       .from(schema.contacts)
@@ -405,6 +452,8 @@ export async function DELETE(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
+    const deletionDenied = denyAdministrativeAssistantDeletion(auth.user);
+    if (deletionDenied) return deletionDenied;
     const denied = requirePermission(auth.user, Permission.CLIENT_UPDATE);
     if (denied) return denied;
 

@@ -32,6 +32,23 @@ contactoEmergencia?: {
   mascotasItems?: string[];
 }
 
+export interface ContactoResumen {
+  id: string;
+  nombre: string;
+  apellido: string;
+  tipoPersona: PersonType;
+  dni: string;
+  ruc?: string | null;
+  email: string;
+  telefono: string;
+  codigoPais: string;
+  domicilio: string;
+  nacionalidad: string;
+  contactoEmergencia?: ContactSeed["contactoEmergencia"];
+  mascotas: boolean;
+  mascotasItems: string[];
+}
+
 /** Clave LEGACY (localStorage) usada solo por la migración de una sola vez. */
 export const CONTACTOS_STORAGE_KEY = "sc_contactos_v7";
 
@@ -43,6 +60,27 @@ export async function obtenerContactos(): Promise<ContactSeed[]> {
   } catch {
     return [];
   }
+}
+
+export async function obtenerContactosResumen(): Promise<ContactoResumen[]> {
+  try {
+    const res = await apiFetch("/api/contactos?resumen=1");
+    if (!res.ok) return [];
+    return (await res.json()) as ContactoResumen[];
+  } catch {
+    return [];
+  }
+}
+
+export async function obtenerContactoPorId(id: string): Promise<ContactSeed> {
+  const res = await apiFetch(`/api/contactos?id=${encodeURIComponent(id)}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(
+      (body as { error?: string }).error ?? "No se pudo cargar el contacto"
+    );
+  }
+  return (await res.json()) as ContactSeed;
 }
 
 /** Persona de la lista negra que coincide al registrar un contacto. */

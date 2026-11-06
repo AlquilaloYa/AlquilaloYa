@@ -24,6 +24,7 @@ import type { DatosExtraidos } from "@/lib/pdf/extraer-datos-form";
 import type { ArchivoAdjunto } from "@/lib/contactos-seed";
 import { MASCOTAS, MASCOTAS_TOTAL, type GrupoChecklist } from "@/lib/catalogos";
 import { PAISES_CODIGO } from "@/lib/paises-codigo";
+import { useAuth } from "@/lib/auth-context";
 
 const EMERGENCIA_VACIO = { nombre: "", parentesco: "", telefono: "" };
 
@@ -626,6 +627,8 @@ function VistaDocs(props: {
 }
 
 export default function ContactosPage() {
+  const { user } = useAuth();
+  const puedeEliminar = user !== null && user.role !== "ASISTENTE_ADMINISTRATIVO";
   const [contactos, setContactos] = useState<ContactView[]>([]);
   const [form, setForm] = useState<ContactView>({
     id: "",
@@ -1457,7 +1460,9 @@ export default function ContactosPage() {
                       >
                         Email{sortKey === "email" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                       </th>
-                      <th className="px-3 py-2 font-medium">Eliminar</th>
+                      {puedeEliminar ? (
+                        <th className="px-3 py-2 font-medium">Eliminar</th>
+                      ) : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -1621,20 +1626,22 @@ export default function ContactosPage() {
                         >
                           {c.email}
                         </td>
-                        <td className="px-3 py-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            disabled={eliminandoId === c.id}
-                            onClick={() => setPorEliminar(c)}
-                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            title="Eliminar contacto"
-                            aria-label={`Eliminar contacto ${[c.nombre, c.apellido].filter(Boolean).join(" ")}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </td>
+                        {puedeEliminar ? (
+                          <td className="px-3 py-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={eliminandoId === c.id}
+                              onClick={() => setPorEliminar(c)}
+                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              title="Eliminar contacto"
+                              aria-label={`Eliminar contacto ${[c.nombre, c.apellido].filter(Boolean).join(" ")}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>
@@ -1683,7 +1690,7 @@ export default function ContactosPage() {
           onClose={() => setMascotasVista(null)}
         />
       ) : null}
-      {porEliminar ? (
+      {puedeEliminar && porEliminar ? (
         <ConfirmarBorradoContacto
           nombre={
             [porEliminar.nombre, porEliminar.apellido].filter(Boolean).join(" ") ||

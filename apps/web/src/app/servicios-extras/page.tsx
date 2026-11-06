@@ -80,6 +80,7 @@ export default function ServiciosExtrasPage() {
   const puedeGestionar = user
     ? AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.CONTRACT_UPDATE)
     : false;
+  const puedeEliminar = user !== null && user.role !== "ASISTENTE_ADMINISTRATIVO";
 
   const [servicios, setServicios] = useState<ServicioExtra[]>([]);
   const [loading, setLoading] = useState(true);
@@ -457,16 +458,18 @@ export default function ServiciosExtrasPage() {
                               <Edit className="h-3.5 w-3.5" />
                               Editar
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => void eliminar(s)}
-                              disabled={eliminandoId === s.id}
-                              className="inline-flex items-center gap-1 text-destructive hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                              title="Eliminar el servicio extra y su PDF"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              {eliminandoId === s.id ? "…" : "Eliminar"}
-                            </button>
+                            {puedeEliminar ? (
+                              <button
+                                type="button"
+                                onClick={() => void eliminar(s)}
+                                disabled={eliminandoId === s.id}
+                                className="inline-flex items-center gap-1 text-destructive hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                                title="Eliminar el servicio extra y su PDF"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                {eliminandoId === s.id ? "…" : "Eliminar"}
+                              </button>
+                            ) : null}
                           </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>

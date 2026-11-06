@@ -21,6 +21,14 @@ async function ctx(permission: Permission, req: Request) {
   const dbModule = await import("@contract/db");
   const auth = await requireUser(dbModule, req);
   if ("error" in auth) return { error: auth.error };
+  if (auth.user.role === "ASISTENTE_ADMINISTRATIVO") {
+    return {
+      error: NextResponse.json(
+        { error: "El permiso del asistente no incluye administrar plantillas de Marketing" },
+        { status: 403 }
+      ),
+    };
+  }
   const denied = requirePermission(auth.user, permission);
   if (denied) return { error: denied };
   const { db, schema } = dbModule as {

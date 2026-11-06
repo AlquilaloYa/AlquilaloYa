@@ -12,8 +12,8 @@ import type { UserRole } from "./role";
  *   Solo el DEVELOPER puede asignar el rol DEVELOPER.
  * - RRHH: solo lectura sobre la operación (no crea, no edita, no elimina);
  *   si quiere modificar algo pide permiso al Developer.
- * - ASISTENTE_ADMINISTRATIVO: igual que RRHH, con acceso de lectura además a
- *   Google SyS y Marketing, y permiso para agendar citas.
+ * - ASISTENTE_ADMINISTRATIVO: gestiona el sistema de contratos sin eliminar
+ *   registros, además de acceso a Google SyS/Marketing y citas.
  * - MARKETING: solo lectura y solo del módulo de marketing (no crea, no edita).
  */
 
@@ -47,6 +47,17 @@ const ROLE_PERMISSION_MAP: Record<UserRole, ReadonlySet<Permission>> = {
   RRHH: new Set([...BASE_OPERATIVO, P.PERMISSION_REQUEST_CREATE]),
   ASISTENTE_ADMINISTRATIVO: new Set([
     ...BASE_OPERATIVO,
+    P.CLIENT_CREATE,
+    P.CLIENT_UPDATE,
+    P.DEPARTMENT_CREATE,
+    P.DEPARTMENT_UPDATE,
+    P.CONTRACT_CREATE,
+    P.CONTRACT_UPDATE,
+    P.CONTRACT_EMIT,
+    P.CONTRACT_SIGN,
+    P.CONTRACT_CANCEL,
+    P.DOCUMENT_DOWNLOAD,
+    P.TEMPLATE_MANAGE,
     P.MARKETING_READ,
     P.AGENDA_CREATE,
     P.PERMISSION_REQUEST_CREATE,

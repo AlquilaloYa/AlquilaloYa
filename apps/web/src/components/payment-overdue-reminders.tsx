@@ -52,7 +52,10 @@ export function PaymentOverdueReminders() {
 
     const check = async () => {
       try {
-        const response = await apiFetch("/api/payments/overdue", { cache: "no-store" });
+        const response = await apiFetch("/api/payments/overdue", {
+          cache: "no-store",
+          sesionCritica: false,
+        });
         const body: unknown = await response.json().catch(() => null);
         if (!response.ok) {
           const message =

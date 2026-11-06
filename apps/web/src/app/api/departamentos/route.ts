@@ -26,7 +26,6 @@ export async function GET(req: Request) {
 
     const hoy = new Date();
     const hoyISO = hoy.toISOString().slice(0, 10);
-
     const ocupantes = await db
       .select({
         departamentoId: schema.contracts.departamentoId,
@@ -42,6 +41,36 @@ export async function GET(req: Request) {
           isNull(schema.contracts.eliminadoEn)
         )
       );
+
+    const contratoEstadoPorDepartamento = new Map<string, string>();
+    const ultimoFinPorDepartamento = new Map<string, string>();
+    const contratoVigentePorDepartamento = new Map<string, (typeof ocupantes)[number]>();
+    const fechaFinOcupadaPorDepartamento = new Map<string, string>();
+    const pesoEstado = (estado: string) =>
+      estado === "NOTARIADO" ? 3 : estado === "FIRMADO" ? 2 : estado === "ACTIVO" || estado === "VIGENTE" ? 1 : 0;
+
+    for (const contrato of ocupantes) {
+      const estadoPrevio = contratoEstadoPorDepartamento.get(contrato.departamentoId);
+      if (!estadoPrevio || pesoEstado(contrato.estado) >= pesoEstado(estadoPrevio)) {
+        contratoEstadoPorDepartamento.set(contrato.departamentoId, contrato.estado);
+      }
+
+      const ultimoFin = ultimoFinPorDepartamento.get(contrato.departamentoId);
+      if (!ultimoFin || contrato.fechaFin > ultimoFin) {
+        ultimoFinPorDepartamento.set(contrato.departamentoId, contrato.fechaFin);
+      }
+
+      if (contrato.fechaInicio <= hoyISO && contrato.fechaFin >= hoyISO) {
+        const vigente = contratoVigentePorDepartamento.get(contrato.departamentoId);
+        if (!vigente || contrato.fechaInicio > vigente.fechaInicio) {
+          contratoVigentePorDepartamento.set(contrato.departamentoId, contrato);
+        }
+        const finOcupada = fechaFinOcupadaPorDepartamento.get(contrato.departamentoId);
+        if (!finOcupada || contrato.fechaFin > finOcupada) {
+          fechaFinOcupadaPorDepartamento.set(contrato.departamentoId, contrato.fechaFin);
+        }
+      }
+    }
 
     const clienteIds = [...new Set(ocupantes.map((c) => c.clienteId))];
     const clientes = clienteIds.length > 0
@@ -59,44 +88,14 @@ export async function GET(req: Request) {
       : [];
     const clientePorId = new Map(clientes.map((c) => [c.id, c]));
 
-    // Última fecha de término de cada departamento para detectar mantenimiento
-    // (contrato terminado sin renovación por adenda → el depto pasa a mantenimiento).
-    const ultimoFinPorDepartamento = new Map<string, string>();
-    for (const c of ocupantes) {
-      const prev = ultimoFinPorDepartamento.get(c.departamentoId);
-      if (!prev || c.fechaFin > prev) {
-        ultimoFinPorDepartamento.set(c.departamentoId, c.fechaFin);
-      }
-    }
-
-    // Estado del contrato más reciente por departamento: si existe un contrato
-    // firmado (aprobado) o notariado, el concepto de "vencido" deja de aplicar
-    // en el temporizador de separación.
-    const contratoEstadoPorDepartamento = new Map<string, string>();
-    for (const c of ocupantes) {
-      const prev = contratoEstadoPorDepartamento.get(c.departamentoId);
-      const peso = (e: string) =>
-        e === "NOTARIADO" ? 3 : e === "FIRMADO" ? 2 : e === "ACTIVO" ? 1 : e === "VIGENTE" ? 1 : 0;
-      if (!prev || peso(c.estado) >= peso(prev)) {
-        contratoEstadoPorDepartamento.set(c.departamentoId, c.estado);
-      }
-    }
-
     function diasRestantes(fecha: string): number {
       return Math.max(0, Math.round((new Date(fecha).getTime() - hoy.getTime()) / 86_400_000));
     }
 
     const resultado = rows.map((d) => {
       const contratoEstado = contratoEstadoPorDepartamento.get(d.id) ?? null;
-      const contratosOcupando = ocupantes
-        .filter(
-          (c) =>
-            c.departamentoId === d.id &&
-            c.fechaInicio <= hoyISO &&
-            c.fechaFin >= hoyISO
-        )
-        .sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio));
-      if (contratosOcupando.length === 0) {
+      const contratoVigente = contratoVigentePorDepartamento.get(d.id);
+      if (!contratoVigente) {
         // Un contrato vigente manda siempre sobre el estado manual. Sin contrato
         // vigente se delega la clasificacion a la funcion pura: el estado manual
         // explicito (incluido DISPONIBLE) gana sobre el mantenimiento automatico
@@ -108,16 +107,16 @@ export async function GET(req: Request) {
         });
         return { ...d, contratoEstado, disponibilidad: null, enMantenimiento, bloqueado };
       }
-      const contratoVigente = contratosOcupando[0]!;
-      const fin = contratosOcupando.reduce(
-        (fechaMasLejana, contrato) => contrato.fechaFin > fechaMasLejana ? contrato.fechaFin : fechaMasLejana,
-        contratoVigente.fechaFin
-      );
       const cliente = clientePorId.get(contratoVigente.clienteId);
+      const fechaFin = fechaFinOcupadaPorDepartamento.get(d.id) ?? contratoVigente.fechaFin;
       return {
         ...d,
         contratoEstado,
-        disponibilidad: { disponible: false, fechaFin: fin, dias: diasRestantes(fin) },
+        disponibilidad: {
+          disponible: false,
+          fechaFin,
+          dias: diasRestantes(fechaFin),
+        },
         enMantenimiento: false,
         bloqueado: false,
         ocupante: cliente

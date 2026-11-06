@@ -77,7 +77,8 @@ export function AppointmentReminders() {
         const min = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
         const max = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
         const res = await apiFetch(
-          `/api/agenda?timeMin=${encodeURIComponent(min)}&timeMax=${encodeURIComponent(max)}`
+          `/api/agenda?timeMin=${encodeURIComponent(min)}&timeMax=${encodeURIComponent(max)}`,
+          { sesionCritica: false }
         );
         if (!res.ok) return;
         const data = (await res.json()) as { connected: boolean; events: GEvent[] };
