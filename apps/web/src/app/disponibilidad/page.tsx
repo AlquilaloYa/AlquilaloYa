@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { RefreshCw, X } from "lucide-react";
@@ -26,31 +25,45 @@ function fmtPrecio(val: string | undefined): string {
   return `S/ ${numero.toLocaleString("es-PE", { minimumFractionDigits: 0 })}/mes`;
 }
 
-function TarjetaDisponible({ dept }: { dept: DisponibilidadDepartment }) {
+function TarjetaDisponible({
+  dept,
+  onOpen,
+}: {
+  dept: DisponibilidadDepartment;
+  onOpen: () => void;
+}) {
   return (
-    <Link
-      href={`/disponibilidad/${encodeURIComponent(dept.codigo)}`}
+    <button
+      type="button"
+      onClick={onOpen}
       title="Ver propiedad"
       className="flex min-w-0 items-center justify-center rounded-xl border border-green-600/20 bg-green-500/10 border-l-4 border-l-green-600 p-2 transition-colors hover:bg-green-500/15 sm:p-4"
     >
       <span className="break-words text-center font-mono-label text-sm font-bold text-green-700 sm:text-base dark:text-green-500">
         {dept.codigo}
       </span>
-    </Link>
+    </button>
   );
 }
 
-function TarjetaOcupada({ dept }: { dept: DisponibilidadDepartment }) {
+function TarjetaOcupada({
+  dept,
+  onOpen,
+}: {
+  dept: DisponibilidadDepartment;
+  onOpen: () => void;
+}) {
   return (
-    <Link
-      href={`/disponibilidad/${encodeURIComponent(dept.codigo)}`}
+    <button
+      type="button"
+      onClick={onOpen}
       title="Ver propiedad"
       className="flex min-w-0 items-center justify-center rounded-xl border border-red-600/20 bg-red-500/10 border-l-4 border-l-red-600 p-2 transition-colors hover:bg-red-500/15 sm:p-4"
     >
       <span className="break-words text-center font-mono-label text-sm font-bold text-red-700 sm:text-base dark:text-red-500">
         {dept.codigo}
       </span>
-    </Link>
+    </button>
   );
 }
 
@@ -108,6 +121,31 @@ function PopupCambiarEstado({
   const [guardando, setGuardando] = useState(false);
   const [errorCambio, setErrorCambio] = useState<string | null>(null);
   const manual = dept.estadoManual ?? null;
+  const estado = dept.disponibilidad
+    ? "Ocupado"
+    : dept.bloqueado
+      ? "Bloqueado"
+      : dept.enMantenimiento
+        ? "En mantenimiento"
+        : "Disponible";
+  const nombreOcupante = [dept.ocupante?.nombres, dept.ocupante?.apellidos]
+    .filter(Boolean)
+    .join(" ");
+  const fechaDisponible = dept.disponibilidad?.fechaFin
+    ? new Date(`${dept.disponibilidad.fechaFin}T12:00:00`).toLocaleDateString("es-PE", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    : null;
+
+  useEffect(() => {
+    const cerrarConEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", cerrarConEscape);
+    return () => window.removeEventListener("keydown", cerrarConEscape);
+  }, [onClose]);
 
   async function cambiarEstado(estado: "DISPONIBLE" | "MANTENIMIENTO" | "BLOQUEADO" | null) {
     if (guardando) return;
@@ -139,13 +177,20 @@ function PopupCambiarEstado({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-xl border bg-background p-5 shadow-lg"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="disponibilidad-popup-title"
+        className="w-full max-w-md rounded-xl border bg-background p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-mono-label text-lg font-bold text-foreground">{dept.codigo}</h3>
-            <p className="text-sm text-muted-foreground">{dept.nombre} · Cambiar modo</p>
+            <h3 id="disponibilidad-popup-title" className="font-mono-label text-lg font-bold text-foreground">
+              {dept.codigo}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {dept.nombre || `Departamento ${dept.numero}`} · Piso {dept.piso}
+            </p>
             {fmtPrecio(dept.precio) ? (
               <p className="mt-1 text-sm font-semibold text-primary">{fmtPrecio(dept.precio)}</p>
             ) : null}
@@ -159,7 +204,30 @@ function PopupCambiarEstado({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="mt-4 space-y-2">
+        <dl className="mt-4 divide-y rounded-lg border px-3">
+          <div className="flex justify-between gap-4 py-2 text-sm">
+            <dt className="text-muted-foreground">Estado</dt>
+            <dd className="font-medium text-foreground">{estado}</dd>
+          </div>
+          {dept.disponibilidad ? (
+            <>
+              <div className="flex justify-between gap-4 py-2 text-sm">
+                <dt className="text-muted-foreground">Inquilino</dt>
+                <dd className="text-right font-medium text-foreground">{nombreOcupante || "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-4 py-2 text-sm">
+                <dt className="text-muted-foreground">Teléfono</dt>
+                <dd className="font-medium text-foreground">{dept.ocupante?.telefono || "—"}</dd>
+              </div>
+              <div className="flex justify-between gap-4 py-2 text-sm">
+                <dt className="text-muted-foreground">Disponible desde</dt>
+                <dd className="font-medium text-foreground">{fechaDisponible || "—"}</dd>
+              </div>
+            </>
+          ) : null}
+        </dl>
+        <p className="mb-2 mt-4 text-sm font-semibold text-foreground">Cambiar estado</p>
+        <div className="space-y-2">
           <button
             type="button"
             disabled={guardando}
@@ -246,7 +314,7 @@ function GrupoDepartamentos({
       </h2>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2 sm:gap-3">
         {disponibles.map((dept) => (
-          <TarjetaDisponible key={dept.id} dept={dept} />
+          <TarjetaDisponible key={dept.id} dept={dept} onOpen={() => onAbrirCambio(dept)} />
         ))}
         {mantenimiento.map((dept) => (
           <TarjetaMantenimiento
@@ -263,7 +331,7 @@ function GrupoDepartamentos({
           />
         ))}
         {ocupados.map((dept) => (
-          <TarjetaOcupada key={dept.id} dept={dept} />
+          <TarjetaOcupada key={dept.id} dept={dept} onOpen={() => onAbrirCambio(dept)} />
         ))}
       </div>
     </section>
