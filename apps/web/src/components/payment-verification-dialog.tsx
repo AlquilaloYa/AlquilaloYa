@@ -11,6 +11,10 @@ type Responsable = "miguel" | "emely";
 type VerificationStep = "loading" | "code" | "enroll" | "payments";
 type EnrolledTotp = { factorId: string; qrCode: string; secret: string };
 type EnrollmentPurpose = "payment-verification" | "replace-lost-factor";
+type VerificationAccess = {
+  scope: "angamos" | "ben2195" | null;
+  verifyPrefix: string | null;
+};
 
 type VerificationPayment = {
   id: string;
@@ -55,6 +59,8 @@ export function PaymentVerificationDialog({
   const [month, setMonth] = useState(mesActual);
   const [responsable, setResponsable] = useState<Responsable>("miguel");
   const [payments, setPayments] = useState<VerificationPayment[]>([]);
+  const [verificationAccess, setVerificationAccess] =
+    useState<VerificationAccess>({ scope: null, verifyPrefix: null });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [activePaymentId, setActivePaymentId] = useState<string | null>(null);
@@ -94,6 +100,17 @@ export function PaymentVerificationDialog({
         throw new Error("La respuesta de pagos no tiene el formato esperado.");
       }
       setPayments(body.payments as VerificationPayment[]);
+      if ("access" in body && typeof body.access === "object" && body.access !== null) {
+        const access = body.access as Partial<VerificationAccess>;
+        setVerificationAccess({
+          scope:
+            access.scope === "angamos" || access.scope === "ben2195"
+              ? access.scope
+              : null,
+          verifyPrefix:
+            typeof access.verifyPrefix === "string" ? access.verifyPrefix : null,
+        });
+      }
     } catch (loadFailure) {
       setLoadError(
         loadFailure instanceof Error
@@ -183,8 +200,11 @@ export function PaymentVerificationDialog({
   }, [load, step]);
 
   const visiblePayments = useMemo(
-    () => payments.filter((payment) => payment.responsable === responsable),
-    [payments, responsable]
+    () =>
+      verificationAccess.scope
+        ? payments
+        : payments.filter((payment) => payment.responsable === responsable),
+    [payments, responsable, verificationAccess.scope]
   );
 
   async function verificar(payment: VerificationPayment) {
@@ -380,7 +400,7 @@ export function PaymentVerificationDialog({
           </label> : null}
         </header>
 
-        {step === "payments" ? <nav className="flex gap-2 border-b border-outline-variant/50 px-4 py-3" aria-label="Filtrar por responsable">
+        {step === "payments" && !verificationAccess.scope ? <nav className="flex gap-2 border-b border-outline-variant/50 px-4 py-3" aria-label="Filtrar por responsable">
           {RESPONSABLES.map((item) => {
             const count = payments.filter(
               (payment) => payment.responsable === item.key
@@ -410,6 +430,13 @@ export function PaymentVerificationDialog({
         </nav> : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+          {step === "payments" && verificationAccess.scope ? (
+            <p className="mb-3 text-sm text-on-surface-variant">
+              {verificationAccess.scope === "angamos"
+                ? "Pagos de Angamos. Solo puedes verificar contratos ANG170-."
+                : "Solo se muestran pagos de contratos BEN2195-."}
+            </p>
+          ) : null}
           {step !== "payments" ? (
             <div className="mx-auto max-w-md space-y-4 py-5">
               {step === "loading" ? (
@@ -501,7 +528,11 @@ export function PaymentVerificationDialog({
             </div>
           ) : visiblePayments.length === 0 ? (
             <p className="py-10 text-center text-sm text-on-surface-variant">
-              No hay pagos registrados para {RESPONSABLES.find((item) => item.key === responsable)?.nombre} en este mes.
+              {verificationAccess.scope === "angamos"
+                ? "No hay pagos de Angamos en este mes."
+                : verificationAccess.scope === "ben2195"
+                  ? "No hay pagos BEN2195- en este mes."
+                  : `No hay pagos registrados para ${RESPONSABLES.find((item) => item.key === responsable)?.nombre} en este mes.`}
             </p>
           ) : (
             <ul className="space-y-4">
@@ -544,6 +575,11 @@ export function PaymentVerificationDialog({
                         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-600/10 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
                           <CheckCircle2 className="h-4 w-4" />
                           Pago verificado
+                        </span>
+                      ) : verificationAccess.verifyPrefix &&
+                        !payment.codigoContrato.toUpperCase().startsWith(verificationAccess.verifyPrefix) ? (
+                        <span className="shrink-0 rounded-full bg-surface-container px-2.5 py-1 text-xs text-on-surface-variant">
+                          Solo lectura
                         </span>
                       ) : (
                         <button

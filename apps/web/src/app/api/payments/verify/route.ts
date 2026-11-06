@@ -4,6 +4,7 @@ import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
 import { recordAdminAction } from "@/lib/audit-log";
 import { hasPaymentVerification } from "@/lib/payment-verification-session";
+import { canVerifyPayment } from "@/lib/payment-verification-access";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
       const [current] = await tx
         .select({
           id: schema.payments.id,
+          contractId: schema.payments.contractId,
           estado: schema.payments.estado,
           vouchers: schema.payments.vouchers,
           voucherUrl: schema.payments.voucherUrl,
@@ -57,6 +59,18 @@ export async function POST(req: Request) {
         .for("update");
 
       if (!current) throw new VerificationError("Pago no encontrado", 404);
+      const [contract] = await tx
+        .select({ codigoContrato: schema.contracts.codigoContrato })
+        .from(schema.contracts)
+        .where(eq(schema.contracts.id, current.contractId))
+        .limit(1);
+      if (!contract) throw new VerificationError("Contrato no encontrado", 404);
+      if (!canVerifyPayment(auth.user.email, contract.codigoContrato)) {
+        throw new VerificationError(
+          "No tienes permiso para verificar pagos de este contrato.",
+          403,
+        );
+      }
       if (current.estado !== "PAGADO" && current.estado !== "PARCIAL") {
         throw new VerificationError("Solo se pueden verificar pagos parciales o pagados", 400);
       }

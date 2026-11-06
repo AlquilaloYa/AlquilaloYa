@@ -3,6 +3,10 @@ import { and, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
 import { hasPaymentVerification } from "@/lib/payment-verification-session";
+import {
+  canViewVerificationPayment,
+  paymentVerificationAccess,
+} from "@/lib/payment-verification-access";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +101,9 @@ export async function GET(req: Request) {
       .orderBy(schema.payments.updatedAt);
 
     const payments = rows.flatMap((row) => {
+      if (!canViewVerificationPayment(auth.user.email, row.codigoContrato, row.departamento)) {
+        return [];
+      }
       const owner = normalizarPersona(row.personaPago);
       if (!owner) return [];
       const vouchers =
@@ -132,7 +139,11 @@ export async function GET(req: Request) {
       ];
     });
 
-    const response = NextResponse.json({ month, payments });
+    const response = NextResponse.json({
+      month,
+      payments,
+      access: paymentVerificationAccess(auth.user.email),
+    });
     response.headers.set("Cache-Control", "no-store");
     return response;
   } catch (error) {
