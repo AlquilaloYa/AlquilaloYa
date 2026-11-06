@@ -11,7 +11,6 @@ import type { Permission } from "@contract/domain/rbac";
 import { TopBar } from "@/components/top-bar";
 import { ThemeToggle } from "@contract/ui/components/theme-toggle";
 import { AppointmentReminders } from "@/components/appointment-reminders";
-import { PaymentOverdueReminders } from "@/components/payment-overdue-reminders";
 import {
   LayoutDashboard,
   Star,
@@ -664,7 +663,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <AppointmentReminders />
-      <PaymentOverdueReminders />
     </div>
   );
 }
