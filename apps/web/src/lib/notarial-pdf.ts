@@ -7,6 +7,7 @@ export interface NotarialAttachment {
 }
 
 const A4: [number, number] = [595.28, 841.89];
+const DNI_PDF_SUBJECT = "AlquilaYa ERP: DNI PDF adjunto";
 
 function dataUrlToParts(dataUrl: string): { mime: string; bytes: Uint8Array } | null {
   const m = /^data:([^;,]+)(?:;base64)?,(.*)$/i.exec(dataUrl);
@@ -57,15 +58,18 @@ async function addNotePage(doc: PDFDocument, text: string): Promise<void> {
 }
 
 /**
- * Compone el PDF de notaría: partes del PDF del contrato CONGELADO (bytes
- * verbatim) + anexa cada copia de DNI como página real (imagen → A4; PDF → sus
- * páginas). No modifica el archivo base.
+ * Anexa las copias del DNI como páginas reales (imagen → A4; PDF → sus páginas)
+ * al PDF del contrato. Si el PDF ya contiene las páginas del DNI en PDF, no las
+ * vuelve a anexar.
  */
 export async function buildNotarialPdf(
   contractPdfBytes: Uint8Array,
   attachments: NotarialAttachment[]
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.load(contractPdfBytes);
+  if (doc.getSubject() === DNI_PDF_SUBJECT) return contractPdfBytes;
+
+  let hasPdfAttachment = false;
   for (const att of attachments) {
     const parts = att?.dataUrl ? dataUrlToParts(att.dataUrl) : null;
     if (!parts) {
@@ -73,6 +77,7 @@ export async function buildNotarialPdf(
       continue;
     }
     if (parts.mime === "application/pdf") {
+      hasPdfAttachment = true;
       try {
         const sub = await PDFDocument.load(parts.bytes);
         const copied = await doc.copyPages(sub, sub.getPageIndices());
@@ -86,5 +91,6 @@ export async function buildNotarialPdf(
       await addNotePage(doc, `Anexo no soportado (${parts.mime}): ${att.nombre}`);
     }
   }
+  if (hasPdfAttachment) doc.setSubject(DNI_PDF_SUBJECT);
   return doc.save();
 }

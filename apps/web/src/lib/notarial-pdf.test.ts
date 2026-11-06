@@ -12,6 +12,13 @@ async function basePdf(pages = 1): Promise<Uint8Array> {
   return doc.save();
 }
 
+async function attachmentPdf(pages = 1): Promise<string> {
+  const doc = await PDFDocument.create();
+  for (let i = 0; i < pages; i++) doc.addPage();
+  const bytes = await doc.save();
+  return `data:application/pdf;base64,${Buffer.from(bytes).toString("base64")}`;
+}
+
 async function pageCount(bytes: Uint8Array): Promise<number> {
   const d = await PDFDocument.load(bytes);
   return d.getPageCount();
@@ -36,6 +43,18 @@ describe("buildNotarialPdf", () => {
       { nombre: "b.png", tipo: "image/png", dataUrl: PNG_1x1 },
     ]);
     expect(await pageCount(out)).toBe(4);
+  });
+
+  it("anexa las páginas PDF del DNI y evita duplicarlas al preparar notaría", async () => {
+    const attachments = [
+      { nombre: "dni.pdf", tipo: "application/pdf", dataUrl: await attachmentPdf(2) },
+    ];
+    const contractPdf = await buildNotarialPdf(await basePdf(3), attachments);
+    expect(await pageCount(contractPdf)).toBe(5);
+
+    const notarialPdf = await buildNotarialPdf(contractPdf, attachments);
+    expect(await pageCount(notarialPdf)).toBe(5);
+    expect(notarialPdf).toEqual(contractPdf);
   });
 
   it("no pierde un anexo ilegible (lo deja como nota)", async () => {

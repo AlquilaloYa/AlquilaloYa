@@ -119,7 +119,7 @@ function dniMarkup(attachments: unknown): string {
       const src = escapeHtml(item.dataUrl);
       const nombre = escapeHtml(item.nombre ?? "Copia de DNI");
       if ((item.tipo ?? "").toLowerCase() === "application/pdf" || item.dataUrl.startsWith("data:application/pdf")) {
-        return `<p class="dni-note" style="text-align:center;font-size:11pt;">Se adjunta copia del DNI en formato PDF ( "${nombre}" ). Las páginas reales se incorporan en la versión para notaría.</p>`;
+        return `<p class="dni-note" style="text-align:center;font-size:11pt;">Se adjunta copia del DNI en formato PDF ( "${nombre}" ). Sus páginas se incorporan al final del PDF del contrato.</p>`;
       }
       if (item.dataUrl.startsWith("data:image/")) {
         return `<img src="${src}" alt="${nombre}" class="dni-image" style="display:block;margin:0 auto 8mm;width:auto;height:auto;max-width:165mm;max-height:225mm;object-fit:contain;" />`;

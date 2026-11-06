@@ -1,6 +1,7 @@
 import type { ContractSnapshot } from "@contract/domain/snapshot";
 import { renderContractHtml } from "./render-contract-html";
 import { renderAdendaHtml } from "./render-adenda-html";
+import { buildNotarialPdf, type NotarialAttachment } from "../notarial-pdf";
 
 export interface PdfResult {
   bytes: Buffer;
@@ -75,10 +76,21 @@ export async function generateContractPdf(
   snapshot: ContractSnapshot,
   templateHtml?: string | null
 ): Promise<PdfResult> {
-  return pdfFromHtml(
+  const pdf = await pdfFromHtml(
     renderContractHtml(snapshot, templateHtml),
     `${snapshot.codigoContrato || "contrato"}.pdf`
   );
+  const attachments = Array.isArray(snapshot.datosContrato.copiaDni)
+    ? (snapshot.datosContrato.copiaDni as NotarialAttachment[]).filter(
+        (attachment) =>
+          attachment?.tipo?.toLowerCase() === "application/pdf" ||
+          attachment?.dataUrl?.startsWith("data:application/pdf")
+      )
+    : [];
+  if (attachments.length === 0) return pdf;
+
+  const bytes = await buildNotarialPdf(pdf.bytes, attachments);
+  return { ...pdf, bytes: Buffer.from(bytes) };
 }
 
 /** Genera el PDF de una adenda a partir de su snapshot. */

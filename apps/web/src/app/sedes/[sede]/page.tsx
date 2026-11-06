@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
@@ -184,27 +183,46 @@ export default function SedePage() {
           </p>
         ) : (
           <div className="space-y-2">
-            <label className="relative block w-full max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="search"
-                value={busqueda}
-                onChange={(event) => setBusqueda(event.target.value)}
-                placeholder="Buscar código, piso, estado o inquilino…"
-                className="h-10 w-full rounded-md border border-outline-variant bg-background pl-9 pr-3 text-sm outline-none focus:border-primary"
-                aria-label="Buscar departamentos"
-              />
-            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label className="relative block w-full max-w-md">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="search"
+                  value={busqueda}
+                  onChange={(event) => setBusqueda(event.target.value)}
+                  placeholder="Buscar código, piso, estado o inquilino…"
+                  className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm text-on-surface outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
+                  aria-label="Buscar departamentos"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setTablaContraida((contraida) => !contraida)}
+                aria-expanded={!tablaContraida}
+                aria-label={tablaContraida ? "Expandir tabla" : "Contraer tabla"}
+                title={tablaContraida ? "Expandir tabla" : "Contraer tabla"}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                {tablaContraida ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
+                )}
+              </button>
+            </div>
 
-            {departamentosFiltrados.length === 0 ? (
+            {departamentosFiltrados.length === 0 && !tablaContraida ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
                 No se encontraron departamentos para “{busqueda}”.
               </p>
             ) : (
-              <TableScroll contentClassName="max-h-80">
+              <TableScroll
+                className="w-full rounded-md border"
+                contentClassName="max-h-[30rem]"
+              >
                 <table className="w-full min-w-[620px] text-sm">
-                  <thead className="sticky top-0 z-10 bg-background">
-                    <tr className="border-b border-outline-variant text-left text-xs uppercase tracking-wider text-on-surface-variant">
+                  <thead className="sticky top-0 z-10 bg-[#151a24] text-left text-xs text-white/80">
+                    <tr>
                       <th className="px-3 py-2 font-medium">Código</th>
                       <th className="px-3 py-2 font-medium">Piso</th>
                       <th className="px-3 py-2 font-medium">Estado</th>
@@ -218,20 +236,20 @@ export default function SedePage() {
                         const estado = estadoDe(d);
                         const meta = META_ESTADO[estado];
                         return (
-                          <tr key={d.id} className="border-t border-outline-variant/50">
-                            <td className="whitespace-nowrap px-3 py-1.5 font-mono">{d.codigo}</td>
-                            <td className="whitespace-nowrap px-3 py-1.5">{d.piso}</td>
-                            <td className="whitespace-nowrap px-3 py-1.5">
+                          <tr key={d.id} className="border-t transition-colors hover:bg-muted/50">
+                            <td className="whitespace-nowrap px-3 py-2 font-mono-label font-medium">{d.codigo}</td>
+                            <td className="whitespace-nowrap px-3 py-2">{d.piso}</td>
+                            <td className="whitespace-nowrap px-3 py-2">
                               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${meta.clases}`}>
                                 {meta.label}
                               </span>
                             </td>
-                            <td className="whitespace-nowrap px-3 py-1.5">
+                            <td className="whitespace-nowrap px-3 py-2">
                               {d.ocupante
                                 ? [d.ocupante.nombres, d.ocupante.apellidos].filter(Boolean).join(" ")
                                 : "—"}
                             </td>
-                            <td className="whitespace-nowrap px-3 py-1.5">
+                            <td className="whitespace-nowrap px-3 py-2">
                               {d.disponible && !d.disponible.disponible
                                 ? fechaEs(d.disponible.fechaFin)
                                 : "—"}
@@ -245,35 +263,11 @@ export default function SedePage() {
               </TableScroll>
             )}
 
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-muted-foreground">
-                {departamentosFiltrados.length} de {departamentosOrdenados.length} departamentos
-              </span>
-              <button
-                type="button"
-                onClick={() => setTablaContraida((contraida) => !contraida)}
-                aria-expanded={!tablaContraida}
-                className="inline-flex items-center gap-1 rounded-md border border-outline-variant px-3 py-1.5 text-sm font-medium hover:bg-surface-variant/50"
-              >
-                {tablaContraida ? (
-                  <>
-                    <ChevronDown className="h-4 w-4" /> Expandir tabla
-                  </>
-                ) : (
-                  <>
-                    <ChevronUp className="h-4 w-4" /> Contraer tabla
-                  </>
-                )}
-              </button>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              {departamentosFiltrados.length} de {departamentosOrdenados.length} departamentos
+            </p>
           </div>
         )}
-
-        <div className="text-sm text-muted-foreground">
-          <Link href="/departamentos" className="font-medium text-primary hover:underline">
-            Ver todos los departamentos →
-          </Link>
-        </div>
       </div>
     </DashboardShell>
   );

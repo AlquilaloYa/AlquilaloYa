@@ -186,14 +186,14 @@ describe("renderContractHtml con plantilla (Benavides)", () => {
     expect(html).not.toContain("max-width:175mm");
   });
 
-  it("no usa embed para DNI en PDF (headless lo imprime como recuadro vacío)", () => {
+  it("indica que las páginas del DNI en PDF se anexan al PDF del contrato", () => {
     const snp = snapshot();
     (snp.datosContrato as Record<string, unknown>).copiaDni = [
       { nombre: "dni.pdf", tipo: "application/pdf", dataUrl: "data:application/pdf;base64,JVBERg==" },
     ];
     const html = renderContractHtml(snp, "<h1>Contrato</h1><div>[DNI]</div>");
     expect(html).not.toContain("<embed");
-    expect(html).toContain("versión para notaría");
+    expect(html).toContain("se incorporan al final del PDF del contrato");
   });
 });
 
