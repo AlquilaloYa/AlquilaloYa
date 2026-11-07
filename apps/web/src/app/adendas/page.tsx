@@ -7,7 +7,12 @@ import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
 import { CalendarPlus, Download, Edit, FileCheck, Plus, RefreshCw, ShieldCheck, Trash2, X, MoveUpRight } from "lucide-react";
-import { AdendaModal, EditAdendaModal, ExtensionModal } from "@/components/adenda-modals";
+import {
+  AdendaModal,
+  EditAdendaModal,
+  ExtensionModal,
+  type EditableAdenda,
+} from "@/components/adenda-modals";
 import { useAuth } from "@/lib/auth-context";
 
 type AdendaApi = {
@@ -31,7 +36,7 @@ type AdendaApi = {
   clienteDocumento: string | null;
   fechaFinAdenda: string | null;
   datosContrato: Record<string, unknown> | null;
-  anexoContenido: string | null;
+  anexoContenido?: string | null;
   departamentoNombre: string | null;
   departamentoCodigo: string | null;
 };
@@ -109,7 +114,7 @@ export default function AdendasPage() {
   const [pickerLoading, setPickerLoading] = useState(false);
 
   const [selected, setSelected] = useState<ContractPick | null>(null);
-  const [editarAdenda, setEditarAdenda] = useState<AdendaApi | null>(null);
+  const [editarAdenda, setEditarAdenda] = useState<EditableAdenda | null>(null);
   const [showAdenda, setShowAdenda] = useState(false);
   const [showExtension, setShowExtension] = useState(false);
 
@@ -130,6 +135,26 @@ export default function AdendasPage() {
       setLoading(false);
     }
   }, []);
+
+  async function cargarAdendaParaEdicion(d: AdendaApi) {
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/adendas/${encodeURIComponent(d.id)}`);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error ?? "No se pudo cargar la adenda para editar");
+      }
+      setEditarAdenda({
+        ...d,
+        datosContrato:
+          (body.datosContrato as Record<string, unknown> | null | undefined) ?? null,
+        anexoContenido:
+          (body.anexoContenido as string | null | undefined) ?? null,
+      });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   useEffect(() => {
     load();
@@ -461,7 +486,7 @@ export default function AdendasPage() {
                           {isAdmin ? (
                             <button
                               type="button"
-                              onClick={() => setEditarAdenda(d)}
+                              onClick={() => void cargarAdendaParaEdicion(d)}
                               className="inline-flex items-center gap-1 text-on-surface-variant hover:text-primary"
                               title="Editar título, contenido, numeración o plazo de la adenda"
                             >

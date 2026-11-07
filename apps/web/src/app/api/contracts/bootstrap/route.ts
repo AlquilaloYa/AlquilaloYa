@@ -20,6 +20,7 @@ function fechasLimite(fechaSeparacion: Date) {
 
 export async function GET(request: Request) {
   try {
+    const mode = new URL(request.url).searchParams.get("mode");
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, request);
     if ("error" in auth) return auth.error;
@@ -35,7 +36,9 @@ export async function GET(request: Request) {
 
     const [contractsResult, departmentsResult, contactsResult, separationsResult, templatesResult] =
       await Promise.allSettled([
-        db
+        mode === "catalogs"
+          ? Promise.resolve(null)
+          : db
           .select({
             id: schema.contracts.id,
             codigoContrato: schema.contracts.codigoContrato,
@@ -71,8 +74,9 @@ export async function GET(request: Request) {
           )
           .where(isNull(schema.contracts.eliminadoEn))
           .orderBy(desc(schema.contracts.creadoEn)),
-        canReadDepartments
-          ? db
+        mode === "contracts" || !canReadDepartments
+          ? Promise.resolve(null)
+          : db
               .select({
                 id: schema.departments.id,
                 nombre: schema.departments.nombre,
@@ -84,10 +88,10 @@ export async function GET(request: Request) {
                 personaPago: schema.departments.personaPago,
               })
               .from(schema.departments)
-              .orderBy(schema.departments.nombre, schema.departments.numero)
-          : Promise.resolve(null),
-        canReadContacts
-          ? db
+              .orderBy(schema.departments.nombre, schema.departments.numero),
+        mode === "contracts" || !canReadContacts
+          ? Promise.resolve(null)
+          : db
               .select({
                 id: schema.contacts.id,
                 nombre: schema.contacts.nombre,
@@ -106,16 +110,16 @@ export async function GET(request: Request) {
               })
               .from(schema.contacts)
               .where(isNull(schema.contacts.eliminadoEn))
-              .orderBy(desc(schema.contacts.createdAt))
-          : Promise.resolve(null),
-        canReadDepartments
-          ? db
+              .orderBy(desc(schema.contacts.createdAt)),
+        mode === "contracts" || !canReadDepartments
+          ? Promise.resolve(null)
+          : db
               .select()
               .from(schema.separations)
-              .where(isNull(schema.separations.eliminadoEn))
-          : Promise.resolve(null),
-        canReadTemplates
-          ? (async () => {
+              .where(isNull(schema.separations.eliminadoEn)),
+        mode === "contracts" || !canReadTemplates
+          ? Promise.resolve(null)
+          : (async () => {
               const templates = await db
                 .select({
                   id: schema.templates.id,
@@ -162,12 +166,33 @@ export async function GET(request: Request) {
                 }
               }
               return { templates, versions };
-            })()
-          : Promise.resolve(null),
+            })(),
       ]);
 
     if (contractsResult.status === "rejected") {
       throw contractsResult.reason;
+    }
+
+    const contracts = (contractsResult.value ?? []).map((row) => ({
+      ...row,
+      createdAt: row.creadoEn.toISOString(),
+      updatedAt: row.actualizadoEn.toISOString(),
+      clienteNombre: row.clienteNombre ?? "",
+      apellidoCliente: row.clienteApellido ?? "",
+      departamentoNombre: row.departamentoNombre ?? "",
+    }));
+
+    if (mode === "contracts") {
+      const response = NextResponse.json({
+        contracts,
+        departments: null,
+        contacts: null,
+        separations: null,
+        templateSelector: null,
+        failures: [],
+      });
+      response.headers.set("Cache-Control", "no-store");
+      return response;
     }
 
     const failures: string[] = [];
@@ -205,14 +230,6 @@ export async function GET(request: Request) {
       canReadTemplates
     );
 
-    const contracts = contractsResult.value.map((row) => ({
-      ...row,
-      createdAt: row.creadoEn.toISOString(),
-      updatedAt: row.actualizadoEn.toISOString(),
-      clienteNombre: row.clienteNombre ?? "",
-      apellidoCliente: row.clienteApellido ?? "",
-      departamentoNombre: row.departamentoNombre ?? "",
-    }));
     const separations = rawSeparations?.map((row) => ({
       id: row.id,
       departamentoId: row.departamentoId,

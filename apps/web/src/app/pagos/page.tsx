@@ -180,8 +180,51 @@ function AbonoModal({
   const [voucher, setVoucher] = useState<{ nombre: string; dataUrl: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [cargandoPago, setCargandoPago] = useState(Boolean(fila.pago));
+  const [pagoDetallado, setPagoDetallado] = useState<PaymentRow | null>(null);
 
   const montoNum = modo === "TOTAL" ? fila.saldo : Number(monto);
+
+  useEffect(() => {
+    if (!fila.pago) {
+      setCargandoPago(false);
+      return;
+    }
+    let active = true;
+    void apiFetch(`/api/payments?paymentId=${encodeURIComponent(fila.pago.id)}`)
+      .then(async (res) => {
+        const body = await res.json().catch(() => null);
+        if (!res.ok) {
+          const message =
+            typeof body === "object" &&
+            body !== null &&
+            "error" in body &&
+            typeof body.error === "string"
+              ? body.error
+              : `Error ${res.status}`;
+          throw new Error(message);
+        }
+        if (!body || typeof body !== "object" || !("vouchers" in body)) {
+          throw new Error("No se pudieron cargar los vouchers del pago.");
+        }
+        if (active) setPagoDetallado(body as PaymentRow);
+      })
+      .catch((loadError: unknown) => {
+        if (active) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "No se pudieron cargar los vouchers del pago."
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setCargandoPago(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [fila.pago]);
 
   function leerArchivo(files: FileList | null) {
     const file = files?.[0];
@@ -197,6 +240,10 @@ function AbonoModal({
   }
 
   async function confirmar() {
+    if (fila.pago && !pagoDetallado) {
+      setError("Espera a que terminen de cargar los vouchers del pago.");
+      return;
+    }
     if (!voucher) {
       setError("Adjunta el baucher del pago (imagen JPEG).");
       return;
@@ -212,7 +259,7 @@ function AbonoModal({
     setGuardando(true);
     setError(null);
     try {
-      const existentes: PaymentVoucher[] = (fila.pago?.vouchers ?? []).map((v) => ({
+      const existentes: PaymentVoucher[] = (pagoDetallado?.vouchers ?? []).map((v) => ({
         nombre: v.nombre,
         url: v.url,
         ...(typeof v.monto === "number" ? { monto: v.monto } : {}),
@@ -319,6 +366,11 @@ function AbonoModal({
             {error}
           </p>
         ) : null}
+        {cargandoPago ? (
+          <p className="mt-3 text-sm text-on-surface-variant">
+            Cargando vouchers del pago…
+          </p>
+        ) : null}
 
         <div className="mt-5 flex justify-end gap-2">
           <button
@@ -332,10 +384,10 @@ function AbonoModal({
           <button
             type="button"
             onClick={() => void confirmar()}
-            disabled={guardando}
+            disabled={guardando || cargandoPago}
             className="rounded bg-primary px-3 py-1.5 text-sm text-on-primary hover:opacity-90 disabled:opacity-50"
           >
-            {guardando ? "Guardando…" : "Guardar abono"}
+            {cargandoPago ? "Cargando…" : guardando ? "Guardando…" : "Guardar abono"}
           </button>
         </div>
       </div>
@@ -451,7 +503,7 @@ export default function PagosPage() {
     try {
       const [cs, ps, ss] = await Promise.all([
         cargarLista<ContractRow>("/api/contracts"),
-        cargarLista<PaymentRow>("/api/payments"),
+        cargarLista<PaymentRow>("/api/payments?compact=1"),
         cargarLista<ServicioExtraRow>("/api/servicios-extras"),
       ]);
       setContracts(cs);

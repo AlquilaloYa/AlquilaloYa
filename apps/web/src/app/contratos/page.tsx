@@ -244,23 +244,21 @@ export default function ContratosPage() {
     }
   }, []);
 
-  const cargarDatosIniciales = useCallback(async () => {
+  const cargarCatalogos = useCallback(async () => {
     setCargandoDepositantes(true);
     setCargandoDepartamentos(true);
     setCargandoPlantillas(true);
-    setLoading(true);
-    setError(null);
     setErrorCargaDepositantes(null);
 
     try {
-      let ultimoError: Error = new Error("No se pudieron cargar los datos de Precontratos.");
+      let ultimoError: Error = new Error("No se pudieron cargar los catálogos de Precontratos.");
       for (let intento = 0; intento < 3; intento += 1) {
         try {
-          const res = await apiFetch("/api/contracts/bootstrap");
+          const res = await apiFetch("/api/contracts/bootstrap?mode=catalogs");
           if (!res.ok) {
             const body = await res.json().catch(() => ({}));
             const error = new Error(
-              body.error ?? `No se pudieron cargar los datos de Precontratos (${res.status}).`
+              body.error ?? `No se pudieron cargar los catálogos (${res.status}).`
             );
             if (res.status < 500) throw Object.assign(error, { noReintentar: true });
             throw error;
@@ -273,11 +271,6 @@ export default function ContratosPage() {
             templateSelector: TemplateSelectorResponse | null;
             failures?: string[];
           };
-          if (!Array.isArray(data.contracts)) {
-            throw new Error("La respuesta de contratos no es válida.");
-          }
-
-          setContracts(data.contracts);
           setDepartments(data.departments ?? []);
           setContactos(data.contacts ?? []);
           setSeparaciones(data.separations ?? []);
@@ -292,10 +285,9 @@ export default function ContratosPage() {
           );
           if (data.failures && data.failures.length > 0) {
             setErrorCargaDepositantes(
-              `No se pudieron cargar ${data.failures.join(", ")}. Intenta volver a cargar.`
+              `No se pudieron cargar ${data.failures.join(", ")}. Intenta volver a cargar los catálogos.`
             );
           }
-          setError(null);
           return;
         } catch (error) {
           ultimoError = error as Error;
@@ -306,15 +298,51 @@ export default function ContratosPage() {
         }
       }
 
-      setError(ultimoError.message);
       setErrorCargaDepositantes(ultimoError.message);
     } finally {
-      setLoading(false);
       setCargandoDepositantes(false);
       setCargandoDepartamentos(false);
       setCargandoPlantillas(false);
     }
   }, []);
+
+  const cargarDatosIniciales = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      let ultimoError: Error = new Error("No se pudieron cargar los contratos.");
+      for (let intento = 0; intento < 3; intento += 1) {
+        try {
+          const res = await apiFetch("/api/contracts/bootstrap?mode=contracts");
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            const error = new Error(
+              body.error ?? `No se pudieron cargar los contratos (${res.status}).`
+            );
+            if (res.status < 500) throw Object.assign(error, { noReintentar: true });
+            throw error;
+          }
+          const data = (await res.json()) as { contracts: ContractApi[] };
+          if (!Array.isArray(data.contracts)) {
+            throw new Error("La respuesta de contratos no es válida.");
+          }
+          setContracts(data.contracts);
+          setError(null);
+          return;
+        } catch (error) {
+          ultimoError = error as Error;
+          if ((error as Error & { noReintentar?: boolean }).noReintentar) break;
+          if (intento < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 500 * (intento + 1)));
+          }
+        }
+      }
+      setError(ultimoError.message);
+    } finally {
+      setLoading(false);
+      void cargarCatalogos();
+    }
+  }, [cargarCatalogos]);
 
   useEffect(() => {
     let active = true;
@@ -835,7 +863,7 @@ res.push({
           cargandoDepartamentos={cargandoDepartamentos}
           cargandoPlantillas={cargandoPlantillas}
           errorCargaDepositantes={errorCargaDepositantes}
-          onRetryDepositantes={() => void cargarDatosIniciales()}
+          onRetryDepositantes={() => void cargarCatalogos()}
           onClose={() => setShowCreate(false)}
           onCreated={async () => {
             setShowCreate(false);

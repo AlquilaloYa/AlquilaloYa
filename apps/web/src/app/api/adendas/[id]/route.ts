@@ -64,6 +64,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       tipo: doc.tipo,
       filename: doc.filename,
       codigoContrato: snapshot.codigoContrato,
+      datosContrato: snapshot.datosContrato,
+      anexoContenido: snapshot.anexos[0]?.contenido ?? null,
       documentoHtml,
       htmlActual,
     });

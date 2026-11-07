@@ -1575,7 +1575,7 @@ function MorosidadPopup({ onCerrar }: { onCerrar: () => void }) {
         if (!response.ok) throw new Error("No se pudieron cargar los contratos");
         return (await response.json()) as ContratoMorosidad[];
       }),
-      apiFetch("/api/payments").then(async (response) => {
+      apiFetch("/api/payments?compact=1").then(async (response) => {
         if (!response.ok) throw new Error("No se pudieron cargar los pagos");
         return (await response.json()) as PagoMorosidad[];
       }),
