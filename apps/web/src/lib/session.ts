@@ -54,6 +54,7 @@ export interface DbUserModule {
         name: string;
         role: UserRole;
         active?: boolean;
+        configurationAccess: boolean;
       } | null;
       permissionKeys: string[];
     }>;
