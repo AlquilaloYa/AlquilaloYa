@@ -126,7 +126,11 @@ export default function ContratoDetailPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [snapshotActivity, setSnapshotActivity] = useState<SnapshotActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [activityLoading, setActivityLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const [descargando, setDescargando] = useState(false);
   const [errorPdf, setErrorPdf] = useState<string | null>(null);
   const [showAdenda, setShowAdenda] = useState(false);
@@ -298,28 +302,61 @@ export default function ContratoDetailPage() {
     input.click();
   }
 
+  const loadDocuments = useCallback(async () => {
+    setDocumentsLoading(true);
+    setDocumentsError(null);
+    try {
+      const res = await apiFetch(`/api/documents?contractId=${id}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      setDocuments(((await res.json()) as { items: Document[] }).items ?? []);
+    } catch (e) {
+      setDocumentsError((e as Error).message);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  }, [id]);
+
+  const loadActivity = useCallback(async () => {
+    setActivityLoading(true);
+    setActivityError(null);
+    try {
+      const res = await apiFetch(`/api/activity?entityId=${id}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      setSnapshotActivity(
+        ((await res.json()) as { items: SnapshotActivityItem[] }).items ?? []
+      );
+    } catch (e) {
+      setActivityError((e as Error).message);
+    } finally {
+      setActivityLoading(false);
+    }
+  }, [id]);
+
   const load = useCallback(async () => {
     setError(null);
+    setLoading(true);
     try {
-      const [cr, dr, ar] = await Promise.all([
-        apiFetch(`/api/contracts/${id}`),
-        apiFetch(`/api/documents?contractId=${id}`),
-        apiFetch(`/api/activity?entityId=${id}`),
-      ]);
+      const cr = await apiFetch(`/api/contracts/${id}`);
       if (!cr.ok) {
         const body = await cr.json().catch(() => ({}));
         throw new Error(body.error ?? `Error ${cr.status}`);
       }
       const c = (await cr.json()) as ContractDetail;
       setContract(c);
-      if (dr.ok) setDocuments(((await dr.json()) as { items: Document[] }).items ?? []);
-      if (ar.ok) setSnapshotActivity(((await ar.json()) as { items: SnapshotActivityItem[] }).items ?? []);
+      void loadDocuments();
+      void loadActivity();
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, loadActivity, loadDocuments]);
 
   useEffect(() => {
     load();
@@ -460,7 +497,13 @@ export default function ContratoDetailPage() {
                     {errorPdf}
                   </p>
                 ) : null}
-                {documentosGenerados.length === 0 ? (
+                {documentsLoading ? (
+                  <p className="font-body-sm text-on-surface-variant">Cargando documentos…</p>
+                ) : documentsError ? (
+                  <p className="mb-3 rounded-md bg-error-container px-3 py-2 font-body-sm text-error-container-foreground">
+                    No se pudieron cargar los documentos: {documentsError}
+                  </p>
+                ) : documentosGenerados.length === 0 ? (
                   <p className="font-body-sm text-on-surface-variant">
                     Aún no hay documentos generados para este contrato.
                   </p>
@@ -1015,7 +1058,13 @@ export default function ContratoDetailPage() {
 
             <div className="rounded-lg bg-surface-container-lowest p-5 shadow-sm">
               <h3 className="mb-3 font-headline-md text-primary">Actividad del contrato</h3>
-              {snapshotActivity.length === 0 ? (
+              {activityLoading ? (
+                <p className="font-body-sm text-on-surface-variant">Cargando actividad…</p>
+              ) : activityError ? (
+                <p className="rounded-md bg-error-container px-3 py-2 font-body-sm text-error-container-foreground">
+                  No se pudo cargar la actividad: {activityError}
+                </p>
+              ) : snapshotActivity.length === 0 ? (
                 <p className="font-body-sm text-on-surface-variant">Sin eventos registrados.</p>
               ) : (
                 <ul className="space-y-2">

@@ -181,33 +181,48 @@ export class DrizzleContractRepository implements ContractRepository {
       return null;
     }
 
-    const [cliente] = row.clienteId
-      ? await db
+    const clientePromise = row.clienteId
+      ? db
           .select()
           .from(schema.clients)
           .where(eq(schema.clients.id, row.clienteId))
-      : [];
+          .limit(1)
+          .then(([client]) => client ?? null)
+      : Promise.resolve(null);
 
-    const [departamento] = row.departamentoId
-      ? await db
+    const departamentoPromise = row.departamentoId
+      ? db
           .select()
           .from(schema.departments)
           .where(eq(schema.departments.id, row.departamentoId))
-      : [];
+          .limit(1)
+          .then(([department]) => department ?? null)
+      : Promise.resolve(null);
 
-    const [plantillaVersion] = row.plantillaVersionId
-      ? await db
+    const plantillaVersionPromise = row.plantillaVersionId
+      ? db
           .select()
           .from(schema.templateVersions)
           .where(eq(schema.templateVersions.id, row.plantillaVersionId))
-      : [];
+          .limit(1)
+          .then(([templateVersion]) => templateVersion ?? null)
+      : Promise.resolve(null);
 
-    const [snapshot] = row.snapshotId
-      ? await db
+    const snapshotPromise = row.snapshotId
+      ? db
           .select()
           .from(schema.contractSnapshots)
           .where(eq(schema.contractSnapshots.id, row.snapshotId))
-      : [];
+          .limit(1)
+          .then(([contractSnapshot]) => contractSnapshot ?? null)
+      : Promise.resolve(null);
+
+    const [cliente, departamento, plantillaVersion, snapshot] = await Promise.all([
+      clientePromise,
+      departamentoPromise,
+      plantillaVersionPromise,
+      snapshotPromise,
+    ]);
 
     if (!cliente || !departamento || !plantillaVersion) {
       throw new Error("Relaciones del contrato incompletas");
