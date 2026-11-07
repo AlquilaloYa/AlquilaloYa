@@ -22,7 +22,7 @@ export async function GET(req: Request) {
       ),
     )
     .limit(1);
-  const { id, email, name, role, additionalPermissions } = auth.user;
+  const { id, email, name, role, additionalPermissions, configurationAccess } = auth.user;
   const response = NextResponse.json({
     user: {
       id,
@@ -31,6 +31,7 @@ export async function GET(req: Request) {
       role,
       employeeId: employee?.id ?? null,
       additionalPermissions,
+      configurationAccess,
     },
   });
   response.headers.set("Cache-Control", "no-store");

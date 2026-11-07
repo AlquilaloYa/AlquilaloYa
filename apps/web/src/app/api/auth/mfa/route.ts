@@ -8,7 +8,7 @@ import {
 import { listVerifiedTotp, unenrollFactor } from "@/lib/mfa";
 import { mfaEnforce } from "@contract/config/env";
 import { isMfaPrivilegedRole } from "@/lib/mfa-policy";
-import { requireUser } from "@/lib/session";
+import { requireUser, requireConfigurationAccess } from "@/lib/session";
 import { buildSessionUser } from "@/lib/app-user";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,8 @@ export async function GET(req: Request) {
   if (!user) {
     return NextResponse.json({ error: "Usuario sin acceso al sistema" }, { status: 403 });
   }
+  const configurationDenied = requireConfigurationAccess(user);
+  if (configurationDenied) return configurationDenied;
   try {
     const factors = await listVerifiedTotp(accessToken);
     const response = NextResponse.json({
@@ -52,6 +54,8 @@ export async function DELETE(req: Request) {
   const dbModule = await import("@contract/db");
   const auth = await requireUser(dbModule, req);
   if ("error" in auth) return auth.error;
+  const configurationDenied = requireConfigurationAccess(auth.user);
+  if (configurationDenied) return configurationDenied;
   if (mfaEnforce() && isMfaPrivilegedRole(auth.user.role)) {
     return NextResponse.json(
       { error: "MFA es obligatorio para este rol y no se puede desactivar." },

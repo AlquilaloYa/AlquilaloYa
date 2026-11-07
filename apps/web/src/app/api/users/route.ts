@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { Permission, USER_ROLES } from "@contract/domain/rbac";
 import type { UserRole } from "@contract/domain/rbac";
-import { requireUser, requirePermission } from "@/lib/session";
+import {
+  requireUser,
+  requirePermission,
+  requireConfigurationAccess,
+} from "@/lib/session";
 import { recordAdminAction } from "@/lib/audit-log";
 import { isPasswordLongEnough, MIN_PASSWORD_MESSAGE } from "@/lib/password-policy";
 import {
@@ -41,6 +45,8 @@ export async function GET(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
+    const configurationDenied = requireConfigurationAccess(auth.user);
+    if (configurationDenied) return configurationDenied;
     const denied = requirePermission(auth.user, Permission.USER_READ);
     if (denied) return denied;
 
@@ -63,6 +69,8 @@ export async function POST(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
+    const configurationDenied = requireConfigurationAccess(auth.user);
+    if (configurationDenied) return configurationDenied;
     const denied = requirePermission(auth.user, Permission.USER_MANAGE);
     if (denied) return denied;
 

@@ -1,7 +1,11 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
-import { requirePermission, requireUser } from "@/lib/session";
+import {
+  requireConfigurationAccess,
+  requirePermission,
+  requireUser,
+} from "@/lib/session";
 import {
   clientPortalAuthEmail,
   findCurrentClientContract,
@@ -55,6 +59,8 @@ export async function GET(request: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, request);
     if ("error" in auth) return auth.error;
+    const configurationDenied = requireConfigurationAccess(auth.user);
+    if (configurationDenied) return configurationDenied;
     const denied = requirePermission(auth.user, Permission.USER_MANAGE);
     if (denied) return denied;
 
@@ -100,6 +106,8 @@ export async function POST(request: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, request);
     if ("error" in auth) return auth.error;
+    const configurationDenied = requireConfigurationAccess(auth.user);
+    if (configurationDenied) return configurationDenied;
     const denied = requirePermission(auth.user, Permission.USER_MANAGE);
     if (denied) return denied;
     const body = (await request.json().catch(() => ({}))) as {

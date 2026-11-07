@@ -1,5 +1,6 @@
 export * from "./clients";
 export * from "./departments";
+export * from "./locales";
 export * from "./users";
 export * from "./activity";
 export * from "./templates";

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
-import { requireUser, requirePermission } from "@/lib/session";
+import {
+  requireUser,
+  requirePermission,
+  requireConfigurationAccess,
+} from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +32,8 @@ export async function GET(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
+    const configurationDenied = requireConfigurationAccess(auth.user);
+    if (configurationDenied) return configurationDenied;
 
     const denied = requirePermission(auth.user, Permission.AUDIT_READ);
     if (denied) return denied;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { eq, inArray } from "drizzle-orm";
 import { PERMISSIONS, Permission } from "@contract/domain/rbac";
-import { requireUser } from "@/lib/session";
+import { requireUser, requireConfigurationAccess } from "@/lib/session";
 import { recordAdminAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +24,8 @@ export async function GET(
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
+    const configurationDenied = requireConfigurationAccess(auth.user);
+    if (configurationDenied) return configurationDenied;
     const denied = requirePermissionManager(auth.user.role);
     if (denied) return denied;
 
@@ -58,6 +60,8 @@ export async function PUT(
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
+    const configurationDenied = requireConfigurationAccess(auth.user);
+    if (configurationDenied) return configurationDenied;
     const denied = requirePermissionManager(auth.user.role);
     if (denied) return denied;
 

@@ -8,6 +8,7 @@ export {
 export { db, queryClient } from "./worker";
 export type { ClientRow, NewClientRow } from "./schema/clients";
 export type { DepartmentRow, NewDepartmentRow } from "./schema/departments";
+export type { LocalRow, NewLocalRow, LocalFileRow } from "./schema/locales";
 export type {
   ContractRow,
   NewContractRow,

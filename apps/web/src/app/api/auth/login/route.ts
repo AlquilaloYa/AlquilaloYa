@@ -101,6 +101,7 @@ export async function POST(req: Request) {
           name: appUser.name,
           role: appUser.role,
           additionalPermissions,
+          configurationAccess: appUser.configurationAccess,
         },
       },
       { status: 200 }

@@ -125,6 +125,14 @@ const NAV_ITEMS: NavItem[] = [
     permission: "department.read",
     group: "contratos",
   },
+  {
+    href: "/locales",
+    label: "Locales",
+    icon: Building2,
+    section: "Locales",
+    permission: "department.read",
+    group: "contratos",
+  },
   { href: "/contratos", label: "Pre contrato", icon: FileText, section: "Contratos", permission: "contract.read", group: "contratos" },
   {
     href: "/contrato-final",
@@ -242,14 +250,22 @@ const ROLE_PAGES: Partial<Record<UserRole, ReadonlySet<string>>> = {
 function canAccessPage(
   role: UserRole,
   pathname: string,
-  additionalPermissions: readonly Permission[] = []
+  additionalPermissions: readonly Permission[] = [],
+  configurationAccess = true
 ): boolean {
   if (role === "MANTENIMIENTO") {
     return false;
   }
-  // MFA es por usuario: cualquier sesión puede gestionar su propia seguridad.
+  if (
+    (pathname === "/configuraciones" || pathname.startsWith("/configuraciones/")) &&
+    !configurationAccess
+  ) {
+    return false;
+  }
+  // MFA es por usuario: cualquier sesión puede gestionar su propia seguridad,
+  // salvo que su acceso a la configuración esté restringido explícitamente.
   if (pathname === "/configuraciones/seguridad" || pathname.startsWith("/configuraciones/seguridad/")) {
-    return true;
+    return configurationAccess;
   }
   if (pathname === "/exportaciones" || pathname.startsWith("/exportaciones/")) {
     const ac = AccessControl.forRole(role, additionalPermissions);
@@ -274,6 +290,7 @@ function canAccessPage(
 function visibleNav(user: {
   role: UserRole;
   additionalPermissions: readonly Permission[];
+  configurationAccess: boolean;
 }): NavItem[] {
   if (!user.role) return [];
   const ac = AccessControl.forRole(user.role, user.additionalPermissions);
@@ -282,7 +299,12 @@ function visibleNav(user: {
       return ac.can("permission_request.create") || ac.can("permission_request.read");
     }
     return (
-      canAccessPage(user.role, n.href, user.additionalPermissions) &&
+      canAccessPage(
+        user.role,
+        n.href,
+        user.additionalPermissions,
+        user.configurationAccess
+      ) &&
       (!n.permission || ac.can(n.permission))
     );
   });
@@ -411,7 +433,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (
       user &&
-      !canAccessPage(user.role, pathname, user.additionalPermissions)
+      !canAccessPage(
+        user.role,
+        pathname,
+        user.additionalPermissions,
+        user.configurationAccess
+      )
     ) {
       router.replace(
         user.role === "MARKETING"
@@ -597,7 +624,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 user.additionalPermissions
               );
               const configurationItems = CONFIGURATION_ITEMS.filter((n) =>
-                canAccessPage(user.role, n.href, user.additionalPermissions) &&
+                canAccessPage(
+                  user.role,
+                  n.href,
+                  user.additionalPermissions,
+                  user.configurationAccess
+                ) &&
                 (!n.permission || configurationAc.can(n.permission))
               );
               const isConfiguration = item.label === "Configuración";
@@ -638,7 +670,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <div className={`flex min-w-0 flex-1 flex-col ${collapsed ? "lg:ml-[68px]" : "lg:ml-64"}`}>
         <TopBar
           results={[...visibleNav(user), ...CONFIGURATION_ITEMS.filter((item) =>
-            canAccessPage(user.role, item.href, user.additionalPermissions) &&
+            canAccessPage(
+              user.role,
+              item.href,
+              user.additionalPermissions,
+              user.configurationAccess
+            ) &&
             (!item.permission ||
               AccessControl.forRole(user.role, user.additionalPermissions).can(item.permission))
           )].filter((item) => !item.external).map(({ href, label, section }) => ({ href, label, section }))}

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
-import { requireUser, requirePermission } from "@/lib/session";
+import {
+  requireUser,
+  requirePermission,
+  requireConfigurationAccess,
+} from "@/lib/session";
 import { recordAdminAction } from "@/lib/audit-log";
 import { getIntegrationService } from "@/lib/integration-service";
 
@@ -45,6 +49,8 @@ export async function PATCH(req: Request, { params }: Params) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
+    const configurationDenied = requireConfigurationAccess(auth.user);
+    if (configurationDenied) return configurationDenied;
     const denied = requirePermission(auth.user, Permission.INTEGRATION_MANAGE);
     if (denied) return denied;
 
@@ -135,6 +141,8 @@ export async function DELETE(_req: Request, { params }: Params) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, _req);
     if ("error" in auth) return auth.error;
+    const configurationDenied = requireConfigurationAccess(auth.user);
+    if (configurationDenied) return configurationDenied;
     const denied = requirePermission(auth.user, Permission.INTEGRATION_MANAGE);
     if (denied) return denied;
 

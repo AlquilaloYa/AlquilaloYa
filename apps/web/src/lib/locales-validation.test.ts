@@ -1,0 +1,56 @@
+import { describe, expect, it } from "vitest";
+import { LOCAL_CODES, localSiteForCode } from "@contract/domain/locales";
+import { parseLocal } from "./locales-validation";
+
+describe("locales", () => {
+  it("maps the six local codes to their sites", () => {
+    expect(LOCAL_CODES).toHaveLength(6);
+    expect(LOCAL_CODES.filter((item) => item.sede === "Benavides")).toHaveLength(3);
+    expect(LOCAL_CODES.filter((item) => item.sede === "Angamos")).toHaveLength(3);
+    expect(localSiteForCode("BEN2195-A2")).toBe("Benavides");
+    expect(localSiteForCode("ANG170-A3")).toBe("Angamos");
+  });
+
+  it("normalizes the local input and derives its site from the code", () => {
+    expect(
+      parseLocal({
+        codigo: "BEN2195-A1",
+        nombre: "  Tienda 1 ",
+        areaM2: 75.5,
+        precioAlquiler: 1200,
+        garantia: 1200,
+        mantenimiento: 50,
+        servicios: "Agua",
+        pagoLuzPorcentaje: 35,
+      }),
+    ).toEqual({
+      value: {
+        codigo: "BEN2195-A1",
+        sede: "Benavides",
+        nombre: "Tienda 1",
+        areaM2: "75.50",
+        precioAlquiler: "1200.00",
+        garantia: "1200.00",
+        mantenimiento: "50.00",
+        servicios: "Agua",
+        pagoLuzPorcentaje: "35.00",
+      },
+    });
+  });
+
+  it("rejects unsupported codes and percentages above 100", () => {
+    expect(parseLocal({ codigo: "OTHER-A1", nombre: "Local" })).toHaveProperty("error");
+    expect(
+      parseLocal({
+        codigo: "ANG170-A1",
+        nombre: "Local",
+        areaM2: 1,
+        precioAlquiler: 1,
+        garantia: 1,
+        mantenimiento: 1,
+        servicios: "",
+        pagoLuzPorcentaje: 101,
+      }),
+    ).toHaveProperty("error", "Pago luz % debe ser un número entre 0 y 100.");
+  });
+});
