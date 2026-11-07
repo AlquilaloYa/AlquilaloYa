@@ -125,6 +125,14 @@ const NAV_ITEMS: NavItem[] = [
     permission: "department.read",
     group: "contratos",
   },
+  {
+    href: "/locales",
+    label: "Locales",
+    icon: Building2,
+    section: "Locales",
+    permission: "department.read",
+    group: "contratos",
+  },
   { href: "/contratos", label: "Pre contrato", icon: FileText, section: "Contratos", permission: "contract.read", group: "contratos" },
   {
     href: "/contrato-final",
