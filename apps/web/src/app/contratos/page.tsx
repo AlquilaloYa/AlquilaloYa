@@ -1437,6 +1437,7 @@ function CreateContractModal({
   const [detalleDepositante, setDetalleDepositante] = useState<{
     id: string;
     contacto: ContactSeed;
+    baucherSeparacion: string | null;
   } | null>(null);
   const seleccionRequest = useRef(0);
 
@@ -1515,9 +1516,30 @@ function CreateContractModal({
 
     setCargandoDetalle(true);
     try {
-      const contacto = await obtenerContactoPorId(cli.contactoId);
+      const [contacto, separacionResponse] = await Promise.all([
+        obtenerContactoPorId(cli.contactoId),
+        apiFetch(
+          `/api/contracts/bootstrap?mode=applicant-voucher&departamentoId=${encodeURIComponent(deptId)}&contactoId=${encodeURIComponent(cli.contactoId)}`,
+          { timeoutMs: 15_000 }
+        ).then(async (response) => {
+          const body = (await response.json().catch(() => ({}))) as {
+            baucherSeparacion?: string | null;
+            error?: string;
+          };
+          if (!response.ok) {
+            throw new Error(
+              body.error ?? "No se pudo cargar el voucher de separación."
+            );
+          }
+          return body.baucherSeparacion ?? null;
+        }),
+      ]);
       if (seleccionRequest.current === requestId) {
-        setDetalleDepositante({ id: cli.id, contacto });
+        setDetalleDepositante({
+          id: cli.id,
+          contacto,
+          baucherSeparacion: separacionResponse,
+        });
       }
     } catch (e) {
       if (seleccionRequest.current === requestId) {
@@ -1573,7 +1595,7 @@ function CreateContractModal({
                 monto: Number(clienteSel.separacion.montoSeparacion).toFixed(2),
                 garantiaExtendida: clienteSel.separacion.garantiaExtendida,
                 fecha: clienteSel.separacion.fechaSeparacion,
-                baucherSeparacion: clienteSel.separacion.baucherSeparacion ?? null,
+                baucherSeparacion: detalleDepositante?.baucherSeparacion ?? null,
               }
             : null,
           copiaDni: (contactoSel.copiaDni ?? []).map((archivo) => ({

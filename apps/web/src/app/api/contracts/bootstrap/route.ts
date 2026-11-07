@@ -8,6 +8,8 @@ import {
 import { requireUser, requirePermission } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function fechasLimite(fechaSeparacion: Date) {
   const base = fechaSeparacion.getTime();
@@ -43,6 +45,57 @@ export async function GET(request: Request) {
           )
         : response;
 
+    if (mode === "applicant-voucher") {
+      if (!canReadDepartments) {
+          return requirePermission(auth.user, Permission.DEPARTMENT_READ)!;
+      }
+      if (!canReadContacts) {
+          return requirePermission(auth.user, Permission.CLIENT_READ)!;
+      }
+      const params = new URL(request.url).searchParams;
+      const departamentoId = params.get("departamentoId") ?? "";
+      const contactoId = params.get("contactoId") ?? "";
+      if (!UUID_PATTERN.test(departamentoId) || !UUID_PATTERN.test(contactoId)) {
+          return NextResponse.json(
+            { error: "El solicitante seleccionado no es válido." },
+            { status: 400 }
+          );
+      }
+
+      const [separation] = await db
+          .select({ baucherSeparacion: schema.separations.baucherSeparacion })
+          .from(schema.separations)
+          .innerJoin(
+            schema.contacts,
+            eq(schema.contacts.id, schema.separations.contactoId)
+          )
+          .where(
+            and(
+              eq(schema.separations.departamentoId, departamentoId),
+              eq(schema.separations.contactoId, contactoId),
+              isNull(schema.separations.eliminadoEn),
+              isNull(schema.contacts.eliminadoEn),
+              inArray(schema.separations.estado, [
+                "SEPARADO",
+                "GARANTIA_COMPLETADA",
+                "CONTRATO_PREVIO",
+              ])
+            )
+          )
+          .limit(1);
+      if (!separation) {
+          return NextResponse.json(
+            { error: "No se encontró la separación activa del solicitante." },
+            { status: 404 }
+          );
+      }
+      const response = NextResponse.json({
+          baucherSeparacion: separation.baucherSeparacion ?? null,
+      });
+      response.headers.set("Cache-Control", "no-store");
+      return withSessionCookies(response);
+    }
+
     if (mode === "applicants") {
       if (!canReadDepartments) {
         return requirePermission(auth.user, Permission.DEPARTMENT_READ)!;
@@ -71,7 +124,6 @@ export async function GET(request: Request) {
           montoSeparacion: schema.separations.montoSeparacion,
           tipoSeparacion: schema.separations.tipoSeparacion,
           garantiaExtendida: schema.separations.garantiaExtendida,
-          baucherSeparacion: schema.separations.baucherSeparacion,
           fechaSeparacion: schema.separations.fechaSeparacion,
           diasTiempo: schema.separations.diasTiempo,
           fechaLimiteManual: schema.separations.fechaLimiteManual,
@@ -140,7 +192,7 @@ export async function GET(request: Request) {
             diasTiempo: row.diasTiempo ?? undefined,
             fechaLimiteManual: row.fechaLimiteManual?.toISOString(),
             ...fechasLimite(row.fechaSeparacion),
-            baucherSeparacion: row.baucherSeparacion ?? "",
+            baucherSeparacion: "",
             estado: row.estado,
           },
         })),

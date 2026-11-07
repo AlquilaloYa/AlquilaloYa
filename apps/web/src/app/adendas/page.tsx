@@ -35,7 +35,6 @@ type AdendaApi = {
   clienteApellidos: string | null;
   clienteDocumento: string | null;
   fechaFinAdenda: string | null;
-  datosContrato: Record<string, unknown> | null;
   anexoContenido?: string | null;
   departamentoNombre: string | null;
   departamentoCodigo: string | null;
