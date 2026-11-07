@@ -45,6 +45,16 @@ export interface DbUserModule {
       role: UserRole;
       active?: boolean;
     } | null>;
+    findByEmailWithPermissions(email: string): Promise<{
+      user: {
+        id: string;
+        email: string;
+        name: string;
+        role: UserRole;
+        active?: boolean;
+      } | null;
+      permissionKeys: string[];
+    }>;
     listAdditionalPermissions(userId: string): Promise<string[]>;
   };
 }
@@ -96,7 +106,10 @@ export async function requireUser(
       ),
     };
   }
-  const user = await new dbModule.DrizzleUserRepository().findByEmail(identity.email);
+  const repository = new dbModule.DrizzleUserRepository();
+  const { user, permissionKeys } = await repository.findByEmailWithPermissions(
+    identity.email
+  );
   if (!user || user.active === false) {
     return {
       error: preserveRefreshedSession(
@@ -121,8 +134,6 @@ export async function requireUser(
       ),
     };
   }
-  const permissionKeys = await new dbModule.DrizzleUserRepository()
-    .listAdditionalPermissions(user.id);
   const additionalPermissions = Object.values(Permission).filter((permission) =>
     permissionKeys.includes(permission)
   );

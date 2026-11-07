@@ -35,6 +35,33 @@ export class DrizzleUserRepository {
     return row ?? null;
   }
 
+  async findByEmailWithPermissions(email: string): Promise<{
+    user: UserRow | null;
+    permissionKeys: string[];
+  }> {
+    const rows = await db
+      .select({
+        user: schema.users,
+        permissionKey: schema.permissions.key,
+      })
+      .from(schema.users)
+      .leftJoin(
+        schema.userPermissions,
+        eq(schema.userPermissions.userId, schema.users.id)
+      )
+      .leftJoin(
+        schema.permissions,
+        eq(schema.permissions.id, schema.userPermissions.permissionId)
+      )
+      .where(eq(schema.users.email, email));
+    return {
+      user: rows[0]?.user ?? null,
+      permissionKeys: rows.flatMap((row) =>
+        row.permissionKey ? [row.permissionKey] : []
+      ),
+    };
+  }
+
   async findById(id: string): Promise<UserRow | null> {
     const [row] = await db
       .select()

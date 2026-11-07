@@ -10,9 +10,9 @@ export async function buildSessionUser(
   email: string
 ): Promise<ResolvedUser | null> {
   const repo = new dbModule.DrizzleUserRepository();
-  const appUser = await repo.findByEmail(email);
+  const { user: appUser, permissionKeys } =
+    await repo.findByEmailWithPermissions(email);
   if (!appUser || appUser.active === false) return null;
-  const permissionKeys = await repo.listAdditionalPermissions(appUser.id);
   const additionalPermissions = Object.values(Permission).filter((permission) =>
     permissionKeys.includes(permission)
   );
