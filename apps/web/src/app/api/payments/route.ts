@@ -92,6 +92,11 @@ export async function GET(req: Request) {
     const compact = url.searchParams.get("compact") === "1" && !contractId && !paymentId;
 
     if (compact) {
+      const safeVouchers = sql`CASE
+        WHEN jsonb_typeof(${schema.payments.vouchers}) = 'array'
+          THEN ${schema.payments.vouchers}
+        ELSE '[]'::jsonb
+      END`;
       const rows = await db
         .select({
           id: schema.payments.id,
@@ -106,23 +111,23 @@ export async function GET(req: Request) {
           fechaPago: schema.payments.fechaPago,
           voucherNombre: schema.payments.voucherNombre,
           voucherVerificadoEn: sql<string | null>`CASE
-            WHEN jsonb_array_length(${schema.payments.vouchers}) > 0
+            WHEN jsonb_array_length(${safeVouchers}) > 0
               AND NOT EXISTS (
                 SELECT 1
-                FROM jsonb_array_elements(${schema.payments.vouchers}) AS voucher
+                FROM jsonb_array_elements(${safeVouchers}) AS voucher
                 WHERE voucher->>'verificadoEn' IS NULL
               )
-            THEN ${schema.payments.vouchers}->0->>'verificadoEn'
+            THEN ${safeVouchers}->0->>'verificadoEn'
             ELSE NULL
           END`,
           voucherVerificadoPor: sql<string | null>`CASE
-            WHEN jsonb_array_length(${schema.payments.vouchers}) > 0
+            WHEN jsonb_array_length(${safeVouchers}) > 0
               AND NOT EXISTS (
                 SELECT 1
-                FROM jsonb_array_elements(${schema.payments.vouchers}) AS voucher
+                FROM jsonb_array_elements(${safeVouchers}) AS voucher
                 WHERE voucher->>'verificadoEn' IS NULL
               )
-            THEN ${schema.payments.vouchers}->0->>'verificadoPor'
+            THEN ${safeVouchers}->0->>'verificadoPor'
             ELSE NULL
           END`,
         })
