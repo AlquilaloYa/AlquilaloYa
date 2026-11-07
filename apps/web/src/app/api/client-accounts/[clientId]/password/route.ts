@@ -1,7 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { Permission } from "@contract/domain/rbac";
-import { requirePermission, requireUser } from "@/lib/session";
+import {
+  requireConfigurationAccess,
+  requirePermission,
+  requireUser,
+} from "@/lib/session";
 import { findCurrentClientContract } from "@/lib/client-portal-auth";
 import { generateClientPassword } from "@/lib/client-accounts";
 import {
@@ -19,6 +23,8 @@ export async function POST(
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, request);
     if ("error" in auth) return auth.error;
+    const configurationDenied = requireConfigurationAccess(auth.user);
+    if (configurationDenied) return configurationDenied;
     const denied = requirePermission(auth.user, Permission.USER_MANAGE);
     if (denied) return denied;
 

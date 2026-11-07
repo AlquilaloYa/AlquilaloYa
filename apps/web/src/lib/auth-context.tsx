@@ -17,6 +17,7 @@ interface SessionUser {
   name: string;
   role: UserRole;
   additionalPermissions: Permission[];
+  configurationAccess: boolean;
 }
 
 export type LoginResult =

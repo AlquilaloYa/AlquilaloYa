@@ -23,6 +23,7 @@ export interface ResolvedUser {
   name: string;
   role: UserRole;
   additionalPermissions: Permission[];
+  configurationAccess: boolean;
 }
 
 export type AuthResult =
@@ -44,6 +45,7 @@ export interface DbUserModule {
       name: string;
       role: UserRole;
       active?: boolean;
+      configurationAccess: boolean;
     } | null>;
     listAdditionalPermissions(userId: string): Promise<string[]>;
   };
@@ -165,6 +167,17 @@ export function requirePermission(
     );
   }
   return null;
+}
+
+/** Denies access to configuration pages and their supporting APIs. */
+export function requireConfigurationAccess(
+  principal: Pick<ResolvedUser, "configurationAccess">
+): NextResponse | null {
+  if (principal.configurationAccess) return null;
+  return NextResponse.json(
+    { error: "No tienes acceso a la configuración del sistema" },
+    { status: 403 }
+  );
 }
 
 /** El rol de asistente administra datos operativos, pero no puede eliminarlos. */
