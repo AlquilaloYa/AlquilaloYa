@@ -59,7 +59,7 @@ export interface SignedMediaUpload {
   max_bytes: number;
 }
 
-/** Formatos que acepta la carga. El límite de 6 MB lo aplica el backend. */
+/** Formatos que acepta la carga. Las imágenes se optimizan antes de enviarse. */
 export const ACCEPTED_MEDIA_TYPES = [
   "image/jpeg",
   "image/png",
@@ -85,11 +85,17 @@ export function coverImageUrl(images: Array<{ url: string }>): string | undefine
   return images.find((image) => !isVideoUrl(image.url))?.url ?? images[0]?.url;
 }
 
-export function mediaError(file: { name: string; type: string; size: number }): string | null {
+export function mediaError(
+  file: { name: string; type: string; size: number },
+  options: { allowImageCompression?: boolean } = {},
+): string | null {
   if (!ACCEPTED_MEDIA_TYPES.includes(file.type)) {
     return `"${file.name}" no es un formato aceptado. Usa ${ACCEPTED_MEDIA_LABEL}.`;
   }
-  if (file.size > MAX_MEDIA_BYTES) {
+  const canCompress =
+    options.allowImageCompression &&
+    ["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type);
+  if (file.size > MAX_MEDIA_BYTES && !canCompress) {
     return `"${file.name}" supera el límite de 6 MB.`;
   }
   return null;

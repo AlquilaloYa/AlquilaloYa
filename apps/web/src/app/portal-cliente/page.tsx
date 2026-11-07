@@ -19,6 +19,7 @@ import {
   localDateInputValue,
   type ClientAvailabilityInput,
 } from "@/lib/client-portal-availability";
+import { compressImageFile, MAX_SOURCE_IMAGE_BYTES } from "@/lib/image-compression";
 import { AvailabilityPicker } from "./availability-picker";
 import "./portal-client.css";
 
@@ -176,6 +177,7 @@ export default function ClientPortalPage() {
     emptyAvailabilityOptions(),
   );
   const [selectedFiles, setSelectedFiles] = useState<Upload[]>([]);
+  const [optimizingUploads, setOptimizingUploads] = useState(false);
   const [openChatId, setOpenChatId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatDraft, setChatDraft] = useState("");
@@ -360,7 +362,7 @@ export default function ClientPortalPage() {
     );
   }
 
-  function addFiles(files: FileList | null) {
+  async function addFiles(files: FileList | null) {
     if (!files) return;
     setError("");
     setNotice("");
@@ -372,18 +374,48 @@ export default function ClientPortalPage() {
       return;
     }
     const invalid = next.find(
-      (file) => !ALLOWED_TYPES.has(file.type) || file.size < 1 || file.size > MAX_SIZE,
+      (file) =>
+        !ALLOWED_TYPES.has(file.type) ||
+        file.size < 1 ||
+        (file.type.startsWith("image/")
+          ? file.size > MAX_SOURCE_IMAGE_BYTES
+          : file.size > MAX_SIZE),
     );
     if (invalid) {
-      setError("Solo se permiten fotos JPG, PNG o WebP y videos MP4 o WebM de hasta 8 MB cada uno.");
+      setError("Solo se permiten fotos JPG, PNG o WebP de hasta 30 MB antes de optimizar y videos MP4 o WebM de hasta 8 MB.");
       if (fileInput.current) fileInput.current.value = "";
       if (cameraInput.current) cameraInput.current.value = "";
       return;
     }
-    setSelectedFiles((current) => [
-      ...current,
-      ...next.map((file) => ({ id: crypto.randomUUID(), file })),
-    ]);
+    setOptimizingUploads(true);
+    try {
+      const prepared: File[] = [];
+      for (const file of next) {
+        prepared.push(
+          file.type.startsWith("image/")
+            ? await compressImageFile(file, "photo")
+            : file,
+        );
+      }
+      const oversized = prepared.find((file) => file.size > MAX_SIZE);
+      if (oversized) {
+        throw new Error(
+          `"${oversized.name}" supera 8 MB después de optimizar.`,
+        );
+      }
+      setSelectedFiles((current) => [
+        ...current,
+        ...prepared.map((file) => ({ id: crypto.randomUUID(), file })),
+      ]);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "No se pudieron optimizar las imágenes adjuntas.",
+      );
+    } finally {
+      setOptimizingUploads(false);
+    }
     if (fileInput.current) fileInput.current.value = "";
     if (cameraInput.current) cameraInput.current.value = "";
   }
@@ -440,6 +472,10 @@ export default function ClientPortalPage() {
   async function submitReport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submittingRef.current) return;
+    if (optimizingUploads) {
+      setError("Espera a que termine la optimización de las imágenes.");
+      return;
+    }
     submittingRef.current = true;
     setError("");
     setSubmitting(true);
@@ -741,7 +777,8 @@ export default function ClientPortalPage() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
                 multiple
-                onChange={(event) => addFiles(event.target.files)}
+                disabled={optimizingUploads || submitting}
+                onChange={(event) => void addFiles(event.target.files)}
                 className="sr-only"
                 id="portal-evidence"
               />
@@ -750,7 +787,8 @@ export default function ClientPortalPage() {
                 type="file"
                 accept="image/*"
                 capture="environment"
-                onChange={(event) => addFiles(event.target.files)}
+                disabled={optimizingUploads || submitting}
+                onChange={(event) => void addFiles(event.target.files)}
                 className="sr-only"
                 id="portal-camera-capture"
               />
@@ -759,15 +797,16 @@ export default function ClientPortalPage() {
                 className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 hover:border-cyan-400 hover:text-white"
               >
                 <Paperclip aria-hidden className="h-4 w-4" />
-                Agregar fotos o videos (máx. 8 MB cada uno)
+                Agregar fotos optimizadas o videos (8 MB máx. tras optimizar)
               </label>
               <button
                 type="button"
+                disabled={optimizingUploads || submitting}
                 onClick={() => cameraInput.current?.click()}
                 className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 hover:border-cyan-400 hover:text-white"
               >
                 <Camera aria-hidden className="h-4 w-4" />
-                Tomar foto
+                {optimizingUploads ? "Optimizando…" : "Tomar foto"}
               </button>
               {selectedFiles.length > 0 && (
                 <ul className="mt-2 space-y-1 text-xs text-slate-400">
@@ -836,7 +875,7 @@ export default function ClientPortalPage() {
             </label>
 
             <button
-              disabled={submitting}
+              disabled={submitting || optimizingUploads}
               className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-wait disabled:opacity-60"
             >
               <Send aria-hidden className="h-4 w-4" />

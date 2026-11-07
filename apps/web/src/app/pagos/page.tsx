@@ -16,6 +16,7 @@ import {
   localDateStr,
   parseLocalDate,
 } from "@/lib/cronograma";
+import { compressImageFile, fileToDataUrl } from "@/lib/image-compression";
 
 type PaymentVoucher = { nombre: string; url: string; monto?: number };
 
@@ -180,6 +181,7 @@ function AbonoModal({
   const [voucher, setVoucher] = useState<{ nombre: string; dataUrl: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [optimizandoVoucher, setOptimizandoVoucher] = useState(false);
   const [cargandoPago, setCargandoPago] = useState(Boolean(fila.pago));
   const [pagoDetallado, setPagoDetallado] = useState<PaymentRow | null>(null);
 
@@ -226,7 +228,7 @@ function AbonoModal({
     };
   }, [fila.pago]);
 
-  function leerArchivo(files: FileList | null) {
+  async function leerArchivo(files: FileList | null) {
     const file = files?.[0];
     if (!file) return;
     if (!esJpeg(file.name, `data:${file.type}`) && !file.name.toLowerCase().endsWith(".jpg")) {
@@ -234,14 +236,28 @@ function AbonoModal({
       return;
     }
     setError(null);
-    const reader = new FileReader();
-    reader.onload = () => setVoucher({ nombre: file.name, dataUrl: String(reader.result) });
-    reader.readAsDataURL(file);
+    setOptimizandoVoucher(true);
+    try {
+      const optimized = await compressImageFile(file, "voucher");
+      const dataUrl = await fileToDataUrl(optimized);
+      if (!esJpeg(optimized.name, dataUrl)) {
+        throw new Error("El baucher optimizado no quedó en formato JPEG.");
+      }
+      setVoucher({ nombre: optimized.name, dataUrl });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo optimizar el baucher.");
+    } finally {
+      setOptimizandoVoucher(false);
+    }
   }
 
   async function confirmar() {
     if (fila.pago && !pagoDetallado) {
       setError("Espera a que terminen de cargar los vouchers del pago.");
+      return;
+    }
+    if (optimizandoVoucher) {
+      setError("Espera a que termine de optimizarse el baucher.");
       return;
     }
     if (!voucher) {
@@ -350,8 +366,9 @@ function AbonoModal({
           <input
             type="file"
             accept="image/jpeg"
+            disabled={optimizandoVoucher}
             onChange={(e) => {
-              leerArchivo(e.target.files);
+              void leerArchivo(e.target.files);
               e.target.value = "";
             }}
             className="mt-1 block w-full text-sm text-on-surface-variant file:mr-3 file:rounded file:border file:border-outline-variant file:bg-surface-container file:px-3 file:py-1.5 file:text-sm file:text-on-surface"
@@ -359,6 +376,9 @@ function AbonoModal({
           {voucher ? (
             <span className="mt-1 block text-xs text-on-surface-variant">{voucher.nombre}</span>
           ) : null}
+          {optimizandoVoucher && (
+            <span className="mt-1 block text-xs text-on-surface-variant">Optimizando baucher…</span>
+          )}
         </label>
 
         {error ? (
@@ -384,7 +404,7 @@ function AbonoModal({
           <button
             type="button"
             onClick={() => void confirmar()}
-            disabled={guardando || cargandoPago}
+            disabled={guardando || cargandoPago || optimizandoVoucher}
             className="rounded bg-primary px-3 py-1.5 text-sm text-on-primary hover:opacity-90 disabled:opacity-50"
           >
             {cargandoPago ? "Cargando…" : guardando ? "Guardando…" : "Guardar abono"}

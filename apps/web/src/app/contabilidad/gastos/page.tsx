@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
 import { FileText, ImageIcon, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { compressImageFile } from "@/lib/image-compression";
 
 interface Gasto {
   id: string;
@@ -103,7 +104,13 @@ export default function GastosPage() {
       fd.set("producto", fProducto.trim());
       fd.set("monto", String(monto));
       fd.set("nota", fNota.trim());
-      if (fComprobante) fd.set("comprobante", fComprobante);
+      if (fComprobante) {
+        const comprobante =
+          fComprobante.type.startsWith("image/")
+            ? await compressImageFile(fComprobante, "voucher")
+            : fComprobante;
+        fd.set("comprobante", comprobante);
+      }
       const res = await apiFetch("/api/gastos", { method: "POST", body: fd });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
@@ -256,7 +263,7 @@ export default function GastosPage() {
             </button>
           </div>
           <p className="mt-2 font-body-xs text-on-surface-variant">
-            El comprobante es opcional: JPG, PNG, WebP o PDF, hasta 8 MB.
+            El comprobante es opcional. Las imágenes se optimizan conservando legibilidad; el PDF se sube sin cambios (máx. 8 MB).
           </p>
         </div>
 

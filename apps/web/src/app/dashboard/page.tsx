@@ -37,6 +37,7 @@ import {
   localDateStr,
   parseLocalDate,
 } from "@/lib/cronograma";
+import { compressImageFile } from "@/lib/image-compression";
 
 interface ProximoAVencer {
   id: string;
@@ -2040,6 +2041,7 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
   const [telefono, setTelefono] = useState("");
   const [motivo, setMotivo] = useState("");
   const [fotos, setFotos] = useState<File[]>([]);
+  const [optimizandoFotos, setOptimizandoFotos] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [eliminando, setEliminando] = useState<string | null>(null);
   const [errorForm, setErrorForm] = useState<string | null>(null);
@@ -2151,20 +2153,61 @@ function NoAlquilarPopup({ onCerrar }: { onCerrar: () => void }) {
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 multiple
+                disabled={optimizandoFotos || guardando}
                 onChange={(event) => {
                   const seleccion = Array.from(event.target.files ?? []);
-                  setFotos([...fotos, ...seleccion].slice(0, 5));
                   event.target.value = "";
+                  if (fotos.length + seleccion.length > 5) {
+                    setErrorForm("Puedes adjuntar hasta 5 fotos.");
+                    return;
+                  }
+                  const invalid = seleccion.find(
+                    (file) =>
+                      !["image/jpeg", "image/png", "image/webp"].includes(file.type),
+                  );
+                  if (invalid) {
+                    setErrorForm(`"${invalid.name}" no es una foto JPG, PNG o WebP.`);
+                    return;
+                  }
+                  setErrorForm(null);
+                  setOptimizandoFotos(true);
+                  void (async () => {
+                    try {
+                      const optimized: File[] = [];
+                      for (const file of seleccion) {
+                        optimized.push(await compressImageFile(file, "photo"));
+                      }
+                      const tooLarge = optimized.find(
+                        (file) => file.size > 8 * 1024 * 1024,
+                      );
+                      if (tooLarge) {
+                        throw new Error(
+                          `"${tooLarge.name}" supera 8 MB después de optimizar.`,
+                        );
+                      }
+                      setFotos((current) => [...current, ...optimized]);
+                    } catch (reason) {
+                      setErrorForm(
+                        reason instanceof Error
+                          ? reason.message
+                          : "No se pudieron optimizar las fotos.",
+                      );
+                    } finally {
+                      setOptimizandoFotos(false);
+                    }
+                  })();
                 }}
                 className="text-sm text-on-surface-variant"
               />
               <span className="text-sm text-on-surface-variant">
-                {fotos.length} de 5 fotos · JPG, PNG o WebP
+                {optimizandoFotos
+                  ? "Optimizando fotos…"
+                  : `${fotos.length} de 5 fotos · se optimizan antes de subir`}
               </span>
               <button
                 type="button"
                 onClick={() => void agregar()}
-                disabled={guardando}
+                disabled={guardando || optimizandoFotos}
                 className={botonClase}
               >
                 {guardando ? "Guardando…" : "Agregar"}
