@@ -84,34 +84,96 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq } = await import("drizzle-orm");
+    const { eq, sql } = await import("drizzle-orm");
 
     const url = new URL(req.url);
     const contractId = url.searchParams.get("contractId");
+    const paymentId = url.searchParams.get("paymentId");
+    const compact = url.searchParams.get("compact") === "1" && !contractId && !paymentId;
 
-    const base = db.select().from(schema.payments);
-    const rows = contractId
-      ? await base.where(eq(schema.payments.contractId, contractId))
-      : await base;
+    if (compact) {
+      const safeVouchers = sql`CASE
+        WHEN jsonb_typeof(${schema.payments.vouchers}) = 'array'
+          THEN ${schema.payments.vouchers}
+        ELSE '[]'::jsonb
+      END`;
+      const rows = await db
+        .select({
+          id: schema.payments.id,
+          contractId: schema.payments.contractId,
+          periodo: schema.payments.periodo,
+          monto: schema.payments.monto,
+          mantenimiento: schema.payments.mantenimiento,
+          penalidad: schema.payments.penalidad,
+          montoPagado: schema.payments.montoPagado,
+          diasIndulgencia: schema.payments.diasIndulgencia,
+          estado: schema.payments.estado,
+          fechaPago: schema.payments.fechaPago,
+          voucherNombre: schema.payments.voucherNombre,
+          voucherVerificadoEn: sql<string | null>`CASE
+            WHEN jsonb_array_length(${safeVouchers}) > 0
+              AND NOT EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(${safeVouchers}) AS voucher
+                WHERE voucher->>'verificadoEn' IS NULL
+              )
+            THEN ${safeVouchers}->0->>'verificadoEn'
+            ELSE NULL
+          END`,
+          voucherVerificadoPor: sql<string | null>`CASE
+            WHEN jsonb_array_length(${safeVouchers}) > 0
+              AND NOT EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements(${safeVouchers}) AS voucher
+                WHERE voucher->>'verificadoEn' IS NULL
+              )
+            THEN ${safeVouchers}->0->>'verificadoPor'
+            ELSE NULL
+          END`,
+        })
+        .from(schema.payments);
+      return NextResponse.json(
+        rows.map((p) => ({
+          ...p,
+          voucherUrl: null,
+          vouchers: [],
+          periodo: toDateStr(p.periodo),
+          fechaPago: p.fechaPago ? toDateStr(p.fechaPago) : null,
+        }))
+      );
+    }
 
-    return NextResponse.json(
-      rows.map((p) => ({
-        ...p,
-        voucherUrl: contractId ? p.voucherUrl : null,
-        voucherVerificadoEn:
-          p.vouchers.length > 0 &&
-          p.vouchers.every((voucher) => Boolean(voucher.verificadoEn))
-            ? p.vouchers[0]?.verificadoEn ?? null
-            : null,
-        voucherVerificadoPor:
-          p.vouchers.length > 0 &&
-          p.vouchers.every((voucher) => Boolean(voucher.verificadoEn))
-            ? p.vouchers[0]?.verificadoPor ?? null
-            : null,
-        periodo: toDateStr(p.periodo),
-        fechaPago: p.fechaPago ? toDateStr(p.fechaPago) : null,
-      }))
-    );
+    const rows = paymentId
+      ? await db
+          .select()
+          .from(schema.payments)
+          .where(eq(schema.payments.id, paymentId))
+          .limit(1)
+      : contractId
+        ? await db
+            .select()
+            .from(schema.payments)
+            .where(eq(schema.payments.contractId, contractId))
+        : await db.select().from(schema.payments);
+
+    const result = rows.map((p) => ({
+          ...p,
+          voucherUrl: contractId || paymentId ? p.voucherUrl : null,
+          voucherVerificadoEn:
+            p.vouchers.length > 0 &&
+            p.vouchers.every((voucher) => Boolean(voucher.verificadoEn))
+              ? p.vouchers[0]?.verificadoEn ?? null
+              : null,
+          voucherVerificadoPor:
+            p.vouchers.length > 0 &&
+            p.vouchers.every((voucher) => Boolean(voucher.verificadoEn))
+              ? p.vouchers[0]?.verificadoPor ?? null
+              : null,
+          periodo: toDateStr(p.periodo),
+          fechaPago: p.fechaPago ? toDateStr(p.fechaPago) : null,
+        }));
+
+    return NextResponse.json(paymentId ? result[0] ?? null : result);
   } catch (error) {
     return NextResponse.json(
       { error: (error as Error).message },

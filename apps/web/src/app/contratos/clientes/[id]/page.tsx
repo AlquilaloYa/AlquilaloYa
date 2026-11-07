@@ -9,6 +9,7 @@ import { TableScroll } from "@/components/table-scroll";
 import { PdfCanvasPreview } from "@/components/pdf-canvas-preview";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
 import { apiFetch } from "@/lib/api";
+import { compressImageFile, fileToDataUrl } from "@/lib/image-compression";
 
 type ClientFichaApi = {
   id: string;
@@ -132,6 +133,7 @@ export default function ClienteContratoPage() {
     Record<string, Array<{ nombre: string; dataUrl: string; tipo: string }>>
   >({});
   const [registrando, setRegistrando] = useState<string | null>(null);
+  const [optimizandoVoucher, setOptimizandoVoucher] = useState<string | null>(null);
   const [errorPago, setErrorPago] = useState<string | null>(null);
   const [previewVoucher, setPreviewVoucher] = useState<{
     dataUrl: string;
@@ -418,6 +420,10 @@ export default function ClienteContratoPage() {
 
   async function registrarPago(periodoStr: string) {
     if (!contrato) return;
+    if (optimizandoVoucher === periodoStr) {
+      setErrorPago("Espera a que termine de optimizarse el baucher.");
+      return;
+    }
     const lista = vouchers[periodoStr] ?? [];
     if (lista.length === 0 || lista.some((v) => !esJpeg(v))) {
       setErrorPago(
@@ -462,7 +468,7 @@ export default function ClienteContratoPage() {
     }
   }
 
-  function leerVouchers(periodoStr: string, files: FileList | null) {
+  async function leerVouchers(periodoStr: string, files: FileList | null) {
     if (!files || files.length === 0) return;
     const elegidos = Array.from(files);
     const invalido = elegidos.find(
@@ -476,18 +482,27 @@ export default function ClienteContratoPage() {
       return;
     }
     setErrorPago(null);
-    for (const file of elegidos) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setVouchers((prev) => ({
-          ...prev,
-          [periodoStr]: [
-            ...(prev[periodoStr] ?? []),
-            { nombre: file.name, dataUrl: String(reader.result), tipo: "image/jpeg" },
-          ],
-        }));
-      };
-      reader.readAsDataURL(file);
+    setOptimizandoVoucher(periodoStr);
+    try {
+      const prepared: Array<{ nombre: string; dataUrl: string; tipo: string }> = [];
+      for (const file of elegidos) {
+        const optimized = await compressImageFile(file, "voucher");
+        const dataUrl = await fileToDataUrl(optimized);
+        if (!esJpeg({ nombre: optimized.name, dataUrl, tipo: optimized.type })) {
+          throw new Error(`No se pudo optimizar "${file.name}" como JPEG.`);
+        }
+        prepared.push({ nombre: optimized.name, dataUrl, tipo: "image/jpeg" });
+      }
+      setVouchers((prev) => ({
+        ...prev,
+        [periodoStr]: [...(prev[periodoStr] ?? []), ...prepared],
+      }));
+    } catch (reason) {
+      setErrorPago(
+        reason instanceof Error ? reason.message : "No se pudieron optimizar los bauchers.",
+      );
+    } finally {
+      setOptimizandoVoucher(null);
     }
   }
 
@@ -841,8 +856,9 @@ export default function ClienteContratoPage() {
                                     className="hidden"
                                     accept="image/jpeg"
                                     multiple
+                                    disabled={optimizandoVoucher !== null}
                                     onChange={(e) => {
-                                      leerVouchers(pStr, e.target.files);
+                                      void leerVouchers(pStr, e.target.files);
                                       e.target.value = "";
                                     }}
                                   />
@@ -851,6 +867,7 @@ export default function ClienteContratoPage() {
                                   type="button"
                                   disabled={
                                     registrando === pStr ||
+                                    optimizandoVoucher === pStr ||
                                     selVouchers.length === 0 ||
                                     selVouchers.some((v) => !esJpeg(v))
                                   }

@@ -8,6 +8,8 @@ import {
 import { requireUser, requirePermission } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function fechasLimite(fechaSeparacion: Date) {
   const base = fechaSeparacion.getTime();
@@ -20,6 +22,7 @@ function fechasLimite(fechaSeparacion: Date) {
 
 export async function GET(request: Request) {
   try {
+    const mode = new URL(request.url).searchParams.get("mode");
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, request);
     if ("error" in auth) return auth.error;
@@ -33,9 +36,259 @@ export async function GET(request: Request) {
     const canReadContacts = !requirePermission(auth.user, Permission.CLIENT_READ);
     const canReadTemplates = !requirePermission(auth.user, Permission.TEMPLATE_READ);
 
+    const withSessionCookies = (response: NextResponse) =>
+      auth.sessionTokens.refreshed
+        ? applySessionCookies(
+            response,
+            auth.sessionTokens.refreshed,
+            isNativeMobileRequest(request)
+          )
+        : response;
+
+    if (mode === "applicant-voucher") {
+      if (!canReadDepartments) {
+          return requirePermission(auth.user, Permission.DEPARTMENT_READ)!;
+      }
+      if (!canReadContacts) {
+          return requirePermission(auth.user, Permission.CLIENT_READ)!;
+      }
+      const params = new URL(request.url).searchParams;
+      const departamentoId = params.get("departamentoId") ?? "";
+      const contactoId = params.get("contactoId") ?? "";
+      if (!UUID_PATTERN.test(departamentoId) || !UUID_PATTERN.test(contactoId)) {
+          return NextResponse.json(
+            { error: "El solicitante seleccionado no es válido." },
+            { status: 400 }
+          );
+      }
+
+      const [separation] = await db
+          .select({ baucherSeparacion: schema.separations.baucherSeparacion })
+          .from(schema.separations)
+          .innerJoin(
+            schema.contacts,
+            eq(schema.contacts.id, schema.separations.contactoId)
+          )
+          .where(
+            and(
+              eq(schema.separations.departamentoId, departamentoId),
+              eq(schema.separations.contactoId, contactoId),
+              isNull(schema.separations.eliminadoEn),
+              isNull(schema.contacts.eliminadoEn),
+              inArray(schema.separations.estado, [
+                "SEPARADO",
+                "GARANTIA_COMPLETADA",
+                "CONTRATO_PREVIO",
+              ])
+            )
+          )
+          .limit(1);
+      if (!separation) {
+          return NextResponse.json(
+            { error: "No se encontró la separación activa del solicitante." },
+            { status: 404 }
+          );
+      }
+      const response = NextResponse.json({
+          baucherSeparacion: separation.baucherSeparacion ?? null,
+      });
+      response.headers.set("Cache-Control", "no-store");
+      return withSessionCookies(response);
+    }
+
+    if (mode === "applicants") {
+      if (!canReadDepartments) {
+        return requirePermission(auth.user, Permission.DEPARTMENT_READ)!;
+      }
+      if (!canReadContacts) {
+        return requirePermission(auth.user, Permission.CLIENT_READ)!;
+      }
+
+      const applicants = await db
+        .select({
+          contactoId: schema.contacts.id,
+          nombre: schema.contacts.nombre,
+          apellido: schema.contacts.apellido,
+          tipoPersona: schema.contacts.tipoPersona,
+          dni: schema.contacts.dni,
+          ruc: schema.contacts.ruc,
+          email: schema.contacts.email,
+          telefono: schema.contacts.telefono,
+          codigoPais: schema.contacts.codigoPais,
+          domicilio: schema.contacts.domicilio,
+          nacionalidad: schema.contacts.nacionalidad,
+          contactoEmergencia: schema.contacts.contactoEmergencia,
+          mascotas: schema.contacts.mascotas,
+          mascotasItems: schema.contacts.mascotasItems,
+          departamentoId: schema.separations.departamentoId,
+          montoSeparacion: schema.separations.montoSeparacion,
+          tipoSeparacion: schema.separations.tipoSeparacion,
+          garantiaExtendida: schema.separations.garantiaExtendida,
+          fechaSeparacion: schema.separations.fechaSeparacion,
+          diasTiempo: schema.separations.diasTiempo,
+          fechaLimiteManual: schema.separations.fechaLimiteManual,
+          estado: schema.separations.estado,
+          codigoDepartamento: schema.departments.codigo,
+          precio: schema.departments.precio,
+          garantia: schema.departments.garantia,
+        })
+        .from(schema.separations)
+        .innerJoin(
+          schema.contacts,
+          eq(schema.contacts.id, schema.separations.contactoId)
+        )
+        .innerJoin(
+          schema.departments,
+          eq(schema.departments.id, schema.separations.departamentoId)
+        )
+        .where(
+          and(
+            isNull(schema.separations.eliminadoEn),
+            isNull(schema.contacts.eliminadoEn),
+            inArray(schema.separations.estado, [
+              "SEPARADO",
+              "GARANTIA_COMPLETADA",
+              "CONTRATO_PREVIO",
+            ])
+          )
+        );
+
+      const response = NextResponse.json({
+        applicants: applicants.map((row) => ({
+          id: `dep-${row.contactoId}-${row.departamentoId}`,
+          contactoId: row.contactoId,
+          nombres: row.nombre,
+          apellidos: row.apellido,
+          documentoIdentidad: row.dni,
+          ruc: row.ruc,
+          tipoPersona: row.tipoPersona,
+          email: row.email,
+          telefono: row.telefono,
+          domicilio: row.domicilio,
+          nacionalidad: row.nacionalidad,
+          codigoPais: row.codigoPais,
+          contactoEmergencia: row.contactoEmergencia,
+          mascotas: row.mascotas,
+          mascotasItems: row.mascotasItems,
+          codigoDepartamento: row.codigoDepartamento,
+          departamentoId: row.departamentoId,
+          mensualidad:
+            row.precio && Number(row.precio) > 0
+              ? Number(row.precio).toFixed(2)
+              : "",
+          garantia:
+            row.garantia && Number(row.garantia) > 0
+              ? Number(row.garantia).toFixed(2)
+              : row.precio && Number(row.precio) > 0
+                ? Number(row.precio).toFixed(2)
+                : "",
+          separacion: {
+            departamentoId: row.departamentoId,
+            contactoId: row.contactoId,
+            montoSeparacion: Number(row.montoSeparacion),
+            tipoSeparacion: row.tipoSeparacion,
+            garantiaExtendida: row.garantiaExtendida,
+            fechaSeparacion: row.fechaSeparacion.toISOString(),
+            diasTiempo: row.diasTiempo ?? undefined,
+            fechaLimiteManual: row.fechaLimiteManual?.toISOString(),
+            ...fechasLimite(row.fechaSeparacion),
+            baucherSeparacion: "",
+            estado: row.estado,
+          },
+        })),
+      });
+      response.headers.set("Cache-Control", "no-store");
+      return withSessionCookies(response);
+    }
+
+    if (mode === "departments") {
+      if (!canReadDepartments) {
+        return requirePermission(auth.user, Permission.DEPARTMENT_READ)!;
+      }
+      const departments = await db
+        .select({
+          id: schema.departments.id,
+          nombre: schema.departments.nombre,
+          codigo: schema.departments.codigo,
+          numero: schema.departments.numero,
+          precio: schema.departments.precio,
+          garantia: schema.departments.garantia,
+          mantenimiento: schema.departments.mantenimiento,
+          personaPago: schema.departments.personaPago,
+        })
+        .from(schema.departments)
+        .orderBy(schema.departments.nombre, schema.departments.numero);
+      const response = NextResponse.json({ departments });
+      response.headers.set("Cache-Control", "no-store");
+      return withSessionCookies(response);
+    }
+
+    if (mode === "templates") {
+      if (!canReadTemplates) {
+        return requirePermission(auth.user, Permission.TEMPLATE_READ)!;
+      }
+      const templates = await db
+        .select({
+          id: schema.templates.id,
+          clave: schema.templates.clave,
+          nombre: schema.templates.nombre,
+        })
+        .from(schema.templates)
+        .where(eq(schema.templates.activo, true));
+
+      if (templates.length === 0) {
+        const response = NextResponse.json({
+          templateSelector: { templates: [], versions: {} },
+        });
+        response.headers.set("Cache-Control", "no-store");
+        return withSessionCookies(response);
+      }
+
+      const publishedVersions = await db
+        .select({
+          id: schema.templateVersions.id,
+          templateId: schema.templateVersions.templateId,
+          version: schema.templateVersions.version,
+          publicada: schema.templateVersions.publicada,
+        })
+        .from(schema.templateVersions)
+        .where(
+          and(
+            inArray(
+              schema.templateVersions.templateId,
+              templates.map((template) => template.id)
+            ),
+            eq(schema.templateVersions.publicada, true)
+          )
+        )
+        .orderBy(desc(schema.templateVersions.version));
+
+      const versions: Record<
+        string,
+        { id: string; version: number; publicada: boolean }
+      > = {};
+      for (const version of publishedVersions) {
+        if (!versions[version.templateId]) {
+          versions[version.templateId] = {
+            id: version.id,
+            version: version.version,
+            publicada: version.publicada,
+          };
+        }
+      }
+
+      const response = NextResponse.json({
+        templateSelector: { templates, versions },
+      });
+      response.headers.set("Cache-Control", "no-store");
+      return withSessionCookies(response);
+    }
+
     const [contractsResult, departmentsResult, contactsResult, separationsResult, templatesResult] =
       await Promise.allSettled([
-        db
+        mode === "catalogs"
+          ? Promise.resolve(null)
+          : db
           .select({
             id: schema.contracts.id,
             codigoContrato: schema.contracts.codigoContrato,
@@ -71,8 +324,9 @@ export async function GET(request: Request) {
           )
           .where(isNull(schema.contracts.eliminadoEn))
           .orderBy(desc(schema.contracts.creadoEn)),
-        canReadDepartments
-          ? db
+        mode === "contracts" || !canReadDepartments
+          ? Promise.resolve(null)
+          : db
               .select({
                 id: schema.departments.id,
                 nombre: schema.departments.nombre,
@@ -84,10 +338,10 @@ export async function GET(request: Request) {
                 personaPago: schema.departments.personaPago,
               })
               .from(schema.departments)
-              .orderBy(schema.departments.nombre, schema.departments.numero)
-          : Promise.resolve(null),
-        canReadContacts
-          ? db
+              .orderBy(schema.departments.nombre, schema.departments.numero),
+        mode === "contracts" || !canReadContacts
+          ? Promise.resolve(null)
+          : db
               .select({
                 id: schema.contacts.id,
                 nombre: schema.contacts.nombre,
@@ -106,16 +360,16 @@ export async function GET(request: Request) {
               })
               .from(schema.contacts)
               .where(isNull(schema.contacts.eliminadoEn))
-              .orderBy(desc(schema.contacts.createdAt))
-          : Promise.resolve(null),
-        canReadDepartments
-          ? db
+              .orderBy(desc(schema.contacts.createdAt)),
+        mode === "contracts" || !canReadDepartments
+          ? Promise.resolve(null)
+          : db
               .select()
               .from(schema.separations)
-              .where(isNull(schema.separations.eliminadoEn))
-          : Promise.resolve(null),
-        canReadTemplates
-          ? (async () => {
+              .where(isNull(schema.separations.eliminadoEn)),
+        mode === "contracts" || !canReadTemplates
+          ? Promise.resolve(null)
+          : (async () => {
               const templates = await db
                 .select({
                   id: schema.templates.id,
@@ -162,12 +416,33 @@ export async function GET(request: Request) {
                 }
               }
               return { templates, versions };
-            })()
-          : Promise.resolve(null),
+            })(),
       ]);
 
     if (contractsResult.status === "rejected") {
       throw contractsResult.reason;
+    }
+
+    const contracts = (contractsResult.value ?? []).map((row) => ({
+      ...row,
+      createdAt: row.creadoEn.toISOString(),
+      updatedAt: row.actualizadoEn.toISOString(),
+      clienteNombre: row.clienteNombre ?? "",
+      apellidoCliente: row.clienteApellido ?? "",
+      departamentoNombre: row.departamentoNombre ?? "",
+    }));
+
+    if (mode === "contracts") {
+      const response = NextResponse.json({
+        contracts,
+        departments: null,
+        contacts: null,
+        separations: null,
+        templateSelector: null,
+        failures: [],
+      });
+      response.headers.set("Cache-Control", "no-store");
+      return response;
     }
 
     const failures: string[] = [];
@@ -205,14 +480,6 @@ export async function GET(request: Request) {
       canReadTemplates
     );
 
-    const contracts = contractsResult.value.map((row) => ({
-      ...row,
-      createdAt: row.creadoEn.toISOString(),
-      updatedAt: row.actualizadoEn.toISOString(),
-      clienteNombre: row.clienteNombre ?? "",
-      apellidoCliente: row.clienteApellido ?? "",
-      departamentoNombre: row.departamentoNombre ?? "",
-    }));
     const separations = rawSeparations?.map((row) => ({
       id: row.id,
       departamentoId: row.departamentoId,

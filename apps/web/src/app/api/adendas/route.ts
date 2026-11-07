@@ -52,17 +52,6 @@ function fmtFechaEs(iso: string): string {
   return `${d} de ${MESES[(m as number) - 1]} de ${y}`;
 }
 
-/** Fecha de término de la adenda según su snapshot (fin del plazo extendido). */
-function finAdenda(tipo: string, datos: unknown): string | null {
-  const d = (datos ?? {}) as Record<string, unknown>;
-  if (tipo === "ADENDA_EXTENSION") {
-    const f = d.fechaFin;
-    return String(f ?? "").slice(0, 10) || null;
-  }
-  const f = d.fechaFinAdenda;
-  return String(f ?? "").slice(0, 10) || null;
-}
-
 /** Períodos mensuales nuevos del canon entre cursor (< nuevaFechaFin). */
 function periodosExtension(fechaFinActual: string, nuevaFechaFin: string): string[] {
   const periodos: string[] = [];
@@ -160,7 +149,7 @@ export async function GET(req: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq, and, inArray, desc, isNull } = await import("drizzle-orm");
+    const { eq, and, inArray, desc, isNull, sql } = await import("drizzle-orm");
 
     const rows = await db
       .select({
@@ -176,8 +165,11 @@ export async function GET(req: Request) {
         estadoGeneracion: schema.documents.estadoGeneracion,
         error: schema.documents.error,
         createdAt: schema.documents.createdAt,
-        datosContrato: schema.contractSnapshots.datosContrato,
-        anexos: schema.contractSnapshots.anexos,
+        fechaFinAdenda: sql<string | null>`CASE
+          WHEN ${schema.documents.tipo} = 'ADENDA_EXTENSION'
+            THEN ${schema.contractSnapshots.datosContrato}->>'fechaFin'
+          ELSE ${schema.contractSnapshots.datosContrato}->>'fechaFinAdenda'
+        END`,
         codigoContrato: schema.contracts.codigoContrato,
         estadoContrato: schema.contracts.estado,
         clienteId: schema.clients.id,
@@ -217,9 +209,7 @@ export async function GET(req: Request) {
         estadoGeneracion: d.estadoGeneracion,
         error: d.error,
         createdAt: d.createdAt?.toISOString?.() ?? null,
-        fechaFinAdenda: finAdenda(d.tipo, d.datosContrato),
-        datosContrato: d.datosContrato as Record<string, unknown> | null,
-        anexoContenido: (Array.isArray(d.anexos) ? d.anexos[0]?.contenido : null) ?? null,
+        fechaFinAdenda: d.fechaFinAdenda?.slice(0, 10) || null,
         codigoContrato: d.codigoContrato,
         estadoContrato: d.estadoContrato,
         clienteId: d.clienteId,

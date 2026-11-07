@@ -12,6 +12,7 @@ import {
   moveItem,
 } from "@/lib/contenido-web-client";
 import type { AdminImage, AdminProperty } from "@/lib/contenido-web-client";
+import { compressImageFile } from "@/lib/image-compression";
 
 export interface ImageManagerProps {
   property: AdminProperty;
@@ -43,7 +44,7 @@ export function ImageManager({ property, onChange, onError }: ImageManagerProps)
     if (!file) return;
     event.target.value = "";
 
-    const invalid = mediaError(file);
+    const invalid = mediaError(file, { allowImageCompression: true });
     if (invalid) {
       onError(new Error(invalid));
       return;
@@ -51,7 +52,16 @@ export function ImageManager({ property, onChange, onError }: ImageManagerProps)
 
     setIsUploading(true);
     try {
-      const updated = await contenidoWebApi.images.upload(property.id, file, file.name);
+      const uploadFile = file.type.startsWith("image/")
+        ? await compressImageFile(file, "photo")
+        : file;
+      const optimizedError = mediaError(uploadFile);
+      if (optimizedError) throw new Error(optimizedError);
+      const updated = await contenidoWebApi.images.upload(
+        property.id,
+        uploadFile,
+        uploadFile.name,
+      );
       onChange(updated);
     } catch (error) {
       onError(error);
@@ -101,7 +111,7 @@ export function ImageManager({ property, onChange, onError }: ImageManagerProps)
         Fotos y videos ({property.images.length})
       </h3>
       <p className="mt-1 text-xs text-muted-foreground">
-        La primera imagen es la portada del catálogo. Acepta {ACCEPTED_MEDIA_LABEL} de hasta 6 MB.
+        La primera imagen es la portada del catálogo. Las fotos JPG, PNG y WebP se optimizan antes de subirlas; los demás formatos deben pesar hasta 6 MB. Acepta {ACCEPTED_MEDIA_LABEL}.
       </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -141,7 +151,7 @@ export function ImageManager({ property, onChange, onError }: ImageManagerProps)
             onChange={(event) => void handleUpload(event)}
           />
         </label>
-        {isUploading && <span className="text-sm text-muted-foreground">Subiendo…</span>}
+        {isUploading && <span className="text-sm text-muted-foreground">Optimizando y subiendo…</span>}
       </div>
 
       {property.images.length === 0 ? (

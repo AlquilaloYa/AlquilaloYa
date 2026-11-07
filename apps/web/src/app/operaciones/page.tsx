@@ -36,6 +36,7 @@ import {
 import { AccessControl, Permission } from "@contract/domain/rbac";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
+import { compressImageFile } from "@/lib/image-compression";
 import { useAuth } from "@/lib/auth-context";
 
 type WorkStatus =
@@ -669,6 +670,7 @@ export default function OperacionesPage() {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
   const [selectedClientId, setSelectedClientId] = useState("");
   const [creationPhotos, setCreationPhotos] = useState<File[]>([]);
+  const [optimizingPhotos, setOptimizingPhotos] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderDetails | null>(null);
   const [timelineOrder, setTimelineOrder] = useState<OrderDetails | null>(null);
   const [expandedTimelineOrderId, setExpandedTimelineOrderId] = useState<
@@ -1749,6 +1751,7 @@ export default function OperacionesPage() {
               <PhotoPicker
                 files={creationPhotos}
                 onChange={updateCreationPhotos}
+                onOptimizingChange={setOptimizingPhotos}
               />
               <div className="flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:justify-end">
                 <button
@@ -1760,7 +1763,7 @@ export default function OperacionesPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={creating}
+                  disabled={creating || optimizingPhotos}
                   className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60"
                 >
                   {creating ? (
@@ -2031,11 +2034,15 @@ function PriorityPill({ priority }: { priority: Priority }) {
 function PhotoPicker({
   files,
   onChange,
+  onOptimizingChange,
 }: {
   files: File[];
   onChange: (files: File[]) => void;
+  onOptimizingChange: (optimizing: boolean) => void;
 }) {
   const [previews, setPreviews] = useState<string[]>([]);
+  const [optimizing, setOptimizing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file));
     setPreviews(urls);
@@ -2054,7 +2061,7 @@ function PhotoPicker({
               Fotos de la incidencia
             </p>
             <p className="mt-0.5 text-xs text-on-surface-variant">
-              JPG, PNG o WebP · hasta 5 fotos · 8 MB por foto
+              JPG, PNG o WebP · hasta 5 fotos · se optimizan antes de subir (máx. 8 MB)
             </p>
           </div>
         </div>
@@ -2065,14 +2072,67 @@ function PhotoPicker({
             type="file"
             accept="image/jpeg,image/png,image/webp"
             multiple
+            disabled={optimizing}
             className="sr-only"
             onChange={(event) => {
-              onChange(Array.from(event.target.files ?? []));
+              const selected = Array.from(event.target.files ?? []);
               event.currentTarget.value = "";
+              if (!selected.length) return;
+              if (selected.length > 5) {
+                setError("Puedes adjuntar hasta 5 fotos por carga.");
+                return;
+              }
+              const invalid = selected.find(
+                (file) =>
+                  !["image/jpeg", "image/png", "image/webp"].includes(file.type),
+              );
+              if (invalid) {
+                setError(`"${invalid.name}" no es JPG, PNG o WebP.`);
+                return;
+              }
+              setError(null);
+              setOptimizing(true);
+              onOptimizingChange(true);
+              void (async () => {
+                try {
+                  const prepared: File[] = [];
+                  for (const file of selected) {
+                    prepared.push(await compressImageFile(file, "photo"));
+                  }
+                  const tooLarge = prepared.find(
+                    (file) => file.size > 8 * 1024 * 1024,
+                  );
+                  if (tooLarge) {
+                    throw new Error(
+                      `"${tooLarge.name}" supera 8 MB después de optimizar.`,
+                    );
+                  }
+                  onChange(prepared);
+                } catch (reason) {
+                  setError(
+                    reason instanceof Error
+                      ? reason.message
+                      : "No se pudieron optimizar las fotos.",
+                  );
+                } finally {
+                  setOptimizing(false);
+                  onOptimizingChange(false);
+                }
+              })();
             }}
           />
         </label>
       </div>
+      {optimizing && (
+        <p role="status" className="mt-3 text-xs text-on-surface-variant">
+          Optimizando fotos en este dispositivo…
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="mt-3 text-xs text-destructive">
+          {error}
+        </p>
+      )}
       {files.length > 0 && (
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {files.map((file, index) => (
@@ -2323,6 +2383,7 @@ function OrderDrawer({
 }) {
   const [assignee, setAssignee] = useState(order.assignedEmployeeId ?? "");
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+  const [optimizingPhotos, setOptimizingPhotos] = useState(false);
   const [evidenceKind, setEvidenceKind] = useState<EvidenceKind>("FOTO FINAL");
   const [evidenceDescription, setEvidenceDescription] = useState("");
   return (
@@ -2651,11 +2712,13 @@ function OrderDrawer({
                 <PhotoPicker
                   files={evidenceFiles}
                   onChange={setEvidenceFiles}
+                  onOptimizingChange={setOptimizingPhotos}
                 />
                 <button
                   type="button"
                   disabled={
                     saving ||
+                    optimizingPhotos ||
                     evidenceFiles.length === 0 ||
                     !evidenceDescription.trim()
                   }

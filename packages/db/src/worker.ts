@@ -37,16 +37,15 @@ function createPool(): PoolRef {
     // prepare:false desactiva sentencias preparadas: requisito para el
     // pooler de TRANSACCIONES de Supabase (puerto 6543) y seguro con sesión.
     prepare: false,
-    // Sin estos timeouts, postgres.js reintenta conexiones infinitamente y
-    // un endpoint (p. ej. /api/auth/me) puede quedar colgado para siempre.
+    // Limita el establecimiento de conexiones y la duración de cada consulta
+    // para que una conexión lenta no bloquee indefinidamente las rutas API.
     connect_timeout: 5,
-    timeout: 10,
     idle_timeout: 20,
     ssl: isLocalDatabase ? false : "require",
     // Fuerza UTF-8 en cada conexión: sin esto, el pooler de Supabase puede
     // devolver los acentos (los bytes UTF-8 de la BD) con encoding ASCII,
     // corrompiendo "Á"/"ó" en las respuestas de la API.
-    connection: { client_encoding: "utf8" },
+    connection: { client_encoding: "utf8", statement_timeout: 10_000 },
   });
   const db = drizzle(queryClient, { schema });
   return { queryClient, db };

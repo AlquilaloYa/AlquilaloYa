@@ -16,6 +16,7 @@ import {
   localDateStr,
   parseLocalDate,
 } from "@/lib/cronograma";
+import { compressImageFile, fileToDataUrl } from "@/lib/image-compression";
 
 type PaymentVoucher = { nombre: string; url: string; monto?: number };
 
@@ -180,10 +181,54 @@ function AbonoModal({
   const [voucher, setVoucher] = useState<{ nombre: string; dataUrl: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [optimizandoVoucher, setOptimizandoVoucher] = useState(false);
+  const [cargandoPago, setCargandoPago] = useState(Boolean(fila.pago));
+  const [pagoDetallado, setPagoDetallado] = useState<PaymentRow | null>(null);
 
   const montoNum = modo === "TOTAL" ? fila.saldo : Number(monto);
 
-  function leerArchivo(files: FileList | null) {
+  useEffect(() => {
+    if (!fila.pago) {
+      setCargandoPago(false);
+      return;
+    }
+    let active = true;
+    void apiFetch(`/api/payments?paymentId=${encodeURIComponent(fila.pago.id)}`)
+      .then(async (res) => {
+        const body = await res.json().catch(() => null);
+        if (!res.ok) {
+          const message =
+            typeof body === "object" &&
+            body !== null &&
+            "error" in body &&
+            typeof body.error === "string"
+              ? body.error
+              : `Error ${res.status}`;
+          throw new Error(message);
+        }
+        if (!body || typeof body !== "object" || !("vouchers" in body)) {
+          throw new Error("No se pudieron cargar los vouchers del pago.");
+        }
+        if (active) setPagoDetallado(body as PaymentRow);
+      })
+      .catch((loadError: unknown) => {
+        if (active) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "No se pudieron cargar los vouchers del pago."
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setCargandoPago(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [fila.pago]);
+
+  async function leerArchivo(files: FileList | null) {
     const file = files?.[0];
     if (!file) return;
     if (!esJpeg(file.name, `data:${file.type}`) && !file.name.toLowerCase().endsWith(".jpg")) {
@@ -191,12 +236,30 @@ function AbonoModal({
       return;
     }
     setError(null);
-    const reader = new FileReader();
-    reader.onload = () => setVoucher({ nombre: file.name, dataUrl: String(reader.result) });
-    reader.readAsDataURL(file);
+    setOptimizandoVoucher(true);
+    try {
+      const optimized = await compressImageFile(file, "voucher");
+      const dataUrl = await fileToDataUrl(optimized);
+      if (!esJpeg(optimized.name, dataUrl)) {
+        throw new Error("El baucher optimizado no quedó en formato JPEG.");
+      }
+      setVoucher({ nombre: optimized.name, dataUrl });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo optimizar el baucher.");
+    } finally {
+      setOptimizandoVoucher(false);
+    }
   }
 
   async function confirmar() {
+    if (fila.pago && !pagoDetallado) {
+      setError("Espera a que terminen de cargar los vouchers del pago.");
+      return;
+    }
+    if (optimizandoVoucher) {
+      setError("Espera a que termine de optimizarse el baucher.");
+      return;
+    }
     if (!voucher) {
       setError("Adjunta el baucher del pago (imagen JPEG).");
       return;
@@ -212,7 +275,7 @@ function AbonoModal({
     setGuardando(true);
     setError(null);
     try {
-      const existentes: PaymentVoucher[] = (fila.pago?.vouchers ?? []).map((v) => ({
+      const existentes: PaymentVoucher[] = (pagoDetallado?.vouchers ?? []).map((v) => ({
         nombre: v.nombre,
         url: v.url,
         ...(typeof v.monto === "number" ? { monto: v.monto } : {}),
@@ -303,8 +366,9 @@ function AbonoModal({
           <input
             type="file"
             accept="image/jpeg"
+            disabled={optimizandoVoucher}
             onChange={(e) => {
-              leerArchivo(e.target.files);
+              void leerArchivo(e.target.files);
               e.target.value = "";
             }}
             className="mt-1 block w-full text-sm text-on-surface-variant file:mr-3 file:rounded file:border file:border-outline-variant file:bg-surface-container file:px-3 file:py-1.5 file:text-sm file:text-on-surface"
@@ -312,11 +376,19 @@ function AbonoModal({
           {voucher ? (
             <span className="mt-1 block text-xs text-on-surface-variant">{voucher.nombre}</span>
           ) : null}
+          {optimizandoVoucher && (
+            <span className="mt-1 block text-xs text-on-surface-variant">Optimizando baucher…</span>
+          )}
         </label>
 
         {error ? (
           <p role="alert" className="mt-3 rounded-md bg-destructive/10 p-2 text-sm text-destructive">
             {error}
+          </p>
+        ) : null}
+        {cargandoPago ? (
+          <p className="mt-3 text-sm text-on-surface-variant">
+            Cargando vouchers del pago…
           </p>
         ) : null}
 
@@ -332,10 +404,10 @@ function AbonoModal({
           <button
             type="button"
             onClick={() => void confirmar()}
-            disabled={guardando}
+            disabled={guardando || cargandoPago || optimizandoVoucher}
             className="rounded bg-primary px-3 py-1.5 text-sm text-on-primary hover:opacity-90 disabled:opacity-50"
           >
-            {guardando ? "Guardando…" : "Guardar abono"}
+            {cargandoPago ? "Cargando…" : guardando ? "Guardando…" : "Guardar abono"}
           </button>
         </div>
       </div>
@@ -451,7 +523,7 @@ export default function PagosPage() {
     try {
       const [cs, ps, ss] = await Promise.all([
         cargarLista<ContractRow>("/api/contracts"),
-        cargarLista<PaymentRow>("/api/payments"),
+        cargarLista<PaymentRow>("/api/payments?compact=1"),
         cargarLista<ServicioExtraRow>("/api/servicios-extras"),
       ]);
       setContracts(cs);

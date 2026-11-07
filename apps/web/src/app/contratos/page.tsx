@@ -14,7 +14,6 @@ import {
 } from "@/lib/separaciones";
 import {
   obtenerContactoPorId,
-  type ContactoResumen,
   type ContactSeed,
   type ArchivoAdjunto,
 } from "@/lib/contactos-seed";
@@ -207,11 +206,10 @@ export default function ContratosPage() {
   const [regenerandoId, setRegenerandoId] = useState<string | null>(null);
   const [docEditor, setDocEditor] = useState<DocEditorState | null>(null);
   const [loadingDocId, setLoadingDocId] = useState<string | null>(null);
-  const [separaciones, setSeparaciones] = useState<SeparacionRecord[]>([]);
-  const [contactos, setContactos] = useState<ContactoResumen[]>([]);
-  const [cargandoDepositantes, setCargandoDepositantes] = useState(true);
+  const [depositantes, setDepositantes] = useState<Depositante[]>([]);
+  const [cargandoDepositantes, setCargandoDepositantes] = useState(false);
   const [cargandoDepartamentos, setCargandoDepartamentos] = useState(true);
-  const [cargandoPlantillas, setCargandoPlantillas] = useState(true);
+  const [cargandoPlantillas, setCargandoPlantillas] = useState(false);
   const [errorCargaDepositantes, setErrorCargaDepositantes] = useState<string | null>(null);
   const [, setTick] = useState(0);
 
@@ -244,57 +242,137 @@ export default function ContratosPage() {
     }
   }, []);
 
-  const cargarDatosIniciales = useCallback(async () => {
+  const cargarCatalogos = useCallback(async () => {
     setCargandoDepositantes(true);
-    setCargandoDepartamentos(true);
     setCargandoPlantillas(true);
-    setLoading(true);
-    setError(null);
     setErrorCargaDepositantes(null);
 
+    const cargarOpcion = async <T,>(
+      mode: "applicants" | "templates",
+      setLoading: (loading: boolean) => void,
+      onLoaded: (data: T) => void
+    ) => {
+      try {
+        const res = await apiFetch(`/api/contracts/bootstrap?mode=${mode}`, {
+          timeoutMs: 15_000,
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(
+            body.error ?? `No se pudieron cargar los datos (${res.status}).`
+          );
+        }
+        onLoaded((await res.json()) as T);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Error inesperado al cargar datos.";
+        const catalogo = {
+          applicants: "solicitantes",
+          departments: "departamentos",
+          templates: "plantillas",
+        }[mode];
+        setErrorCargaDepositantes((current) =>
+          current
+            ? `${current} No se pudieron cargar ${catalogo}: ${message}`
+            : `No se pudieron cargar ${catalogo}: ${message}`
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    await Promise.all([
+      cargarOpcion<{ applicants: Depositante[] }>(
+        "applicants",
+        setCargandoDepositantes,
+        (data) => {
+          if (!Array.isArray(data.applicants)) {
+            throw new Error("La respuesta de solicitantes no es válida.");
+          }
+          setDepositantes(
+            data.applicants.map((applicant) => ({
+              ...applicant,
+              mascotasItems: etiquetasDeIds(MASCOTAS, applicant.mascotasItems ?? []),
+            }))
+          );
+        }
+      ),
+      cargarOpcion<{ templateSelector: TemplateSelectorResponse }>(
+        "templates",
+        setCargandoPlantillas,
+        (data) => {
+          const selector = data.templateSelector;
+          if (!Array.isArray(selector?.templates) || !selector.versions) {
+            throw new Error("La respuesta de plantillas no es válida.");
+          }
+          setTemplates(selector.templates);
+          setVersions(
+            Object.fromEntries(
+              selector.templates.map((template) => [
+                template.id,
+                selector.versions[template.id] ?? null,
+              ])
+            )
+          );
+        }
+      ),
+    ]);
+  }, []);
+
+  const cargarDepartamentos = useCallback(async () => {
+    setCargandoDepartamentos(true);
     try {
-      let ultimoError: Error = new Error("No se pudieron cargar los datos de Precontratos.");
+      const res = await apiFetch("/api/contracts/bootstrap?mode=departments", {
+        timeoutMs: 15_000,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          body.error ?? `No se pudieron cargar los departamentos (${res.status}).`
+        );
+      }
+      const data = (await res.json()) as { departments: DepartmentApi[] };
+      if (!Array.isArray(data.departments)) {
+        throw new Error("La respuesta de departamentos no es válida.");
+      }
+      setDepartments(data.departments);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Error inesperado al cargar departamentos.";
+      setErrorCargaDepositantes((current) =>
+        current ? `${current} No se pudieron cargar departamentos: ${message}` : message
+      );
+    } finally {
+      setCargandoDepartamentos(false);
+    }
+  }, []);
+
+  const reintentarCatalogos = useCallback(
+    () => Promise.all([cargarCatalogos(), cargarDepartamentos()]),
+    [cargarCatalogos, cargarDepartamentos]
+  );
+
+  const cargarDatosIniciales = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      let ultimoError: Error = new Error("No se pudieron cargar los contratos.");
       for (let intento = 0; intento < 3; intento += 1) {
         try {
-          const res = await apiFetch("/api/contracts/bootstrap");
+          const res = await apiFetch("/api/contracts/bootstrap?mode=contracts");
           if (!res.ok) {
             const body = await res.json().catch(() => ({}));
             const error = new Error(
-              body.error ?? `No se pudieron cargar los datos de Precontratos (${res.status}).`
+              body.error ?? `No se pudieron cargar los contratos (${res.status}).`
             );
             if (res.status < 500) throw Object.assign(error, { noReintentar: true });
             throw error;
           }
-          const data = (await res.json()) as {
-            contracts: ContractApi[];
-            departments: DepartmentApi[] | null;
-            contacts: ContactoResumen[] | null;
-            separations: SeparacionRecord[] | null;
-            templateSelector: TemplateSelectorResponse | null;
-            failures?: string[];
-          };
+          const data = (await res.json()) as { contracts: ContractApi[] };
           if (!Array.isArray(data.contracts)) {
             throw new Error("La respuesta de contratos no es válida.");
           }
-
           setContracts(data.contracts);
-          setDepartments(data.departments ?? []);
-          setContactos(data.contacts ?? []);
-          setSeparaciones(data.separations ?? []);
-          setTemplates(data.templateSelector?.templates ?? []);
-          setVersions(
-            Object.fromEntries(
-              (data.templateSelector?.templates ?? []).map((template) => [
-                template.id,
-                data.templateSelector?.versions[template.id] ?? null,
-              ])
-            )
-          );
-          if (data.failures && data.failures.length > 0) {
-            setErrorCargaDepositantes(
-              `No se pudieron cargar ${data.failures.join(", ")}. Intenta volver a cargar.`
-            );
-          }
           setError(null);
           return;
         } catch (error) {
@@ -305,14 +383,9 @@ export default function ContratosPage() {
           }
         }
       }
-
       setError(ultimoError.message);
-      setErrorCargaDepositantes(ultimoError.message);
     } finally {
       setLoading(false);
-      setCargandoDepositantes(false);
-      setCargandoDepartamentos(false);
-      setCargandoPlantillas(false);
     }
   }, []);
 
@@ -329,6 +402,10 @@ export default function ContratosPage() {
       active = false;
     };
   }, [cargarDatosIniciales]);
+
+  useEffect(() => {
+    void cargarDepartamentos();
+  }, [cargarDepartamentos]);
 
   useEffect(() => {
     const interval = setInterval(() => setTick((t) => t + 1), 60000);
@@ -544,54 +621,6 @@ export default function ContratosPage() {
     }
   }
 
-  const separacionesActivas = separaciones.filter((s) => {
-    return ["SEPARADO", "GARANTIA_COMPLETADA", "CONTRATO_PREVIO"].includes(s.estado);
-  });
-
-  const contactoPorId = useMemo(
-    () => new Map(contactos.map((contacto) => [contacto.id, contacto])),
-    [contactos]
-  );
-  const departamentoPorId = useMemo(
-    () => new Map(departments.map((departamento) => [departamento.id, departamento])),
-    [departments]
-  );
-  const depositantes = useMemo<Depositante[]>(() => {
-    const res: Depositante[] = [];
-    for (const sep of separacionesActivas) {
-      const contacto = contactoPorId.get(sep.contactoId ?? "");
-      if (!contacto) continue;
-      const dept = departamentoPorId.get(sep.departamentoId);
-      if (!dept) continue;
-      const mensualidad = dept?.precio && Number(dept.precio) > 0 ? Number(dept.precio).toFixed(2) : "";
-      const garantia = dept?.garantia && Number(dept.garantia) > 0
-        ? Number(dept.garantia).toFixed(2)
-        : mensualidad;
-res.push({
-        id: `dep-${contacto.id}-${dept.id}`,
-  contactoId: contacto.id,
-  nombres: contacto.nombre,
-  apellidos: contacto.apellido,
-  documentoIdentidad: contacto.dni,
-        tipoPersona: contacto.tipoPersona,
-        email: contacto.email ?? null,
-        telefono: contacto.telefono ?? null,
-        domicilio: contacto.domicilio ?? null,
-        nacionalidad: contacto.nacionalidad ?? null,
-        codigoDepartamento: dept?.codigo ?? null,
-        departamentoId: sep.departamentoId,
-        mensualidad,
-        garantia,
-        separacion: sep,
-        codigoPais: contacto.codigoPais ?? "51",
-        contactoEmergencia: contacto.contactoEmergencia ?? null,
-        mascotas: contacto.mascotas,
-        mascotasItems: etiquetasDeIds(MASCOTAS, contacto.mascotasItems),
-      });
-    }
-    return res;
-  }, [separacionesActivas, contactoPorId, departamentoPorId]);
-
   return (
     <DashboardShell>
       <div className="mx-auto max-w-7xl space-y-6">
@@ -603,7 +632,15 @@ res.push({
             </p>
           </div>
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={() => {
+              setShowCreate(true);
+              void Promise.all([
+                cargarCatalogos(),
+                departments.length === 0 && !cargandoDepartamentos
+                  ? cargarDepartamentos()
+                  : Promise.resolve(),
+              ]);
+            }}
             className="flex h-10 shrink-0 items-center gap-2 rounded bg-primary px-4 font-label-md text-on-primary shadow-sm"
           >
             <Plus className="h-4 w-4" />
@@ -835,7 +872,7 @@ res.push({
           cargandoDepartamentos={cargandoDepartamentos}
           cargandoPlantillas={cargandoPlantillas}
           errorCargaDepositantes={errorCargaDepositantes}
-          onRetryDepositantes={() => void cargarDatosIniciales()}
+          onRetryDepositantes={() => void reintentarCatalogos()}
           onClose={() => setShowCreate(false)}
           onCreated={async () => {
             setShowCreate(false);
@@ -1400,6 +1437,7 @@ function CreateContractModal({
   const [detalleDepositante, setDetalleDepositante] = useState<{
     id: string;
     contacto: ContactSeed;
+    baucherSeparacion: string | null;
   } | null>(null);
   const seleccionRequest = useRef(0);
 
@@ -1478,9 +1516,30 @@ function CreateContractModal({
 
     setCargandoDetalle(true);
     try {
-      const contacto = await obtenerContactoPorId(cli.contactoId);
+      const [contacto, separacionResponse] = await Promise.all([
+        obtenerContactoPorId(cli.contactoId),
+        apiFetch(
+          `/api/contracts/bootstrap?mode=applicant-voucher&departamentoId=${encodeURIComponent(deptId)}&contactoId=${encodeURIComponent(cli.contactoId)}`,
+          { timeoutMs: 15_000 }
+        ).then(async (response) => {
+          const body = (await response.json().catch(() => ({}))) as {
+            baucherSeparacion?: string | null;
+            error?: string;
+          };
+          if (!response.ok) {
+            throw new Error(
+              body.error ?? "No se pudo cargar el voucher de separación."
+            );
+          }
+          return body.baucherSeparacion ?? null;
+        }),
+      ]);
       if (seleccionRequest.current === requestId) {
-        setDetalleDepositante({ id: cli.id, contacto });
+        setDetalleDepositante({
+          id: cli.id,
+          contacto,
+          baucherSeparacion: separacionResponse,
+        });
       }
     } catch (e) {
       if (seleccionRequest.current === requestId) {
@@ -1536,7 +1595,7 @@ function CreateContractModal({
                 monto: Number(clienteSel.separacion.montoSeparacion).toFixed(2),
                 garantiaExtendida: clienteSel.separacion.garantiaExtendida,
                 fecha: clienteSel.separacion.fechaSeparacion,
-                baucherSeparacion: clienteSel.separacion.baucherSeparacion ?? null,
+                baucherSeparacion: detalleDepositante?.baucherSeparacion ?? null,
               }
             : null,
           copiaDni: (contactoSel.copiaDni ?? []).map((archivo) => ({
@@ -1589,7 +1648,7 @@ function CreateContractModal({
               <select
                 className="h-10 w-full rounded border border-outline-variant bg-transparent text-on-surface"
                 value={form.clienteId}
-                disabled={cargandoDepositantes || cargandoDepartamentos}
+                disabled={cargandoDepositantes || cargandoDepartamentos || cargandoPlantillas}
                 onChange={(e) => void seleccionarDepositante(e.target.value)}
               >
                 <option value="">
@@ -1616,10 +1675,10 @@ function CreateContractModal({
                 <button
                   type="button"
                   onClick={onRetryDepositantes}
-                  disabled={cargandoDepositantes || cargandoDepartamentos}
+                  disabled={cargandoDepositantes || cargandoDepartamentos || cargandoPlantillas}
                   className="inline-flex shrink-0 items-center gap-1 rounded border border-outline-variant px-2 py-1 text-on-surface-variant disabled:opacity-50"
                 >
-                  <RefreshCw className={`h-3 w-3 ${cargandoDepositantes || cargandoDepartamentos ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`h-3 w-3 ${cargandoDepositantes || cargandoDepartamentos || cargandoPlantillas ? "animate-spin" : ""}`} />
                   Reintentar
                 </button>
               </div>
@@ -1663,8 +1722,15 @@ function CreateContractModal({
                 </div>
               );
             })() : (
-              <select className="h-10 w-full rounded border border-outline-variant bg-transparent text-on-surface" value={form.departamentoId} onChange={(e) => setForm({ ...form, departamentoId: e.target.value })}>
-                <option value="">Selecciona un departamento</option>
+              <select
+                className="h-10 w-full rounded border border-outline-variant bg-transparent text-on-surface"
+                value={form.departamentoId}
+                disabled={cargandoDepartamentos}
+                onChange={(e) => setForm({ ...form, departamentoId: e.target.value })}
+              >
+                <option value="">
+                  {cargandoDepartamentos ? "Cargando departamentos…" : "Selecciona un departamento"}
+                </option>
                 {departments.map((d) => (
                   <option key={d.id} value={d.id}>{d.nombre} {d.codigo ? `(${d.codigo})` : ""}</option>
                 ))}

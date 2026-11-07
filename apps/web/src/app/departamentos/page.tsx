@@ -20,6 +20,7 @@ import {
   gruposModal,
   agregarElementoCatalogo,
 } from "@/lib/inventarios-departamento";
+import { compressImageFile, fileToDataUrl } from "@/lib/image-compression";
 import {
   type SeparacionRecord,
   leerSeparaciones,
@@ -83,6 +84,7 @@ export default function DepartamentosPage() {
   const [contactoAsignado, setContactoAsignado] = useState<string | null>(null);
   const [, setProtocoloSeleccionado] = useState<string>("");
   const [baucherUrl, setBaucherUrl] = useState<string>("");
+  const [optimizandoBaucher, setOptimizandoBaucher] = useState(false);
   const [fechaSeparacion, setFechaSeparacion] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [tipoSeparacion, setTipoSeparacion] = useState<"500" | "TOTAL" | "FLUCTUANTE">("500");
   const [montoFluctuante, setMontoFluctuante] = useState("");
@@ -92,6 +94,7 @@ export default function DepartamentosPage() {
   const [garantiaModalModo, setGarantiaModalModo] = useState<"activar" | "ver">("activar");
   const [confirmarQuitarDeptId, setConfirmarQuitarDeptId] = useState<string | null>(null);
   const [baucherGarantiaUrl, setBaucherGarantiaUrl] = useState<string>("");
+  const [optimizandoBaucherGarantia, setOptimizandoBaucherGarantia] = useState(false);
   const [inventarioDeptId, setInventarioDeptId] = useState<string | null>(null);
   const [inventarioItems, setInventarioItems] = useState<string[]>([]);
   const [nuevoItemInventario, setNuevoItemInventario] = useState("");
@@ -399,18 +402,22 @@ export default function DepartamentosPage() {
     setEditandoPersona({ id, valor: valorActual });
   }
 
-  function manejarBaucher(file: File | null) {
+  async function manejarBaucher(file: File | null) {
     if (!file) return;
     if (!file.type.includes("image")) {
       setError("El baucher debe ser una imagen.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === "string" ? reader.result : "";
-      setBaucherUrl(dataUrl);
-    };
-    reader.readAsDataURL(file);
+    setOptimizandoBaucher(true);
+    try {
+      const optimized = await compressImageFile(file, "voucher");
+      setBaucherUrl(await fileToDataUrl(optimized));
+      setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo optimizar el baucher.");
+    } finally {
+      setOptimizandoBaucher(false);
+    }
   }
 
   function asignarDepartamento() {
@@ -517,18 +524,23 @@ export default function DepartamentosPage() {
     setBaucherGarantiaUrl("");
   }
 
-  function manejarBaucherGarantia(file: File | null) {
+  async function manejarBaucherGarantia(file: File | null) {
     if (!file) return;
     const esJpgPng = ["image/jpeg", "image/png"].includes(file.type) || /\.(jpe?g|png)$/i.test(file.name);
     if (!esJpgPng) {
       setError("El baucher debe ser un archivo JPG o PNG.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setBaucherGarantiaUrl(typeof reader.result === "string" ? reader.result : "");
-    };
-    reader.readAsDataURL(file);
+    setOptimizandoBaucherGarantia(true);
+    try {
+      const optimized = await compressImageFile(file, "voucher");
+      setBaucherGarantiaUrl(await fileToDataUrl(optimized));
+      setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo optimizar el baucher.");
+    } finally {
+      setOptimizandoBaucherGarantia(false);
+    }
   }
 
   function activarGarantiaExtendida(deptId: string) {
@@ -666,12 +678,17 @@ export default function DepartamentosPage() {
                 <Label>Baucher</Label>
                 <label className="flex h-10 cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent">
                   <Upload className="h-4 w-4" />
-                  {baucherUrl ? "Cambiar" : "Adjuntar"}
+                  {optimizandoBaucher ? "Optimizando…" : baucherUrl ? "Cambiar" : "Adjuntar"}
                   <input
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => manejarBaucher(e.target.files?.[0] ?? null)}
+                    disabled={optimizandoBaucher}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      e.target.value = "";
+                      void manejarBaucher(file);
+                    }}
                   />
                 </label>
               </div>
@@ -1170,12 +1187,17 @@ export default function DepartamentosPage() {
                         <Label>Baucer de abono (obligatorio)</Label>
                         <label className="flex h-10 cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent">
                           <Upload className="h-4 w-4" />
-                          {baucherGarantiaUrl ? "Cambiar" : "Adjuntar imagen"}
+                          {optimizandoBaucherGarantia ? "Optimizando…" : baucherGarantiaUrl ? "Cambiar" : "Adjuntar imagen"}
                           <input
                             type="file"
                             accept=".jpg,.jpeg,.png,image/jpeg,image/png"
                             className="hidden"
-                            onChange={(e) => manejarBaucherGarantia(e.target.files?.[0] ?? null)}
+                            disabled={optimizandoBaucherGarantia}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] ?? null;
+                              e.target.value = "";
+                              void manejarBaucherGarantia(file);
+                            }}
                           />
                         </label>
                       </div>
