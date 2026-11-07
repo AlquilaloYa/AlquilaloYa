@@ -72,11 +72,14 @@ export interface ResumenPortafolio {
 /** Agrega las métricas del dashboard (Fase 5). */
 export class DrizzleDashboardRepository {
   async getContractMetrics(): Promise<DashboardMetrics> {
-    const rows = await db
-      .select({ estado: schema.contracts.estado, value: count() })
-      .from(schema.contracts)
-      .where(isNull(schema.contracts.eliminadoEn))
-      .groupBy(schema.contracts.estado);
+    const [rows, erroresGeneracion] = await Promise.all([
+      db
+        .select({ estado: schema.contracts.estado, value: count() })
+        .from(schema.contracts)
+        .where(isNull(schema.contracts.eliminadoEn))
+        .groupBy(schema.contracts.estado),
+      this.contarErroresGeneracion(),
+    ]);
 
     const byState = new Map<string, number>();
     let total = 0;
@@ -95,7 +98,7 @@ export class DrizzleDashboardRepository {
         firmados: byState.get("FIRMADO") ?? 0,
         cancelados: byState.get("CANCELADO") ?? 0,
       },
-      erroresGeneracion: await this.contarErroresGeneracion(),
+      erroresGeneracion,
     };
   }
 
@@ -109,46 +112,47 @@ export class DrizzleDashboardRepository {
 
   /** Portafolio: ocupación, cobranza, incidencias y pipeline contractual. */
   async getResumenPortafolio(): Promise<ResumenPortafolio> {
-    const departments = await db
-      .select({
-        id: schema.departments.id,
-        activo: schema.departments.activo,
-        estadoManual: schema.departments.estadoManual,
-      })
-      .from(schema.departments);
-    const unidadesTotales = departments.length;
-
     const hoy = new Date();
     const hoyStr = toDateStr(hoy);
     const finProximo = new Date(hoy);
     finProximo.setDate(hoy.getDate() + 30);
     const finProximoStr = toDateStr(finProximo);
 
-    const firmas = await db
-      .select({
-        id: schema.contracts.id,
-        departamentoId: schema.contracts.departamentoId,
-        fechaInicio: schema.contracts.fechaInicio,
-        fechaFin: schema.contracts.fechaFin,
-        estado: schema.contracts.estado,
-        renovadoDe: schema.contracts.renovadoDe,
-        resueltoEn: schema.contracts.resueltoEn,
-      })
-      .from(schema.contracts)
-      .where(
-        and(
-          isNull(schema.contracts.eliminadoEn),
-          inArray(schema.contracts.estado, [
-            "EMITIDO",
-            "PENDIENTE_FIRMA",
-            "FIRMADO",
-            "NOTARIADO",
-            "ACTIVO",
-            "VIGENTE",
-            "RESUELTO",
-          ])
-        )
-      );
+    const [departments, firmas] = await Promise.all([
+      db
+        .select({
+          id: schema.departments.id,
+          activo: schema.departments.activo,
+          estadoManual: schema.departments.estadoManual,
+        })
+        .from(schema.departments),
+      db
+        .select({
+          id: schema.contracts.id,
+          departamentoId: schema.contracts.departamentoId,
+          fechaInicio: schema.contracts.fechaInicio,
+          fechaFin: schema.contracts.fechaFin,
+          estado: schema.contracts.estado,
+          renovadoDe: schema.contracts.renovadoDe,
+          resueltoEn: schema.contracts.resueltoEn,
+        })
+        .from(schema.contracts)
+        .where(
+          and(
+            isNull(schema.contracts.eliminadoEn),
+            inArray(schema.contracts.estado, [
+              "EMITIDO",
+              "PENDIENTE_FIRMA",
+              "FIRMADO",
+              "NOTARIADO",
+              "ACTIVO",
+              "VIGENTE",
+              "RESUELTO",
+            ])
+          )
+        ),
+    ]);
+    const unidadesTotales = departments.length;
 
     const departamentosOcupados = new Set(
       firmas
@@ -243,7 +247,9 @@ export class DrizzleDashboardRepository {
       .select({
         contractId: schema.documents.contractId,
         tipo: schema.documents.tipo,
-        datosContrato: schema.contractSnapshots.datosContrato,
+        fechaFinAdenda: sql<string | null>`${schema.contractSnapshots.datosContrato}->>'fechaFinAdenda'`,
+        fechaFin: sql<string | null>`${schema.contractSnapshots.datosContrato}->>'fechaFin'`,
+        fechaFinAnterior: sql<string | null>`${schema.contractSnapshots.datosContrato}->>'fechaFinAnterior'`,
       })
       .from(schema.documents)
       .leftJoin(
@@ -262,15 +268,10 @@ export class DrizzleDashboardRepository {
     const inicioVentanaRenovacionStr = toDateStr(inicioVentanaRenovacion);
     const renovacionesPorContrato = new Map<string, Set<string>>();
     for (const adenda of adendas) {
-      const datos = (adenda.datosContrato ?? {}) as Record<string, unknown>;
-      const fechaFinAdenda = typeof datos.fechaFinAdenda === "string"
-        ? String(datos.fechaFinAdenda).slice(0, 10)
-        : "";
-      const fechaFinSnapshot = typeof datos.fechaFin === "string"
-        ? String(datos.fechaFin).slice(0, 10)
-        : "";
-      const fechaFinAnterior = typeof datos.fechaFinAnterior === "string"
-        ? String(datos.fechaFinAnterior).slice(0, 10)
+      const fechaFinAdenda = adenda.fechaFinAdenda?.slice(0, 10) ?? "";
+      const fechaFinSnapshot = adenda.fechaFin?.slice(0, 10) ?? "";
+      const fechaFinAnterior = adenda.fechaFinAnterior
+        ? adenda.fechaFinAnterior.slice(0, 10)
         : adenda.tipo === "ADENDA" && fechaFinAdenda > fechaFinSnapshot
           ? fechaFinSnapshot
           : "";
@@ -383,15 +384,8 @@ export class DrizzleDashboardRepository {
       ? Math.round(vacanciasCerradas.reduce((suma, dias) => suma + dias, 0) / vacanciasCerradas.length)
       : null;
 
-    const departamentosDisponibles = await db
-      .select({
-        id: schema.departments.id,
-        estadoManual: schema.departments.estadoManual,
-        activo: schema.departments.activo,
-      })
-      .from(schema.departments);
     const vacanciasActuales: number[] = [];
-    for (const departamento of departamentosDisponibles) {
+    for (const departamento of departments) {
       if (!departamento.activo || departamento.estadoManual === "BLOQUEADO" || departamento.estadoManual === "MANTENIMIENTO") continue;
       const ultimoFin = finMasRecientePorDepartamento.get(departamento.id);
       if (!ultimoFin || ultimoFin >= hoyStr) continue;
@@ -402,135 +396,134 @@ export class DrizzleDashboardRepository {
       : null;
 
     const hoyInicioAnioStr = toDateStr(new Date(hoy.getFullYear(), 0, 1));
-    const pagosAnio = await db
-      .select({
-        monto: schema.payments.monto,
-        mantenimiento: schema.payments.mantenimiento,
-      })
-      .from(schema.payments)
-      .where(
-        and(
-          eq(schema.payments.estado, "PAGADO"),
-          gte(schema.payments.periodo, hoyInicioAnioStr),
-          lte(schema.payments.periodo, hoyStr)
+    const [
+      pagosAnioRow,
+      egresosRow,
+      enProcesoRow,
+      vencidosRow,
+      devengadoRow,
+      reportadosRow,
+      incidenciasRow,
+    ] = await Promise.all([
+      db
+        .select({
+          value: sql<string>`coalesce(sum(${schema.payments.monto} + ${schema.payments.mantenimiento}), 0)`,
+        })
+        .from(schema.payments)
+        .where(
+          and(
+            eq(schema.payments.estado, "PAGADO"),
+            gte(schema.payments.periodo, hoyInicioAnioStr),
+            lte(schema.payments.periodo, hoyStr)
+          )
         )
-      );
-    let ingresosYTD = 0;
-    for (const p of pagosAnio) {
-      ingresosYTD += Number(p.monto) + Number(p.mantenimiento);
-    }
-    ingresosYTD = Math.round(ingresosYTD * 100) / 100;
-    const [egresosRow] = await db
-      .select({
-        value: sql<string>`coalesce(sum(${schema.gastos.monto}), 0)`,
-      })
-      .from(schema.gastos)
-      .where(
-        and(
-          isNull(schema.gastos.eliminadoEn),
-          gte(schema.gastos.dia, hoyInicioAnioStr),
-          lte(schema.gastos.dia, hoyStr)
+        .then((rows) => rows[0]),
+      db
+        .select({
+          value: sql<string>`coalesce(sum(${schema.gastos.monto}), 0)`,
+        })
+        .from(schema.gastos)
+        .where(
+          and(
+            isNull(schema.gastos.eliminadoEn),
+            gte(schema.gastos.dia, hoyInicioAnioStr),
+            lte(schema.gastos.dia, hoyStr)
+          )
         )
-      );
+        .then((rows) => rows[0]),
+      db
+        .select({ value: count() })
+        .from(schema.contracts)
+        .where(
+          and(
+            isNull(schema.contracts.eliminadoEn),
+            inArray(schema.contracts.estado, [
+              "PENDIENTE_EMISION",
+              "EMITIDO",
+              "PENDIENTE_FIRMA",
+            ])
+          )
+        )
+        .then((rows) => rows[0]),
+      db
+        .select({
+          value: sql<string>`coalesce(sum(
+            case
+              when ${schema.payments.monto} = 0
+              then ${schema.contracts.montoCanonMensual} + ${schema.contracts.mantenimiento}
+              else ${schema.payments.monto} + ${schema.payments.mantenimiento}
+            end
+          ), 0)`,
+        })
+        .from(schema.payments)
+        .innerJoin(
+          schema.contracts,
+          eq(schema.contracts.id, schema.payments.contractId)
+        )
+        .where(
+          and(
+            isNull(schema.contracts.eliminadoEn),
+            eq(schema.payments.estado, "PENDIENTE"),
+            lt(schema.payments.periodo, hoyStr)
+          )
+        )
+        .then((rows) => rows[0]),
+      db
+        .select({
+          value: sql<string>`coalesce(sum(
+            case
+              when ${schema.payments.monto} = 0
+                and ${schema.payments.estado} in ('PENDIENTE', 'PARCIAL')
+              then ${schema.contracts.montoCanonMensual}
+              else ${schema.payments.monto}
+            end
+            + case
+              when ${schema.payments.monto} = 0
+                and ${schema.payments.estado} in ('PENDIENTE', 'PARCIAL')
+              then ${schema.contracts.mantenimiento}
+              else ${schema.payments.mantenimiento}
+            end
+          ), 0)`,
+        })
+        .from(schema.payments)
+        .innerJoin(
+          schema.contracts,
+          eq(schema.contracts.id, schema.payments.contractId)
+        )
+        .where(
+          and(
+            isNull(schema.contracts.eliminadoEn),
+            lte(schema.payments.periodo, hoyStr),
+            ne(schema.payments.estado, "CANCELADO")
+          )
+        )
+        .then((rows) => rows[0]),
+      db
+        .select({
+          value: sql<number>`count(distinct ${schema.tenantIncidents.clienteId})`,
+        })
+        .from(schema.tenantIncidents)
+        .where(isNull(schema.tenantIncidents.eliminadoEn))
+        .then((rows) => rows[0]),
+      db
+        .select({
+          total: count(),
+          pendientes: sql<number>`coalesce(sum(case when ${schema.workOrders.status} in ('RESOLVED','COMPLETED','CANCELLED','REJECTED') then 0 else 1 end), 0)`,
+        })
+        .from(schema.workOrders)
+        .then((rows) => rows[0]),
+    ]);
+    const ingresosYTD = Math.round(Number(pagosAnioRow?.value ?? 0) * 100) / 100;
     const egresos = Math.round(Number(egresosRow?.value ?? 0) * 100) / 100;
     const resultadosYTD = Math.round((ingresosYTD - egresos) * 100) / 100;
-
-    const [enProcesoRow] = await db
-      .select({ value: count() })
-      .from(schema.contracts)
-      .where(
-        and(
-          isNull(schema.contracts.eliminadoEn),
-          inArray(schema.contracts.estado, [
-            "PENDIENTE_EMISION",
-            "EMITIDO",
-            "PENDIENTE_FIRMA",
-          ])
-        )
-      );
     const enProceso = enProcesoRow?.value ?? 0;
-
-    const vencidos = await db
-      .select({
-        monto: schema.payments.monto,
-        mantenimiento: schema.payments.mantenimiento,
-        montoCanonMensual: schema.contracts.montoCanonMensual,
-        mantenimientoContrato: schema.contracts.mantenimiento,
-      })
-      .from(schema.payments)
-      .innerJoin(
-        schema.contracts,
-        eq(schema.contracts.id, schema.payments.contractId)
-      )
-      .where(
-        and(
-          isNull(schema.contracts.eliminadoEn),
-          eq(schema.payments.estado, "PENDIENTE"),
-          lt(schema.payments.periodo, hoyStr)
-        )
-      );
-
-    let montoVencido = 0;
-    for (const p of vencidos) {
-      const rentaNoRegistrada = Number(p.monto) === 0;
-      montoVencido += rentaNoRegistrada
-        ? Number(p.montoCanonMensual) + Number(p.mantenimientoContrato)
-        : Number(p.monto) + Number(p.mantenimiento);
-    }
-
-    const [devengadoRow] = await db
-      .select({
-        value: sql<number>`coalesce(sum(
-          case
-            when ${schema.payments.monto} = 0
-              and ${schema.payments.estado} in ('PENDIENTE', 'PARCIAL')
-            then ${schema.contracts.montoCanonMensual}
-            else ${schema.payments.monto}
-          end
-          + case
-            when ${schema.payments.monto} = 0
-              and ${schema.payments.estado} in ('PENDIENTE', 'PARCIAL')
-            then ${schema.contracts.mantenimiento}
-            else ${schema.payments.mantenimiento}
-          end
-        ), 0)`,
-      })
-      .from(schema.payments)
-      .innerJoin(
-        schema.contracts,
-        eq(schema.contracts.id, schema.payments.contractId)
-      )
-      .where(
-        and(
-          isNull(schema.contracts.eliminadoEn),
-          lte(schema.payments.periodo, hoyStr),
-          ne(schema.payments.estado, "CANCELADO")
-        )
-      );
+    const montoVencido = Number(vencidosRow?.value ?? 0);
     const montoDevengado = Number(devengadoRow?.value ?? 0);
     const morosidad =
       montoDevengado > 0
         ? Math.round((montoVencido / montoDevengado) * 100)
         : 0;
-
-    // Clientes reportados = clientes con al menos un reporte activo
-    // (tenant_incidents), no los morosos.
-    const [reportadosRow] = await db
-      .select({
-        value: sql<number>`count(distinct ${schema.tenantIncidents.clienteId})`,
-      })
-      .from(schema.tenantIncidents)
-      .where(isNull(schema.tenantIncidents.eliminadoEn));
     const clientesReportados = Number(reportadosRow?.value ?? 0);
-
-    // Incidencias = órdenes de trabajo reales.
-    // Pendientes = incidencias no resueltas (ni canceladas/rechazadas).
-    const [incidenciasRow] = await db
-      .select({
-        total: count(),
-        pendientes: sql<number>`coalesce(sum(case when ${schema.workOrders.status} in ('RESOLVED','COMPLETED','CANCELLED','REJECTED') then 0 else 1 end), 0)`,
-      })
-      .from(schema.workOrders);
     const incidencias = incidenciasRow?.total ?? 0;
     const incidenciasPendientes = Number(incidenciasRow?.pendientes ?? 0);
 
