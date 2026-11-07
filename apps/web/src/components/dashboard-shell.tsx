@@ -75,7 +75,7 @@ interface NavItem {
   phase?: string;
   permission?: Permission;
   external?: boolean;
-  group?: "contratos" | "locales" | "marketing" | "rrhh" | "operatividad" | "contabilidad" | "sedes";
+  group?: "contratos" | "marketing" | "rrhh" | "operatividad" | "contabilidad" | "sedes";
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -136,32 +136,13 @@ const NAV_ITEMS: NavItem[] = [
   },
   { href: "/adendas", label: "Adendas", icon: ScrollText, section: "Adendas", permission: "contract.read", group: "contratos" },
   { href: "/servicios-extras", label: "Servicios Extras", icon: Zap, section: "Servicios Extras", permission: "contract.read", group: "contratos" },
-  { href: "/contactos", label: "Contactos", icon: Contact, section: "Contactos", group: "locales" },
-  {
-    href: "/departamentos",
-    label: "Locales",
-    icon: Building2,
-    section: "Locales",
-    permission: "department.read",
-    group: "locales",
-  },
-  { href: "/contratos", label: "Pre contrato", icon: FileText, section: "Contratos", permission: "contract.read", group: "locales" },
-  {
-    href: "/contrato-final",
-    label: "Contrato Final",
-    icon: FileCheck,
-    section: "Contrato Final",
-    permission: "contract.read",
-    group: "locales",
-  },
-  { href: "/adendas", label: "Adendas", icon: ScrollText, section: "Adendas", permission: "contract.read", group: "locales" },
-  { href: "/servicios-extras", label: "Servicios", icon: Zap, section: "Servicios", permission: "contract.read", group: "locales" },
   { href: "/separaciones", label: "Separación", icon: Receipt, section: "Separación", permission: "contract.read", group: "contratos" },
   { href: "/plantillas", label: "Plantillas", icon: FilePlus2, section: "Plantillas", permission: "template.read", group: "contratos" },
   { href: "/clientes", label: "Clientes", icon: Star, section: "Clientes", permission: "client.read" },
   { href: "/scoring", label: "Scoring de inquilinos", icon: Gauge, section: "Scoring", permission: "scoring.read" },
   { href: "/pagos", label: "Cobranza", icon: Banknote, section: "Cobranza", permission: "contract.read" },
   { href: "/analiticas", label: "Analíticas", icon: BarChart3, section: "Analíticas", permission: "contract.read" },
+  { href: "/departamentos", label: "Locales", icon: Building2, section: "Locales", permission: "department.read" },
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "hr.read", group: "rrhh" },
   { href: "/cronograma-asistencia", label: "Registro de asistencia", icon: AlarmClock, section: "Recursos Humanos", permission: "attendance.read", group: "rrhh" },
@@ -415,7 +396,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [contractsOpen, setContractsOpen] = useState(false);
-  const [localesOpen, setLocalesOpen] = useState(false);
   const [marketingOpen, setMarketingOpen] = useState(false);
   const [rrhhOpen, setRrhhOpen] = useState(false);
   const [sedesOpen, setSedesOpen] = useState(false);
@@ -545,13 +525,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 icon: Briefcase,
                 open: contractsOpen,
                 onToggle: () => setContractsOpen((open) => !open),
-              },
-              {
-                key: "locales",
-                label: "Locales",
-                icon: Building2,
-                open: localesOpen,
-                onToggle: () => setLocalesOpen((open) => !open),
               },
               {
                 key: "operatividad",

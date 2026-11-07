@@ -132,7 +132,7 @@ async function upsert(req: Request) {
       .values(values)
       .onConflictDoUpdate({
         target: ctx.schema.separations.departamentoId,
-        set: { ...values, updatedAt: new Date() },
+        set: { ...values, eliminadoEn: null, updatedAt: new Date() },
       })
       .returning();
     if (!row) {
