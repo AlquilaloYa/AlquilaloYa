@@ -541,7 +541,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               },
               {
                 key: "contratos",
-                label: "Sistema de Contratos",
+                label: "Departamentos",
                 icon: Briefcase,
                 open: contractsOpen,
                 onToggle: () => setContractsOpen((open) => !open),
