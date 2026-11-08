@@ -23,8 +23,12 @@ type SeparationInput = {
   localId: string;
   contactId: string;
   monto: string;
+  tipoSeparacion: "500" | "TOTAL" | "FLUCTUANTE";
   estado: "PENDIENTE" | "CONFIRMADA" | "CANCELADA";
   fecha: string;
+  diasTiempo: number;
+  fechaLimiteManual: Date;
+  garantiaExtendida: boolean;
   observaciones: string;
 };
 
@@ -34,10 +38,13 @@ type ContractInput = {
   contactId: string;
   separationId: string | null;
   codigo: string;
+  plantillaVersionId: string | null;
   montoCanon: string;
   fechaInicio: string;
   fechaFin: string;
-  estado: "BORRADOR" | "VIGENTE" | "FINALIZADO" | "ANULADO";
+  depositoGarantia: string;
+  mantenimiento: string;
+  estado: "BORRADOR" | "EMITIDO" | "NOTARIADO_FIRMADO" | "VIGENTE" | "FINALIZADO" | "ANULADO";
 };
 
 type AnnexInput = {
@@ -47,7 +54,10 @@ type AnnexInput = {
   numero: string;
   descripcion: string;
   fecha: string;
-  estado: "BORRADOR" | "VIGENTE" | "ANULADA";
+  tipoAdenda: "ADENDA" | "ADENDA_EXTENSION";
+  fechaFin: string | null;
+  montoCanon: string | null;
+  estado: "BORRADOR" | "EMITIDA" | "NOTARIADA_FIRMADA" | "VIGENTE" | "ANULADA";
 };
 
 type ServiceInput = {
@@ -166,22 +176,37 @@ export function parseLocalRecord(input: unknown): ParseResult {
   if (tipo === "separaciones") {
     const contactId = uuidValue(input, "contactId", "contacto");
     const monto = amountValue(input, "monto", "El monto");
+    const tipoSeparacion = enumValue(input, "tipoSeparacion", ["500", "TOTAL", "FLUCTUANTE"], "tipo de separación");
     const estado = enumValue(input, "estado", ["PENDIENTE", "CONFIRMADA", "CANCELADA"], "estado");
     const fecha = dateValue(input, "fecha", "la separación");
+    const diasTiempo = Number(input.diasTiempo);
     const observaciones = stringValue(input, "observaciones", "Observaciones", 2000);
+    if (typeof input.garantiaExtendida !== "boolean") {
+      return { error: "Indica si la garantía de la separación fue extendida." };
+    }
     if (!contactId.ok) return { error: contactId.error };
     if (!monto.ok) return { error: monto.error };
+    if (!tipoSeparacion.ok) return { error: tipoSeparacion.error };
     if (!estado.ok) return { error: estado.error };
     if (!fecha.ok) return { error: fecha.error };
+    if (!Number.isSafeInteger(diasTiempo) || diasTiempo < 1) {
+      return { error: "El tiempo restante debe ser un número entero de al menos 1 día." };
+    }
     if (!observaciones.ok) return { error: observaciones.error };
+    const fechaLimiteManual = new Date(`${fecha.value}T12:00:00.000Z`);
+    fechaLimiteManual.setUTCDate(fechaLimiteManual.getUTCDate() + diasTiempo);
     return {
       value: {
         tipo,
         localId: local.value,
         contactId: contactId.value,
         monto: monto.value,
+        tipoSeparacion: tipoSeparacion.value,
         estado: estado.value,
         fecha: fecha.value,
+        diasTiempo,
+        fechaLimiteManual,
+        garantiaExtendida: input.garantiaExtendida,
         observaciones: observaciones.value,
       },
     };
@@ -198,18 +223,27 @@ export function parseLocalRecord(input: unknown): ParseResult {
       return { error: "Selecciona una separación válida." };
     }
     const codigo = stringValue(input, "codigo", "Código de contrato", 50, true);
+    const plantillaVersionRaw = typeof input.plantillaVersionId === "string" ? input.plantillaVersionId.trim() : "";
+    const plantillaVersionId = plantillaVersionRaw && !UUID.test(plantillaVersionRaw)
+      ? { ok: false as const, error: "Selecciona una plantilla válida." }
+      : { ok: true as const, value: plantillaVersionRaw || null };
     const montoCanon = amountValue(input, "montoCanon", "El canon");
+    const depositoGarantia = amountValue(input, "depositoGarantia", "La garantía");
+    const mantenimiento = amountValue(input, "mantenimiento", "El mantenimiento");
     const fechaInicio = dateValue(input, "fechaInicio", "inicio");
     const fechaFin = dateValue(input, "fechaFin", "fin");
     const estado = enumValue(
       input,
       "estado",
-      ["BORRADOR", "VIGENTE", "FINALIZADO", "ANULADO"],
+      ["BORRADOR", "EMITIDO", "NOTARIADO_FIRMADO", "VIGENTE", "FINALIZADO", "ANULADO"],
       "estado",
     );
     if (!contactId.ok) return { error: contactId.error };
     if (!codigo.ok) return { error: codigo.error };
+    if (!plantillaVersionId.ok) return { error: plantillaVersionId.error };
     if (!montoCanon.ok) return { error: montoCanon.error };
+    if (!depositoGarantia.ok) return { error: depositoGarantia.error };
+    if (!mantenimiento.ok) return { error: mantenimiento.error };
     if (!fechaInicio.ok) return { error: fechaInicio.error };
     if (!fechaFin.ok) return { error: fechaFin.error };
     if (!estado.ok) return { error: estado.error };
@@ -223,7 +257,10 @@ export function parseLocalRecord(input: unknown): ParseResult {
         contactId: contactId.value,
         separationId,
         codigo: codigo.value,
+        plantillaVersionId: plantillaVersionId.value,
         montoCanon: montoCanon.value,
+        depositoGarantia: depositoGarantia.value,
+        mantenimiento: mantenimiento.value,
         fechaInicio: fechaInicio.value,
         fechaFin: fechaFin.value,
         estado: estado.value,
@@ -236,12 +273,30 @@ export function parseLocalRecord(input: unknown): ParseResult {
     const numero = stringValue(input, "numero", "Número de adenda", 50, true);
     const descripcion = stringValue(input, "descripcion", "Descripción", 4000, true);
     const fecha = dateValue(input, "fecha", "la adenda");
-    const estado = enumValue(input, "estado", ["BORRADOR", "VIGENTE", "ANULADA"], "estado");
+    const tipoAdenda = enumValue(input, "tipoAdenda", ["ADENDA", "ADENDA_EXTENSION"], "tipo de adenda");
+    const fechaFinRaw = typeof input.fechaFin === "string" ? input.fechaFin.trim() : "";
+    const fechaFin = fechaFinRaw ? dateValue(input, "fechaFin", "fin de la adenda") : { ok: true as const, value: "" };
+    const montoCanonRaw = input.montoCanon;
+    const montoCanon = montoCanonRaw === "" || montoCanonRaw === null || montoCanonRaw === undefined
+      ? { ok: true as const, value: "" }
+      : amountValue(input, "montoCanon", "El canon de la adenda");
+    const estado = enumValue(
+      input,
+      "estado",
+      ["BORRADOR", "EMITIDA", "NOTARIADA_FIRMADA", "VIGENTE", "ANULADA"],
+      "estado",
+    );
     if (!contractId.ok) return { error: contractId.error };
     if (!numero.ok) return { error: numero.error };
     if (!descripcion.ok) return { error: descripcion.error };
     if (!fecha.ok) return { error: fecha.error };
+    if (!tipoAdenda.ok) return { error: tipoAdenda.error };
+    if (!fechaFin.ok) return { error: fechaFin.error };
+    if (!montoCanon.ok) return { error: montoCanon.error };
     if (!estado.ok) return { error: estado.error };
+    if (tipoAdenda.value === "ADENDA_EXTENSION" && !fechaFin.value) {
+      return { error: "Indica la nueva fecha de término para la extensión." };
+    }
     return {
       value: {
         tipo,
@@ -250,6 +305,9 @@ export function parseLocalRecord(input: unknown): ParseResult {
         numero: numero.value,
         descripcion: descripcion.value,
         fecha: fecha.value,
+        tipoAdenda: tipoAdenda.value,
+        fechaFin: fechaFin.value || null,
+        montoCanon: montoCanon.value || null,
         estado: estado.value,
       },
     };
@@ -285,6 +343,23 @@ export function parseLocalRecord(input: unknown): ParseResult {
 
 export function isLocalModule(value: string | null): value is LocalModule {
   return LOCAL_MODULES.some((module) => module === value);
+}
+
+export function validateLocalSeparationAmount(
+  record: Pick<SeparationInput, "monto" | "tipoSeparacion">,
+  rentAmount: string | number,
+): string | null {
+  const amount = Number(record.monto);
+  if (record.tipoSeparacion === "500" && amount !== 500) {
+    return "La separación de tipo S/ 500 debe ser exactamente S/ 500.";
+  }
+  if (record.tipoSeparacion === "TOTAL" && amount !== Number(rentAmount)) {
+    return "El monto de separación total debe coincidir con el alquiler del local.";
+  }
+  if (record.tipoSeparacion === "FLUCTUANTE" && amount < 500) {
+    return "La separación fluctuante debe ser de al menos S/ 500.";
+  }
+  return null;
 }
 
 export function withoutRecordType<T extends { tipo: string }>(

@@ -4,7 +4,10 @@ import { asc, eq } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
 import { deleteObject, isStorageConfigured, uploadObject } from "@/lib/storage";
-import { maxLocalUploadBytes } from "@/lib/locales-files";
+import {
+  matchesLocalFileSignature,
+  maxLocalUploadBytes,
+} from "@/lib/locales-files";
 
 export const dynamic = "force-dynamic";
 const BUCKET = "local-assets";
@@ -15,27 +18,6 @@ const MIME_TYPES = new Set([
   "image/webp",
 ]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function matchesFileSignature(mimeType: string, bytes: Uint8Array): boolean {
-  if (mimeType === "application/pdf") {
-    return new TextDecoder().decode(bytes.subarray(0, 1024)).includes("%PDF-");
-  }
-  if (mimeType === "image/png") {
-    return [137, 80, 78, 71, 13, 10, 26, 10].every(
-      (byte, index) => bytes[index] === byte,
-    );
-  }
-  if (mimeType === "image/jpeg") {
-    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  }
-  if (mimeType === "image/webp") {
-    return (
-      new TextDecoder().decode(bytes.subarray(0, 4)) === "RIFF" &&
-      new TextDecoder().decode(bytes.subarray(8, 12)) === "WEBP"
-    );
-  }
-  return false;
-}
 
 export async function GET(
   request: Request,
@@ -135,7 +117,7 @@ export async function POST(
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    if (!matchesFileSignature(file.type, bytes)) {
+    if (!matchesLocalFileSignature(file.type, bytes)) {
       return NextResponse.json(
         { error: "El contenido no coincide con el tipo de archivo indicado." },
         { status: 400 },

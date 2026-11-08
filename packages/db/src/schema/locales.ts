@@ -1,10 +1,13 @@
 import { sql } from "drizzle-orm";
+import { templateVersions } from "./templates";
 import {
   check,
   boolean,
   bigint,
   date,
   index,
+  integer,
+  jsonb,
   numeric,
   pgTable,
   text,
@@ -145,8 +148,13 @@ export const localSeparations = pgTable(
       .notNull()
       .references(() => localContacts.id, { onDelete: "restrict" }),
     monto: numeric("monto", { precision: 15, scale: 2 }).notNull().default("0"),
+    tipoSeparacion: varchar("tipo", { length: 20 }).notNull().default("500"),
     estado: varchar("estado", { length: 20 }).notNull().default("PENDIENTE"),
     fecha: date("fecha").notNull(),
+    diasTiempo: integer("dias_tiempo").notNull().default(1),
+    fechaLimiteManual: timestamp("fecha_limite_manual", { withTimezone: true }),
+    garantiaExtendida: boolean("garantia_extendida").notNull().default(false),
+    fechaGarantiaExtendida: timestamp("fecha_garantia_extendida", { withTimezone: true }),
     observaciones: text("observaciones").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -160,9 +168,14 @@ export const localSeparations = pgTable(
     index("local_separations_contact_id_idx").on(table.contactId),
     index("local_separations_estado_idx").on(table.estado),
     check("local_separations_monto_check", sql`${table.monto} >= 0`),
+    check("local_separations_dias_tiempo_check", sql`${table.diasTiempo} >= 1`),
     check(
       "local_separations_estado_check",
       sql`${table.estado} in ('PENDIENTE', 'CONFIRMADA', 'CANCELADA')`,
+    ),
+    check(
+      "local_separations_tipo_check",
+      sql`${table.tipoSeparacion} in ('500', 'TOTAL', 'FLUCTUANTE')`,
     ),
   ],
 );
@@ -181,12 +194,20 @@ export const localContracts = pgTable(
       onDelete: "set null",
     }),
     codigo: varchar("codigo", { length: 50 }).notNull().unique(),
+    plantillaVersionId: uuid("plantilla_version_id").references(() => templateVersions.id),
     montoCanon: numeric("monto_canon", { precision: 15, scale: 2 })
+      .notNull()
+      .default("0"),
+    depositoGarantia: numeric("deposito_garantia", { precision: 15, scale: 2 })
+      .notNull()
+      .default("0"),
+    mantenimiento: numeric("mantenimiento", { precision: 15, scale: 2 })
       .notNull()
       .default("0"),
     fechaInicio: date("fecha_inicio").notNull(),
     fechaFin: date("fecha_fin").notNull(),
-    estado: varchar("estado", { length: 20 }).notNull().default("BORRADOR"),
+    estado: varchar("estado", { length: 30 }).notNull().default("BORRADOR"),
+    documentoHtml: text("documento_html"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -200,9 +221,11 @@ export const localContracts = pgTable(
     index("local_contracts_separation_id_idx").on(table.separationId),
     index("local_contracts_estado_idx").on(table.estado),
     check("local_contracts_monto_canon_check", sql`${table.montoCanon} >= 0`),
+    check("local_contracts_garantia_check", sql`${table.depositoGarantia} >= 0`),
+    check("local_contracts_mantenimiento_check", sql`${table.mantenimiento} >= 0`),
     check(
       "local_contracts_estado_check",
-      sql`${table.estado} in ('BORRADOR', 'VIGENTE', 'FINALIZADO', 'ANULADO')`,
+      sql`${table.estado} in ('BORRADOR', 'EMITIDO', 'NOTARIADO_FIRMADO', 'VIGENTE', 'FINALIZADO', 'ANULADO')`,
     ),
     check("local_contracts_fechas_check", sql`${table.fechaFin} >= ${table.fechaInicio}`),
   ],
@@ -221,7 +244,11 @@ export const localAnnexes = pgTable(
     numero: varchar("numero", { length: 50 }).notNull(),
     descripcion: text("descripcion").notNull(),
     fecha: date("fecha").notNull(),
-    estado: varchar("estado", { length: 20 }).notNull().default("BORRADOR"),
+    tipoAdenda: varchar("tipo", { length: 30 }).notNull().default("ADENDA"),
+    fechaFin: date("fecha_fin"),
+    montoCanon: numeric("monto_canon", { precision: 15, scale: 2 }),
+    documentoHtml: text("documento_html"),
+    estado: varchar("estado", { length: 30 }).notNull().default("BORRADOR"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -234,8 +261,92 @@ export const localAnnexes = pgTable(
     index("local_annexes_contract_id_idx").on(table.contractId),
     check(
       "local_annexes_estado_check",
-      sql`${table.estado} in ('BORRADOR', 'VIGENTE', 'ANULADA')`,
+      sql`${table.estado} in ('BORRADOR', 'EMITIDA', 'NOTARIADA_FIRMADA', 'VIGENTE', 'ANULADA')`,
     ),
+    check("local_annexes_tipo_check", sql`${table.tipoAdenda} in ('ADENDA', 'ADENDA_EXTENSION')`),
+    check("local_annexes_monto_canon_check", sql`${table.montoCanon} is null or ${table.montoCanon} >= 0`),
+  ],
+);
+
+export const localContractDocuments = pgTable(
+  "local_contract_documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    localId: uuid("local_id")
+      .notNull()
+      .references(() => locales.id, { onDelete: "cascade" }),
+    separationId: uuid("separation_id").references(() => localSeparations.id, {
+      onDelete: "cascade",
+    }),
+    contractId: uuid("contract_id").references(() => localContracts.id, {
+      onDelete: "cascade",
+    }),
+    annexId: uuid("annex_id").references(() => localAnnexes.id, {
+      onDelete: "cascade",
+    }),
+    tipo: varchar("tipo", { length: 32 }).notNull(),
+    nombre: varchar("nombre", { length: 255 }).notNull(),
+    storageKey: text("storage_key").notNull().unique(),
+    mimeType: varchar("mime_type", { length: 100 }).notNull(),
+    sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
+    uploadedBy: varchar("uploaded_by", { length: 255 }).notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("local_contract_documents_local_id_created_idx").on(table.localId, table.createdAt),
+    index("local_contract_documents_separation_idx").on(table.separationId, table.tipo),
+    index("local_contract_documents_contract_idx").on(table.contractId, table.tipo),
+    index("local_contract_documents_annex_idx").on(table.annexId, table.tipo),
+    check("local_contract_documents_size_check", sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 12582912`),
+    check(
+      "local_contract_documents_parent_check",
+      sql`num_nonnulls(${table.separationId}, ${table.contractId}, ${table.annexId}) = 1`,
+    ),
+    check(
+      "local_contract_documents_tipo_check",
+      sql`${table.tipo} in ('VOUCHER_SEPARACION', 'VOUCHER_GARANTIA_EXTENDIDA', 'VOUCHER_GARANTIA', 'VOUCHER_PRIMERA_MENSUALIDAD', 'CONTRATO_EMITIDO', 'CONTRATO_FIRMADO', 'ADENDA_EMITIDA', 'ADENDA_FIRMADA')`,
+    ),
+  ],
+);
+
+export type LocalPaymentVoucher = {
+  nombre: string;
+  url: string;
+  monto?: number;
+  verificadoEn?: string;
+  verificadoPor?: string;
+};
+
+export const localPayments = pgTable(
+  "local_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    localId: uuid("local_id")
+      .notNull()
+      .references(() => locales.id, { onDelete: "cascade" }),
+    contractId: uuid("contract_id")
+      .notNull()
+      .references(() => localContracts.id, { onDelete: "cascade" }),
+    periodo: date("periodo").notNull(),
+    monto: numeric("monto", { precision: 15, scale: 2 }).notNull().default("0"),
+    mantenimiento: numeric("mantenimiento", { precision: 15, scale: 2 }).notNull().default("0"),
+    penalidad: numeric("penalidad", { precision: 15, scale: 2 }).notNull().default("0"),
+    montoPagado: numeric("monto_pagado", { precision: 15, scale: 2 }).notNull().default("0"),
+    diasIndulgencia: integer("dias_indulgencia").notNull().default(0),
+    estado: varchar("estado", { length: 20 }).notNull().default("PENDIENTE"),
+    fechaPago: date("fecha_pago"),
+    voucherVerificadoEn: timestamp("voucher_verificado_en", { withTimezone: true }),
+    voucherVerificadoPor: varchar("voucher_verificado_por", { length: 255 }),
+    vouchers: jsonb("vouchers").notNull().default([]).$type<LocalPaymentVoucher[]>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("local_payments_contract_periodo_key").on(table.contractId, table.periodo),
+    index("local_payments_local_periodo_idx").on(table.localId, table.periodo),
+    index("local_payments_estado_periodo_idx").on(table.localId, table.estado, table.periodo),
   ],
 );
 

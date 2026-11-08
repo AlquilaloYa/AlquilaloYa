@@ -136,6 +136,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   { href: "/adendas", label: "Adendas", icon: ScrollText, section: "Adendas", permission: "contract.read", group: "contratos" },
   { href: "/locales", label: "Catálogo", icon: Building2, section: "Locales", permission: "department.read", group: "locales" },
+  { href: "/locales/cobranza", label: "Cobranza Locales", icon: Banknote, section: "Cobranza Locales", permission: "department.read", group: "locales" },
   { href: "/locales/contactos", label: "Contactos", icon: Contact, section: "Contactos de Locales", permission: "department.read", group: "locales" },
   { href: "/locales/separaciones", label: "Separación", icon: Receipt, section: "Separaciones de Locales", permission: "department.read", group: "locales" },
   { href: "/locales/contratos", label: "Contratos", icon: FileText, section: "Contratos de Locales", permission: "department.read", group: "locales" },

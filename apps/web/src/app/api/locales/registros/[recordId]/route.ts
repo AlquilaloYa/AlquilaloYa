@@ -4,6 +4,7 @@ import { Permission } from "@contract/domain/rbac";
 import {
   isLocalModule,
   parseLocalRecord,
+  validateLocalSeparationAmount,
   withoutRecordType,
 } from "@/lib/locales-records";
 import { requirePermission, requireUser } from "@/lib/session";
@@ -25,11 +26,23 @@ async function validateReferences(
       .limit(1);
     if (!contact) return "El contacto no pertenece al local seleccionado.";
   }
+  if (record.tipo === "contratos" && record.plantillaVersionId) {
+    const [templateVersion] = await dbModule.db
+      .select({ id: schema.templateVersions.id })
+      .from(schema.templateVersions)
+      .where(and(
+        eq(schema.templateVersions.id, record.plantillaVersionId),
+        eq(schema.templateVersions.publicada, true),
+      ))
+      .limit(1);
+    if (!templateVersion) return "Selecciona una versión publicada de plantilla.";
+  }
   if (record.tipo === "contratos" && record.separationId) {
     const [separation] = await dbModule.db
       .select({
         id: schema.localSeparations.id,
         contactId: schema.localSeparations.contactId,
+        estado: schema.localSeparations.estado,
       })
       .from(schema.localSeparations)
       .where(
@@ -43,10 +56,17 @@ async function validateReferences(
     if (separation.contactId !== record.contactId) {
       return "La separación seleccionada pertenece a otro contacto.";
     }
+    if (separation.estado !== "CONFIRMADA") {
+      return "Solo puedes vincular una separación confirmada a un contrato.";
+    }
   }
   if (record.tipo === "adendas") {
     const [contract] = await dbModule.db
-      .select({ id: schema.localContracts.id })
+      .select({
+        id: schema.localContracts.id,
+        fechaFin: schema.localContracts.fechaFin,
+        estado: schema.localContracts.estado,
+      })
       .from(schema.localContracts)
       .where(
         and(
@@ -56,6 +76,12 @@ async function validateReferences(
       )
       .limit(1);
     if (!contract) return "El contrato no pertenece al local seleccionado.";
+    if (!["NOTARIADO_FIRMADO", "VIGENTE"].includes(contract.estado)) {
+      return "Solo puedes crear adendas para contratos firmados y notariados.";
+    }
+    if (record.tipoAdenda === "ADENDA_EXTENSION" && record.fechaFin && record.fechaFin <= contract.fechaFin) {
+      return "La nueva fecha de término debe ser posterior al fin vigente del contrato.";
+    }
   }
   return null;
 }
@@ -88,17 +114,65 @@ export async function PATCH(
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
     const [local] = await dbModule.db
-      .select({ id: dbModule.schema.locales.id })
+      .select({
+        id: dbModule.schema.locales.id,
+        precioAlquiler: dbModule.schema.locales.precioAlquiler,
+      })
       .from(dbModule.schema.locales)
       .where(eq(dbModule.schema.locales.id, parsed.value.localId))
       .limit(1);
     if (!local) return NextResponse.json({ error: "Local no encontrado." }, { status: 404 });
+    if (parsed.value.tipo === "separaciones") {
+      const amountError = validateLocalSeparationAmount(parsed.value, local.precioAlquiler);
+      if (amountError) return NextResponse.json({ error: amountError }, { status: 400 });
+    }
     const referenceError = await validateReferences(dbModule, parsed.value);
     if (referenceError) {
       return NextResponse.json({ error: referenceError }, { status: 400 });
     }
 
     const { schema } = dbModule;
+    if (parsed.value.tipo === "separaciones") {
+      const [current] = await dbModule.db.select({
+        estado: schema.localSeparations.estado,
+        garantiaExtendida: schema.localSeparations.garantiaExtendida,
+      })
+        .from(schema.localSeparations)
+        .where(and(
+          eq(schema.localSeparations.id, params.recordId),
+          eq(schema.localSeparations.localId, parsed.value.localId),
+        )).limit(1);
+      if (!current) return NextResponse.json({ error: "Registro no encontrado en ese local." }, { status: 404 });
+      if (current.estado !== parsed.value.estado) {
+        return NextResponse.json({ error: "Usa la acción del flujo para cambiar el estado de la separación." }, { status: 409 });
+      }
+      if (current.garantiaExtendida !== parsed.value.garantiaExtendida) {
+        return NextResponse.json({ error: "Usa la acción del flujo para cambiar la garantía extendida." }, { status: 409 });
+      }
+    } else if (parsed.value.tipo === "contratos") {
+      const [current] = await dbModule.db.select({ estado: schema.localContracts.estado })
+        .from(schema.localContracts)
+        .where(and(
+          eq(schema.localContracts.id, params.recordId),
+          eq(schema.localContracts.localId, parsed.value.localId),
+        )).limit(1);
+      if (!current) return NextResponse.json({ error: "Registro no encontrado en ese local." }, { status: 404 });
+      if (current.estado !== parsed.value.estado) {
+        return NextResponse.json({ error: "Usa la acción del flujo para cambiar el estado del contrato." }, { status: 409 });
+      }
+    } else if (parsed.value.tipo === "adendas") {
+      const [current] = await dbModule.db.select({ estado: schema.localAnnexes.estado })
+        .from(schema.localAnnexes)
+        .where(and(
+          eq(schema.localAnnexes.id, params.recordId),
+          eq(schema.localAnnexes.localId, parsed.value.localId),
+        )).limit(1);
+      if (!current) return NextResponse.json({ error: "Registro no encontrado en ese local." }, { status: 404 });
+      if (current.estado !== parsed.value.estado) {
+        return NextResponse.json({ error: "Usa la acción del flujo para cambiar el estado de la adenda." }, { status: 409 });
+      }
+    }
+
     let row;
     switch (parsed.value.tipo) {
       case "contactos": {

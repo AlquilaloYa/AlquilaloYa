@@ -13,6 +13,27 @@ export function maxLocalUploadBytes(mimeType: string): number | null {
   return null;
 }
 
+export function matchesLocalFileSignature(mimeType: string, bytes: Uint8Array): boolean {
+  if (mimeType === "application/pdf") {
+    return new TextDecoder().decode(bytes.subarray(0, 1024)).includes("%PDF-");
+  }
+  if (mimeType === "image/png") {
+    return [137, 80, 78, 71, 13, 10, 26, 10].every(
+      (byte, index) => bytes[index] === byte,
+    );
+  }
+  if (mimeType === "image/jpeg") {
+    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  if (mimeType === "image/webp") {
+    return (
+      new TextDecoder().decode(bytes.subarray(0, 4)) === "RIFF" &&
+      new TextDecoder().decode(bytes.subarray(8, 12)) === "WEBP"
+    );
+  }
+  return false;
+}
+
 function optimizedName(name: string): string {
   return name.replace(/\.[^.]+$/, "") + ".webp";
 }

@@ -52,9 +52,13 @@ function mesActual(): string {
 export function PaymentVerificationDialog({
   onClose,
   onVerified,
+  localMode = false,
+  localId,
 }: {
   onClose: () => void;
   onVerified: () => void;
+  localMode?: boolean;
+  localId?: string;
 }) {
   const [month, setMonth] = useState(mesActual);
   const [responsable, setResponsable] = useState<Responsable>("miguel");
@@ -77,8 +81,10 @@ export function PaymentVerificationDialog({
     setLoading(true);
     setLoadError("");
     try {
+      const params = new URLSearchParams({ month });
+      if (localMode && localId) params.set("localId", localId);
       const response = await apiFetch(
-        `/api/payments/verification?month=${encodeURIComponent(month)}`
+        `${localMode ? "/api/locales/cobranza/verification" : "/api/payments/verification"}?${params}`,
       );
       const body: unknown = await response.json().catch(() => null);
       if (!response.ok) {
@@ -120,7 +126,7 @@ export function PaymentVerificationDialog({
     } finally {
       setLoading(false);
     }
-  }, [month]);
+  }, [localId, localMode, month]);
 
   useEffect(() => {
     let active = true;
@@ -201,17 +207,17 @@ export function PaymentVerificationDialog({
 
   const visiblePayments = useMemo(
     () =>
-      verificationAccess.scope
+      localMode || verificationAccess.scope
         ? payments
         : payments.filter((payment) => payment.responsable === responsable),
-    [payments, responsable, verificationAccess.scope]
+    [localMode, payments, responsable, verificationAccess.scope]
   );
 
   async function verificar(payment: VerificationPayment) {
     setBusyPaymentId(payment.id);
     setError("");
     try {
-      const response = await apiFetch("/api/payments/verify", {
+      const response = await apiFetch(localMode ? "/api/locales/cobranza/verify" : "/api/payments/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paymentId: payment.id }),
@@ -400,7 +406,7 @@ export function PaymentVerificationDialog({
           </label> : null}
         </header>
 
-        {step === "payments" && !verificationAccess.scope ? <nav className="flex gap-2 border-b border-outline-variant/50 px-4 py-3" aria-label="Filtrar por responsable">
+        {step === "payments" && !localMode && !verificationAccess.scope ? <nav className="flex gap-2 border-b border-outline-variant/50 px-4 py-3" aria-label="Filtrar por responsable">
           {RESPONSABLES.map((item) => {
             const count = payments.filter(
               (payment) => payment.responsable === item.key
@@ -430,7 +436,7 @@ export function PaymentVerificationDialog({
         </nav> : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
-          {step === "payments" && verificationAccess.scope ? (
+          {step === "payments" && !localMode && verificationAccess.scope ? (
             <p className="mb-3 text-sm text-on-surface-variant">
               {verificationAccess.scope === "angamos"
                 ? "Pagos de Angamos. Solo puedes verificar contratos ANG170-."
