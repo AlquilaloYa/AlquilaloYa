@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { LOCAL_CODES, localSiteForCode } from "@contract/domain/locales";
+import {
+  LOCAL_CODES,
+  localNumberForCode,
+  localSiteForCode,
+} from "@contract/domain/locales";
 import { parseLocal } from "./locales-validation";
 
 describe("locales", () => {
-  it("maps the six local codes to their sites", () => {
-    expect(LOCAL_CODES).toHaveLength(6);
+  it("maps the eight local codes to their sites", () => {
+    expect(LOCAL_CODES).toHaveLength(8);
     expect(LOCAL_CODES.filter((item) => item.sede === "Benavides")).toHaveLength(3);
-    expect(LOCAL_CODES.filter((item) => item.sede === "Angamos")).toHaveLength(3);
+    expect(LOCAL_CODES.filter((item) => item.sede === "Angamos")).toHaveLength(5);
     expect(localSiteForCode("BEN2195-A2")).toBe("Benavides");
     expect(localSiteForCode("ANG170-A3")).toBe("Angamos");
+    expect(localSiteForCode("ANG170-A5")).toBe("Angamos");
+    expect(localNumberForCode("BEN2195-A2")).toBe("A2");
+    expect(localNumberForCode("ANG170-A5")).toBe("A5");
   });
 
   it("normalizes the local input and derives its site from the code", () => {
@@ -26,6 +33,7 @@ describe("locales", () => {
     ).toEqual({
       value: {
         codigo: "BEN2195-A1",
+        numero: "A1",
         sede: "Benavides",
         nombre: "Tienda 1",
         areaM2: "75.50",

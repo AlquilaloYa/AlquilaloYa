@@ -4,13 +4,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { apiFetch } from "@/lib/api";
-import { compressLocalUpload } from "@/lib/locales-files";
+import {
+  compressLocalUpload,
+  maxLocalUploadBytes,
+  MAX_LOCAL_SOURCE_UPLOAD_BYTES,
+} from "@/lib/locales-files";
 import { LOCAL_CODES } from "@contract/domain/locales";
 import { Pencil, Plus, RefreshCw, Upload, X } from "lucide-react";
 
 type LocalRecord = {
   id: string;
   codigo: string;
+  numero: string;
   sede: string;
   nombre: string;
   areaM2: string;
@@ -30,7 +35,7 @@ type LocalFile = {
   url: string;
 };
 
-type LocalForm = Omit<LocalRecord, "id" | "sede">;
+type LocalForm = Omit<LocalRecord, "id" | "numero" | "sede">;
 
 const EMPTY_FORM: LocalForm = {
   codigo: "",
@@ -43,7 +48,6 @@ const EMPTY_FORM: LocalForm = {
   pagoLuzPorcentaje: "0",
 };
 
-const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const ACCEPTED_TYPES = new Set([
   "application/pdf",
   "image/jpeg",
@@ -101,7 +105,7 @@ export default function LocalesPage() {
   );
   const availableCodes = LOCAL_CODES.filter((item) => !usedCodes.has(item.codigo));
   const filtered = locales.filter((local) =>
-    `${local.codigo} ${local.sede} ${local.nombre}`.toLowerCase().includes(query.toLowerCase()),
+    `${local.codigo} ${local.numero} ${local.sede} ${local.nombre}`.toLowerCase().includes(query.toLowerCase()),
   );
 
   async function loadFiles(localId: string) {
@@ -157,7 +161,7 @@ export default function LocalesPage() {
       setError(`${invalid.name}: solo se admiten PDF, JPG, PNG y WebP.`);
       return;
     }
-    const oversized = chosen.find((file) => file.size > 25 * 1024 * 1024);
+    const oversized = chosen.find((file) => file.size > MAX_LOCAL_SOURCE_UPLOAD_BYTES);
     if (oversized) {
       setError(`${oversized.name}: el archivo original no puede superar 25 MB.`);
       return;
@@ -199,8 +203,10 @@ export default function LocalesPage() {
       for (const original of pendingFiles) {
         try {
           const compressed = await compressLocalUpload(original);
-          if (compressed.size > MAX_UPLOAD_BYTES) {
-            throw new Error("supera el límite de 8 MB después de comprimir");
+          const maxBytes = maxLocalUploadBytes(compressed.type);
+          if (maxBytes === null || compressed.size > maxBytes) {
+            const maxMegabytes = maxBytes ? maxBytes / 1024 / 1024 : 0;
+            throw new Error(`supera el límite de ${maxMegabytes} MB después de optimizar`);
           }
           const data = new FormData();
           data.append("file", compressed);
@@ -281,7 +287,7 @@ export default function LocalesPage() {
             placeholder="Buscar por código, sede o nombre…"
             className="h-10 w-full max-w-md rounded-md border bg-background px-3 text-sm"
           />
-          <span className="text-sm text-muted-foreground">{locales.length} de 6 locales</span>
+          <span className="text-sm text-muted-foreground">{locales.length} de 8 locales</span>
         </div>
 
         {loading ? (
@@ -293,7 +299,7 @@ export default function LocalesPage() {
             </p>
             {locales.length === 0 ? (
               <p className="mt-1 text-sm text-muted-foreground">
-                Registra los locales con su código BEN2195-A1–A3 o ANG170-A1–A3.
+                Los códigos disponibles son BEN2195-A1–A3 y ANG170-A1–A5.
               </p>
             ) : null}
           </div>
@@ -302,7 +308,7 @@ export default function LocalesPage() {
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead className="border-b bg-muted/40">
                 <tr>
-                  {["Código", "Sede", "Nombre", "Área", "Alquiler", "Garantía", "Mantenimiento", "Pago luz"].map((heading) => (
+                  {["Código", "Número", "Sede", "Nombre", "Área", "Alquiler", "Garantía", "Mantenimiento", "Pago luz"].map((heading) => (
                     <th key={heading} className="whitespace-nowrap px-4 py-3 font-medium">{heading}</th>
                   ))}
                   <th className="px-4 py-3" />
@@ -312,6 +318,7 @@ export default function LocalesPage() {
                 {filtered.map((local) => (
                   <tr key={local.id} className="border-b last:border-0">
                     <td className="whitespace-nowrap px-4 py-3 font-medium">{local.codigo}</td>
+                    <td className="px-4 py-3">{local.numero}</td>
                     <td className="px-4 py-3">{local.sede}</td>
                     <td className="px-4 py-3">{local.nombre}</td>
                     <td className="px-4 py-3">{local.areaM2} m²</td>
@@ -410,7 +417,7 @@ export default function LocalesPage() {
               <div>
                 <h3 className="font-medium">Fotos y documentos</h3>
                 <p className="text-xs text-muted-foreground">
-                  JPG, PNG y WebP se convierten a WebP de hasta 1600 px y calidad 75 si reduce el tamaño. Los PDF se optimizan sin rasterizar; si no se pueden reducir de forma segura, se conserva el original. Máximo 8 MB por archivo comprimido.
+                  JPG, PNG y WebP se optimizan a WebP de hasta 1200 px y calidad 65 si reduce el tamaño. Las imágenes admiten hasta 12 MB y los PDF hasta 8 MB por archivo; los originales pueden pesar hasta 25 MB.
                 </p>
               </div>
               <label className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/40">

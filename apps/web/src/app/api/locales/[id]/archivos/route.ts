@@ -4,10 +4,10 @@ import { asc, eq } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { requirePermission, requireUser } from "@/lib/session";
 import { deleteObject, isStorageConfigured, uploadObject } from "@/lib/storage";
+import { maxLocalUploadBytes } from "@/lib/locales-files";
 
 export const dynamic = "force-dynamic";
 const BUCKET = "local-assets";
-const MAX_BYTES = 8 * 1024 * 1024;
 const MIME_TYPES = new Set([
   "application/pdf",
   "image/jpeg",
@@ -125,9 +125,11 @@ export async function POST(
         { status: 400 },
       );
     }
-    if (file.size > MAX_BYTES) {
+    const maxBytes = maxLocalUploadBytes(file.type);
+    if (maxBytes === null || file.size > maxBytes) {
+      const maxMegabytes = maxBytes ? maxBytes / 1024 / 1024 : 0;
       return NextResponse.json(
-        { error: "El archivo comprimido debe pesar como máximo 8 MB." },
+        { error: `El archivo optimizado debe pesar como máximo ${maxMegabytes} MB.` },
         { status: 413 },
       );
     }

@@ -123,6 +123,26 @@ Características del núcleo contractual:
 - Snapshot inmutable al emitir; PDF generado y almacenado automáticamente.
 - Renovaciones `{código}-R{n}` heredando condiciones.
 
+### Sistema independiente de Locales comerciales
+- Menú `/locales`: catálogo fijo de `BEN2195-A1`–`BEN2195-A3` y
+  `ANG170-A1`–`ANG170-A5`.
+- La tabla `locales` guarda el identificador completo en `codigo` y el número
+  corto (`A1`–`A5`) en `numero`; ese número no modifica `departments`.
+- Secciones por local: `/locales/contactos`, `/locales/separaciones`,
+  `/locales/contratos`, `/locales/adendas` y `/locales/servicios`.
+- Estas secciones usan tablas y relaciones propias (`local_contacts`,
+  `local_separations`, `local_contracts`, `local_annexes`, `local_services`),
+  independientes de `departments`, `contacts`, `separations` y `contracts`.
+- Las listas filtran por local y paginan los resultados (50 filas por página;
+  API limitada a 100). Fotos y documentos del catálogo siguen en almacenamiento
+  privado; las imágenes se convierten a WebP de hasta 1200 px y calidad 65 si
+  eso reduce su tamaño. Se admiten cargas optimizadas de hasta 12 MB por imagen
+  y 8 MB por PDF (originales de hasta 25 MB).
+- Migración: `supabase/migrations/20261107170000_locales_operational_modules.sql`.
+  El número corto se agrega en `supabase/migrations/20261108010000_locales_numero.sql`;
+  los límites de archivos se actualizan en
+  `supabase/migrations/20261108020000_locales_image_limit_12mb.sql`.
+
 ### 3.7 Clientes
 - `/clientes`: listado y alta. API: `GET/POST /api/clientes`, `GET/POST /api/clients`.
   Tabla: `clients`.
@@ -274,6 +294,7 @@ Fuente: `packages/db/src/schema/*` (Drizzle).
 | Identidad / RBAC | `users`, `permissions`, `role_permissions`, `user_permissions`, `permission_requests` |
 | Auditoría / actividad | `activity_events`, `audit_events` |
 | Clientes y departamentos | `clients`, `departments` |
+| Locales comerciales | `locales`, `local_files`, `local_contacts`, `local_separations`, `local_contracts`, `local_annexes`, `local_services` |
 | Contratos | `contracts`, `contract_snapshots`, `contract_clauses`, `contract_annexes` |
 | Plantillas / cláusulas / anexos | `templates`, `template_versions`, `template_departments`, `clauses`, `clause_versions`, `annexes`, `annex_versions` |
 | Documentos | `documents` |

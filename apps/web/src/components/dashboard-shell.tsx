@@ -75,7 +75,7 @@ interface NavItem {
   phase?: string;
   permission?: Permission;
   external?: boolean;
-  group?: "contratos" | "marketing" | "rrhh" | "operatividad" | "contabilidad" | "sedes";
+  group?: "contratos" | "locales" | "marketing" | "rrhh" | "operatividad" | "contabilidad" | "sedes";
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -135,6 +135,12 @@ const NAV_ITEMS: NavItem[] = [
     group: "contratos",
   },
   { href: "/adendas", label: "Adendas", icon: ScrollText, section: "Adendas", permission: "contract.read", group: "contratos" },
+  { href: "/locales", label: "Catálogo", icon: Building2, section: "Locales", permission: "department.read", group: "locales" },
+  { href: "/locales/contactos", label: "Contactos", icon: Contact, section: "Contactos de Locales", permission: "department.read", group: "locales" },
+  { href: "/locales/separaciones", label: "Separación", icon: Receipt, section: "Separaciones de Locales", permission: "department.read", group: "locales" },
+  { href: "/locales/contratos", label: "Contratos", icon: FileText, section: "Contratos de Locales", permission: "department.read", group: "locales" },
+  { href: "/locales/adendas", label: "Adendas", icon: ScrollText, section: "Adendas de Locales", permission: "department.read", group: "locales" },
+  { href: "/locales/servicios", label: "Servicios", icon: Zap, section: "Servicios de Locales", permission: "department.read", group: "locales" },
   { href: "/servicios-extras", label: "Servicios Extras", icon: Zap, section: "Servicios Extras", permission: "contract.read", group: "contratos" },
   { href: "/separaciones", label: "Separación", icon: Receipt, section: "Separación", permission: "contract.read", group: "contratos" },
   { href: "/plantillas", label: "Plantillas", icon: FilePlus2, section: "Plantillas", permission: "template.read", group: "contratos" },
@@ -142,7 +148,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/scoring", label: "Scoring de inquilinos", icon: Gauge, section: "Scoring", permission: "scoring.read" },
   { href: "/pagos", label: "Cobranza", icon: Banknote, section: "Cobranza", permission: "contract.read" },
   { href: "/analiticas", label: "Analíticas", icon: BarChart3, section: "Analíticas", permission: "contract.read" },
-  { href: "/locales", label: "Locales", icon: Building2, section: "Locales", permission: "department.read" },
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "hr.read", group: "rrhh" },
   { href: "/cronograma-asistencia", label: "Registro de asistencia", icon: AlarmClock, section: "Recursos Humanos", permission: "attendance.read", group: "rrhh" },
@@ -222,12 +227,14 @@ const CONFIGURATION_ITEMS: NavItem[] = [
 const ROLE_PAGES: Partial<Record<UserRole, ReadonlySet<string>>> = {
   RRHH: new Set([
     "/dashboard", "/directorio", "/separaciones", "/contactos", "/departamentos",
+    "/locales",
     "/contratos", "/contrato-final", "/adendas", "/servicios-extras", "/plantillas", "/clientes",
     "/pagos", "/workflow", "/checklist", "/work-123", "/agenda", "/rrhh",
     "/operaciones", "/pedidos-clientes", "/solicitudes-permiso",
   ]),
   ASISTENTE_ADMINISTRATIVO: new Set([
     "/dashboard", "/directorio", "/separaciones", "/contactos", "/departamentos",
+    "/locales",
     "/contratos", "/contrato-final", "/adendas", "/servicios-extras", "/plantillas", "/clientes",
     "/pagos", "/workflow", "/checklist", "/work-123", "/agenda", "/rrhh",
     "/operaciones", "/pedidos-clientes", "/google/gmail", "/google/drive", "/google/sheets",
@@ -371,7 +378,7 @@ function NavGroup({
   onNavigate?: (() => void) | undefined;
 }) {
   const pathname = usePathname();
-  const childActive = items.some((item) => pathname === item.href);
+  const childActive = items.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
   if (items.length === 0) return null;
   return (
     <div>
@@ -410,6 +417,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [contractsOpen, setContractsOpen] = useState(false);
+  const [localesOpen, setLocalesOpen] = useState(false);
   const [marketingOpen, setMarketingOpen] = useState(false);
   const [rrhhOpen, setRrhhOpen] = useState(false);
   const [sedesOpen, setSedesOpen] = useState(false);
@@ -421,6 +429,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       router.replace("/login");
     }
   }, [loading, user, sessionError, router]);
+
+  useEffect(() => {
+    if (pathname === "/locales" || pathname.startsWith("/locales/")) {
+      setLocalesOpen(true);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     if (
@@ -544,6 +558,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 icon: Briefcase,
                 open: contractsOpen,
                 onToggle: () => setContractsOpen((open) => !open),
+              },
+              {
+                key: "locales",
+                label: "Locales",
+                icon: Building2,
+                open: localesOpen,
+                onToggle: () => setLocalesOpen((open) => !open),
               },
               {
                 key: "operatividad",

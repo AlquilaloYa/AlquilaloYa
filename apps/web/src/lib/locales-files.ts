@@ -1,5 +1,17 @@
-const MAX_IMAGE_SIDE = 1600;
-const IMAGE_QUALITY = 0.75;
+export const MAX_LOCAL_IMAGE_UPLOAD_BYTES = 12 * 1024 * 1024;
+export const MAX_LOCAL_PDF_UPLOAD_BYTES = 8 * 1024 * 1024;
+export const MAX_LOCAL_SOURCE_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+const MAX_IMAGE_SIDE = 1200;
+const IMAGE_QUALITY = 0.65;
+
+export function maxLocalUploadBytes(mimeType: string): number | null {
+  if (mimeType === "application/pdf") return MAX_LOCAL_PDF_UPLOAD_BYTES;
+  if (["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
+    return MAX_LOCAL_IMAGE_UPLOAD_BYTES;
+  }
+  return null;
+}
 
 function optimizedName(name: string): string {
   return name.replace(/\.[^.]+$/, "") + ".webp";

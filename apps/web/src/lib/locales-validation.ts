@@ -1,4 +1,4 @@
-import { localSiteForCode } from "@contract/domain/locales";
+import { localNumberForCode, localSiteForCode } from "@contract/domain/locales";
 
 export type LocalInput = {
   codigo?: unknown;
@@ -18,7 +18,8 @@ export function parseLocal(input: LocalInput) {
   const codigo = typeof input.codigo === "string" ? input.codigo.trim() : "";
   const nombre = typeof input.nombre === "string" ? input.nombre.trim() : "";
   const sede = localSiteForCode(codigo);
-  if (!sede) return { error: "Selecciona un código válido de local." } as const;
+  const numero = localNumberForCode(codigo);
+  if (!sede || !numero) return { error: "Selecciona un código válido de local." } as const;
   if (nombre.length < 2 || nombre.length > 255) {
     return { error: "El nombre debe tener entre 2 y 255 caracteres." } as const;
   }
@@ -67,6 +68,7 @@ export function parseLocal(input: LocalInput) {
   return {
     value: {
       codigo,
+      numero,
       sede,
       nombre,
       areaM2: numbers.areaM2,
