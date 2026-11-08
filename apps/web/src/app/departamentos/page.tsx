@@ -294,6 +294,9 @@ export default function DepartamentosPage() {
       const contactoB = sepB ? contactoPorId.get(sepB.contactoId) : null;
       const estadoA = estadoDepartamento(a);
       const estadoB = estadoDepartamento(b);
+      const prioridadSeparacion =
+        Number(estadoB === "SEPARADO") - Number(estadoA === "SEPARADO");
+      if (prioridadSeparacion !== 0) return prioridadSeparacion;
       const tiempoA = sepA ? new Date(getFechaLimiteActiva(sepA)).getTime() : 0;
       const tiempoB = sepB ? new Date(getFechaLimiteActiva(sepB)).getTime() : 0;
       const garantiaA = sepA ? (sepA.garantiaExtendida ? "Activa" : "No activa") : "—";

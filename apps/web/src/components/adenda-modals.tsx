@@ -183,7 +183,7 @@ export function EditAdendaModal({
   const [titulo, setTitulo] = useState(tituloInicial);
   const [contenido] = useState(extraerContenido(adenda.anexoContenido, tituloInicial));
   const [numeroAdenda, setNumeroAdenda] = useState(String(dc.numeroAdenda ?? "1"));
-  const [fechaInicioAdenda, setFechaInicioAdenda] = useState(
+  const [fechaInicioAdenda] = useState(
     String(dc.fechaInicioAdenda ?? "").slice(0, 10)
   );
   const [fechaFinAdenda, setFechaFinAdenda] = useState(
@@ -484,8 +484,11 @@ export function EditAdendaModal({
                   type="date"
                   className="h-9 w-full rounded border border-outline-variant bg-transparent px-2 font-body-md text-on-surface"
                   value={fechaInicioAdenda}
-                  onChange={(e) => setFechaInicioAdenda(e.target.value)}
+                  readOnly
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  La fecha de inicio se determina por el fin del contrato o de la adenda anterior.
+                </p>
               </div>
               <div>
                 <label className="mb-1 block font-label-md text-on-surface-variant">Fin del plazo</label>
@@ -551,7 +554,7 @@ export function AdendaModal({
   const [titulo, setTitulo] = useState("ADENDA");
   const [contenido, setContenido] = useState("");
   const [numeroAdenda, setNumeroAdenda] = useState("1");
-  const [fechaInicioAdenda, setFechaInicioAdenda] = useState("");
+  const [fechaInicioAdenda] = useState((fechaFin ?? "").slice(0, 10));
   const [fechaFinAdenda, setFechaFinAdenda] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -636,9 +639,11 @@ export function AdendaModal({
               type="date"
               className="h-10 w-full rounded border border-outline-variant bg-transparent px-2 font-body-md text-on-surface"
               value={fechaInicioAdenda}
-              onChange={(e) => setFechaInicioAdenda(e.target.value)}
+              readOnly
             />
-            <p className="mt-1 text-xs text-muted-foreground">Día/Mes/Año inicio del nuevo plazo.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Se toma del fin del contrato o de la adenda anterior.
+            </p>
           </div>
           <div>
             <label className="mb-1 block font-label-md text-on-surface-variant">Fecha de fin de la adenda</label>

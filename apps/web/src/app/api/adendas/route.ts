@@ -325,15 +325,28 @@ export async function POST(request: Request) {
 
     const fechaInicioAdenda = esExtension
       ? undefined
-      : (body.fechaInicioAdenda ?? "").slice(0, 10);
+      : (body.fechaInicioAdenda ?? fechaFinActual).slice(0, 10);
     const fechaFinAdenda = esExtension
       ? undefined
       : (body.fechaFinAdenda ?? "").slice(0, 10);
 
+    if (
+      !esExtension &&
+      fechaInicioAdenda &&
+      fechaInicioAdenda !== fechaFinActual
+    ) {
+      return NextResponse.json(
+        {
+          error: `La fecha de inicio debe coincidir con el fin del contrato o de la adenda anterior (${fechaFinActual}).`,
+        },
+        { status: 400 }
+      );
+    }
+
     // La adenda con plazo es también una extensión: actualiza la fecha de fin
     // del contrato y genera las cuotas de los meses nuevos, con lo que el
     // departamento y la cobranza pasan a ocupado hasta el fin de la adenda.
-    const esAdendaConPlazo = !esExtension && Boolean(fechaInicioAdenda && fechaFinAdenda);
+    const esAdendaConPlazo = !esExtension && Boolean(fechaFinAdenda);
     const extiende = esExtension || esAdendaConPlazo;
 
     if (esExtension) {
@@ -636,9 +649,21 @@ export async function PATCH(request: Request) {
     const titulo = (body.titulo ?? "").trim() || String(contratoActual.titulo ?? "ADENDA");
     const numeroAdenda = (body.numeroAdenda ?? "").trim() || String(contratoActual.numeroAdenda ?? "1");
     const contenido = (body.contenido ?? "").trim();
-    const fechaInicioAdenda = body.fechaInicioAdenda
-      ? body.fechaInicioAdenda.slice(0, 10)
-      : String(contratoActual.fechaInicioAdenda ?? "").slice(0, 10);
+    const fechaInicioAdendaOriginal = String(contratoActual.fechaInicioAdenda ?? "").slice(0, 10);
+    const fechaInicioAdendaSolicitada = body.fechaInicioAdenda?.slice(0, 10);
+    if (
+      !esExtension &&
+      fechaInicioAdendaOriginal &&
+      fechaInicioAdendaSolicitada &&
+      fechaInicioAdendaSolicitada !== fechaInicioAdendaOriginal
+    ) {
+      return NextResponse.json(
+        { error: "La fecha de inicio de una adenda existente no se puede cambiar." },
+        { status: 400 }
+      );
+    }
+    const fechaInicioAdenda =
+      fechaInicioAdendaOriginal || fechaInicioAdendaSolicitada || "";
     const fechaFinAdendaActual = esExtension
       ? String(contratoActual.fechaFin ?? "").slice(0, 10)
       : String(contratoActual.fechaFinAdenda ?? "").slice(0, 10);
