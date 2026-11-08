@@ -165,6 +165,7 @@ const NEXT_TRANSITIONS: Record<
     { action: "cancelar", label: "Cancelar", allowed: true },
   ],
   PENDIENTE_EMISION: [
+    { action: "volverABorrador", label: "Devolver a borrador", allowed: true },
     { action: "emit", label: "Emitir contrato", allowed: true },
     { action: "cancelar", label: "Cancelar", allowed: true },
   ],

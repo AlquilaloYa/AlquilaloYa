@@ -302,6 +302,35 @@ describe("ContractService", () => {
     expect(events).toContain("CONTRACT_EMISSION_REQUESTED");
   });
 
+  it("returnToDraft: permite corregir un contrato pendiente de emisión", async () => {
+    const created = await new ContractService(
+      makeRepo().repo,
+      makeSnapshotPort()
+    ).createContract(makeInput());
+    const { repo } = makeRepo(created);
+    const { events, sink } = collectEvents();
+    const service = new ContractService(repo, makeSnapshotPort(), sink);
+    await service.requestEmission(created.id);
+    await expect(
+      service.updateDraft(created.id, { montoCanonMensual: "999.00" })
+    ).rejects.toThrow(/BORRADOR/);
+
+    const updated = await service.returnToDraft(created.id);
+
+    expect(updated.estado).toBe(ContractStatus.BORRADOR);
+    await expect(
+      service.updateDraft(created.id, { montoCanonMensual: "999.00" })
+    ).resolves.toMatchObject({ montoCanonMensual: "999.00" });
+    expect(events).toContain("CONTRACT_UPDATED");
+  });
+
+  it("returnToDraft: rechaza contratos emitidos y estados no compatibles", async () => {
+    const { repo } = makeRepo(makeDirectContract(ContractStatus.FIRMADO, "snap-1") as Contract);
+    const service = new ContractService(repo, makeSnapshotPort());
+
+    await expect(service.returnToDraft("contract-firmado")).rejects.toThrow();
+  });
+
   it("emitContract: crea snapshot y pasa a EMITIDO registrando SNAPSHOT_CREATED y CONTRACT_EMITTED", async () => {
     const created = await new ContractService(
       makeRepo().repo,

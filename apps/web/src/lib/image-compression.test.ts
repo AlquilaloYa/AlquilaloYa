@@ -68,6 +68,23 @@ describe("compressImageFile", () => {
     expect(result.type).toBe("image/jpeg");
   });
 
+  it("compresses contact document images to at most 1 MB", async () => {
+    const { canvas } = stubImageEncoder(
+      new Blob(["small"], { type: "image/jpeg" }),
+    );
+    const original = new File(["a".repeat(2 * 1024 * 1024)], "dni.png", {
+      type: "image/png",
+    });
+
+    const result = await compressImageFile(original, "contactDocument");
+
+    expect(result.type).toBe("image/jpeg");
+    expect(result.name).toBe("dni.jpg");
+    expect(result.size).toBeLessThanOrEqual(1024 * 1024);
+    expect(canvas.width).toBe(2000);
+    expect(canvas.height).toBe(1000);
+  });
+
   it("leaves animated formats unchanged", async () => {
     const createImageBitmapMock = vi.fn();
     vi.stubGlobal("createImageBitmap", createImageBitmapMock);

@@ -263,6 +263,28 @@ export class ContractService {
     return updated;
   }
 
+  /** Devuelve un contrato pendiente de emisión a borrador para corregir sus datos. */
+  async returnToDraft(id: UUID): Promise<Contract> {
+    const current = await this.repo.findById(id);
+    if (!current) {
+      throw new Error("Contrato no encontrado");
+    }
+    if (current.snapshotId) {
+      throw new Error("Un contrato emitido no puede volver a borrador");
+    }
+    ContractStateMachine.assertTransition(current.estado, StatusConst.BORRADOR);
+    const updated = await this.repo.updateEstado(id, StatusConst.BORRADOR);
+    await this.emit(
+      EventName.CONTRACT_UPDATED,
+      id,
+      current.estado,
+      StatusConst.BORRADOR,
+      null,
+      { accion: "devolver_a_borrador" }
+    );
+    return updated;
+  }
+
   /** Emitir contrato: crea snapshot inmutable, cláusulas (separación/mueblería) y anexo de cronograma. Pasa a EMITIDO. */
   async emitContract(contract: ContractWithRelations): Promise<Contract> {
     ContractStateMachine.assertTransition(contract.estado, StatusConst.EMITIDO);

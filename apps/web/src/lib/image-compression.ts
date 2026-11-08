@@ -1,4 +1,4 @@
-export type ImageCompressionProfile = "photo" | "voucher";
+export type ImageCompressionProfile = "photo" | "voucher" | "contactDocument";
 
 export const MAX_SOURCE_IMAGE_BYTES = 30 * 1024 * 1024;
 
@@ -13,6 +13,12 @@ const profiles = {
     maxDimension: 2400,
     maxOutputBytes: 2.5 * 1024 * 1024,
     quality: 0.9,
+    type: "image/jpeg",
+  },
+  contactDocument: {
+    maxDimension: 2000,
+    maxOutputBytes: 1024 * 1024,
+    quality: 0.86,
     type: "image/jpeg",
   },
 } as const;
@@ -121,8 +127,11 @@ export async function compressImageFile(
       (file.type === "image/png" && hasPngAnimation(header)) ||
       (file.type === "image/webp" && hasWebpAnimation(header))
     ) {
-      if (profileName === "voucher" && file.size > profile.maxOutputBytes) {
-        throw new Error(`El formato animado de "${file.name}" no se puede optimizar como voucher.`);
+      if (
+        profileName !== "photo" &&
+        file.size > profile.maxOutputBytes
+      ) {
+        throw new Error(`El formato animado de "${file.name}" no se puede reducir lo suficiente.`);
       }
       return file;
     }

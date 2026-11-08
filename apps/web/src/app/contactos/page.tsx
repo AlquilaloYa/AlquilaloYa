@@ -13,8 +13,10 @@ import { PersonType } from "@contract/domain/client";
 import { Plus, FileText, X, Check, Upload, Trash2, ShieldAlert } from "lucide-react";
 import {
   type ContactSeed as ContactView,
+  type ContactoResumen,
   ClienteProblematicoError,
-  obtenerContactos,
+  obtenerContactoPorId,
+  obtenerContactosResumen,
   crearContacto,
   actualizarContacto,
   eliminarContacto,
@@ -25,8 +27,41 @@ import type { ArchivoAdjunto } from "@/lib/contactos-seed";
 import { MASCOTAS, MASCOTAS_TOTAL, type GrupoChecklist } from "@/lib/catalogos";
 import { PAISES_CODIGO } from "@/lib/paises-codigo";
 import { useAuth } from "@/lib/auth-context";
+import {
+  compressImageFile,
+  fileToDataUrl,
+} from "@/lib/image-compression";
+import {
+  getAttachmentBytes,
+  MAX_CONTACT_ATTACHMENTS_BYTES,
+  MAX_CONTACT_IMAGE_BYTES,
+  MAX_CONTACT_SOURCE_IMAGE_BYTES,
+  validateContactAttachments,
+} from "@/lib/contact-attachments";
 
 const EMERGENCIA_VACIO = { nombre: "", parentesco: "", telefono: "" };
+type ContactListItem = ContactView &
+  Partial<
+    Pick<
+      ContactoResumen,
+      "copiaDniCount" | "copiaBoletasCount" | "copiaAntecedentesCount"
+    >
+  >;
+
+function resumirContacto(contacto: ContactView): ContactListItem {
+  const {
+    copiaDni = [],
+    copiaBoletas = [],
+    copiaAntecedentes = [],
+    ...datos
+  } = contacto;
+  return {
+    ...datos,
+    copiaDniCount: copiaDni.length,
+    copiaBoletasCount: copiaBoletas.length,
+    copiaAntecedentesCount: copiaAntecedentes.length,
+  };
+}
 
 function normalizarTelefono(valor: string, codigoPais: string = "51"): string {
   let d = valor.replace(/[^0-9]/g, "");
@@ -629,7 +664,7 @@ function VistaDocs(props: {
 export default function ContactosPage() {
   const { user } = useAuth();
   const puedeEliminar = user !== null && user.role !== "ASISTENTE_ADMINISTRATIVO";
-  const [contactos, setContactos] = useState<ContactView[]>([]);
+  const [contactos, setContactos] = useState<ContactListItem[]>([]);
   const [form, setForm] = useState<ContactView>({
     id: "",
     nombre: "",
@@ -668,6 +703,7 @@ export default function ContactosPage() {
   >("inactivo");
   const [pdfMensaje, setPdfMensaje] = useState<string | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
+  const [procesandoAdjuntos, setProcesandoAdjuntos] = useState(false);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [porEliminar, setPorEliminar] = useState<ContactView | null>(null);
   const [alertaListaNegra, setAlertaListaNegra] = useState<{
@@ -781,7 +817,13 @@ export default function ContactosPage() {
   useEffect(() => {
     void (async () => {
       await migrarDatosLocales();
-      setContactos(await obtenerContactos());
+      const resumenes = await obtenerContactosResumen();
+      setContactos(
+        resumenes.map((contacto) => ({
+          ...contacto,
+          contactoEmergencia: contacto.contactoEmergencia ?? null,
+        })),
+      );
     })();
   }, []);
 
@@ -804,6 +846,12 @@ export default function ContactosPage() {
     if (form.telefono.trim() && normalizarTelefono(form.telefono, form.codigoPais).length < 7) {
       return "El teléfono no es válido.";
     }
+    const errorAdjuntos = validateContactAttachments([
+      ...(form.copiaDni ?? []),
+      ...(form.copiaBoletas ?? []),
+      ...(form.copiaAntecedentes ?? []),
+    ]);
+    if (errorAdjuntos) return errorAdjuntos;
     if ((form.copiaDni ?? []).length === 0) {
       return "Debes adjuntar la copia de DNI.";
     }
@@ -820,6 +868,10 @@ export default function ContactosPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (procesandoAdjuntos) {
+      setError("Espera a que termine el procesamiento de los archivos.");
+      return;
+    }
     const problema = validate();
     if (problema) {
       setError(problema);
@@ -854,13 +906,13 @@ export default function ContactosPage() {
       if (form.id) {
         const guardado = await actualizarContacto(nuevo);
         setContactos((prev) => [
-          guardado,
+          resumirContacto(guardado),
           ...prev.filter((c) => c.id !== guardado.id),
         ]);
         setEditandoId(null);
       } else {
         const guardado = await crearContacto(nuevo);
-        setContactos((prev) => [guardado, ...prev]);
+        setContactos((prev) => [resumirContacto(guardado), ...prev]);
       }
     } catch (err) {
       if (err instanceof ClienteProblematicoError) {
@@ -890,40 +942,101 @@ export default function ContactosPage() {
     });
   }
 
-  function agregarArchivos(
+  async function agregarArchivos(
     campo: "copiaDni" | "copiaBoletas" | "copiaAntecedentes",
     files: FileList | null
   ) {
-      if (!files || files.length === 0) {
-        setError("No se seleccionaron archivos.");
-        return;
-      }
+    if (!files || files.length === 0) {
+      setError("No se seleccionaron archivos.");
+      return;
+    }
     const admitidos = Array.from(files).filter(esFormatoAdmitido);
     if (admitidos.length === 0) {
       setError("Solo se permiten archivos PDF, JPG o PNG.");
       return;
     }
-    if (admitidos.length < files.length) {
-      setError(
-        "Algunos archivos se omitieron: solo se permiten PDF, JPG o PNG."
-      );
-    }
+    const errores: string[] =
+      admitidos.length < files.length
+        ? ["Algunos archivos se omitieron: solo se permiten archivos PDF, JPG o PNG."]
+        : [];
+    setProcesandoAdjuntos(true);
+    setError(null);
     const nuevos: ArchivoAdjunto[] = [];
-    admitidos.forEach((f) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        nuevos.push({
+    let bytesRestantes =
+      MAX_CONTACT_ATTACHMENTS_BYTES -
+      [
+        ...(form.copiaDni ?? []),
+        ...(form.copiaBoletas ?? []),
+        ...(form.copiaAntecedentes ?? []),
+      ].reduce((total, archivo) => total + (getAttachmentBytes(archivo.dataUrl) ?? 0), 0);
+
+    try {
+      for (const original of admitidos) {
+        try {
+          const extension = original.name.split(".").pop()?.toLowerCase();
+          const tipo =
+            original.type === "application/pdf" ||
+            original.type === "image/png" ||
+            original.type === "image/jpeg"
+              ? original.type
+              : extension === "pdf"
+                ? "application/pdf"
+                : extension === "png"
+                  ? "image/png"
+                  : "image/jpeg";
+          let archivo =
+            original.type === tipo
+              ? original
+              : new File([original], original.name, {
+                  type: tipo,
+                  lastModified: original.lastModified,
+                });
+
+          if (archivo.type.startsWith("image/")) {
+            if (archivo.size > MAX_CONTACT_SOURCE_IMAGE_BYTES) {
+              throw new Error(`"${archivo.name}" supera el límite de 10 MB antes de optimizar.`);
+            }
+            archivo = await compressImageFile(archivo, "contactDocument");
+            if (archivo.size > MAX_CONTACT_IMAGE_BYTES) {
+              throw new Error(`No se pudo reducir "${archivo.name}" a 1 MB.`);
+            }
+          }
+
+          if (archivo.size > bytesRestantes) {
+            throw new Error(
+              `"${archivo.name}" supera el espacio disponible. El límite total de archivos por contacto es 3 MB.`,
+            );
+          }
+          const dataUrl = await fileToDataUrl(archivo);
+          const bytes = getAttachmentBytes(dataUrl);
+          if (bytes === null || bytes > bytesRestantes) {
+            throw new Error(
+              `"${archivo.name}" supera el espacio disponible. El límite total de archivos por contacto es 3 MB.`,
+            );
+          }
+          bytesRestantes -= bytes;
+          nuevos.push({
           id: `${campo}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          nombre: f.name,
-          tipo: f.type,
-          dataUrl: String(reader.result),
+          nombre: archivo.name,
+          tipo: archivo.type,
+          dataUrl,
         });
-        if (nuevos.length === admitidos.length) {
-          setForm({ ...form, [campo]: [...(form[campo] ?? []), ...nuevos] });
+        } catch (error) {
+          errores.push(
+            error instanceof Error ? error.message : `No se pudo procesar "${original.name}".`,
+          );
         }
-      };
-      reader.readAsDataURL(f);
-    });
+      }
+      if (nuevos.length > 0) {
+        setForm((current) => ({
+          ...current,
+          [campo]: [...(current[campo] ?? []), ...nuevos],
+        }));
+      }
+      if (errores.length > 0) setError(errores.join(" "));
+    } finally {
+      setProcesandoAdjuntos(false);
+    }
   }
 
   function quitarArchivo(
@@ -940,28 +1053,47 @@ export default function ContactosPage() {
       }
   }
 
-  function iniciarEdicion(c: ContactView) {
+  async function obtenerContactoCompleto(c: ContactListItem): Promise<ContactView> {
+    if (
+      c.copiaDni !== undefined &&
+      c.copiaBoletas !== undefined &&
+      c.copiaAntecedentes !== undefined
+    ) {
+      return c;
+    }
+    const completo = await obtenerContactoPorId(c.id);
+    return completo;
+  }
+
+  async function iniciarEdicion(c: ContactListItem) {
+    let completo: ContactView;
+    try {
+      completo = await obtenerContactoCompleto(c);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "No se pudo cargar el contacto.");
+      return;
+    }
     setEditandoId(c.id);
-    const prefijoGuardado = /^\+([0-9]+)/.exec(c.telefono ?? "")?.[1];
-    const codigoPais = c.codigoPais ?? prefijoGuardado ?? "51";
+    const prefijoGuardado = /^\+([0-9]+)/.exec(completo.telefono ?? "")?.[1];
+    const codigoPais = completo.codigoPais ?? prefijoGuardado ?? "51";
     setForm({
-      id: c.id,
-      nombre: c.nombre,
-      apellido: c.apellido,
-      tipoPersona: c.tipoPersona,
-      dni: c.dni,
-      ruc: c.ruc ?? null,
-      domicilio: c.domicilio ?? "",
-      nacionalidad: c.nacionalidad ?? "",
-      email: c.email,
-      telefono: normalizarTelefono(c.telefono ?? "", codigoPais),
+      id: completo.id,
+      nombre: completo.nombre,
+      apellido: completo.apellido,
+      tipoPersona: completo.tipoPersona,
+      dni: completo.dni,
+      ruc: completo.ruc ?? null,
+      domicilio: completo.domicilio ?? "",
+      nacionalidad: completo.nacionalidad ?? "",
+      email: completo.email,
+      telefono: normalizarTelefono(completo.telefono ?? "", codigoPais),
       codigoPais,
-      copiaDni: c.copiaDni ?? [],
-      copiaBoletas: c.copiaBoletas ?? [],
-      copiaAntecedentes: c.copiaAntecedentes ?? [],
-      contactoEmergencia: c.contactoEmergencia ?? { ...EMERGENCIA_VACIO },
-      mascotas: c.mascotas ?? false,
-      mascotasItems: c.mascotasItems ?? [],
+      copiaDni: completo.copiaDni ?? [],
+      copiaBoletas: completo.copiaBoletas ?? [],
+      copiaAntecedentes: completo.copiaAntecedentes ?? [],
+      contactoEmergencia: completo.contactoEmergencia ?? { ...EMERGENCIA_VACIO },
+      mascotas: completo.mascotas ?? false,
+      mascotasItems: completo.mascotasItems ?? [],
     });
     setError(null);
     requestAnimationFrame(() => {
@@ -970,6 +1102,22 @@ export default function ContactosPage() {
         block: "start",
       });
     });
+  }
+
+  async function abrirVistaAdjuntos(
+    contacto: ContactListItem,
+    campo: "copiaDni" | "copiaBoletas" | "copiaAntecedentes",
+    titulo: string,
+  ) {
+    try {
+      const completo = await obtenerContactoCompleto(contacto);
+      setPreview({
+        titulo: `${[completo.nombre, completo.apellido].filter(Boolean).join(" ")} · ${titulo}`,
+        archivos: completo[campo] ?? [],
+      });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "No se pudieron cargar los adjuntos.");
+    }
   }
 
   function cancelarEdicion() {
@@ -1019,17 +1167,18 @@ export default function ContactosPage() {
                     type="button"
                     size="sm"
                     variant="outline"
+                    disabled={procesandoAdjuntos}
                     onClick={cancelarEdicion}
                   >
                     Cancelar
                   </Button>
-                  <Button type="submit" form="form-nuevo-contacto" size="sm">
-                    Guardar cambios
+                  <Button type="submit" form="form-nuevo-contacto" size="sm" disabled={procesandoAdjuntos}>
+                    {procesandoAdjuntos ? "Optimizando archivos…" : "Guardar cambios"}
                   </Button>
                 </div>
               ) : (
-                <Button type="submit" form="form-nuevo-contacto" size="sm">
-                  Crear contacto
+                <Button type="submit" form="form-nuevo-contacto" size="sm" disabled={procesandoAdjuntos}>
+                  {procesandoAdjuntos ? "Optimizando archivos…" : "Crear contacto"}
                 </Button>
               )}
             </div>
@@ -1044,6 +1193,7 @@ export default function ContactosPage() {
                 ref={pdfInputRef}
                 type="file"
                 accept=".pdf,application/pdf"
+                disabled={procesandoAdjuntos}
                 className="hidden"
                 onChange={(e) => {
                   const archivo = e.target.files?.[0];
@@ -1190,12 +1340,13 @@ export default function ContactosPage() {
               <div className="space-y-1.5">
                 <Label>Copia de DNI *</Label>
                 <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-input px-3 text-sm text-muted-foreground hover:border-primary hover:text-primary">
-                  <FileText className="h-4 w-4" /> Subir archivo
+                  <FileText className="h-4 w-4" /> {procesandoAdjuntos ? "Optimizando…" : "Subir archivo"}
                   <input
                     type="file"
                     multiple
                     accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png"
                     className="hidden"
+                    disabled={procesandoAdjuntos}
                     onChange={(e) => {
                       agregarArchivos("copiaDni", e.target.files);
                       e.target.value = "";
@@ -1225,12 +1376,13 @@ export default function ContactosPage() {
               <div className="space-y-1.5">
                 <Label>Copia de boletas *</Label>
                 <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-input px-3 text-sm text-muted-foreground hover:border-primary hover:text-primary">
-                  <FileText className="h-4 w-4" /> Subir archivo
+                  <FileText className="h-4 w-4" /> {procesandoAdjuntos ? "Optimizando…" : "Subir archivo"}
                   <input
                     type="file"
                     multiple
                     accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png"
                     className="hidden"
+                    disabled={procesandoAdjuntos}
                     onChange={(e) => {
                       agregarArchivos("copiaBoletas", e.target.files);
                       e.target.value = "";
@@ -1260,12 +1412,13 @@ export default function ContactosPage() {
               <div className="space-y-1.5">
                 <Label>Copia de antecedentes penales (opcional)</Label>
                 <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-input px-3 text-sm text-muted-foreground hover:border-primary hover:text-primary">
-                  <FileText className="h-4 w-4" /> Subir archivo
+                  <FileText className="h-4 w-4" /> {procesandoAdjuntos ? "Optimizando…" : "Subir archivo"}
                   <input
                     type="file"
                     multiple
                     accept="application/pdf,.pdf,image/jpeg,.jpg,.jpeg,image/png,.png"
                     className="hidden"
+                    disabled={procesandoAdjuntos}
                     onChange={(e) => {
                       agregarArchivos("copiaAntecedentes", e.target.files);
                       e.target.value = "";
@@ -1293,7 +1446,7 @@ export default function ContactosPage() {
                 ) : null}
               </div>
               <p className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-3">
-                Solo se permiten archivos PDF, JPG o PNG
+                Solo se permiten PDF, JPG o PNG. Las imágenes se optimizan hasta 1 MB; los PDF mantienen su calidad. Límite total: 3 MB por contacto.
               </p>
               </fieldset>
               <fieldset className="grid gap-4 rounded-lg border border-input bg-surface-container-lowest/40 p-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1498,24 +1651,17 @@ export default function ContactosPage() {
                         <td className="px-3 py-2">
                           {(() => {
                             const docs = c.copiaDni ?? [];
-                            return docs.length > 0 ? (
+                            const cantidad = c.copiaDniCount ?? docs.length;
+                            return cantidad > 0 ? (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setPreview({
-                                    titulo: `${[
-                                      c.nombre,
-                                      c.apellido,
-                                    ].filter(Boolean).join(" ")} · Copia de DNI`,
-                                    archivos: docs,
-                                  })
-                                }
+                                onClick={() => void abrirVistaAdjuntos(c, "copiaDni", "Copia de DNI")}
                                 className="flex items-center gap-1.5 rounded-md border border-outline-variant bg-surface-container-lowest px-1.5 py-1 transition-colors hover:bg-surface-container"
                                 title="Ver documentos"
                               >
-                                <Miniatura archivo={docs[0]!} />
+                                {docs[0] ? <Miniatura archivo={docs[0]} /> : <FileText className="h-4 w-4" />}
                                 <span className="text-xs font-medium text-on-surface-variant">
-                                  {docs.length}
+                                  {cantidad}
                                 </span>
                               </button>
                             ) : (
@@ -1526,24 +1672,17 @@ export default function ContactosPage() {
                         <td className="px-3 py-2">
                           {(() => {
                             const docs = c.copiaBoletas ?? [];
-                            return docs.length > 0 ? (
+                            const cantidad = c.copiaBoletasCount ?? docs.length;
+                            return cantidad > 0 ? (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setPreview({
-                                    titulo: `${[
-                                      c.nombre,
-                                      c.apellido,
-                                    ].filter(Boolean).join(" ")} · Copia de boletas`,
-                                    archivos: docs,
-                                  })
-                                }
+                                onClick={() => void abrirVistaAdjuntos(c, "copiaBoletas", "Copia de boletas")}
                                 className="flex items-center gap-1.5 rounded-md border border-outline-variant bg-surface-container-lowest px-1.5 py-1 transition-colors hover:bg-surface-container"
                                 title="Ver documentos"
                               >
-                                <Miniatura archivo={docs[0]!} />
+                                {docs[0] ? <Miniatura archivo={docs[0]} /> : <FileText className="h-4 w-4" />}
                                 <span className="text-xs font-medium text-on-surface-variant">
-                                  {docs.length}
+                                  {cantidad}
                                 </span>
                               </button>
                             ) : (
@@ -1554,24 +1693,17 @@ export default function ContactosPage() {
                         <td className="px-3 py-2">
                           {(() => {
                             const docs = c.copiaAntecedentes ?? [];
-                            return docs.length > 0 ? (
+                            const cantidad = c.copiaAntecedentesCount ?? docs.length;
+                            return cantidad > 0 ? (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setPreview({
-                                    titulo: `${[
-                                      c.nombre,
-                                      c.apellido,
-                                    ].filter(Boolean).join(" ")} · Copia de antecedentes penales`,
-                                    archivos: docs,
-                                  })
-                                }
+                                onClick={() => void abrirVistaAdjuntos(c, "copiaAntecedentes", "Copia de antecedentes penales")}
                                 className="flex items-center gap-1.5 rounded-md border border-outline-variant bg-surface-container-lowest px-1.5 py-1 transition-colors hover:bg-surface-container"
                                 title="Ver documentos"
                               >
-                                <Miniatura archivo={docs[0]!} />
+                                {docs[0] ? <Miniatura archivo={docs[0]} /> : <FileText className="h-4 w-4" />}
                                 <span className="text-xs font-medium text-on-surface-variant">
-                                  {docs.length}
+                                  {cantidad}
                                 </span>
                               </button>
                             ) : (

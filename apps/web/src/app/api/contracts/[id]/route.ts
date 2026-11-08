@@ -189,6 +189,12 @@ export async function POST(request: Request, { params }: Ctx) {
         const c = await contractService.requestEmission(params.id);
         return NextResponse.json(c);
       }
+      case "volverABorrador": {
+        const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
+        if (denied) return denied;
+        const c = await contractService.returnToDraft(params.id);
+        return NextResponse.json(c);
+      }
       case "emit": {
         const denied = requirePermission(auth.user, Permission.CONTRACT_EMIT);
         if (denied) return denied;

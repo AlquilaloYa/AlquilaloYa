@@ -47,6 +47,9 @@ export interface ContactoResumen {
   contactoEmergencia?: ContactSeed["contactoEmergencia"];
   mascotas: boolean;
   mascotasItems: string[];
+  copiaDniCount: number;
+  copiaBoletasCount: number;
+  copiaAntecedentesCount: number;
 }
 
 /** Clave LEGACY (localStorage) usada solo por la migración de una sola vez. */

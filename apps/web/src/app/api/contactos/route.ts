@@ -6,6 +6,7 @@ import {
   requireUser,
   requirePermission,
 } from "@/lib/session";
+import { validateContactAttachments } from "@/lib/contact-attachments";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +73,18 @@ telefono: r.telefono ?? "",
 }
 
 type DbModule = typeof import("@contract/db");
+
+function validarAdjuntos(body: Body): string | null {
+  const campos = [
+    body.copiaDni ?? [],
+    body.copiaBoletas ?? [],
+    body.copiaAntecedentes ?? [],
+  ];
+  if (campos.some((campo) => !Array.isArray(campo))) {
+    return "La lista de archivos adjuntos no es válida.";
+  }
+  return validateContactAttachments(campos.flat());
+}
 
 /** Normaliza un nombre: minusculas, sin tildes ni signos, espacios simples. */
 function normalizarNombre(valor: string): string {
@@ -265,6 +278,9 @@ export async function GET(req: Request) {
           contactoEmergencia: schema.contacts.contactoEmergencia,
           mascotas: schema.contacts.mascotas,
           mascotasItems: schema.contacts.mascotasItems,
+          copiaDniCount: sql<number>`case when jsonb_typeof(${schema.contacts.copiaDni}) = 'array' then jsonb_array_length(${schema.contacts.copiaDni}) else 0 end`,
+          copiaBoletasCount: sql<number>`case when jsonb_typeof(${schema.contacts.copiaBoletas}) = 'array' then jsonb_array_length(${schema.contacts.copiaBoletas}) else 0 end`,
+          copiaAntecedentesCount: sql<number>`case when jsonb_typeof(${schema.contacts.copiaAntecedentes}) = 'array' then jsonb_array_length(${schema.contacts.copiaAntecedentes}) else 0 end`,
         })
         .from(schema.contacts)
         .where(isNull(schema.contacts.eliminadoEn))
@@ -299,6 +315,10 @@ export async function POST(req: Request) {
       schema: typeof import("@contract/db").schema;
     };
     const body = (await req.json()) as Body;
+    const errorAdjuntos = validarAdjuntos(body);
+    if (errorAdjuntos) {
+      return NextResponse.json({ error: errorAdjuntos }, { status: 413 });
+    }
     if (!body.nombre?.trim()) {
       return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
     }
@@ -376,6 +396,10 @@ export async function PUT(req: Request) {
       schema: typeof import("@contract/db").schema;
     };
     const body = (await req.json()) as Body & { id: string };
+    const errorAdjuntos = validarAdjuntos(body);
+    if (errorAdjuntos) {
+      return NextResponse.json({ error: errorAdjuntos }, { status: 413 });
+    }
     if (!body.id) {
       return NextResponse.json({ error: "Falta id" }, { status: 400 });
     }
