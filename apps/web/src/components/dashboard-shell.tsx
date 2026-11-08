@@ -125,14 +125,6 @@ const NAV_ITEMS: NavItem[] = [
     permission: "department.read",
     group: "contratos",
   },
-  {
-    href: "/locales",
-    label: "Locales",
-    icon: Building2,
-    section: "Locales",
-    permission: "department.read",
-    group: "contratos",
-  },
   { href: "/contratos", label: "Pre contrato", icon: FileText, section: "Contratos", permission: "contract.read", group: "contratos" },
   {
     href: "/contrato-final",
@@ -150,7 +142,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/scoring", label: "Scoring de inquilinos", icon: Gauge, section: "Scoring", permission: "scoring.read" },
   { href: "/pagos", label: "Cobranza", icon: Banknote, section: "Cobranza", permission: "contract.read" },
   { href: "/analiticas", label: "Analíticas", icon: BarChart3, section: "Analíticas", permission: "contract.read" },
-  { href: "/departamentos", label: "Locales", icon: Building2, section: "Locales", permission: "department.read" },
+  { href: "/locales", label: "Locales", icon: Building2, section: "Locales", permission: "department.read" },
   { href: "/agenda", label: "Agenda", icon: CalendarClock, section: "Agenda", permission: "contract.read" },
   { href: "/rrhh", label: "Recursos Humanos", icon: Users, section: "Recursos Humanos", permission: "hr.read", group: "rrhh" },
   { href: "/cronograma-asistencia", label: "Registro de asistencia", icon: AlarmClock, section: "Recursos Humanos", permission: "attendance.read", group: "rrhh" },
