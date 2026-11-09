@@ -1065,12 +1065,22 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                             <span className={`h-1.5 w-1.5 rounded-full ${meta.cls}`} />
                             {meta.label}
                           </span>
-                          {f.pago?.voucherVerificadoEn ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                              <ShieldCheck className="h-3.5 w-3.5" />
-                              Pago verificado
-                            </span>
-                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => setMostrarVerificacion(true)}
+                            disabled={!f.pago}
+                            title={f.pago?.voucherVerificadoEn
+                              ? `Verificado el ${new Date(f.pago.voucherVerificadoEn).toLocaleString("es-PE")}`
+                              : "Sin verificación registrada"}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium disabled:cursor-default ${
+                              f.pago?.voucherVerificadoEn
+                                ? "border-emerald-600/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+                                : "border-outline-variant bg-surface-container text-on-surface-variant"
+                            }`}
+                          >
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                            {f.pago?.voucherVerificadoEn ? "Verificado" : "No verificado"}
+                          </button>
                         </div>
                       </td>
                       <td className="px-3 py-2">

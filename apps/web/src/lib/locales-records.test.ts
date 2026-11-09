@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseLocalRecord, validateLocalSeparationAmount } from "./locales-records";
+import {
+  parseLocalRecord,
+  validateLocalContractCode,
+  validateLocalSeparationAmount,
+} from "./locales-records";
 
 const localId = "c57a2f9e-861f-4dc2-a101-fb84cbda99bb";
 const contactId = "a41e2835-1004-4fa2-9dd7-8fa9c3919812";
@@ -13,8 +17,19 @@ describe("local module records", () => {
         nombres: "  Ana ",
         apellidos: " Pérez ",
         documento: "123",
+        tipoPersona: "NATURAL",
+        ruc: "",
         telefono: "999",
+        codigoPais: "51",
         email: "ana@example.com",
+        domicilio: " Lima ",
+        nacionalidad: " Peruana ",
+        contactoEmergencia: { nombre: "", parentesco: "", telefono: "" },
+        mascotas: false,
+        mascotasItems: [],
+        copiaDni: [],
+        copiaBoletas: [],
+        copiaAntecedentes: [],
       }),
     ).toEqual({
       value: {
@@ -23,10 +38,35 @@ describe("local module records", () => {
         nombres: "Ana",
         apellidos: "Pérez",
         documento: "123",
+        tipoPersona: "NATURAL",
+        ruc: "",
         telefono: "999",
+        codigoPais: "51",
         email: "ana@example.com",
+        domicilio: "Lima",
+        nacionalidad: "Peruana",
+        contactoEmergencia: null,
+        mascotas: false,
+        mascotasItems: [],
+        copiaDni: [],
+        copiaBoletas: [],
+        copiaAntecedentes: [],
       },
     });
+    expect(
+      parseLocalRecord({
+        tipo: "contactos",
+        localId,
+        nombres: "Empresa",
+        documento: "12345678",
+        tipoPersona: "LEGAL",
+      }),
+    ).toHaveProperty("error", "RUC es obligatorio y no puede superar 20 caracteres.");
+  });
+
+  it("only accepts the selected local code for a contract", () => {
+    expect(validateLocalContractCode("BEN2195-A1", "BEN2195-A1")).toBeNull();
+    expect(validateLocalContractCode("CTR-BEN2195-A1", "BEN2195-A1")).toContain("debe coincidir");
   });
 
   it("rejects malformed relation ids and invalid contract date ranges", () => {

@@ -17,6 +17,19 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
+export type LocalContactAttachment = {
+  id: string;
+  nombre: string;
+  tipo: string;
+  dataUrl: string;
+};
+
+export type LocalContactEmergency = {
+  nombre: string;
+  parentesco: string;
+  telefono: string;
+};
+
 export const locales = pgTable(
   "locales",
   {
@@ -122,8 +135,20 @@ export const localContacts = pgTable(
     nombres: varchar("nombres", { length: 255 }).notNull(),
     apellidos: varchar("apellidos", { length: 255 }).notNull().default(""),
     documento: varchar("documento", { length: 50 }).notNull().default(""),
+    tipoPersona: varchar("tipo_persona", { length: 10 }).notNull().default("NATURAL"),
+    ruc: varchar("ruc", { length: 20 }).notNull().default(""),
     telefono: varchar("telefono", { length: 30 }).notNull().default(""),
+    codigoPais: varchar("codigo_pais", { length: 6 }).notNull().default("51"),
     email: varchar("email", { length: 255 }).notNull().default(""),
+    domicilio: varchar("domicilio", { length: 500 }).notNull().default(""),
+    nacionalidad: varchar("nacionalidad", { length: 100 }).notNull().default(""),
+    contactoEmergencia: jsonb("contacto_emergencia").$type<LocalContactEmergency | null>(),
+    mascotas: boolean("mascotas").notNull().default(false),
+    mascotasItems: jsonb("mascotas_items").notNull().default([]).$type<string[]>(),
+    copiaDni: jsonb("copia_dni").notNull().default([]).$type<LocalContactAttachment[]>(),
+    copiaBoletas: jsonb("copia_boletas").notNull().default([]).$type<LocalContactAttachment[]>(),
+    copiaAntecedentes: jsonb("copia_antecedentes").notNull().default([]).$type<LocalContactAttachment[]>(),
+    clienteActivo: boolean("cliente_activo").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -134,6 +159,7 @@ export const localContacts = pgTable(
   (table) => [
     index("local_contacts_local_id_idx").on(table.localId),
     index("local_contacts_documento_idx").on(table.documento),
+    check("local_contacts_tipo_persona_check", sql`${table.tipoPersona} in ('NATURAL', 'LEGAL')`),
   ],
 );
 
@@ -193,7 +219,7 @@ export const localContracts = pgTable(
     separationId: uuid("separation_id").references(() => localSeparations.id, {
       onDelete: "set null",
     }),
-    codigo: varchar("codigo", { length: 50 }).notNull().unique(),
+    codigo: varchar("codigo", { length: 50 }).notNull(),
     plantillaVersionId: uuid("plantilla_version_id").references(() => templateVersions.id),
     montoCanon: numeric("monto_canon", { precision: 15, scale: 2 })
       .notNull()
@@ -216,7 +242,10 @@ export const localContracts = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index("local_contracts_local_id_idx").on(table.localId),
+    uniqueIndex("local_contracts_reserved_local_key")
+      .on(table.localId)
+      .where(sql`${table.estado} in ('BORRADOR', 'EMITIDO', 'NOTARIADO_FIRMADO', 'VIGENTE')`),
+    index("local_contracts_codigo_idx").on(table.codigo),
     index("local_contracts_contact_id_idx").on(table.contactId),
     index("local_contracts_separation_id_idx").on(table.separationId),
     index("local_contracts_estado_idx").on(table.estado),

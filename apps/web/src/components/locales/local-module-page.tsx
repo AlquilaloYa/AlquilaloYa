@@ -5,7 +5,16 @@ import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { apiFetch } from "@/lib/api";
+import { PersonType } from "@contract/domain/client";
 import type { LocalModule } from "@/lib/locales-records";
+import { compressImageFile, fileToDataUrl } from "@/lib/image-compression";
+import {
+  getAttachmentBytes,
+  MAX_CONTACT_ATTACHMENTS_BYTES,
+  MAX_CONTACT_IMAGE_BYTES,
+  MAX_CONTACT_SOURCE_IMAGE_BYTES,
+  validateContactAttachments,
+} from "@/lib/contact-attachments";
 import {
   LocalDocumentsModal,
   type LocalDocumentOwner,
@@ -27,12 +36,41 @@ type LocalTemplateOption = {
   label: string;
 };
 
-type DataRow = Record<string, string | number | boolean | null> & {
+type DataRow = Record<string, string | number | boolean | null | string[] | LocalContactAttachment[]> & {
   id: string;
   localId: string;
 };
 
-type FieldType = "text" | "email" | "tel" | "date" | "number" | "textarea" | "select" | "checkbox";
+type FieldType = "text" | "email" | "tel" | "date" | "number" | "textarea" | "select" | "checkbox" | "file";
+type LocalContactAttachment = { id: string; nombre: string; tipo: string; dataUrl: string };
+const CONTACT_ATTACHMENT_FIELDS = ["copiaDni", "copiaBoletas", "copiaAntecedentes"] as const;
+
+function parseContactAttachments(value: string): LocalContactAttachment[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value || "[]");
+  } catch {
+    throw new Error("La lista de archivos adjuntos no es válida.");
+  }
+  if (
+    !Array.isArray(parsed) ||
+    !parsed.every((item) =>
+      typeof item === "object" &&
+      item !== null &&
+      "id" in item &&
+      typeof item.id === "string" &&
+      "nombre" in item &&
+      typeof item.nombre === "string" &&
+      "tipo" in item &&
+      typeof item.tipo === "string" &&
+      "dataUrl" in item &&
+      typeof item.dataUrl === "string",
+    )
+  ) {
+    throw new Error("La lista de archivos adjuntos no es válida.");
+  }
+  return parsed;
+}
 type FieldConfig = {
   name: string;
   label: string;
@@ -94,18 +132,39 @@ const MODULES: Record<LocalModule, ModuleConfig> = {
     description: "Contactos independientes, asociados solo al local seleccionado.",
     singular: "contacto",
     fields: [
+      { name: "tipoPersona", label: "Tipo de persona", type: "select", required: true, options: [
+        { value: PersonType.NATURAL, label: "Persona natural" },
+        { value: PersonType.LEGAL, label: "Persona jurídica" },
+      ] },
       { name: "nombres", label: "Nombres", type: "text", required: true },
       { name: "apellidos", label: "Apellidos", type: "text" },
-      { name: "documento", label: "Documento", type: "text" },
+      { name: "documento", label: "DNI/CE", type: "text", required: true },
+      { name: "ruc", label: "RUC", type: "text" },
+      { name: "domicilio", label: "Domicilio", type: "text" },
+      { name: "nacionalidad", label: "Nacionalidad", type: "text" },
+      { name: "codigoPais", label: "Código de país", type: "text", required: true },
       { name: "telefono", label: "Teléfono", type: "tel" },
       { name: "email", label: "Correo electrónico", type: "email" },
+      { name: "contactoEmergenciaNombre", label: "Contacto de emergencia", type: "text" },
+      { name: "contactoEmergenciaParentesco", label: "Parentesco", type: "text" },
+      { name: "contactoEmergenciaTelefono", label: "Teléfono de emergencia", type: "tel" },
+      { name: "mascotas", label: "Tiene mascotas", type: "checkbox" },
+      { name: "mascotasItems", label: "Detalle de mascotas", type: "text" },
+      { name: "copiaDni", label: "Copias de DNI/CE", type: "file" },
+      { name: "copiaBoletas", label: "Boletas de pago", type: "file" },
+      { name: "copiaAntecedentes", label: "Antecedentes penales", type: "file" },
     ],
     columns: [
       { name: "nombres", label: "Nombres" },
       { name: "apellidos", label: "Apellidos" },
-      { name: "documento", label: "Documento" },
+      { name: "tipoPersona", label: "Tipo" },
+      { name: "documento", label: "DNI/CE" },
+      { name: "ruc", label: "RUC" },
       { name: "telefono", label: "Teléfono" },
       { name: "email", label: "Correo" },
+      { name: "domicilio", label: "Domicilio" },
+      { name: "nacionalidad", label: "Nacionalidad" },
+      { name: "mascotas", label: "Mascotas" },
     ],
     references: {},
   },
@@ -261,6 +320,7 @@ function formatCell(value: string | number | boolean | null | undefined, format?
 export function LocalModulePage({ module }: { module: LocalModule }) {
   const config = MODULES[module];
   const [locales, setLocales] = useState<LocalRecord[]>([]);
+  const [availableContractLocalIds, setAvailableContractLocalIds] = useState<string[] | null>(null);
   const [localId, setLocalId] = useState("");
   const [records, setRecords] = useState<DataRow[]>([]);
   const [references, setReferences] = useState<Partial<Record<"contactos" | "separaciones" | "contratos", DataRow[]>>>({});
@@ -282,6 +342,32 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
   const limit = 50;
 
   const local = useMemo(() => locales.find((item) => item.id === localId), [localId, locales]);
+  const canCreateContract = module !== "contratos" ||
+    (availableContractLocalIds !== null && availableContractLocalIds.includes(localId));
+
+  const loadAvailableContractLocals = useCallback(async () => {
+    const response = await apiFetch("/api/locales?availableForContract=1");
+    const body: unknown = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(
+        typeof body === "object" && body !== null && "error" in body
+          ? String(body.error)
+          : "No se pudo cargar la disponibilidad de los locales.",
+      );
+    }
+    if (
+      !Array.isArray(body) ||
+      !body.every((item) =>
+        typeof item === "object" &&
+        item !== null &&
+        "id" in item &&
+        typeof item.id === "string",
+      )
+    ) {
+      throw new Error("La respuesta de locales disponibles no es válida.");
+    }
+    return body as LocalRecord[];
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -296,10 +382,11 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
       .then((items) => {
         if (!active) return;
         setLocales(items);
+        const requestedLocalId = new URLSearchParams(window.location.search).get("localId");
         setLocalId((current) =>
           items.some((item) => item.id === current)
             ? current
-            : items[0]?.id ?? "",
+            : items.find((item) => item.id === requestedLocalId)?.id ?? items[0]?.id ?? "",
         );
       })
       .catch((loadError: unknown) => {
@@ -312,6 +399,27 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (module !== "contratos") {
+      setAvailableContractLocalIds(null);
+      return;
+    }
+    let active = true;
+    void loadAvailableContractLocals()
+      .then((items) => {
+        if (active) setAvailableContractLocalIds(items.map((item) => item.id));
+      })
+      .catch((loadError: unknown) => {
+        if (active) {
+          setAvailableContractLocalIds([]);
+          setError(loadError instanceof Error ? loadError.message : "No se pudo cargar la disponibilidad de los locales.");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadAvailableContractLocals, module]);
 
   useEffect(() => {
     if (module !== "contratos") return;
@@ -415,7 +523,11 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
           const value = record[field.name];
           return [
             field.name,
-            typeof value === "boolean" || typeof value === "string"
+            Array.isArray(value)
+              ? value.length > 0 && typeof value[0] === "object"
+                ? JSON.stringify(value)
+                : value.join(", ")
+              : typeof value === "boolean" || typeof value === "string"
               ? value
               : value === null || value === undefined
                 ? ""
@@ -423,6 +535,21 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
           ];
         }))
       : emptyForm(config);
+    if (module === "contactos") {
+      const emergency = record?.contactoEmergencia;
+      const parsedEmergency = typeof emergency === "object" && emergency !== null && !Array.isArray(emergency)
+        ? emergency as { nombre?: string; parentesco?: string; telefono?: string }
+        : {};
+      Object.assign(initialForm, {
+        contactoEmergenciaNombre: parsedEmergency.nombre ?? "",
+        contactoEmergenciaParentesco: parsedEmergency.parentesco ?? "",
+        contactoEmergenciaTelefono: parsedEmergency.telefono ?? "",
+        mascotasItems: Array.isArray(record?.mascotasItems) ? record.mascotasItems.join(", ") : "",
+        copiaDni: JSON.stringify(record?.copiaDni ?? []),
+        copiaBoletas: JSON.stringify(record?.copiaBoletas ?? []),
+        copiaAntecedentes: JSON.stringify(record?.copiaAntecedentes ?? []),
+      });
+    }
     if (!record) {
       if (module === "separaciones") {
         Object.assign(initialForm, {
@@ -433,12 +560,22 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
         });
       } else if (module === "contratos") {
         Object.assign(initialForm, {
-          codigo: local ? `CTR-${local.codigo}-${Date.now().toString().slice(-6)}` : "",
+          codigo: local?.codigo ?? "",
           montoCanon: local?.precioAlquiler ?? "0",
           depositoGarantia: local?.garantia ?? "0",
           mantenimiento: local?.mantenimiento ?? "0",
           fechaInicio: new Date().toISOString().slice(0, 10),
           fechaFin: "",
+        });
+      } else if (module === "contactos") {
+        Object.assign(initialForm, {
+          tipoPersona: PersonType.NATURAL,
+          codigoPais: "51",
+          mascotas: false,
+          mascotasItems: "",
+          copiaDni: "[]",
+          copiaBoletas: "[]",
+          copiaAntecedentes: "[]",
         });
       } else if (module === "adendas") {
         Object.assign(initialForm, { fecha: new Date().toISOString().slice(0, 10) });
@@ -454,12 +591,116 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
     setIsOpen(true);
   }
 
+  async function editRecord(record: DataRow) {
+    if (module !== "contactos") {
+      openEditor(record);
+      return;
+    }
+    try {
+      const response = await apiFetch(`/api/locales/registros/${record.id}?tipo=contactos`);
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok || typeof body !== "object" || body === null || !("id" in body)) {
+        throw new Error(
+          typeof body === "object" && body !== null && "error" in body
+            ? String(body.error)
+            : "No se pudieron cargar los datos del contacto.",
+        );
+      }
+      openEditor(body as DataRow);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "No se pudieron cargar los datos del contacto.");
+    }
+  }
+
+  async function addContactFiles(fieldName: string, files: FileList | null) {
+    if (!files || files.length === 0) return;
+    try {
+      const current = parseContactAttachments(String(form[fieldName] ?? "[]"));
+      const allCurrent = CONTACT_ATTACHMENT_FIELDS.flatMap((name) =>
+        name === fieldName ? current : parseContactAttachments(String(form[name] ?? "[]")),
+      );
+      const usedBytes = allCurrent.reduce(
+        (totalBytes, attachment) => totalBytes + (getAttachmentBytes(attachment.dataUrl) ?? 0),
+        0,
+      );
+      let totalBytes = usedBytes;
+      const additions: LocalContactAttachment[] = [];
+      const mimeByExtension: Record<string, string> = {
+        pdf: "application/pdf",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        png: "image/png",
+        webp: "image/webp",
+      };
+
+      for (const original of Array.from(files)) {
+        const extension = original.name.split(".").pop()?.toLowerCase() ?? "";
+        const mimeType = original.type || mimeByExtension[extension] || "";
+        if (!Object.values(mimeByExtension).includes(mimeType)) {
+          throw new Error(`"${original.name}" no es PDF, JPG, PNG o WebP.`);
+        }
+        let file = original.type === mimeType
+          ? original
+          : new File([original], original.name, { type: mimeType, lastModified: original.lastModified });
+        if (file.type.startsWith("image/")) {
+          if (file.size > MAX_CONTACT_SOURCE_IMAGE_BYTES) {
+            throw new Error(`"${file.name}" supera el límite de 10 MB antes de optimizar.`);
+          }
+          file = await compressImageFile(file, "contactDocument");
+          if (file.size > MAX_CONTACT_IMAGE_BYTES) {
+            throw new Error(`No se pudo reducir "${file.name}" a 1 MB.`);
+          }
+        }
+        const dataUrl = await fileToDataUrl(file);
+        const bytes = getAttachmentBytes(dataUrl);
+        if (bytes === null || totalBytes + bytes > MAX_CONTACT_ATTACHMENTS_BYTES) {
+          throw new Error("El límite total de archivos por contacto es 3 MB.");
+        }
+        totalBytes += bytes;
+        additions.push({
+          id: crypto.randomUUID(),
+          nombre: original.name,
+          tipo: file.type,
+          dataUrl,
+        });
+      }
+
+      const next = [...current, ...additions];
+      const allNext = CONTACT_ATTACHMENT_FIELDS.flatMap((name) =>
+        name === fieldName ? next : parseContactAttachments(String(form[name] ?? "[]")),
+      );
+      const validationError = validateContactAttachments(allNext);
+      if (validationError) throw new Error(validationError);
+      setForm((currentForm) => ({ ...currentForm, [fieldName]: JSON.stringify(next) }));
+      setError(null);
+    } catch (fileError) {
+      setError(fileError instanceof Error ? fileError.message : "No se pudieron leer los archivos.");
+    }
+  }
+
   async function saveRecord(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!localId) return;
     setSaving(true);
     setError(null);
     try {
+      const payload: Record<string, unknown> = { ...form, tipo: module, localId };
+      if (module === "contactos") {
+        payload.contactoEmergencia = {
+          nombre: String(form.contactoEmergenciaNombre ?? ""),
+          parentesco: String(form.contactoEmergenciaParentesco ?? ""),
+          telefono: String(form.contactoEmergenciaTelefono ?? ""),
+        };
+        delete payload.contactoEmergenciaNombre;
+        delete payload.contactoEmergenciaParentesco;
+        delete payload.contactoEmergenciaTelefono;
+        for (const fieldName of CONTACT_ATTACHMENT_FIELDS) {
+          payload[fieldName] = parseContactAttachments(String(form[fieldName] ?? "[]"));
+        }
+        payload.mascotasItems = Array.isArray(form.mascotasItems)
+          ? form.mascotasItems
+          : String(form.mascotasItems ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+      }
       const response = await apiFetch(
         editing
           ? `/api/locales/registros/${editing.id}?tipo=${module}`
@@ -467,7 +708,7 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
         {
           method: editing ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, tipo: module, localId }),
+          body: JSON.stringify(payload),
         },
       );
       if (!response.ok) {
@@ -477,6 +718,10 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
       setIsOpen(false);
       setEditing(null);
       await loadRecords();
+      if (module === "contratos") {
+        const available = await loadAvailableContractLocals();
+        setAvailableContractLocalIds(available.map((item) => item.id));
+      }
       const dependencyTypes = Object.keys(config.references) as ("contactos" | "separaciones" | "contratos")[];
       const refreshed = await Promise.all(dependencyTypes.map(async (type) => {
         const params = new URLSearchParams({ tipo: type, localId, limit: "100", offset: "0" });
@@ -497,6 +742,15 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
   }
 
   function fieldOptions(field: FieldConfig) {
+    if (field.name === "codigo") {
+      if (editing) {
+        const codigo = String(editing.codigo ?? "");
+        return codigo ? [{ value: codigo, label: codigo }] : [];
+      }
+      return local && availableContractLocalIds?.includes(local.id)
+        ? [{ value: local.codigo, label: local.codigo }]
+        : [];
+    }
     if (field.name === "plantillaVersionId") {
       return templates.map((template) => ({ value: template.id, label: template.label }));
     }
@@ -524,8 +778,12 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
   }
 
   function cellValue(column: ModuleConfig["columns"][number], row: DataRow) {
-    const value = row[column.name];
+    const rawValue = row[column.name];
+    const value = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
     if (column.name === "estadoVista") return estadoLabel(String(value ?? ""));
+    if (column.name === "tipoPersona") {
+      return value === PersonType.LEGAL ? "Jurídica" : "Natural";
+    }
     if (column.format === "reference") {
       const referenceType =
         column.name === "contactId"
@@ -610,12 +868,15 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               Actualizar
             </button>
-            <button type="button" onClick={() => openEditor(null)} disabled={!localId} className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm text-primary-foreground disabled:opacity-50">
+            <button type="button" onClick={() => openEditor(null)} disabled={!localId || !canCreateContract} className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm text-primary-foreground disabled:opacity-50">
               <Plus className="h-4 w-4" />
               Nuevo {config.singular}
             </button>
           </div>
         </div>
+        {module === "contratos" && localId && availableContractLocalIds !== null && !canCreateContract ? (
+          <p className="text-sm text-muted-foreground">Este local ya tiene un contrato y no está disponible para un nuevo contrato.</p>
+        ) : null}
 
         <section className="flex flex-wrap items-center gap-3 rounded-lg bg-card p-4 shadow-sm">
           <label htmlFor="local-filter" className="text-sm font-medium">Local</label>
@@ -687,7 +948,7 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
                               {record.estado === "BORRADOR" ? "Emitir adenda" : "Completar adenda"}
                             </button>
                           ) : null}
-                          <button type="button" onClick={() => openEditor(record)} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">
+                          <button type="button" onClick={() => void editRecord(record)} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">
                             Editar
                           </button>
                         </div>
@@ -730,13 +991,48 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
                 const value = form[field.name] ?? "";
                 const options = fieldOptions(field);
                 const missingOptions = field.type === "select" && !field.options && options.length === 0;
+                const required = field.required || (field.name === "ruc" && form.tipoPersona === PersonType.LEGAL);
+                const Wrapper = field.type === "file" ? "div" : "label";
                 return (
-                  <label key={field.name} className={`space-y-1 text-sm ${field.type === "textarea" ? "sm:col-span-2" : ""}`}>
+                  <Wrapper key={field.name} className={`space-y-1 text-sm ${field.type === "textarea" || field.type === "file" ? "sm:col-span-2" : ""}`}>
                     <span>{field.label}</span>
-                    {field.type === "textarea" ? (
-                      <textarea required={field.required} maxLength={field.name === "descripcion" ? 4000 : 2000} rows={3} value={String(value)} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))} className="w-full rounded-md border bg-background px-3 py-2" />
+                    {field.type === "file" ? (
+                      <div className="space-y-2">
+                        <input
+                          type="file"
+                          multiple
+                          accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                          onChange={(event) => {
+                            void addContactFiles(field.name, event.currentTarget.files);
+                            event.currentTarget.value = "";
+                          }}
+                          className="block w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        />
+                        <ul className="space-y-1">
+                          {parseContactAttachments(String(value)).map((attachment) => (
+                            <li key={attachment.id} className="flex items-center justify-between gap-3 rounded border px-3 py-2 text-xs">
+                              <a href={attachment.dataUrl} target="_blank" rel="noreferrer" className="truncate text-primary hover:underline">
+                                {attachment.nombre}
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = parseContactAttachments(String(form[field.name] ?? "[]"))
+                                    .filter((item) => item.id !== attachment.id);
+                                  setForm((current) => ({ ...current, [field.name]: JSON.stringify(next) }));
+                                }}
+                                className="shrink-0 text-destructive hover:underline"
+                              >
+                                Quitar
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : field.type === "textarea" ? (
+                      <textarea required={required} maxLength={field.name === "descripcion" ? 4000 : 2000} rows={3} value={String(value)} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))} className="w-full rounded-md border bg-background px-3 py-2" />
                     ) : field.type === "select" ? (
-                      <select required={field.required && !(editing && field.name === "plantillaVersionId")} value={String(value)} disabled={missingOptions || (field.name === "estado" && Boolean(editing))} onChange={(event) => setForm((current) => ({
+                      <select required={required && !(editing && field.name === "plantillaVersionId")} value={String(value)} disabled={missingOptions || (field.name === "estado" && Boolean(editing)) || (field.name === "codigo" && Boolean(editing))} onChange={(event) => setForm((current) => ({
                         ...current,
                         [field.name]: event.target.value,
                         ...(field.name === "tipoSeparacion" && event.target.value !== "FLUCTUANTE"
@@ -749,11 +1045,11 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
                     ) : field.type === "checkbox" ? (
                       <input type="checkbox" checked={Boolean(value)} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.checked }))} className="ml-2 h-4 w-4 align-middle" />
                     ) : (
-                      <input required={field.required} type={field.type} min={field.type === "number" ? field.name === "diasTiempo" ? "1" : "0" : undefined} step={field.type === "number" ? field.name === "diasTiempo" ? "1" : "0.01" : undefined} value={String(value)} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))} className="h-10 w-full rounded-md border bg-background px-3" />
+                      <input required={required} type={field.type} min={field.type === "number" ? field.name === "diasTiempo" ? "1" : "0" : undefined} step={field.type === "number" ? field.name === "diasTiempo" ? "1" : "0.01" : undefined} value={String(value)} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))} className="h-10 w-full rounded-md border bg-background px-3" />
                     )}
                     {field.name === "estado" && editing ? <span className="block text-xs text-muted-foreground">Estado actual: {estadoLabel(String(value))}. Usa las acciones del flujo para cambiarlo.</span> : null}
                     {missingOptions ? <span className="block text-xs text-muted-foreground">Primero registra elementos relacionados en su sección.</span> : null}
-                  </label>
+                  </Wrapper>
                 );
               })}
             </div>

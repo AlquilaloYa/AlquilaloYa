@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import {
   isLocalModule,
   parseLocalRecord,
+  validateLocalContractCode,
   validateLocalSeparationAmount,
   withoutRecordType,
 } from "@/lib/locales-records";
@@ -13,9 +14,38 @@ export const dynamic = "force-dynamic";
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export async function GET(
+  request: Request,
+  { params }: { params: { recordId: string } },
+) {
+  try {
+    if (!UUID.test(params.recordId) || new URL(request.url).searchParams.get("tipo") !== "contactos") {
+      return NextResponse.json({ error: "Identificador o sección inválidos." }, { status: 400 });
+    }
+    const dbModule = await import("@contract/db");
+    const auth = await requireUser(dbModule, request);
+    if ("error" in auth) return auth.error;
+    const denied = requirePermission(auth.user, Permission.DEPARTMENT_READ);
+    if (denied) return denied;
+
+    const [record] = await dbModule.db.select()
+      .from(dbModule.schema.localContacts)
+      .where(eq(dbModule.schema.localContacts.id, params.recordId))
+      .limit(1);
+    if (!record) return NextResponse.json({ error: "Contacto no encontrado." }, { status: 404 });
+    const response = NextResponse.json(record);
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
+  } catch (error) {
+    console.error("[locales] load contact details failed", error);
+    return NextResponse.json({ error: "No se pudieron cargar los datos del contacto." }, { status: 500 });
+  }
+}
+
 async function validateReferences(
   dbModule: typeof import("@contract/db"),
   record: Exclude<ReturnType<typeof parseLocalRecord>, { error: string }>["value"],
+  excludeContractId?: string,
 ) {
   const { schema } = dbModule;
   if (record.tipo === "separaciones" || record.tipo === "contratos") {
@@ -25,6 +55,27 @@ async function validateReferences(
       .where(and(eq(schema.localContacts.id, record.contactId), eq(schema.localContacts.localId, record.localId)))
       .limit(1);
     if (!contact) return "El contacto no pertenece al local seleccionado.";
+  }
+  if (record.tipo === "contratos") {
+    const [local] = await dbModule.db
+      .select({ id: schema.locales.id, codigo: schema.locales.codigo })
+      .from(schema.locales)
+      .where(eq(schema.locales.id, record.localId))
+      .limit(1);
+    if (!local) return "Local no encontrado.";
+    const codigoError = validateLocalContractCode(record.codigo, local.codigo);
+    if (codigoError) return codigoError;
+    const [existingContract] = await dbModule.db
+      .select({ id: schema.localContracts.id })
+      .from(schema.localContracts)
+      .where(and(
+        eq(schema.localContracts.localId, record.localId),
+        inArray(schema.localContracts.estado, ["BORRADOR", "EMITIDO", "NOTARIADO_FIRMADO", "VIGENTE"]),
+      ))
+      .limit(1);
+    if (existingContract && existingContract.id !== excludeContractId) {
+      return "Este local ya tiene un contrato; solo se pueden crear contratos para locales disponibles.";
+    }
   }
   if (record.tipo === "contratos" && record.plantillaVersionId) {
     const [templateVersion] = await dbModule.db
@@ -126,7 +177,7 @@ export async function PATCH(
       const amountError = validateLocalSeparationAmount(parsed.value, local.precioAlquiler);
       if (amountError) return NextResponse.json({ error: amountError }, { status: 400 });
     }
-    const referenceError = await validateReferences(dbModule, parsed.value);
+    const referenceError = await validateReferences(dbModule, parsed.value, params.recordId);
     if (referenceError) {
       return NextResponse.json({ error: referenceError }, { status: 400 });
     }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asc } from "drizzle-orm";
+import { asc, inArray } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import { parseLocal, type LocalInput } from "@/lib/locales-validation";
 import { requirePermission, requireUser } from "@/lib/session";
@@ -14,10 +14,23 @@ export async function GET(request: Request) {
     const denied = requirePermission(auth.user, Permission.DEPARTMENT_READ);
     if (denied) return denied;
 
-    const rows = await dbModule.db
+    let rows = await dbModule.db
       .select()
       .from(dbModule.schema.locales)
       .orderBy(asc(dbModule.schema.locales.sede), asc(dbModule.schema.locales.codigo));
+    if (new URL(request.url).searchParams.get("availableForContract") === "1") {
+      const contracts = await dbModule.db
+        .select({ localId: dbModule.schema.localContracts.localId })
+        .from(dbModule.schema.localContracts)
+        .where(inArray(dbModule.schema.localContracts.estado, [
+          "BORRADOR",
+          "EMITIDO",
+          "NOTARIADO_FIRMADO",
+          "VIGENTE",
+        ]));
+      const contractedLocalIds = new Set(contracts.map((contract) => contract.localId));
+      rows = rows.filter((local) => !contractedLocalIds.has(local.id));
+    }
     const response = NextResponse.json(rows);
     response.headers.set("Cache-Control", "no-store");
     return response;

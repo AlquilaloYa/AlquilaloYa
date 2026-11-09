@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { and, asc, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import {
   isLocalModule,
   parseLocalRecord,
+  validateLocalContractCode,
   validateLocalSeparationAmount,
   withoutRecordType,
 } from "@/lib/locales-records";
@@ -35,6 +36,7 @@ function effectiveSeparationDeadline(separation: {
 async function validateReferences(
   dbModule: typeof import("@contract/db"),
   record: Exclude<ReturnType<typeof parseLocalRecord>, { error: string }>["value"],
+  excludeContractId?: string,
 ) {
   const { schema } = dbModule;
   if (record.tipo === "separaciones") {
@@ -47,6 +49,25 @@ async function validateReferences(
     return null;
   }
   if (record.tipo === "contratos") {
+    const [local] = await dbModule.db
+      .select({ id: schema.locales.id, codigo: schema.locales.codigo })
+      .from(schema.locales)
+      .where(eq(schema.locales.id, record.localId))
+      .limit(1);
+    if (!local) return "Local no encontrado.";
+    const codigoError = validateLocalContractCode(record.codigo, local.codigo);
+    if (codigoError) return codigoError;
+    const [existingContract] = await dbModule.db
+      .select({ id: schema.localContracts.id })
+      .from(schema.localContracts)
+      .where(and(
+        eq(schema.localContracts.localId, record.localId),
+        inArray(schema.localContracts.estado, ["BORRADOR", "EMITIDO", "NOTARIADO_FIRMADO", "VIGENTE"]),
+      ))
+      .limit(1);
+    if (existingContract && existingContract.id !== excludeContractId) {
+      return "Este local ya tiene un contrato; solo se pueden crear contratos para locales disponibles.";
+    }
     if (record.plantillaVersionId) {
       const [templateVersion] = await dbModule.db
         .select({ id: schema.templateVersions.id })
@@ -147,7 +168,28 @@ export async function GET(request: Request) {
     let total = 0;
     switch (tipo) {
       case "contactos":
-        rows = await dbModule.db.select().from(schema.localContacts)
+        rows = await dbModule.db.select({
+          id: schema.localContacts.id,
+          localId: schema.localContacts.localId,
+          nombres: schema.localContacts.nombres,
+          apellidos: schema.localContacts.apellidos,
+          documento: schema.localContacts.documento,
+          tipoPersona: schema.localContacts.tipoPersona,
+          ruc: schema.localContacts.ruc,
+          telefono: schema.localContacts.telefono,
+          codigoPais: schema.localContacts.codigoPais,
+          email: schema.localContacts.email,
+          domicilio: schema.localContacts.domicilio,
+          nacionalidad: schema.localContacts.nacionalidad,
+          contactoEmergencia: schema.localContacts.contactoEmergencia,
+          mascotas: schema.localContacts.mascotas,
+          mascotasItems: schema.localContacts.mascotasItems,
+          copiaDniCount: sql<number>`jsonb_array_length(${schema.localContacts.copiaDni})`,
+          copiaBoletasCount: sql<number>`jsonb_array_length(${schema.localContacts.copiaBoletas})`,
+          copiaAntecedentesCount: sql<number>`jsonb_array_length(${schema.localContacts.copiaAntecedentes})`,
+          createdAt: schema.localContacts.createdAt,
+          updatedAt: schema.localContacts.updatedAt,
+        }).from(schema.localContacts)
           .where(eq(schema.localContacts.localId, localId))
           .orderBy(desc(schema.localContacts.createdAt))
           .limit(limit).offset(offset);
@@ -300,7 +342,10 @@ export async function POST(request: Request) {
       "code" in error &&
       error.code === "23505"
     ) {
-      return NextResponse.json({ error: "El código del contrato ya existe." }, { status: 409 });
+      return NextResponse.json(
+        { error: "Este local ya tiene un contrato activo." },
+        { status: 409 },
+      );
     }
     console.error("[locales] create record failed", error);
     return NextResponse.json(

@@ -1,3 +1,6 @@
+import { PersonType } from "@contract/domain/client";
+import { validateContactAttachments } from "./contact-attachments";
+
 export const LOCAL_MODULES = [
   "contactos",
   "separaciones",
@@ -14,8 +17,19 @@ type ContactInput = {
   nombres: string;
   apellidos: string;
   documento: string;
+  tipoPersona: PersonType;
+  ruc: string;
   telefono: string;
+  codigoPais: string;
   email: string;
+  domicilio: string;
+  nacionalidad: string;
+  contactoEmergencia: { nombre: string; parentesco: string; telefono: string } | null;
+  mascotas: boolean;
+  mascotasItems: string[];
+  copiaDni: { id: string; nombre: string; tipo: string; dataUrl: string }[];
+  copiaBoletas: { id: string; nombre: string; tipo: string; dataUrl: string }[];
+  copiaAntecedentes: { id: string; nombre: string; tipo: string; dataUrl: string }[];
 };
 
 type SeparationInput = {
@@ -149,14 +163,72 @@ export function parseLocalRecord(input: unknown): ParseResult {
   if (tipo === "contactos") {
     const nombres = stringValue(input, "nombres", "Nombres", 255, true);
     const apellidos = stringValue(input, "apellidos", "Apellidos", 255);
-    const documento = stringValue(input, "documento", "Documento", 50);
+    const documento = stringValue(input, "documento", "DNI/CE", 50, true);
+    const tipoPersona = enumValue(input, "tipoPersona", [PersonType.NATURAL, PersonType.LEGAL], "tipo de persona");
+    const ruc = stringValue(input, "ruc", "RUC", 20, tipoPersona.ok && tipoPersona.value === PersonType.LEGAL);
     const telefono = stringValue(input, "telefono", "Teléfono", 30);
+    const codigoPais = stringValue(input, "codigoPais", "Código de país", 6);
     const email = stringValue(input, "email", "Correo", 255);
+    const domicilio = stringValue(input, "domicilio", "Domicilio", 500);
+    const nacionalidad = stringValue(input, "nacionalidad", "Nacionalidad", 100);
+    const emergenciaInput = isObject(input.contactoEmergencia) ? input.contactoEmergencia : {};
+    const emergenciaNombre = stringValue(emergenciaInput, "nombre", "Nombre del contacto de emergencia", 255);
+    const emergenciaParentesco = stringValue(emergenciaInput, "parentesco", "Parentesco del contacto de emergencia", 100);
+    const emergenciaTelefono = stringValue(emergenciaInput, "telefono", "Teléfono del contacto de emergencia", 30);
+    const mascotasItemsInput = input.mascotasItems;
+    const mascotasItems = Array.isArray(mascotasItemsInput) && mascotasItemsInput.every((item) => typeof item === "string")
+      ? mascotasItemsInput.map((item) => item.trim()).filter(Boolean)
+      : mascotasItemsInput === undefined
+        ? []
+        : null;
+    const attachments = (key: string) => {
+      const value = input[key];
+      if (value === undefined) return { ok: true as const, value: [] as ContactInput["copiaDni"] };
+      if (
+        !Array.isArray(value) ||
+        !value.every((item) =>
+          isObject(item) &&
+          typeof item.id === "string" &&
+          typeof item.nombre === "string" &&
+          typeof item.tipo === "string" &&
+          typeof item.dataUrl === "string",
+        )
+      ) {
+        return { ok: false as const, error: "Uno de los archivos adjuntos no es válido." };
+      }
+      return { ok: true as const, value: value as ContactInput["copiaDni"] };
+    };
+    const copiaDni = attachments("copiaDni");
+    const copiaBoletas = attachments("copiaBoletas");
+    const copiaAntecedentes = attachments("copiaAntecedentes");
+    const mascotas = input.mascotas === undefined ? false : input.mascotas;
     if (!nombres.ok) return { error: nombres.error };
     if (!apellidos.ok) return { error: apellidos.error };
     if (!documento.ok) return { error: documento.error };
+    if (!tipoPersona.ok) return { error: tipoPersona.error };
+    if (!ruc.ok) return { error: ruc.error };
     if (!telefono.ok) return { error: telefono.error };
+    if (!codigoPais.ok) return { error: codigoPais.error };
     if (!email.ok) return { error: email.error };
+    if (!domicilio.ok) return { error: domicilio.error };
+    if (!nacionalidad.ok) return { error: nacionalidad.error };
+    if (!emergenciaNombre.ok) return { error: emergenciaNombre.error };
+    if (!emergenciaParentesco.ok) return { error: emergenciaParentesco.error };
+    if (!emergenciaTelefono.ok) return { error: emergenciaTelefono.error };
+    if (mascotasItems === null) return { error: "La lista de mascotas no es válida." };
+    if (!copiaDni.ok) return { error: copiaDni.error };
+    if (!copiaBoletas.ok) return { error: copiaBoletas.error };
+    if (!copiaAntecedentes.ok) return { error: copiaAntecedentes.error };
+    const attachmentError = validateContactAttachments([
+      ...copiaDni.value,
+      ...copiaBoletas.value,
+      ...copiaAntecedentes.value,
+    ]);
+    if (attachmentError) return { error: attachmentError };
+    if (typeof mascotas !== "boolean") return { error: "Indica si el contacto tiene mascotas." };
+    if (codigoPais.value && !/^\d{1,6}$/.test(codigoPais.value)) {
+      return { error: "El código de país solo puede contener números." };
+    }
     if (email.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) {
       return { error: "Ingresa un correo válido." };
     }
@@ -167,8 +239,25 @@ export function parseLocalRecord(input: unknown): ParseResult {
         nombres: nombres.value,
         apellidos: apellidos.value,
         documento: documento.value,
+        tipoPersona: tipoPersona.value,
+        ruc: ruc.value,
         telefono: telefono.value,
+        codigoPais: codigoPais.value || "51",
         email: email.value,
+        domicilio: domicilio.value,
+        nacionalidad: nacionalidad.value,
+        contactoEmergencia: emergenciaNombre.value || emergenciaParentesco.value || emergenciaTelefono.value
+          ? {
+              nombre: emergenciaNombre.value,
+              parentesco: emergenciaParentesco.value,
+              telefono: emergenciaTelefono.value,
+            }
+          : null,
+        mascotas,
+        mascotasItems,
+        copiaDni: copiaDni.value,
+        copiaBoletas: copiaBoletas.value,
+        copiaAntecedentes: copiaAntecedentes.value,
       },
     };
   }
@@ -343,6 +432,12 @@ export function parseLocalRecord(input: unknown): ParseResult {
 
 export function isLocalModule(value: string | null): value is LocalModule {
   return LOCAL_MODULES.some((module) => module === value);
+}
+
+export function validateLocalContractCode(code: string, localCode: string): string | null {
+  return code === localCode
+    ? null
+    : "El código del contrato debe coincidir con el código del local seleccionado.";
 }
 
 export function validateLocalSeparationAmount(
