@@ -134,6 +134,13 @@
       "when": 1792087200002,
       "tag": "0020_fieldops_push_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794268800000,
+      "tag": "0032_dias_extras_y_checkin",
+      "breakpoints": true
     }
   ]
 }

@@ -1,17 +1,47 @@
 import { and, eq, inArray } from "drizzle-orm";
 
-export type EventoContrato = "REVISION" | "LIMPIEZA" | "CHECKOFF";
+export type EventoContrato = "REVISION" | "LIMPIEZA" | "CHECKIN" | "CHECKOFF";
+
+type CargoDiasExtras = {
+  fechaFinPeriodo: string | Date;
+  dias: number;
+};
+
+function fechaIso(value: string | Date): string {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
+}
+
+export function calcularFechaCheckOut(
+  fechaFinPeriodo: string,
+  cargos: CargoDiasExtras[],
+): { fecha: string; diasExtras: number } {
+  const diasExtras = cargos
+    .filter((cargo) => fechaIso(cargo.fechaFinPeriodo) === fechaFinPeriodo)
+    .reduce((total, cargo) => total + cargo.dias, 0);
+  const fecha = new Date(`${fechaFinPeriodo}T12:00:00Z`);
+  fecha.setUTCDate(fecha.getUTCDate() + diasExtras);
+  return { fecha: fecha.toISOString().slice(0, 10), diasExtras };
+}
 
 function fechaMediodia(iso: string): Date | null {
-  const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00-05:00`);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function fechaEnLima(value: Date | null): string | null {
+  if (!value) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Lima",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
+}
+
 function shiftDias(iso: string, dias: number): string {
-  const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
-  d.setDate(d.getDate() + dias);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
 }
 
 /**
@@ -52,7 +82,16 @@ export async function sincronizarTareasContrato(
   if (!c?.fechaInicio || !c?.fechaFin) return { creadas: 0, actualizadas: 0 };
 
   const inicio = String(c.fechaInicio).slice(0, 10);
-  const fin = String(c.fechaFin).slice(0, 10);
+  const finPeriodo = String(c.fechaFin).slice(0, 10);
+  const cargosDiasExtras = await db
+    .select({
+      fechaFinPeriodo: schema.diasExtras.fechaFinPeriodo,
+      dias: schema.diasExtras.dias,
+    })
+    .from(schema.diasExtras)
+    .where(eq(schema.diasExtras.contractId, contractId));
+  const checkout = calcularFechaCheckOut(finPeriodo, cargosDiasExtras);
+  const fin = checkout.fecha;
   const cliente = `${c.clienteNombre ?? ""} ${c.clienteApellido ?? ""}`.trim() || "cliente";
   const depto = `Depto ${c.deptNumero || c.deptCodigo || "—"}`;
 
@@ -70,10 +109,18 @@ export async function sincronizarTareasContrato(
       detalle: `Limpieza 1 día antes del inicio (${inicio})`,
     },
     {
+      kind: "CHECKIN",
+      fecha: inicio,
+      titulo: `Check-in ${depto} · ${c.codigoContrato}`,
+      detalle: `Check-in del departamento el día de inicio del contrato (${inicio})`,
+    },
+    {
       kind: "CHECKOFF",
       fecha: fin,
       titulo: `Revisión (Check out) ${depto} · ${c.codigoContrato}`,
-      detalle: `Check out del departamento el día del fin de contrato (${fin})`,
+      detalle: checkout.diasExtras
+        ? `Check out del departamento al terminar ${checkout.diasExtras} día(s) extra, el ${fin}`
+        : `Check out del departamento el día del fin de contrato (${fin})`,
     },
   ];
 
@@ -83,7 +130,7 @@ export async function sincronizarTareasContrato(
     .where(
       and(
         eq(schema.tasks.origenContratoId, contractId),
-        inArray(schema.tasks.origenEvento, ["REVISION", "LIMPIEZA", "CHECKOFF"])
+        inArray(schema.tasks.origenEvento, ["REVISION", "LIMPIEZA", "CHECKIN", "CHECKOFF"])
       )
     );
 
@@ -96,6 +143,8 @@ export async function sincronizarTareasContrato(
       fechaLimite?: Date;
       titulo?: string;
       descripcion?: string;
+      estado?: string;
+      completedAt?: Date | null;
       updatedAt: Date;
     };
   }> = [];
@@ -122,12 +171,18 @@ export async function sincronizarTareasContrato(
       fechaLimite?: Date;
       titulo?: string;
       descripcion?: string;
+      estado?: string;
+      completedAt?: Date | null;
       updatedAt: Date;
     } = { updatedAt: new Date() };
     let toco = false;
-    if (prev.fechaLimite?.getTime() !== limite.getTime()) {
+    if (fechaEnLima(prev.fechaLimite) !== ev.fecha) {
       patch.fechaLimite = limite;
       toco = true;
+      if (ev.kind === "CHECKOFF" && prev.estado === "RESUELTA") {
+        patch.estado = "PENDIENTE";
+        patch.completedAt = null;
+      }
     }
     if (prev.titulo !== ev.titulo) {
       patch.titulo = ev.titulo;
@@ -142,7 +197,7 @@ export async function sincronizarTareasContrato(
     }
   }
   if (nuevas.length > 0) {
-    await db.insert(schema.tasks).values(nuevas);
+    await db.insert(schema.tasks).values(nuevas).onConflictDoNothing();
     creadas = nuevas.length;
   }
   await Promise.all(

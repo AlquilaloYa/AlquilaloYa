@@ -86,6 +86,184 @@ export interface CuotaExtensionValor {
   estado: string;
 }
 
+class ExtensionPaymentConflictError extends Error {
+  readonly status = 409;
+}
+
+function pagoTieneActividad(pago: {
+  estado: string;
+  montoPagado: string | number;
+  fechaPago: string | Date | null;
+  voucherNombre: string | null;
+  voucherUrl: string | null;
+  vouchers: unknown[];
+}): boolean {
+  return (
+    pago.estado !== "PENDIENTE" ||
+    Number(pago.montoPagado) > 0 ||
+    pago.fechaPago !== null ||
+    pago.voucherNombre !== null ||
+    pago.voucherUrl !== null ||
+    (Array.isArray(pago.vouchers) && pago.vouchers.length > 0)
+  );
+}
+
+function requiereCambioCuota(
+  pago: { monto: string | number; mantenimiento: string | number },
+  cuota: CuotaExtensionValor,
+): boolean {
+  return (
+    Number(pago.monto) !== Number(cuota.monto) ||
+    Number(pago.mantenimiento) !== Number(cuota.mantenimiento)
+  );
+}
+
+async function actualizarExtensionYCobros(
+  dbModule: typeof import("@contract/db"),
+  contractId: string,
+  fechaFinEsperada: string,
+  nuevaFechaFin: string,
+  cuotas: CuotaExtensionValor[],
+): Promise<void> {
+  const { db, schema } = dbModule;
+  const { and, eq, inArray, sql } = await import("drizzle-orm");
+
+  await db.transaction(async (tx) => {
+    const [contract] = await tx
+      .select({ fechaFin: schema.contracts.fechaFin })
+      .from(schema.contracts)
+      .where(eq(schema.contracts.id, contractId))
+      .for("update");
+    if (!contract) throw new Error("Contrato no encontrado");
+    if (dstr(contract.fechaFin) !== fechaFinEsperada) {
+      throw new ExtensionPaymentConflictError(
+        "El plazo del contrato cambió mientras se procesaba la adenda. Actualiza la página e inténtalo nuevamente.",
+      );
+    }
+
+    const periodos = cuotas.map((cuota) => cuota.periodo);
+    if (periodos.length > 0) {
+      const anteriores = await tx
+        .select({
+          periodo: schema.payments.periodo,
+          monto: schema.payments.monto,
+          mantenimiento: schema.payments.mantenimiento,
+          montoPagado: schema.payments.montoPagado,
+          fechaPago: schema.payments.fechaPago,
+          estado: schema.payments.estado,
+          voucherNombre: schema.payments.voucherNombre,
+          voucherUrl: schema.payments.voucherUrl,
+          vouchers: schema.payments.vouchers,
+        })
+        .from(schema.payments)
+        .where(and(
+          eq(schema.payments.contractId, contractId),
+          inArray(schema.payments.periodo, periodos),
+        ))
+        .for("update");
+
+      const cuotasPorPeriodo = new Map(
+        cuotas.map((cuota) => [cuota.periodo, cuota] as const),
+      );
+      const conActividad = anteriores.find((pago) => {
+        const cuota = cuotasPorPeriodo.get(dstr(pago.periodo));
+        return Boolean(
+          cuota && pagoTieneActividad(pago) && requiereCambioCuota(pago, cuota),
+        );
+      });
+      if (conActividad) {
+        throw new ExtensionPaymentConflictError(
+          `No se puede cambiar el monto de la cuota del ${dstr(conActividad.periodo)} porque ya tiene un pago o comprobante asociado. Regulariza ese pago antes de modificar el plazo.`,
+        );
+      }
+
+      await tx
+        .insert(schema.payments)
+        .values(cuotas)
+        .onConflictDoNothing({
+          target: [schema.payments.contractId, schema.payments.periodo],
+        });
+
+      const pagosActuales = await tx
+        .select({
+          id: schema.payments.id,
+          periodo: schema.payments.periodo,
+          monto: schema.payments.monto,
+          mantenimiento: schema.payments.mantenimiento,
+          montoPagado: schema.payments.montoPagado,
+          fechaPago: schema.payments.fechaPago,
+          estado: schema.payments.estado,
+          voucherNombre: schema.payments.voucherNombre,
+          voucherUrl: schema.payments.voucherUrl,
+          vouchers: schema.payments.vouchers,
+        })
+        .from(schema.payments)
+        .where(and(
+          eq(schema.payments.contractId, contractId),
+          inArray(schema.payments.periodo, periodos),
+        ))
+        .for("update");
+
+      const pagoConcurrente = pagosActuales.find((pago) => {
+        const cuota = cuotasPorPeriodo.get(dstr(pago.periodo));
+        return Boolean(
+          cuota && pagoTieneActividad(pago) && requiereCambioCuota(pago, cuota),
+        );
+      });
+      if (pagoConcurrente) {
+        throw new ExtensionPaymentConflictError(
+          `No se puede cambiar el monto de la cuota del ${dstr(pagoConcurrente.periodo)} porque ya tiene un pago o comprobante asociado. Regulariza ese pago antes de modificar el plazo.`,
+        );
+      }
+
+      const pagosPorPeriodo = new Map(
+        pagosActuales.map((pago) => [dstr(pago.periodo), pago] as const),
+      );
+      const cambiosPorValores = new Map<
+        string,
+        { ids: string[]; monto: string; mantenimiento: string; penalidad: string }
+      >();
+      for (const cuota of cuotas) {
+        const pago = pagosPorPeriodo.get(cuota.periodo);
+        if (!pago) {
+          throw new Error(`No se pudo crear la cuota del ${cuota.periodo}.`);
+        }
+        if (requiereCambioCuota(pago, cuota)) {
+          const key = `${cuota.monto}:${cuota.mantenimiento}:${cuota.penalidad}`;
+          const grupo = cambiosPorValores.get(key) ?? {
+            ids: [],
+            monto: cuota.monto,
+            mantenimiento: cuota.mantenimiento,
+            penalidad: cuota.penalidad,
+          };
+          grupo.ids.push(pago.id);
+          cambiosPorValores.set(key, grupo);
+        }
+      }
+      for (const grupo of cambiosPorValores.values()) {
+        await tx
+          .update(schema.payments)
+          .set({
+            monto: grupo.monto,
+            mantenimiento: grupo.mantenimiento,
+            penalidad: grupo.penalidad,
+            updatedAt: new Date(),
+          })
+          .where(inArray(schema.payments.id, grupo.ids));
+      }
+    }
+
+    await tx
+      .update(schema.contracts)
+      .set({
+        fechaFin: nuevaFechaFin,
+        actualizadoEn: new Date(),
+        revision: sql`${schema.contracts.revision} + 1`,
+      })
+      .where(eq(schema.contracts.id, contractId));
+  });
+}
+
 interface ResultadoCuotas {
   valores: CuotaExtensionValor[];
   diasProrrateo: number | null;
@@ -303,7 +481,7 @@ export async function POST(request: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq, and, inArray, count, sql } = await import("drizzle-orm");
+    const { eq, and, inArray, count } = await import("drizzle-orm");
 
     const [{ value: nAdendas = 0 } = {}] = await db
       .select({ value: count() })
@@ -375,16 +553,6 @@ export async function POST(request: Request) {
         );
       }
       cuotasNuevas = periodosExtension(fechaFinActual, nuevaFechaFin);
-      await db
-        .update(schema.contracts)
-        .set({
-          fechaFin: nuevaFechaFin,
-          actualizadoEn: new Date(),
-          revision: sql`${schema.contracts.revision} + 1`,
-        })
-        .where(eq(schema.contracts.id, contract.id));
-      await sincronizarTareasDeContrato(contract.id);
-
       const montoCanon = Number(contract.montoCanonMensual);
       const mantMensual = Number(contract.mantenimiento ?? "50");
       const cobroPorDias = Boolean(body.cobroPorDias);
@@ -396,14 +564,14 @@ export async function POST(request: Request) {
         mantMensual,
         cobroPorDias
       );
-      if (cuotasValores.valores.length > 0) {
-        await db
-          .insert(schema.payments)
-          .values(cuotasValores.valores)
-          .onConflictDoNothing({
-            target: [schema.payments.contractId, schema.payments.periodo],
-          });
-      }
+      await actualizarExtensionYCobros(
+        dbModule,
+        contract.id,
+        fechaFinActual,
+        nuevaFechaFin,
+        cuotasValores.valores,
+      );
+      await sincronizarTareasDeContrato(contract.id);
       camposContrato = {
         fechaFinAnterior: fechaFinActual,
         codigoBase: contract.codigoContrato,
@@ -553,11 +721,14 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = (error as Error).message;
-    const status = /Chrome|snapshot emitido|solo puede crearse|requerido|contenido|posterior/i.test(
-      message
-    )
-      ? 400
-      : 500;
+    const status =
+      error instanceof ExtensionPaymentConflictError
+        ? error.status
+        : /Chrome|snapshot emitido|solo puede crearse|requerido|contenido|posterior/i.test(
+              message,
+            )
+          ? 400
+          : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }
@@ -609,7 +780,7 @@ export async function PATCH(request: Request) {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
     };
-    const { eq, sql } = await import("drizzle-orm");
+    const { eq } = await import("drizzle-orm");
 
     const doc = await findDocumentById(db, schema, body.documentId);
     if (!doc) {
@@ -698,15 +869,6 @@ export async function PATCH(request: Request) {
         );
       }
       const cuotasNuevas = periodosExtension(fechaFinActual, nuevaFechaFinAdenda);
-      await db
-        .update(schema.contracts)
-        .set({
-          fechaFin: nuevaFechaFinAdenda,
-          actualizadoEn: new Date(),
-          revision: sql`${schema.contracts.revision} + 1`,
-        })
-        .where(eq(schema.contracts.id, contract.id));
-      await sincronizarTareasDeContrato(contract.id);
       const cuotasValores = valoresCuotasExtension(
         contract.id,
         cuotasNuevas,
@@ -715,14 +877,14 @@ export async function PATCH(request: Request) {
         Number(contract.mantenimiento ?? "50"),
         Boolean(body.cobroPorDias)
       );
-      if (cuotasValores.valores.length > 0) {
-        await db
-          .insert(schema.payments)
-          .values(cuotasValores.valores)
-          .onConflictDoNothing({
-            target: [schema.payments.contractId, schema.payments.periodo],
-          });
-      }
+      await actualizarExtensionYCobros(
+        dbModule,
+        contract.id,
+        fechaFinActual,
+        nuevaFechaFinAdenda,
+        cuotasValores.valores,
+      );
+      await sincronizarTareasDeContrato(contract.id);
     }
 
     // 2) Snapshot actualizado (título, numeración, contenido y plazo).
@@ -819,9 +981,12 @@ export async function PATCH(request: Request) {
     });
   } catch (error) {
     const message = (error as Error).message;
-    const status = /requerido|posterior|adenda|snapshot|no encontrado/i.test(message)
-      ? 400
-      : 500;
+    const status =
+      error instanceof ExtensionPaymentConflictError
+        ? error.status
+        : /requerido|posterior|adenda|snapshot|no encontrado/i.test(message)
+          ? 400
+          : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

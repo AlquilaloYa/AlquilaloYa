@@ -25,6 +25,7 @@ export * from "./hr-onboarding";
 export * from "./attendance";
 export * from "./permission-requests";
 export * from "./servicios-extras";
+export * from "./dias-extras";
 export * from "./personas-no-alquilar";
 export * from "./accounting";
 export * from "./gastos";

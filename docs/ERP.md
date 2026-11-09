@@ -150,6 +150,9 @@ Características del núcleo contractual:
 ### 3.8 Cobranza
 - `/pagos`: pagos y cobranza. API: `GET/POST /api/payments`,
   `GET /api/cobranza-vendedores`, `GET /api/analiticas-cobranza`. Tabla: `payments`.
+- `/dias-extras`: cargos separados del canon mensual, hasta 7 días por período
+  (S/ 100 por día). El check-out y sus avisos se sincronizan con esos cargos;
+  las ampliaciones mayores se gestionan mediante adendas. Tabla: `dias_extras`.
 
 ### 3.9 Analíticas
 - `/analiticas`: reportes. API: `GET /api/analiticas-cobranza`,

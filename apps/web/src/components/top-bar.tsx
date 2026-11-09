@@ -23,6 +23,12 @@ interface InboxNotification {
   createdAt: string;
 }
 
+interface Work123Reminder {
+  id: string;
+  titulo: string;
+  descripcion: string;
+}
+
 export interface SearchResult {
   href: string;
   label: string;
@@ -44,6 +50,9 @@ export function TopBar({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationError, setNotificationError] = useState("");
   const [popups, setPopups] = useState<InboxNotification[]>([]);
+  const [work123Reminders, setWork123Reminders] = useState<Work123Reminder[]>([]);
+  const [work123Error, setWork123Error] = useState("");
+  const [confirmingTaskId, setConfirmingTaskId] = useState<string | null>(null);
   const knownNotificationIds = useRef<Set<string> | null>(null);
   const bellRef = useRef<HTMLDivElement>(null);
 
@@ -140,6 +149,42 @@ export function TopBar({
     return () => window.clearInterval(interval);
   }, [refreshNotifications]);
 
+  const refreshWork123Reminders = useCallback(async () => {
+    try {
+      const response = await apiFetch("/api/tareas/recordatorios", {
+        method: "POST",
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? "No se pudieron cargar las tareas de hoy");
+      }
+      const data = (await response.json()) as { items?: Work123Reminder[] };
+      setWork123Reminders(data.items ?? []);
+      setWork123Error("");
+    } catch (error) {
+      setWork123Error(
+        error instanceof Error ? error.message : "No se pudieron cargar las tareas de hoy",
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (
+      !user ||
+      !AccessControl.forRole(user.role, user.additionalPermissions).can(
+        Permission.CONTRACT_READ,
+      )
+    ) {
+      setWork123Reminders([]);
+      setWork123Error("");
+      return;
+    }
+    void refreshWork123Reminders();
+    const interval = window.setInterval(() => void refreshWork123Reminders(), 60_000);
+    return () => window.clearInterval(interval);
+  }, [refreshWork123Reminders, user]);
+
   // Cierre automático secuencial de notificaciones flotantes (8 seg)
   useEffect(() => {
     if (!popups.length) return;
@@ -180,6 +225,27 @@ export function TopBar({
     dismissPopup(notification.id);
     if (notification.href.startsWith("/") && !notification.href.startsWith("//")) {
       router.push(notification.href);
+    }
+  }
+
+  async function confirmarTarea(task: Work123Reminder) {
+    setConfirmingTaskId(task.id);
+    setWork123Error("");
+    try {
+      const response = await apiFetch("/api/tareas", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: task.id, estado: "RESUELTA" }),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? "No se pudo confirmar la tarea");
+      }
+      setWork123Reminders((current) => current.filter((item) => item.id !== task.id));
+    } catch (error) {
+      setWork123Error(error instanceof Error ? error.message : "No se pudo confirmar la tarea");
+    } finally {
+      setConfirmingTaskId(null);
     }
   }
 
@@ -354,6 +420,33 @@ export function TopBar({
           </Button>
         </div>
       </header>
+
+      {work123Reminders.length > 0 || work123Error ? (
+        <aside
+          aria-label="Avisos de check-in y check-out"
+          className="pointer-events-auto fixed right-4 top-20 z-50 flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2.5"
+        >
+          {work123Error ? (
+            <p role="alert" className="rounded-lg border border-destructive/40 bg-background p-3 text-sm text-destructive shadow-lg">
+              {work123Error}
+            </p>
+          ) : null}
+          {work123Reminders.map((task) => (
+            <div key={task.id} role="status" className="rounded-xl border border-violet-500/40 bg-background p-4 shadow-xl">
+              <p className="text-sm font-semibold">{task.titulo}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{task.descripcion}</p>
+              <button
+                type="button"
+                onClick={() => void confirmarTarea(task)}
+                disabled={confirmingTaskId === task.id}
+                className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                Tarea hecha
+              </button>
+            </div>
+          ))}
+        </aside>
+      ) : null}
 
       {/* POP-ups de notificaciones en la esquina inferior derecha */}
       {popups.length > 0 ? (
