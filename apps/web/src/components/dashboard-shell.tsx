@@ -135,6 +135,7 @@ const NAV_ITEMS: NavItem[] = [
     group: "contratos",
   },
   { href: "/adendas", label: "Adendas", icon: ScrollText, section: "Adendas", permission: "contract.read", group: "contratos" },
+  { href: "/dias-extras", label: "Días extras", icon: CalendarClock, section: "Días extras", permission: "contract.read", group: "contratos" },
   { href: "/servicios-extras", label: "Servicios Extras", icon: Zap, section: "Servicios Extras", permission: "contract.read", group: "contratos" },
   { href: "/separaciones", label: "Separación", icon: Receipt, section: "Separación", permission: "contract.read", group: "contratos" },
   { href: "/plantillas", label: "Plantillas", icon: FilePlus2, section: "Plantillas", permission: "template.read", group: "contratos" },

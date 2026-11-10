@@ -158,8 +158,6 @@ export async function PUT(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user, Permission.CLIENT_UPDATE);
-    if (denied) return denied;
 
     const { db, schema } = dbModule as {
       db: typeof import("@contract/db").db;
@@ -170,11 +168,38 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "Falta id" }, { status: 400 });
     }
     const [existing] = await db
-      .select({ id: schema.tasks.id, estado: schema.tasks.estado, empleadoId: schema.tasks.empleadoId })
+      .select({
+        id: schema.tasks.id,
+        estado: schema.tasks.estado,
+        empleadoId: schema.tasks.empleadoId,
+        origenEvento: schema.tasks.origenEvento,
+      })
       .from(schema.tasks)
       .where(eq(schema.tasks.id, body.id));
     if (!existing) {
       return NextResponse.json({ error: "Tarea no encontrada" }, { status: 404 });
+    }
+    const clientUpdateDenied = requirePermission(auth.user, Permission.CLIENT_UPDATE);
+    const contractReadDenied = requirePermission(auth.user, Permission.CONTRACT_READ);
+    const bodyKeys = Object.keys(body);
+    const isReminderConfirmation =
+      body.estado === "RESUELTA" &&
+      (existing.origenEvento === "CHECKIN" || existing.origenEvento === "CHECKOFF") &&
+      bodyKeys.every((key) => key === "id" || key === "estado");
+    const isCheckOutScheduleUpdate =
+      existing.origenEvento === "CHECKOFF" &&
+      (body.horaEjecucion !== undefined || body.repetirCadaHora !== undefined) &&
+      bodyKeys.every(
+        (key) =>
+          key === "id" ||
+          key === "horaEjecucion" ||
+          key === "repetirCadaHora",
+      );
+    const isAllowedReminderOperation =
+      !contractReadDenied &&
+      (isReminderConfirmation || isCheckOutScheduleUpdate);
+    if (clientUpdateDenied && !isAllowedReminderOperation) {
+      return clientUpdateDenied;
     }
     const patch: {
       titulo?: string;

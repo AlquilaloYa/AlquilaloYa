@@ -9,6 +9,7 @@ import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-
 import { PaymentVerificationDialog } from "@/components/payment-verification-dialog";
 import { CobranzaVendedores } from "@/components/cobranza-vendedores";
 import { CobranzaServiciosExtras } from "@/components/cobranza-servicios-extras";
+import { CobranzaDiasExtras } from "@/components/cobranza-dias-extras";
 import { apiFetch } from "@/lib/api";
 import {
   addMonths,
@@ -925,6 +926,7 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
         </div>
 
         {!localMode ? <CobranzaVendedores /> : null}
+        {!localMode ? <CobranzaDiasExtras /> : null}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">

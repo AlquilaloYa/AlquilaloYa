@@ -1,6 +1,6 @@
 import {
-  index,
   boolean,
+  index,
   pgTable,
   text,
   timestamp,
@@ -42,6 +42,11 @@ export const tasks = pgTable(
       .on(table.origenContratoId, table.origenEvento)
       .where(
         sql`${table.origenContratoId} IS NOT NULL AND ${table.origenEvento} = 'VENCIMIENTO'`,
+      ),
+    uniqueIndex("tasks_contract_checkinout_unique")
+      .on(table.origenContratoId, table.origenEvento)
+      .where(
+        sql`${table.origenContratoId} IS NOT NULL AND ${table.origenEvento} IN ('CHECKIN', 'CHECKOFF')`,
       ),
   ]
 );

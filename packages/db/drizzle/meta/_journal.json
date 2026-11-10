@@ -138,8 +138,15 @@
     {
       "idx": 19,
       "version": "7",
+      "when": 1794268800000,
+      "tag": "0032_dias_extras_y_checkin",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
       "when": 1794272400000,
-      "tag": "0021_checkoff_schedule",
+      "tag": "0033_checkoff_schedule",
       "breakpoints": true
     }
   ]
