@@ -100,8 +100,9 @@ export async function GET(req: Request) {
       )
       .orderBy(schema.payments.updatedAt);
 
+    const isAdmin = auth.user.role === "ADMIN";
     const payments = rows.flatMap((row) => {
-      if (!canViewVerificationPayment(auth.user.email, row.codigoContrato, row.departamento)) {
+      if (!canViewVerificationPayment(auth.user.email, row.codigoContrato, row.departamento, isAdmin)) {
         return [];
       }
       const owner = normalizarPersona(row.personaPago);
@@ -142,7 +143,7 @@ export async function GET(req: Request) {
     const response = NextResponse.json({
       month,
       payments,
-      access: paymentVerificationAccess(auth.user.email),
+      access: paymentVerificationAccess(auth.user.email, auth.user.role === "ADMIN"),
     });
     response.headers.set("Cache-Control", "no-store");
     return response;

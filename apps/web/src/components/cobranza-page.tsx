@@ -165,7 +165,7 @@ async function cargarLista<T>(path: string): Promise<T[]> {
   return data as T[];
 }
 
-type AbonoModo = "PARCIAL" | "TOTAL";
+type AbonoModo = "PARCIAL" | "TOTAL" | "VOUCHER";
 
 function AbonoModal({
   fila,
@@ -188,7 +188,8 @@ function AbonoModal({
   const [cargandoPago, setCargandoPago] = useState(Boolean(fila.pago));
   const [pagoDetallado, setPagoDetallado] = useState<PaymentRow | null>(null);
 
-  const montoNum = modo === "TOTAL" ? fila.saldo : Number(monto);
+  const montoNum =
+    modo === "TOTAL" ? fila.saldo : modo === "VOUCHER" ? null : Number(monto);
 
   useEffect(() => {
     if (!fila.pago) {
@@ -255,6 +256,10 @@ function AbonoModal({
   }
 
   async function confirmar() {
+    if (modo === "VOUCHER" && !fila.pago) {
+      setError("No hay un pago existente para adjuntar el voucher.");
+      return;
+    }
     if (fila.pago && !pagoDetallado) {
       setError("Espera a que terminen de cargar los vouchers del pago.");
       return;
@@ -267,36 +272,47 @@ function AbonoModal({
       setError("Adjunta el baucher del pago (imagen JPEG).");
       return;
     }
-    if (!Number.isFinite(montoNum) || montoNum <= 0) {
+    if (modo !== "VOUCHER" && (!Number.isFinite(montoNum) || montoNum === null || montoNum <= 0)) {
       setError("Ingresa el monto abonado en el baucher.");
       return;
     }
-    if (montoNum > fila.saldo + 0.001) {
+    if (modo !== "VOUCHER" && montoNum !== null && montoNum > fila.saldo + 0.001) {
       setError(`El monto no puede superar el saldo pendiente (${moneda(fila.saldo)}).`);
       return;
     }
     setGuardando(true);
     setError(null);
     try {
+      const nuevosVouchers: PaymentVoucher[] = [
+        {
+          nombre: voucher.nombre,
+          url: voucher.dataUrl,
+          ...(montoNum !== null ? { monto: montoNum } : {}),
+        },
+      ];
       const existentes: PaymentVoucher[] = (pagoDetallado?.vouchers ?? []).map((v) => ({
         nombre: v.nombre,
         url: v.url,
         ...(typeof v.monto === "number" ? { monto: v.monto } : {}),
       }));
-      const vouchers = [...existentes, { nombre: voucher.nombre, url: voucher.dataUrl, monto: montoNum }];
+      const vouchers =
+        modo === "VOUCHER" ? nuevosVouchers : [...existentes, ...nuevosVouchers];
       // Usa los montos de la fila de pago existente (puede estar prorrateada
       // por días) y solo cae al canon mensual del contrato cuando no hay fila.
       const usaMontosFila = fila.pago && Number(fila.pago.monto) > 0;
-      const payload = {
-        id: fila.pago?.id,
-        contractId: fila.contrato.id,
-        periodo: fila.periodo,
-        monto: usaMontosFila ? fila.pago!.monto : fila.contrato.montoCanonMensual,
-        mantenimiento: usaMontosFila
-          ? fila.pago!.mantenimiento
-          : fila.contrato.mantenimiento ?? "50",
-        vouchers,
-      };
+      const payload =
+        modo === "VOUCHER"
+          ? { id: fila.pago!.id, voucherOnly: true, vouchers }
+          : {
+              id: fila.pago?.id,
+              contractId: fila.contrato.id,
+              periodo: fila.periodo,
+              monto: usaMontosFila ? fila.pago!.monto : fila.contrato.montoCanonMensual,
+              mantenimiento: usaMontosFila
+                ? fila.pago!.mantenimiento
+                : fila.contrato.mantenimiento ?? "50",
+              vouchers,
+            };
       const res = fila.pago
         ? await apiFetch(paymentsApiBase, {
             method: "PATCH",
@@ -324,13 +340,21 @@ function AbonoModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl border border-outline-variant bg-surface-container-lowest p-5 shadow-xl">
         <h3 className="font-headline-md text-on-surface">
-          {modo === "TOTAL" ? "Pago total" : "Pago parcial"}
+          {modo === "VOUCHER"
+            ? "Adjuntar voucher"
+            : modo === "TOTAL"
+              ? "Pago total"
+              : "Pago parcial"}
         </h3>
         <p className="mt-1 text-sm text-on-surface-variant">
           {fila.contrato.codigoContrato} · {fila.periodoFecha.toLocaleDateString("es-PE")}
         </p>
 
-        <dl className="mt-4 grid grid-cols-3 gap-2 text-sm">
+        {modo === "VOUCHER" ? (
+          <p className="mt-4 text-sm text-on-surface-variant">
+            Adjunta el comprobante correcto. El estado y los montos del pago no cambiarán.
+          </p>
+        ) : <dl className="mt-4 grid grid-cols-3 gap-2 text-sm">
           <div>
             <dt className="text-xs uppercase tracking-wider text-on-surface-variant">Total mes</dt>
             <dd className="font-semibold">{moneda(fila.total)}</dd>
@@ -343,9 +367,9 @@ function AbonoModal({
             <dt className="text-xs uppercase tracking-wider text-on-surface-variant">Saldo</dt>
             <dd className="font-semibold text-destructive">{moneda(fila.saldo)}</dd>
           </div>
-        </dl>
+        </dl>}
 
-        <label className="mt-4 block text-sm">
+        {modo !== "VOUCHER" ? <label className="mt-4 block text-sm">
           <span className="text-on-surface-variant">Monto abonado (S/)</span>
           <input
             type="number"
@@ -362,7 +386,7 @@ function AbonoModal({
               Se abonará el saldo pendiente: el pago queda cancelado o completa el parcial.
             </span>
           ) : null}
-        </label>
+        </label> : null}
 
         <label className="mt-3 block text-sm">
           <span className="text-on-surface-variant">Baucher (JPEG)</span>
@@ -410,7 +434,7 @@ function AbonoModal({
             disabled={guardando || cargandoPago || optimizandoVoucher}
             className="rounded bg-primary px-3 py-1.5 text-sm text-on-primary hover:opacity-90 disabled:opacity-50"
           >
-            {cargandoPago ? "Cargando…" : guardando ? "Guardando…" : "Guardar abono"}
+            {cargandoPago ? "Cargando…" : guardando ? "Guardando…" : modo === "VOUCHER" ? "Guardar voucher" : "Guardar abono"}
           </button>
         </div>
       </div>
@@ -1105,9 +1129,20 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                       </td>
                       <td className="px-3 py-2">
                         {f.estadoPago === "PAGADO" ? (
-                          <span className="text-xs text-on-surface-variant">
-                            {f.pago?.fechaPago ?? "—"}
-                          </span>
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="text-xs text-on-surface-variant">
+                              {f.pago?.fechaPago ?? "—"}
+                            </span>
+                            {f.pago && !f.pago.voucherNombre ? (
+                              <button
+                                type="button"
+                                onClick={() => setAbono({ fila: f, modo: "VOUCHER" })}
+                                className="rounded border border-outline-variant px-2 py-1 text-xs text-primary hover:bg-surface-container"
+                              >
+                                Adjuntar voucher
+                              </button>
+                            ) : null}
+                          </div>
                         ) : (
                           <div className="flex flex-col items-start gap-1.5">
                             <div className="flex flex-wrap items-center gap-2">

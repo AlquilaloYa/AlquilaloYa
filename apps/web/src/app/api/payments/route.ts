@@ -345,9 +345,18 @@ export async function PATCH(req: Request) {
     const denied = requirePermission(auth.user, Permission.CONTRACT_UPDATE);
     if (denied) return denied;
 
-    const { id, ...patch } = await req.json();
+    const { id, voucherOnly = false, ...patch } = await req.json();
     if (!id) {
       return NextResponse.json({ error: "Falta el id" }, { status: 400 });
+    }
+    if (typeof voucherOnly !== "boolean") {
+      return NextResponse.json({ error: "Modo de voucher no válido" }, { status: 400 });
+    }
+    if (voucherOnly && Object.keys(patch).some((key) => key !== "vouchers")) {
+      return NextResponse.json(
+        { error: "Adjuntar un voucher no permite modificar los datos del pago." },
+        { status: 400 }
+      );
     }
 
     const { db, schema } = dbModule as {
@@ -370,6 +379,7 @@ export async function PATCH(req: Request) {
       values.diasIndulgencia = Math.max(0, Math.floor(Number(patch.diasIndulgencia) || 0));
 
     const tocaPago =
+      voucherOnly ||
       "vouchers" in patch ||
       "estado" in patch ||
       "monto" in patch ||
@@ -393,67 +403,114 @@ export async function PATCH(req: Request) {
         .where(sql`id = ${id}`)
         .limit(1);
 
-      const vouchers: { nombre: string; url: string; monto?: number }[] =
-        Array.isArray(values.vouchers) && values.vouchers.length > 0
-          ? (values.vouchers as { nombre: string; url: string; monto?: number }[])
-          : typeof patch.voucherUrl === "string" &&
-              typeof patch.voucherNombre === "string"
-            ? normalizarVouchers([
-                { nombre: patch.voucherNombre, url: patch.voucherUrl },
-              ])
-            : Array.isArray(existente?.vouchers) && existente.vouchers.length > 0
-              ? normalizarVouchers(existente.vouchers)
-              : existente?.voucherUrl
-                ? normalizarVouchers([
-                    { nombre: existente.voucherNombre ?? "", url: existente.voucherUrl },
-                  ])
-                : [];
-
-      const total = totalDelMes(
-        "monto" in patch ? patch.monto : existente?.monto,
-        "mantenimiento" in patch ? patch.mantenimiento : existente?.mantenimiento,
-      );
-      const estadoFallback =
-        typeof values.estado === "string"
-          ? values.estado
-          : existente?.estado ?? "PENDIENTE";
-      const { montoPagado, estado } = derivarPago(vouchers, total, estadoFallback);
-
-      if ((estado === "PARCIAL" || estado === "PAGADO") && vouchers.length === 0) {
-        return NextResponse.json(
-          { error: "El pago solo se confirma con al menos un baucher en imagen JPEG" },
-          { status: 400 }
-        );
-      }
-
-      values.estado = estado;
-      const tieneMontos = vouchers.some((v) => typeof v.monto === "number");
-      if (tieneMontos) {
-        values.montoPagado = montoPagado.toFixed(2);
-      } else if ("montoPagado" in patch) {
-        values.montoPagado = Math.max(0, Number(patch.montoPagado) || 0).toFixed(2);
-      }
-
-      if (vouchers.length > 0) {
+      if (voucherOnly) {
+        if (!existente) {
+          return NextResponse.json({ error: "Pago no encontrado" }, { status: 404 });
+        }
+        const nuevosVouchers = normalizarVouchers(patch.vouchers);
+        if (nuevosVouchers.length === 0) {
+          return NextResponse.json(
+            { error: "Adjunta un voucher en imagen JPEG válido." },
+            { status: 400 }
+          );
+        }
+        const existentes =
+          existente.vouchers.length > 0
+            ? existente.vouchers
+            : existente.voucherUrl
+              ? [{ nombre: existente.voucherNombre ?? "", url: existente.voucherUrl }]
+              : [];
+        const vouchers = [...existentes, ...nuevosVouchers];
         values.vouchers = vouchers;
         values.voucherUrl = vouchers[0]?.url ?? null;
         values.voucherNombre = vouchers[0]?.nombre ?? null;
-      }
+      } else {
+        const vouchers: { nombre: string; url: string; monto?: number }[] =
+          Array.isArray(values.vouchers) && values.vouchers.length > 0
+            ? (values.vouchers as {
+                nombre: string;
+                url: string;
+                monto?: number;
+              }[])
+            : typeof patch.voucherUrl === "string" &&
+                typeof patch.voucherNombre === "string"
+              ? normalizarVouchers([
+                  { nombre: patch.voucherNombre, url: patch.voucherUrl },
+                ])
+              : Array.isArray(existente?.vouchers) &&
+                  existente.vouchers.length > 0
+                ? normalizarVouchers(existente.vouchers)
+                : existente?.voucherUrl
+                  ? normalizarVouchers([
+                      {
+                        nombre: existente.voucherNombre ?? "",
+                        url: existente.voucherUrl,
+                      },
+                    ])
+                  : [];
 
-      if (estado === "PAGADO") {
-        const fp =
-          typeof patch.fechaPago === "string"
-            ? patch.fechaPago
-            : existente?.fechaPago
-              ? toDateStr(existente.fechaPago)
-              : new Date().toISOString().slice(0, 10);
-        const per = existente ? toDateStr(existente.periodo) : "";
-        const ind =
-          "diasIndulgencia" in patch
-            ? Math.max(0, Math.floor(Number(patch.diasIndulgencia) || 0))
-            : Number(existente?.diasIndulgencia ?? 0);
-        values.fechaPago = fp;
-        values.penalidad = fp && per && fp > sumarDias(per, ind) ? "70.00" : "0";
+        const total = totalDelMes(
+          "monto" in patch ? patch.monto : existente?.monto,
+          "mantenimiento" in patch
+            ? patch.mantenimiento
+            : existente?.mantenimiento,
+        );
+        const estadoFallback =
+          typeof values.estado === "string"
+            ? values.estado
+            : (existente?.estado ?? "PENDIENTE");
+        const { montoPagado, estado } = derivarPago(
+          vouchers,
+          total,
+          estadoFallback,
+        );
+
+        if (
+          (estado === "PARCIAL" || estado === "PAGADO") &&
+          vouchers.length === 0
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                "El pago solo se confirma con al menos un baucher en imagen JPEG",
+            },
+            { status: 400 },
+          );
+        }
+
+        values.estado = estado;
+        const tieneMontos = vouchers.some((v) => typeof v.monto === "number");
+        if (tieneMontos) {
+          values.montoPagado = montoPagado.toFixed(2);
+        } else if ("montoPagado" in patch) {
+          values.montoPagado = Math.max(
+            0,
+            Number(patch.montoPagado) || 0,
+          ).toFixed(2);
+        }
+
+        if (vouchers.length > 0) {
+          values.vouchers = vouchers;
+          values.voucherUrl = vouchers[0]?.url ?? null;
+          values.voucherNombre = vouchers[0]?.nombre ?? null;
+        }
+
+        if (estado === "PAGADO") {
+          const fp =
+            typeof patch.fechaPago === "string"
+              ? patch.fechaPago
+              : existente?.fechaPago
+                ? toDateStr(existente.fechaPago)
+                : new Date().toISOString().slice(0, 10);
+          const per = existente ? toDateStr(existente.periodo) : "";
+          const ind =
+            "diasIndulgencia" in patch
+              ? Math.max(0, Math.floor(Number(patch.diasIndulgencia) || 0))
+              : Number(existente?.diasIndulgencia ?? 0);
+          values.fechaPago = fp;
+          values.penalidad =
+            fp && per && fp > sumarDias(per, ind) ? "70.00" : "0";
+        }
       }
     }
 

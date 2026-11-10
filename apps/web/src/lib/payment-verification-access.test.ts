@@ -12,6 +12,7 @@ describe("payment verification account access", () => {
     expect(paymentVerificationAccess(email)).toEqual({
       scope: "angamos",
       verifyPrefix: "ANG170-",
+      canVerify: true,
     });
     expect(canViewVerificationPayment(email, "ANG170-2C", "ANG170")).toBe(true);
     expect(canViewVerificationPayment(email, "BEN2195-18", "BEN2195")).toBe(false);
@@ -25,6 +26,7 @@ describe("payment verification account access", () => {
     expect(paymentVerificationAccess(email)).toEqual({
       scope: "ben2195",
       verifyPrefix: "BEN2195-",
+      canVerify: true,
     });
     expect(canViewVerificationPayment(email, "BEN2195-18", "BEN2195")).toBe(true);
     expect(canViewVerificationPayment(email, "ANG170-2C", "ANG170")).toBe(false);
@@ -41,5 +43,26 @@ describe("payment verification account access", () => {
     expect(canVerifyPayment(email, "ANG170-2C")).toBe(false);
     expect(canVerifyPayment(email, "BEN2195-18")).toBe(false);
     expect(canVerifyPayment(email, "OTRO-1")).toBe(true);
+  });
+
+  it("allows administrators to view both assigned portfolios without verifying them", () => {
+    const email = "admin@sistema.com";
+
+    expect(paymentVerificationAccess(email, true)).toEqual({
+      scope: "all",
+      verifyPrefix: null,
+      canVerify: false,
+    });
+    expect(canViewVerificationPayment(email, "ANG170-2C", "ANG170", true)).toBe(true);
+    expect(canViewVerificationPayment(email, "BEN2195-18", "BEN2195", true)).toBe(true);
+    expect(canVerifyPayment(email, "ANG170-2C")).toBe(false);
+    expect(canVerifyPayment(email, "BEN2195-18")).toBe(false);
+  });
+
+  it("does not grant administrator visibility by email alone", () => {
+    const email = "admin@sistema.com";
+
+    expect(canViewVerificationPayment(email, "ANG170-2C", "ANG170")).toBe(false);
+    expect(canViewVerificationPayment(email, "BEN2195-18", "BEN2195")).toBe(false);
   });
 });

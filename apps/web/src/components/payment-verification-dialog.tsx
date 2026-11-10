@@ -12,8 +12,9 @@ type VerificationStep = "loading" | "code" | "enroll" | "payments";
 type EnrolledTotp = { factorId: string; qrCode: string; secret: string };
 type EnrollmentPurpose = "payment-verification" | "replace-lost-factor";
 type VerificationAccess = {
-  scope: "angamos" | "ben2195" | null;
+  scope: "angamos" | "ben2195" | "all" | null;
   verifyPrefix: string | null;
+  canVerify: boolean;
 };
 
 type VerificationPayment = {
@@ -64,7 +65,7 @@ export function PaymentVerificationDialog({
   const [responsable, setResponsable] = useState<Responsable>("miguel");
   const [payments, setPayments] = useState<VerificationPayment[]>([]);
   const [verificationAccess, setVerificationAccess] =
-    useState<VerificationAccess>({ scope: null, verifyPrefix: null });
+    useState<VerificationAccess>({ scope: null, verifyPrefix: null, canVerify: true });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [activePaymentId, setActivePaymentId] = useState<string | null>(null);
@@ -110,11 +111,12 @@ export function PaymentVerificationDialog({
         const access = body.access as Partial<VerificationAccess>;
         setVerificationAccess({
           scope:
-            access.scope === "angamos" || access.scope === "ben2195"
+            access.scope === "angamos" || access.scope === "ben2195" || access.scope === "all"
               ? access.scope
               : null,
           verifyPrefix:
             typeof access.verifyPrefix === "string" ? access.verifyPrefix : null,
+          canVerify: typeof access.canVerify === "boolean" ? access.canVerify : true,
         });
       }
     } catch (loadFailure) {
@@ -440,7 +442,9 @@ export function PaymentVerificationDialog({
             <p className="mb-3 text-sm text-on-surface-variant">
               {verificationAccess.scope === "angamos"
                 ? "Pagos de Angamos. Solo puedes verificar contratos ANG170-."
-                : "Solo se muestran pagos de contratos BEN2195-."}
+                : verificationAccess.scope === "ben2195"
+                  ? "Solo se muestran pagos de contratos BEN2195-."
+                  : "Se muestran los vouchers de Miguel y Emely."}
             </p>
           ) : null}
           {step !== "payments" ? (
@@ -538,12 +542,21 @@ export function PaymentVerificationDialog({
                 ? "No hay pagos de Angamos en este mes."
                 : verificationAccess.scope === "ben2195"
                   ? "No hay pagos BEN2195- en este mes."
-                  : `No hay pagos registrados para ${RESPONSABLES.find((item) => item.key === responsable)?.nombre} en este mes.`}
+                  : verificationAccess.scope === "all"
+                    ? "No hay vouchers registrados para este mes."
+                    : `No hay pagos registrados para ${RESPONSABLES.find((item) => item.key === responsable)?.nombre} en este mes.`}
             </p>
           ) : (
             <ul className="space-y-4">
               {visiblePayments.map((payment) => {
                 const verified = Boolean(payment.voucherVerificadoEn);
+                const soloLectura =
+                  !localMode &&
+                  (!verificationAccess.canVerify ||
+                    (verificationAccess.verifyPrefix !== null &&
+                      !payment.codigoContrato
+                        .toUpperCase()
+                        .startsWith(verificationAccess.verifyPrefix)));
                 const amount = Number(payment.montoPagado || 0);
                 const selected = activePaymentId === payment.id;
                 return (
@@ -582,8 +595,7 @@ export function PaymentVerificationDialog({
                           <CheckCircle2 className="h-4 w-4" />
                           Pago verificado
                         </span>
-                      ) : verificationAccess.verifyPrefix &&
-                        !payment.codigoContrato.toUpperCase().startsWith(verificationAccess.verifyPrefix) ? (
+                      ) : soloLectura ? (
                         <span className="shrink-0 rounded-full bg-surface-container px-2.5 py-1 text-xs text-on-surface-variant">
                           Solo lectura
                         </span>

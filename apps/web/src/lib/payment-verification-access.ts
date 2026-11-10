@@ -4,25 +4,31 @@ const ANGAMOS_PREFIX = "ANG";
 const ANGAMOS_VERIFY_PREFIX = "ANG170-";
 const BENAVIDES_PREFIX = "BEN2195-";
 
-export type PaymentVerificationScope = "angamos" | "ben2195" | null;
+export type PaymentVerificationScope = "angamos" | "ben2195" | "all" | null;
 
 export interface PaymentVerificationAccess {
   scope: PaymentVerificationScope;
   verifyPrefix: string | null;
+  canVerify: boolean;
 }
 
 function normalized(value: string | null | undefined): string {
   return (value ?? "").trim().toUpperCase();
 }
 
-export function paymentVerificationAccess(email: string): PaymentVerificationAccess {
+export function paymentVerificationAccess(
+  email: string,
+  isAdmin = false,
+): PaymentVerificationAccess {
+  if (isAdmin) return { scope: "all", verifyPrefix: null, canVerify: false };
+
   switch (email.trim().toLowerCase()) {
     case MIGUEL_EMAIL:
-      return { scope: "angamos", verifyPrefix: ANGAMOS_VERIFY_PREFIX };
+      return { scope: "angamos", verifyPrefix: ANGAMOS_VERIFY_PREFIX, canVerify: true };
     case EMELY_EMAIL:
-      return { scope: "ben2195", verifyPrefix: BENAVIDES_PREFIX };
+      return { scope: "ben2195", verifyPrefix: BENAVIDES_PREFIX, canVerify: true };
     default:
-      return { scope: null, verifyPrefix: null };
+      return { scope: null, verifyPrefix: null, canVerify: true };
   }
 }
 
@@ -30,7 +36,10 @@ export function canViewVerificationPayment(
   email: string,
   contractCode: string,
   departmentCode: string | null,
+  isAdmin = false,
 ): boolean {
+  if (isAdmin) return true;
+
   const code = normalized(contractCode);
   const department = normalized(departmentCode);
   const access = paymentVerificationAccess(email);
