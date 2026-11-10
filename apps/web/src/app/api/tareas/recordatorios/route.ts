@@ -131,6 +131,10 @@ export async function POST(req: Request) {
         id: schema.tasks.id,
         titulo: schema.tasks.titulo,
         descripcion: schema.tasks.descripcion,
+        fechaLimite: schema.tasks.fechaLimite,
+        horaEjecucion: schema.tasks.horaEjecucion,
+        repetirCadaHora: schema.tasks.repetirCadaHora,
+        origenEvento: schema.tasks.origenEvento,
       })
       .from(schema.tasks)
       .where(and(

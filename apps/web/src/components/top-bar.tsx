@@ -10,7 +10,16 @@ import { playNotificationChime } from "@/lib/notification-sound";
 import { AccessControl, Permission } from "@contract/domain/rbac";
 import { Button } from "@contract/ui/components/button";
 import { ThemeToggle } from "@contract/ui/components/theme-toggle";
-import { Bell, ExternalLink, FileSpreadsheet, LogOut, Menu, Wrench, X } from "lucide-react";
+import {
+  Bell,
+  Clock3,
+  ExternalLink,
+  FileSpreadsheet,
+  LogOut,
+  Menu,
+  Wrench,
+  X,
+} from "lucide-react";
 import { CommandPalette } from "@/components/command-palette";
 
 interface InboxNotification {
@@ -27,6 +36,34 @@ interface Work123Reminder {
   id: string;
   titulo: string;
   descripcion: string;
+  fechaLimite: string;
+  horaEjecucion: string;
+  repetirCadaHora: boolean;
+  origenEvento: string | null;
+}
+
+type ReminderDismissal = number | "closed";
+
+function reminderDismissalKey(userId: string, taskId: string): string {
+  return `alquilaya:work123-dismissed:${userId}:${taskId}`;
+}
+
+function limaTime(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Lima",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+}
+
+function limaDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Lima",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 export interface SearchResult {
@@ -53,6 +90,14 @@ export function TopBar({
   const [work123Reminders, setWork123Reminders] = useState<Work123Reminder[]>([]);
   const [work123Error, setWork123Error] = useState("");
   const [confirmingTaskId, setConfirmingTaskId] = useState<string | null>(null);
+  const [savingReminderTaskId, setSavingReminderTaskId] = useState<string | null>(null);
+  const [work123Dismissals, setWork123Dismissals] = useState<
+    Record<string, ReminderDismissal>
+  >({});
+  const [work123ScheduleDrafts, setWork123ScheduleDrafts] = useState<
+    Record<string, { horaEjecucion: string; repetirCadaHora: boolean }>
+  >({});
+  const [work123Now, setWork123Now] = useState(() => Date.now());
   const knownNotificationIds = useRef<Set<string> | null>(null);
   const bellRef = useRef<HTMLDivElement>(null);
 
@@ -160,14 +205,42 @@ export function TopBar({
         throw new Error(data.error ?? "No se pudieron cargar las tareas de hoy");
       }
       const data = (await response.json()) as { items?: Work123Reminder[] };
-      setWork123Reminders(data.items ?? []);
+      const items = data.items ?? [];
+      setWork123Reminders(items);
+      setWork123ScheduleDrafts((current) => {
+        const next = { ...current };
+        for (const task of items) {
+          next[task.id] ??= {
+            horaEjecucion: task.horaEjecucion,
+            repetirCadaHora: task.repetirCadaHora,
+          };
+        }
+        return next;
+      });
+      setWork123Dismissals((current) => {
+        const next: Record<string, ReminderDismissal> = {};
+        for (const task of items) {
+          const dismissal = current[task.id];
+          const stored = user?.id
+            ? window.sessionStorage.getItem(reminderDismissalKey(user.id, task.id))
+            : null;
+          if (dismissal !== undefined) {
+            next[task.id] = dismissal;
+          } else if (stored === "closed") {
+            next[task.id] = "closed";
+          } else if (stored && Number.isFinite(Number(stored))) {
+            next[task.id] = Number(stored);
+          }
+        }
+        return next;
+      });
       setWork123Error("");
     } catch (error) {
       setWork123Error(
         error instanceof Error ? error.message : "No se pudieron cargar las tareas de hoy",
       );
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (
@@ -184,6 +257,11 @@ export function TopBar({
     const interval = window.setInterval(() => void refreshWork123Reminders(), 60_000);
     return () => window.clearInterval(interval);
   }, [refreshWork123Reminders, user]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setWork123Now(Date.now()), 15_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   // Cierre automático secuencial de notificaciones flotantes (8 seg)
   useEffect(() => {
@@ -242,11 +320,77 @@ export function TopBar({
         throw new Error(data.error ?? "No se pudo confirmar la tarea");
       }
       setWork123Reminders((current) => current.filter((item) => item.id !== task.id));
+      if (user?.id) {
+        window.sessionStorage.removeItem(reminderDismissalKey(user.id, task.id));
+      }
+      setWork123Dismissals((current) => {
+        const next = { ...current };
+        delete next[task.id];
+        return next;
+      });
     } catch (error) {
       setWork123Error(error instanceof Error ? error.message : "No se pudo confirmar la tarea");
     } finally {
       setConfirmingTaskId(null);
     }
+  }
+
+  async function guardarHorarioTarea(
+    task: Work123Reminder,
+    schedule: { horaEjecucion: string; repetirCadaHora: boolean },
+  ) {
+    setSavingReminderTaskId(task.id);
+    setWork123Error("");
+    try {
+      const response = await apiFetch("/api/tareas", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: task.id,
+          horaEjecucion: schedule.horaEjecucion,
+          repetirCadaHora: schedule.repetirCadaHora,
+        }),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? "No se pudo guardar el horario");
+      }
+      const updated = (await response.json()) as Work123Reminder;
+      setWork123Reminders((current) =>
+        current.map((item) => (item.id === task.id ? updated : item)),
+      );
+      setWork123ScheduleDrafts((current) => ({
+        ...current,
+        [task.id]: {
+          horaEjecucion: updated.horaEjecucion,
+          repetirCadaHora: updated.repetirCadaHora,
+        },
+      }));
+      if (user?.id) {
+        window.sessionStorage.removeItem(reminderDismissalKey(user.id, task.id));
+      }
+      setWork123Dismissals((current) => {
+        const next = { ...current };
+        delete next[task.id];
+        return next;
+      });
+    } catch (error) {
+      setWork123Error(
+        error instanceof Error ? error.message : "No se pudo guardar el horario",
+      );
+    } finally {
+      setSavingReminderTaskId(null);
+    }
+  }
+
+  function cerrarRecordatorio(task: Work123Reminder) {
+    if (!user?.id) return;
+    const dismissal: ReminderDismissal = task.repetirCadaHora
+      ? Date.now() + 60 * 60 * 1_000
+      : "closed";
+    const key = reminderDismissalKey(user.id, task.id);
+    window.sessionStorage.setItem(key, String(dismissal));
+    setWork123Dismissals((current) => ({ ...current, [task.id]: dismissal }));
   }
 
   const initials =
@@ -265,6 +409,19 @@ export function TopBar({
         Permission.DEPARTMENT_READ,
       ),
   );
+  const now = new Date(work123Now);
+  const nowDateLima = limaDate(now);
+  const nowTimeLima = limaTime(now);
+  const visibleWork123Reminders = work123Reminders.filter((task) => {
+    if (task.origenEvento !== "CHECKOFF") return true;
+    const date = new Date(task.fechaLimite);
+    if (Number.isNaN(date.getTime())) return false;
+    if (limaDate(date) !== nowDateLima || nowTimeLima < task.horaEjecucion) {
+      return false;
+    }
+    const dismissal = work123Dismissals[task.id];
+    return dismissal === undefined || (typeof dismissal === "number" && dismissal <= work123Now);
+  });
 
   return (
     <>
@@ -421,7 +578,7 @@ export function TopBar({
         </div>
       </header>
 
-      {work123Reminders.length > 0 || work123Error ? (
+      {visibleWork123Reminders.length > 0 || work123Error ? (
         <aside
           aria-label="Avisos de check-in y check-out"
           className="pointer-events-auto fixed right-4 top-20 z-50 flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2.5"
@@ -431,14 +588,99 @@ export function TopBar({
               {work123Error}
             </p>
           ) : null}
-          {work123Reminders.map((task) => (
+          {visibleWork123Reminders.map((task) => (
             <div key={task.id} role="status" className="rounded-xl border border-violet-500/40 bg-background p-4 shadow-xl">
-              <p className="text-sm font-semibold">{task.titulo}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{task.descripcion}</p>
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{task.titulo}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{task.descripcion}</p>
+                </div>
+                {task.origenEvento === "CHECKOFF" ? (
+                  <button
+                    type="button"
+                    onClick={() => cerrarRecordatorio(task)}
+                    aria-label="Cerrar recordatorio"
+                    title="Cerrar recordatorio"
+                    className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+              {task.origenEvento === "CHECKOFF" ? (
+                <div className="mt-3 space-y-3">
+                  <label className="flex items-center justify-between gap-3 text-xs">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />
+                      Hora de ejecución
+                    </span>
+                    <input
+                      type="time"
+                      value={
+                        work123ScheduleDrafts[task.id]?.horaEjecucion ??
+                        task.horaEjecucion
+                      }
+                      onChange={(event) =>
+                        setWork123ScheduleDrafts((current) => ({
+                          ...current,
+                          [task.id]: {
+                            horaEjecucion: event.target.value,
+                            repetirCadaHora:
+                              current[task.id]?.repetirCadaHora ??
+                              task.repetirCadaHora,
+                          },
+                        }))
+                      }
+                      className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={
+                        work123ScheduleDrafts[task.id]?.repetirCadaHora ??
+                        task.repetirCadaHora
+                      }
+                      onChange={(event) =>
+                        setWork123ScheduleDrafts((current) => ({
+                          ...current,
+                          [task.id]: {
+                            horaEjecucion:
+                              current[task.id]?.horaEjecucion ??
+                              task.horaEjecucion,
+                            repetirCadaHora: event.target.checked,
+                          },
+                        }))
+                      }
+                      className="h-4 w-4 accent-primary"
+                    />
+                    Repetir cada hora si se cierra
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void guardarHorarioTarea(
+                        task,
+                        work123ScheduleDrafts[task.id] ?? {
+                          horaEjecucion: task.horaEjecucion,
+                          repetirCadaHora: task.repetirCadaHora,
+                        },
+                      )
+                    }
+                    disabled={savingReminderTaskId === task.id}
+                    className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+                  >
+                    {savingReminderTaskId === task.id ? "Guardando…" : "Guardar horario"}
+                  </button>
+                </div>
+              ) : null}
               <button
                 type="button"
                 onClick={() => void confirmarTarea(task)}
-                disabled={confirmingTaskId === task.id}
+                disabled={
+                  confirmingTaskId === task.id ||
+                  (task.origenEvento === "CHECKOFF" && nowTimeLima < task.horaEjecucion)
+                }
                 className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
               >
                 Tarea hecha

@@ -9,7 +9,11 @@ import {
   updateAuthEmailById,
 } from "@/lib/users-admin";
 
-const PASSWORD_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+const PASSWORD_ALPHABET = [
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+  "abcdefghijklmnopqrstuvwxyz",
+  "0123456789",
+].join("");
 
 export function generateClientPassword(): string {
   return Array.from(
