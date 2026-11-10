@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { CheckOutReminder } from "@/components/check-out-reminder";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -2701,6 +2702,7 @@ export default function DashboardPage() {
 
 return (
     <DashboardShell>
+      <CheckOutReminder />
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-end">
           <div>

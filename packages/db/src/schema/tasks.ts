@@ -1,5 +1,6 @@
 import {
   index,
+  boolean,
   pgTable,
   text,
   timestamp,
@@ -20,6 +21,8 @@ export const tasks = pgTable(
     asignadoA: varchar("asignado_a", { length: 255 }).notNull().default(""),
     empleadoId: uuid("empleado_id").references(() => hrEmployees.id),
     fechaLimite: timestamp("fecha_limite", { withTimezone: true }).notNull(),
+    horaEjecucion: varchar("hora_ejecucion", { length: 5 }).notNull().default("09:00"),
+    repetirCadaHora: boolean("repetir_cada_hora").notNull().default(false),
     estado: varchar("estado", { length: 30 }).notNull().default("PENDIENTE"),
     creadoPor: varchar("creado_por", { length: 255 }).notNull().default(""),
     origenTipo: varchar("origen_tipo", { length: 30 }).notNull().default("MANUAL"),

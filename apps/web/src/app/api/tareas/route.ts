@@ -15,8 +15,14 @@ type Body = {
   asignadoA?: string;
   empleadoId?: string | null;
   fechaLimite?: string;
+  horaEjecucion?: string;
+  repetirCadaHora?: boolean;
   estado?: string;
 };
+
+function isTime(value: unknown): value is string {
+  return typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
 
 function isState(value: unknown): value is TaskState {
   return TASK_STATES.includes(value as TaskState);
@@ -29,6 +35,8 @@ function toView(r: {
   asignadoA: string;
   empleadoId: string | null;
   fechaLimite: Date;
+  horaEjecucion: string;
+  repetirCadaHora: boolean;
   estado: string;
   creadoPor: string;
   origenTipo: string;
@@ -45,6 +53,8 @@ function toView(r: {
     asignadoA: r.asignadoA,
     empleadoId: r.empleadoId,
     fechaLimite: r.fechaLimite?.toISOString?.() ?? null,
+    horaEjecucion: r.horaEjecucion,
+    repetirCadaHora: r.repetirCadaHora,
     estado: r.estado,
     creadoPor: r.creadoPor,
     origenTipo: r.origenTipo,
@@ -171,6 +181,8 @@ export async function PUT(req: Request) {
       descripcion?: string;
       asignadoA?: string;
       fechaLimite?: Date;
+      horaEjecucion?: string;
+      repetirCadaHora?: boolean;
       estado?: string;
       empleadoId?: string | null;
       completedAt?: Date | null;
@@ -208,6 +220,18 @@ export async function PUT(req: Request) {
       patch.empleadoId = null;
     }
     if (body.fechaLimite) patch.fechaLimite = new Date(body.fechaLimite);
+    if (body.horaEjecucion !== undefined) {
+      if (!isTime(body.horaEjecucion)) {
+        return NextResponse.json({ error: "Indica una hora válida (HH:MM)" }, { status: 400 });
+      }
+      patch.horaEjecucion = body.horaEjecucion;
+    }
+    if (body.repetirCadaHora !== undefined) {
+      if (typeof body.repetirCadaHora !== "boolean") {
+        return NextResponse.json({ error: "El valor de repetición no es válido" }, { status: 400 });
+      }
+      patch.repetirCadaHora = body.repetirCadaHora;
+    }
     if (body.estado !== undefined && isState(body.estado)) {
       patch.estado = body.estado;
       if (body.estado === "RESUELTA" && existing.estado !== "RESUELTA") {
