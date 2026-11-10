@@ -1062,28 +1062,28 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                         {f.extras > 0 ? moneda(f.extras) : "—"}
                       </td>
                       <td className="px-3 py-2">
-                        <div className="flex flex-col items-start gap-1">
+                        {f.pago ? (
+                          <button
+                            type="button"
+                            onClick={() => setMostrarVerificacion(true)}
+                            title={f.pago.voucherVerificadoEn
+                              ? `Verificado el ${new Date(f.pago.voucherVerificadoEn).toLocaleString("es-PE")}`
+                              : "Sin verificación registrada"}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                              f.pago.voucherVerificadoEn
+                                ? "border-emerald-600/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+                                : "border-red-600/30 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300"
+                            }`}
+                          >
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                            {f.pago.voucherVerificadoEn ? "Verificado" : "No verificado"}
+                          </button>
+                        ) : (
                           <span className="inline-flex items-center gap-1.5 font-label-md">
                             <span className={`h-1.5 w-1.5 rounded-full ${meta.cls}`} />
                             {meta.label}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => setMostrarVerificacion(true)}
-                            disabled={!f.pago}
-                            title={f.pago?.voucherVerificadoEn
-                              ? `Verificado el ${new Date(f.pago.voucherVerificadoEn).toLocaleString("es-PE")}`
-                              : "Sin verificación registrada"}
-                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium disabled:cursor-default ${
-                              f.pago?.voucherVerificadoEn
-                                ? "border-emerald-600/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
-                                : "border-outline-variant bg-surface-container text-on-surface-variant"
-                            }`}
-                          >
-                            <ShieldCheck className="h-3.5 w-3.5" />
-                            {f.pago?.voucherVerificadoEn ? "Verificado" : "NO verificado"}
-                          </button>
-                        </div>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         {f.estadoPago === "PAGADO" || f.estadoPago === "FINALIZADO" ? (
