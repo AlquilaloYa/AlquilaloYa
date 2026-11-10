@@ -7,7 +7,9 @@ import { deleteObject, downloadObject, isStorageConfigured, uploadObject } from 
 import { matchesLocalFileSignature, maxLocalUploadBytes } from "@/lib/locales-files";
 
 export const dynamic = "force-dynamic";
-const BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "contracts";
+// Bucket dedicado a vouchers de pagos (PDF + imágenes); el bucket "contracts"
+// solo admite PDF y rechaza los JPG/PNG con 415 invalid_mime_type.
+const BUCKET = "vouchers";
 
 function extensionForMimeType(mimeType: string): string {
   switch (mimeType) {
