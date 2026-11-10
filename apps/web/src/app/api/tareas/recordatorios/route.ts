@@ -117,14 +117,14 @@ export async function POST(req: Request) {
             dias: extra.dias,
           })),
       );
-      const contractEvents = [
+      const contractEvents: Array<{ kind: "CHECKIN" | "CHECKOFF"; label: string; date: string }> = [
         ...(fechaInicio === today ? [{
-          kind: "CHECKIN",
+          kind: "CHECKIN" as const,
           label: "Check-in",
           date: fechaInicio,
         }] : []),
         ...(checkout.fecha >= today && checkout.fecha <= tomorrow ? [{
-          kind: "CHECKOFF",
+          kind: "CHECKOFF" as const,
           label: "Check out",
           date: checkout.fecha,
         }] : []),
