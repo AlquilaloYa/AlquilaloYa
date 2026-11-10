@@ -25,6 +25,18 @@ function fechaEnLima(value: Date): string {
   }).format(value);
 }
 
+type TareaContratoNueva = {
+  titulo: string;
+  descripcion: string;
+  asignadoA: string;
+  fechaLimite: Date;
+  estado: string;
+  creadoPor: string;
+  origenTipo: string;
+  origenContratoId: string;
+  origenEvento: "CHECKIN" | "CHECKOFF";
+};
+
 export async function POST(req: Request) {
   try {
     const dbModule = await import("@contract/db");
@@ -93,7 +105,7 @@ export async function POST(req: Request) {
       extrasPorContrato.set(extra.contractId, contractExtras);
     }
 
-    const tareasNuevas: Array<typeof schema.tasks.$inferInsert> = [];
+    const tareasNuevas: TareaContratoNueva[] = [];
     for (const contract of contracts) {
       const fechaInicio = String(contract.fechaInicio).slice(0, 10);
       const fechaFinPeriodo = String(contract.fechaFin).slice(0, 10);
