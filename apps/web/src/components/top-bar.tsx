@@ -101,6 +101,7 @@ export function TopBar({
   >({});
   const [work123Now, setWork123Now] = useState(() => Date.now());
   const knownNotificationIds = useRef<Set<string> | null>(null);
+  const knownWork123Ids = useRef<Set<string> | null>(null);
   const bellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -226,6 +227,19 @@ export function TopBar({
       }
       const data = (await response.json()) as { items?: Work123Reminder[] };
       const items = data.items ?? [];
+      // Suena solo cuando entra un recordatorio nuevo (check in/out); la
+      // carga inicial registra los IDs conocidos sin sonar.
+      if (knownWork123Ids.current === null) {
+        knownWork123Ids.current = new Set(items.map((item) => item.id));
+      } else {
+        const entrantes = items.filter(
+          (item) => !knownWork123Ids.current!.has(item.id),
+        );
+        for (const item of items) {
+          knownWork123Ids.current.add(item.id);
+        }
+        if (entrantes.length > 0) playNotificationChime();
+      }
       setWork123Reminders(items);
       setWork123ScheduleDrafts((current) => {
         const next = { ...current };

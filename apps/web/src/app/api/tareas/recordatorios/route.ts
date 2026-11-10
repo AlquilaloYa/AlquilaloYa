@@ -16,6 +16,15 @@ function limaToday(): string {
   }).format(new Date());
 }
 
+function fechaEnLima(value: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Lima",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
+}
+
 export async function POST(req: Request) {
   try {
     const dbModule = await import("@contract/db");
@@ -122,10 +131,66 @@ export async function POST(req: Request) {
         });
       }
     }
-    for (let offset = 0; offset < tareasNuevas.length; offset += 500) {
+    // El índice único (origen_contrato_id, origen_evento) permite una sola fila
+    // por contrato y evento: si la fecha del check in/out cambió (p. ej. días
+    // extras registrados después), se mueve la tarea en lugar de chocar con el
+    // conflicto y dejar una fecha vencida.
+    const contractIdsConEvento = [
+      ...new Set(
+        tareasNuevas
+          .map((tarea) => tarea.origenContratoId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ];
+    const existentes = contractIdsConEvento.length
+      ? await db
+          .select({
+            id: schema.tasks.id,
+            origenContratoId: schema.tasks.origenContratoId,
+            origenEvento: schema.tasks.origenEvento,
+            fechaLimite: schema.tasks.fechaLimite,
+            estado: schema.tasks.estado,
+          })
+          .from(schema.tasks)
+          .where(and(
+            inArray(schema.tasks.origenContratoId, contractIdsConEvento),
+            inArray(schema.tasks.origenEvento, ["CHECKIN", "CHECKOFF"]),
+          ))
+      : [];
+
+    const tareasAInsertar: typeof tareasNuevas = [];
+    for (const nueva of tareasNuevas) {
+      const previa = existentes.find(
+        (t) => t.origenContratoId === nueva.origenContratoId && t.origenEvento === nueva.origenEvento,
+      );
+      if (!previa) {
+        tareasAInsertar.push(nueva);
+        continue;
+      }
+      if (fechaEnLima(previa.fechaLimite) === fechaEnLima(nueva.fechaLimite)) continue;
+      const patch: {
+        fechaLimite: Date;
+        titulo: string;
+        descripcion: string;
+        estado?: string;
+        completedAt?: null;
+        updatedAt: Date;
+      } = {
+        fechaLimite: nueva.fechaLimite,
+        titulo: nueva.titulo,
+        descripcion: nueva.descripcion,
+        updatedAt: new Date(),
+      };
+      if (nueva.origenEvento === "CHECKOFF" && previa.estado === "RESUELTA") {
+        patch.estado = "PENDIENTE";
+        patch.completedAt = null;
+      }
+      await db.update(schema.tasks).set(patch).where(eq(schema.tasks.id, previa.id));
+    }
+    for (let offset = 0; offset < tareasAInsertar.length; offset += 500) {
       await db
         .insert(schema.tasks)
-        .values(tareasNuevas.slice(offset, offset + 500))
+        .values(tareasAInsertar.slice(offset, offset + 500))
         .onConflictDoNothing();
     }
 

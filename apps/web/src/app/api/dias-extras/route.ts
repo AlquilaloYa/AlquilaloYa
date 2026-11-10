@@ -50,6 +50,8 @@ export async function GET(req: Request) {
         fechaFinPeriodo: schema.diasExtras.fechaFinPeriodo,
         estado: schema.diasExtras.estado,
         fechaPago: schema.diasExtras.fechaPago,
+        voucherFilename: schema.diasExtras.voucherFilename,
+        voucherMimeType: schema.diasExtras.voucherMimeType,
         creadoPor: schema.diasExtras.creadoPor,
         createdAt: schema.diasExtras.createdAt,
       })

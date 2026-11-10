@@ -33,6 +33,8 @@ type DiasExtra = {
   fechaFinPeriodo: string;
   estado: "PENDIENTE" | "PAGADO";
   fechaPago: string | null;
+  voucherFilename: string | null;
+  voucherMimeType: string | null;
 };
 
 function fechaLegible(fecha: string | null | undefined): string {
@@ -178,20 +180,21 @@ export default function DiasExtrasPage() {
     }
   }
 
-  async function actualizarEstado(charge: DiasExtra) {
+  async function subirVoucher(charge: DiasExtra, archivo: File) {
     setActualizandoId(charge.id);
     setError(null);
     try {
-      const response = await apiFetch(`/api/dias-extras/${charge.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estado: charge.estado === "PAGADO" ? "PENDIENTE" : "PAGADO" }),
+      const form = new FormData();
+      form.append("file", archivo);
+      const response = await apiFetch(`/api/dias-extras/${charge.id}/voucher`, {
+        method: "POST",
+        body: form,
       });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error ?? "No se pudo actualizar el estado del cobro");
+      if (!response.ok) throw new Error(body.error ?? "No se pudo subir el voucher");
       await load();
-    } catch (updateError) {
-      setError((updateError as Error).message);
+    } catch (uploadError) {
+      setError((uploadError as Error).message);
     } finally {
       setActualizandoId(null);
     }
@@ -307,12 +310,52 @@ export default function DiasExtrasPage() {
                       <td className="px-3 py-2">{fechaLegible(charge.fechaFinPeriodo)}</td>
                       <td className="px-3 py-2">{charge.dias}</td>
                       <td className="px-3 py-2 font-semibold">{moneda(charge.monto)}</td>
-                      <td className="px-3 py-2">{charge.estado}</td>
-                      <td className="px-3 py-2">{puedeGestionar ? (
-                        <button type="button" disabled={actualizandoId === charge.id} onClick={() => void actualizarEstado(charge)} className="rounded border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50">
-                          {charge.estado === "PAGADO" ? "Marcar pendiente" : "Marcar pagado"}
-                        </button>
-                      ) : charge.fechaPago ? fechaLegible(charge.fechaPago) : "—"}</td>
+                      <td className="px-3 py-2">{charge.estado === "PAGADO" ? "Pagado" : "Pendiente"}</td>
+                      <td className="px-3 py-2">
+                        {puedeGestionar ? (
+                          charge.voucherFilename ? (
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={`/api/dias-extras/${charge.id}/voucher`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded border px-2 py-1 text-xs hover:bg-muted"
+                              >
+                                Ver voucher
+                              </a>
+                              <label className="cursor-pointer rounded border px-2 py-1 text-xs hover:bg-muted">
+                                {actualizandoId === charge.id ? "Subiendo…" : "Reemplazar"}
+                                <input
+                                  type="file"
+                                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                                  className="hidden"
+                                  disabled={actualizandoId === charge.id}
+                                  onChange={(event) => {
+                                    const archivo = event.target.files?.[0];
+                                    event.target.value = "";
+                                    if (archivo) void subirVoucher(charge, archivo);
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          ) : (
+                            <label className="cursor-pointer rounded border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50" aria-disabled={actualizandoId === charge.id}>
+                              {actualizandoId === charge.id ? "Subiendo…" : "Subir voucher"}
+                              <input
+                                type="file"
+                                accept="application/pdf,image/jpeg,image/png,image/webp"
+                                className="hidden"
+                                disabled={actualizandoId === charge.id}
+                                onChange={(event) => {
+                                  const archivo = event.target.files?.[0];
+                                  event.target.value = "";
+                                  if (archivo) void subirVoucher(charge, archivo);
+                                }}
+                              />
+                            </label>
+                          )
+                        ) : charge.fechaPago ? fechaLegible(charge.fechaPago) : "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
