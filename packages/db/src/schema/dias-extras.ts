@@ -6,6 +6,7 @@ import {
   integer,
   numeric,
   pgTable,
+  text,
   timestamp,
   uuid,
   varchar,
