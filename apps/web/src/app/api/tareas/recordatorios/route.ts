@@ -29,6 +29,9 @@ export async function POST(req: Request) {
     const tomorrowDate = new Date(`${today}T12:00:00Z`);
     tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
     const tomorrow = tomorrowDate.toISOString().slice(0, 10);
+    const dayAfterTomorrowDate = new Date(`${tomorrow}T12:00:00Z`);
+    dayAfterTomorrowDate.setUTCDate(dayAfterTomorrowDate.getUTCDate() + 1);
+    const dayAfterTomorrow = dayAfterTomorrowDate.toISOString().slice(0, 10);
     const earliestCheckOutDate = new Date(`${today}T12:00:00Z`);
     earliestCheckOutDate.setUTCDate(earliestCheckOutDate.getUTCDate() - MAX_DIAS_EXTRAS);
     const earliestCheckOut = earliestCheckOutDate.toISOString().slice(0, 10);
@@ -54,7 +57,7 @@ export async function POST(req: Request) {
           eq(schema.contracts.fechaInicio, today),
           and(
             gte(schema.contracts.fechaFin, earliestCheckOut),
-            lte(schema.contracts.fechaFin, today),
+            lte(schema.contracts.fechaFin, tomorrow),
           ),
         ),
       ));
@@ -70,7 +73,7 @@ export async function POST(req: Request) {
           .where(and(
             inArray(schema.diasExtras.contractId, contracts.map((contract) => contract.contractId)),
             gte(schema.diasExtras.fechaFinPeriodo, earliestCheckOut),
-            lte(schema.diasExtras.fechaFinPeriodo, today),
+            lte(schema.diasExtras.fechaFinPeriodo, tomorrow),
           ))
       : [];
 
@@ -99,16 +102,16 @@ export async function POST(req: Request) {
           label: "Check-in",
           date: fechaInicio,
         }] : []),
-        ...(checkout.fecha === today ? [{
+        ...(checkout.fecha >= today && checkout.fecha <= tomorrow ? [{
           kind: "CHECKOFF",
-          label: "Check-out",
+          label: "Check out",
           date: checkout.fecha,
         }] : []),
       ];
       for (const event of contractEvents) {
         tareasNuevas.push({
           titulo: `${event.label} ${contract.departamento || contract.numero || "departamento"} · ${contract.codigo}`,
-          descripcion: `${event.label} de ${[contract.cliente, contract.apellidos].filter(Boolean).join(" ")}. Confirmar que se realizó hoy.`,
+          descripcion: `${event.label} de ${[contract.cliente, contract.apellidos].filter(Boolean).join(" ")}. Programado para el ${event.date}. Confirmar que se realizó.`,
           asignadoA: "",
           fechaLimite: new Date(`${event.date}T12:00:00-05:00`),
           estado: "PENDIENTE",
@@ -147,7 +150,8 @@ export async function POST(req: Request) {
           ),
           and(
             eq(schema.tasks.origenEvento, "CHECKOFF"),
-            lt(schema.tasks.fechaLimite, new Date(`${tomorrow}T00:00:00-05:00`)),
+            gte(schema.tasks.fechaLimite, new Date(`${today}T00:00:00-05:00`)),
+            lt(schema.tasks.fechaLimite, new Date(`${dayAfterTomorrow}T00:00:00-05:00`)),
           ),
         ),
       ));

@@ -287,7 +287,7 @@ export default function Work123Page() {
       };
       const inicio = c.fechaInicio ? String(c.fechaInicio).slice(0, 10) : "";
       const fin = c.fechaFin ? String(c.fechaFin).slice(0, 10) : "";
-      // Reglas: con inicio el 15 → revisión previa el 13, limpieza el 14, inicio el 15 y check off el día del fin.
+      // Reglas: con inicio el 15 → revisión previa el 13, limpieza el 14, inicio el 15 y check out el día del fin.
       pushOffset(inicio, -2, "REVISION");
       pushOffset(inicio, -1, "LIMPIEZA");
       pushOffset(inicio, 0, "INICIO");

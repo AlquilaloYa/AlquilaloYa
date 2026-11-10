@@ -117,7 +117,7 @@ export async function sincronizarTareasContrato(
     {
       kind: "CHECKOFF",
       fecha: fin,
-      titulo: `Revisión (Check out) ${depto} · ${c.codigoContrato}`,
+      titulo: `Check out ${depto} · ${c.codigoContrato}`,
       detalle: checkout.diasExtras
         ? `Check out del departamento al terminar ${checkout.diasExtras} día(s) extra, el ${fin}`
         : `Check out del departamento el día del fin de contrato (${fin})`,

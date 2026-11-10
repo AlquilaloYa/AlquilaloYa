@@ -5,6 +5,7 @@ import { requirePermission, requireUser } from "@/lib/session";
 import {
   addDaysToDate,
   daysBetweenDates,
+  isPaymentDue,
   monthlyDueDate,
   todayInLima,
 } from "@/lib/payment-overdue";
@@ -91,7 +92,7 @@ export async function GET(req: Request) {
           Math.floor(Number(payment?.diasIndulgencia ?? 0) || 0),
         );
         const effectiveDueDate = addDaysToDate(dueDate, extensionDays);
-        if (effectiveDueDate >= today) continue;
+        if (!isPaymentDue(effectiveDueDate, today)) continue;
 
         const hasVoucher =
           Boolean(payment?.voucherNombre && payment?.voucherUrl) ||

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addDaysToDate,
   daysBetweenDates,
+  isPaymentDue,
   monthlyDueDate,
   todayInLima,
 } from "./payment-overdue";
@@ -16,6 +17,12 @@ describe("payment overdue dates", () => {
     expect(addDaysToDate("2026-11-06", 0)).toBe("2026-11-06");
     expect(addDaysToDate("2026-11-06", 3)).toBe("2026-11-09");
     expect(daysBetweenDates("2026-11-09", "2026-11-11")).toBe(2);
+  });
+
+  it("includes payments due today but excludes future due dates", () => {
+    expect(isPaymentDue("2026-11-09", "2026-11-09")).toBe(true);
+    expect(isPaymentDue("2026-11-08", "2026-11-09")).toBe(true);
+    expect(isPaymentDue("2026-11-10", "2026-11-09")).toBe(false);
   });
 
   it("uses the Lima calendar day rather than the server's UTC day", () => {

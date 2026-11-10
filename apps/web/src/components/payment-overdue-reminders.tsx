@@ -129,15 +129,19 @@ export function PaymentOverdueReminders() {
       <div className="flex items-start gap-3 p-4">
         <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-300" />
         <div className="min-w-0 flex-1">
-          <p className="font-semibold">Pago vencido</p>
-          <p className="mt-1 text-sm">Falta entregar el voucher:</p>
+          <p className="font-semibold">Pago pendiente</p>
+          <p className="mt-1 text-sm">Pago que vence hoy o sigue sin voucher:</p>
           <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-sm">
             {alerts.map((payment) => (
               <li key={payment.id}>
                 <span className="font-semibold">{payment.cliente}</span>
                 <span className="block text-xs opacity-80">
-                  {payment.codigoContrato} · {payment.diasAtraso}{" "}
-                  {payment.diasAtraso === 1 ? "día" : "días"} de atraso
+                  {payment.codigoContrato} ·{" "}
+                  {payment.diasAtraso === 0
+                    ? "pago vence hoy"
+                    : `${payment.diasAtraso} ${
+                        payment.diasAtraso === 1 ? "día" : "días"
+                      } de atraso`}
                 </span>
               </li>
             ))}
@@ -155,7 +159,7 @@ export function PaymentOverdueReminders() {
           onClick={() => setAlerts([])}
           className="rounded p-1 text-red-700 hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-900"
           aria-label="Cerrar alerta temporalmente"
-          title="Se repetirá si el pago sigue vencido"
+          title="Se repetirá cada hora mientras el pago siga pendiente"
         >
           <X className="h-4 w-4" />
         </button>

@@ -1,24 +1,32 @@
 let notificationAudioContext: AudioContext | null = null;
 
+function getNotificationAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const AudioCtx =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext: typeof AudioContext })
+      .webkitAudioContext;
+  if (!AudioCtx) return null;
+  notificationAudioContext ??= new AudioCtx();
+  return notificationAudioContext;
+}
+
+export async function unlockNotificationAudio(): Promise<void> {
+  const context = getNotificationAudioContext();
+  if (!context || context.state !== "suspended") return;
+  await context.resume();
+}
+
 /**
  * Emite un sonido sutil y profesional de notificación utilizando la Web Audio API.
  * No depende de assets externos y funciona en todos los navegadores modernos.
  */
 export function playNotificationChime() {
-  if (typeof window === "undefined") return;
-  try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioCtx) return;
-    if (!notificationAudioContext) {
-      notificationAudioContext = new AudioCtx();
-    }
-    const context = notificationAudioContext;
-    const resume =
-      context.state === "suspended" ? context.resume() : Promise.resolve();
-    void resume.then(() => {
+  const context = getNotificationAudioContext();
+  if (!context) return;
+
+  const play = () => {
+    try {
       const now = context.currentTime;
       const gain = context.createGain();
       gain.gain.setValueAtTime(0.0001, now);
@@ -35,8 +43,19 @@ export function playNotificationChime() {
         oscillator.start(now + index * 0.14);
         oscillator.stop(now + 0.28 + index * 0.14);
       });
+    } catch (error) {
+      console.warn("No se pudo reproducir el sonido de notificación:", error);
+    }
+  };
+
+  if (context.state === "suspended") {
+    void context.resume().then(play).catch((error: unknown) => {
+      console.warn(
+        "El navegador bloqueó el sonido de notificación hasta que se interactúe con la app:",
+        error,
+      );
     });
-  } catch {
-    /* El navegador puede suspender el audio hasta que el usuario interactúe con la app */
+  } else {
+    play();
   }
 }

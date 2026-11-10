@@ -36,3 +36,7 @@ export function daysBetweenDates(startDate: string, endDate: string): number {
   const end = Date.parse(`${endDate.slice(0, 10)}T00:00:00.000Z`);
   return Math.max(0, Math.floor((end - start) / 86_400_000));
 }
+
+export function isPaymentDue(effectiveDueDate: string, today: string): boolean {
+  return effectiveDueDate.slice(0, 10) <= today.slice(0, 10);
+}

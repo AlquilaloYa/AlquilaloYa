@@ -45,6 +45,54 @@ function moneda(monto: string | number): string {
   return Number(monto).toLocaleString("es-PE", { style: "currency", currency: "PEN" });
 }
 
+function diasHastaFin(fechaFin: string): number {
+  const [year, month, day] = fechaFin.slice(0, 10).split("-").map(Number);
+  const fin = Date.UTC(year!, month! - 1, day!);
+  const hoy = new Date();
+  const hoyLima = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Lima",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(hoy);
+  const parte = (tipo: string) => Number(hoyLima.find((item) => item.type === tipo)?.value);
+  const hoyUtc = Date.UTC(parte("year"), parte("month") - 1, parte("day"));
+  return Math.round((fin - hoyUtc) / 86_400_000);
+}
+
+function estadoVencimiento(contract: ContractOption): {
+  dias: number;
+  etiqueta: string;
+  clase: string;
+  fila: string;
+} {
+  const dias = diasHastaFin(contract.fechaFin);
+  const etiqueta =
+    dias === 0 ? "Vence hoy" : dias === 1 ? "Vence mañana" : `Vence en ${dias} días`;
+  if (dias <= 7) {
+    return {
+      dias,
+      etiqueta,
+      clase: "text-amber-700 dark:text-amber-300",
+      fila: "border-amber-500/50 bg-amber-500/5",
+    };
+  }
+  if (dias <= 30) {
+    return {
+      dias,
+      etiqueta,
+      clase: "text-green-700 dark:text-green-300",
+      fila: "border-green-600/50 bg-green-500/5",
+    };
+  }
+  return {
+    dias,
+    etiqueta,
+    clase: "text-muted-foreground",
+    fila: "",
+  };
+}
+
 export default function DiasExtrasPage() {
   const { user } = useAuth();
   const puedeGestionar = user
@@ -74,7 +122,16 @@ export default function DiasExtrasPage() {
       if (!contractsResponse.ok) throw new Error(contractsBody.error ?? "No se pudieron cargar los contratos");
       if (!chargesResponse.ok) throw new Error(chargesBody.error ?? "No se pudieron cargar los cargos de días extras");
       const validStates = new Set(["FIRMADO", "NOTARIADO", "ACTIVO", "VIGENTE"]);
-      setContratos((contractsBody as ContractOption[]).filter((contract) => validStates.has(contract.estado)));
+      setContratos(
+        (contractsBody as ContractOption[])
+          .filter(
+            (contract) =>
+              validStates.has(contract.estado) &&
+              Boolean(contract.fechaFin) &&
+              diasHastaFin(contract.fechaFin) >= 0,
+          )
+          .sort((a, b) => diasHastaFin(a.fechaFin) - diasHastaFin(b.fechaFin)),
+      );
       setCargos(chargesBody as DiasExtra[]);
     } catch (loadError) {
       setError((loadError as Error).message);
@@ -158,17 +215,50 @@ export default function DiasExtrasPage() {
           <section className="space-y-4 rounded-xl border p-4">
             <h2 className="font-semibold">Registrar días adicionales</h2>
             <div className="grid gap-4 sm:grid-cols-3">
-              <label className="text-sm">
-                <span className="mb-1 block">Contrato</span>
-                <select value={contractId} onChange={(event) => setContractId(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3">
-                  <option value="">Selecciona un contrato</option>
-                  {contratos.map((contract) => (
-                    <option key={contract.id} value={contract.id}>
-                      {contract.codigoContrato} · {contract.clienteNombre} {contract.apellidoCliente}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="text-sm sm:col-span-3">
+                <span className="mb-2 block font-medium">Contratos próximos a finalizar</span>
+                {contratos.length === 0 ? (
+                  <p className="rounded-lg border p-4 text-sm text-muted-foreground">
+                    No hay contratos vigentes próximos a finalizar.
+                  </p>
+                ) : (
+                  <ul className="max-h-64 space-y-2 overflow-y-auto">
+                    {contratos.map((contract) => {
+                      const vencimiento = estadoVencimiento(contract);
+                      const selected = contract.id === contractId;
+                      return (
+                        <li key={contract.id}>
+                          <button
+                            type="button"
+                            onClick={() => setContractId(contract.id)}
+                            aria-pressed={selected}
+                            className={`flex w-full flex-col gap-0.5 rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-muted ${
+                              selected ? "border-primary ring-1 ring-primary" : ""
+                            } ${vencimiento.fila}`}
+                          >
+                            <span className="font-mono font-medium">
+                              {contract.codigoContrato}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {[contract.clienteNombre, contract.apellidoCliente]
+                                .filter(Boolean)
+                                .join(" ")}{" "}
+                              · {contract.departamentoNombre}
+                            </span>
+                            <span className="flex flex-wrap items-center gap-x-2 text-xs">
+                              <span>{contract.estado}</span>
+                              <span>· {fechaLegible(contract.fechaFin)}</span>
+                              <span className={`font-medium ${vencimiento.clase}`}>
+                                {vencimiento.etiqueta}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
               <label className="text-sm">
                 <span className="mb-1 block">Días extra (máximo {MAX_DIAS_EXTRAS} por período)</span>
                 <input type="number" min={1} max={MAX_DIAS_EXTRAS} value={dias} onChange={(event) => setDias(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3" />

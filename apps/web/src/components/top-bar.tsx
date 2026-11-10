@@ -6,7 +6,10 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api";
 import { useTheme } from "@/lib/theme-provider";
-import { playNotificationChime } from "@/lib/notification-sound";
+import {
+  playNotificationChime,
+  unlockNotificationAudio,
+} from "@/lib/notification-sound";
 import { AccessControl, Permission } from "@contract/domain/rbac";
 import { Button } from "@contract/ui/components/button";
 import { ThemeToggle } from "@contract/ui/components/theme-toggle";
@@ -99,6 +102,20 @@ export function TopBar({
   const [work123Now, setWork123Now] = useState(() => Date.now());
   const knownNotificationIds = useRef<Set<string> | null>(null);
   const bellRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const unlockAudio = () => {
+      void unlockNotificationAudio().catch((error: unknown) => {
+        console.warn("No se pudo habilitar el audio de notificaciones:", error);
+      });
+    };
+    window.addEventListener("pointerdown", unlockAudio, { once: true });
+    window.addEventListener("keydown", unlockAudio, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
+  }, []);
 
   // Cierra el popover de la campana al presionar cualquier parte de la
   // pantalla fuera de él, o con la tecla Escape.
@@ -410,15 +427,18 @@ export function TopBar({
   const now = new Date(work123Now);
   const nowDateLima = limaDate(now);
   const nowTimeLima = limaTime(now);
+  const tomorrowDate = new Date(`${nowDateLima}T12:00:00Z`);
+  tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
+  const tomorrowLima = tomorrowDate.toISOString().slice(0, 10);
   const visibleWork123Reminders = work123Reminders.filter((task) => {
     if (task.origenEvento !== "CHECKOFF") return true;
     const date = new Date(task.fechaLimite);
     if (Number.isNaN(date.getTime())) return false;
     const taskDateLima = limaDate(date);
-    if (
-      taskDateLima > nowDateLima ||
-      (taskDateLima === nowDateLima && nowTimeLima < task.horaEjecucion)
-    ) {
+    if (taskDateLima < nowDateLima || taskDateLima > tomorrowLima) {
+      return false;
+    }
+    if (taskDateLima === nowDateLima && nowTimeLima < task.horaEjecucion) {
       return false;
     }
     const dismissal = work123Dismissals[task.id];
@@ -658,7 +678,10 @@ export function TopBar({
                 onClick={() => void confirmarTarea(task)}
                 disabled={
                   confirmingTaskId === task.id ||
-                  (task.origenEvento === "CHECKOFF" && nowTimeLima < task.horaEjecucion)
+                  (task.origenEvento === "CHECKOFF" &&
+                    (limaDate(new Date(task.fechaLimite)) > nowDateLima ||
+                      (limaDate(new Date(task.fechaLimite)) === nowDateLima &&
+                        nowTimeLima < task.horaEjecucion)))
                 }
                 className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
               >
