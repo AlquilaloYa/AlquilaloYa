@@ -1,4 +1,5 @@
 let notificationAudioContext: AudioContext | null = null;
+let audioPrimed = false;
 
 function getNotificationAudioContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -11,10 +12,36 @@ function getNotificationAudioContext(): AudioContext | null {
   return notificationAudioContext;
 }
 
+/**
+ * Safari y Chrome mantienen la salida de audio bloqueada hasta que la página
+ * reproduce algo durante un gesto del usuario. Este buffer silencioso "priming"
+ * habilita el altavoz para poder sonar después de forma programática.
+ */
+async function primarAudio(context: AudioContext): Promise<void> {
+  if (audioPrimed && context.state === "running") return;
+  const buffer = context.createBuffer(1, 2205, 22050);
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.connect(context.destination);
+  source.start(0);
+  audioPrimed = true;
+}
+
 export async function unlockNotificationAudio(): Promise<void> {
   const context = getNotificationAudioContext();
-  if (!context || context.state !== "suspended") return;
-  await context.resume();
+  if (!context) return;
+  if (context.state === "suspended") {
+    try {
+      await context.resume();
+    } catch {
+      // El reintento ocurre en el siguiente gesto del usuario.
+    }
+  }
+  try {
+    await primarAudio(context);
+  } catch {
+    // Sin priming el chime igual lo intenta por su cuenta.
+  }
 }
 
 /**
@@ -49,12 +76,16 @@ export function playNotificationChime() {
   };
 
   if (context.state === "suspended") {
-    void context.resume().then(play).catch((error: unknown) => {
-      console.warn(
-        "El navegador bloqueó el sonido de notificación hasta que se interactúe con la app:",
-        error,
-      );
-    });
+    void context
+      .resume()
+      .then(() => primarAudio(context))
+      .then(play)
+      .catch((error: unknown) => {
+        console.warn(
+          "El navegador bloqueó el sonido de notificación hasta que se interactúe con la app:",
+          error,
+        );
+      });
   } else {
     play();
   }

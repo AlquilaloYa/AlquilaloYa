@@ -109,11 +109,15 @@ export function TopBar({
         console.warn("No se pudo habilitar el audio de notificaciones:", error);
       });
     };
-    window.addEventListener("pointerdown", unlockAudio, { once: true });
-    window.addEventListener("keydown", unlockAudio, { once: true });
+    // Listeners persistentes: cada gesto reintenta el desbloqueo si el
+    // navegador sigue bloqueando la salida de audio.
+    window.addEventListener("pointerdown", unlockAudio);
+    window.addEventListener("keydown", unlockAudio);
+    window.addEventListener("touchstart", unlockAudio, { passive: true });
     return () => {
       window.removeEventListener("pointerdown", unlockAudio);
       window.removeEventListener("keydown", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
     };
   }, []);
 

@@ -65,4 +65,26 @@ describe("payment verification account access", () => {
     expect(canViewVerificationPayment(email, "ANG170-2C", "ANG170")).toBe(false);
     expect(canViewVerificationPayment(email, "BEN2195-18", "BEN2195")).toBe(false);
   });
+
+  it("keeps the assigned portfolio for scoped accounts with the ADMIN role", () => {
+    const emely = "emely.carpio@sistema.com";
+
+    expect(paymentVerificationAccess(emely, true)).toEqual({
+      scope: "ben2195",
+      verifyPrefix: "BEN2195-",
+      canVerify: true,
+    });
+    expect(canViewVerificationPayment(emely, "BEN2195-18", "BEN2195", true)).toBe(true);
+    expect(canViewVerificationPayment(emely, "ANG170-2C", "ANG170", true)).toBe(false);
+    expect(canVerifyPayment(emely, "ANG170-2C")).toBe(false);
+
+    const miguel = "miguel.carpio@sistema.com";
+    expect(paymentVerificationAccess(miguel, true)).toEqual({
+      scope: "angamos",
+      verifyPrefix: "ANG170-",
+      canVerify: true,
+    });
+    expect(canViewVerificationPayment(miguel, "ANG170-2C", "ANG170", true)).toBe(true);
+    expect(canViewVerificationPayment(miguel, "BEN2195-18", "BEN2195", true)).toBe(false);
+  });
 });
