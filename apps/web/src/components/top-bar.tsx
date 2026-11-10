@@ -38,14 +38,7 @@ interface Work123Reminder {
   descripcion: string;
   fechaLimite: string;
   horaEjecucion: string;
-  repetirCadaHora: boolean;
   origenEvento: string | null;
-}
-
-type ReminderDismissal = number | "closed";
-
-function reminderDismissalKey(userId: string, taskId: string): string {
-  return `alquilaya:work123-dismissed:${userId}:${taskId}`;
 }
 
 function limaTime(date: Date): string {
@@ -91,11 +84,8 @@ export function TopBar({
   const [work123Error, setWork123Error] = useState("");
   const [confirmingTaskId, setConfirmingTaskId] = useState<string | null>(null);
   const [savingReminderTaskId, setSavingReminderTaskId] = useState<string | null>(null);
-  const [work123Dismissals, setWork123Dismissals] = useState<
-    Record<string, ReminderDismissal>
-  >({});
   const [work123ScheduleDrafts, setWork123ScheduleDrafts] = useState<
-    Record<string, { horaEjecucion: string; repetirCadaHora: boolean }>
+    Record<string, { horaEjecucion: string }>
   >({});
   const [work123Now, setWork123Now] = useState(() => Date.now());
   const knownNotificationIds = useRef<Set<string> | null>(null);
@@ -212,25 +202,7 @@ export function TopBar({
         for (const task of items) {
           next[task.id] ??= {
             horaEjecucion: task.horaEjecucion,
-            repetirCadaHora: task.repetirCadaHora,
           };
-        }
-        return next;
-      });
-      setWork123Dismissals((current) => {
-        const next: Record<string, ReminderDismissal> = {};
-        for (const task of items) {
-          const dismissal = current[task.id];
-          const stored = user?.id
-            ? window.sessionStorage.getItem(reminderDismissalKey(user.id, task.id))
-            : null;
-          if (dismissal !== undefined) {
-            next[task.id] = dismissal;
-          } else if (stored === "closed") {
-            next[task.id] = "closed";
-          } else if (stored && Number.isFinite(Number(stored))) {
-            next[task.id] = Number(stored);
-          }
         }
         return next;
       });
@@ -240,7 +212,7 @@ export function TopBar({
         error instanceof Error ? error.message : "No se pudieron cargar las tareas de hoy",
       );
     }
-  }, [user?.id]);
+  }, []);
 
   useEffect(() => {
     if (
@@ -320,14 +292,6 @@ export function TopBar({
         throw new Error(data.error ?? "No se pudo confirmar la tarea");
       }
       setWork123Reminders((current) => current.filter((item) => item.id !== task.id));
-      if (user?.id) {
-        window.sessionStorage.removeItem(reminderDismissalKey(user.id, task.id));
-      }
-      setWork123Dismissals((current) => {
-        const next = { ...current };
-        delete next[task.id];
-        return next;
-      });
     } catch (error) {
       setWork123Error(error instanceof Error ? error.message : "No se pudo confirmar la tarea");
     } finally {
@@ -337,7 +301,7 @@ export function TopBar({
 
   async function guardarHorarioTarea(
     task: Work123Reminder,
-    schedule: { horaEjecucion: string; repetirCadaHora: boolean },
+    schedule: { horaEjecucion: string },
   ) {
     setSavingReminderTaskId(task.id);
     setWork123Error("");
@@ -348,7 +312,6 @@ export function TopBar({
         body: JSON.stringify({
           id: task.id,
           horaEjecucion: schedule.horaEjecucion,
-          repetirCadaHora: schedule.repetirCadaHora,
         }),
       });
       if (!response.ok) {
@@ -363,17 +326,8 @@ export function TopBar({
         ...current,
         [task.id]: {
           horaEjecucion: updated.horaEjecucion,
-          repetirCadaHora: updated.repetirCadaHora,
         },
       }));
-      if (user?.id) {
-        window.sessionStorage.removeItem(reminderDismissalKey(user.id, task.id));
-      }
-      setWork123Dismissals((current) => {
-        const next = { ...current };
-        delete next[task.id];
-        return next;
-      });
     } catch (error) {
       setWork123Error(
         error instanceof Error ? error.message : "No se pudo guardar el horario",
@@ -381,16 +335,6 @@ export function TopBar({
     } finally {
       setSavingReminderTaskId(null);
     }
-  }
-
-  function cerrarRecordatorio(task: Work123Reminder) {
-    if (!user?.id) return;
-    const dismissal: ReminderDismissal = task.repetirCadaHora
-      ? Date.now() + 60 * 60 * 1_000
-      : "closed";
-    const key = reminderDismissalKey(user.id, task.id);
-    window.sessionStorage.setItem(key, String(dismissal));
-    setWork123Dismissals((current) => ({ ...current, [task.id]: dismissal }));
   }
 
   const initials =
@@ -416,11 +360,11 @@ export function TopBar({
     if (task.origenEvento !== "CHECKOFF") return true;
     const date = new Date(task.fechaLimite);
     if (Number.isNaN(date.getTime())) return false;
-    if (limaDate(date) !== nowDateLima || nowTimeLima < task.horaEjecucion) {
-      return false;
-    }
-    const dismissal = work123Dismissals[task.id];
-    return dismissal === undefined || (typeof dismissal === "number" && dismissal <= work123Now);
+    const taskDateLima = limaDate(date);
+    return (
+      taskDateLima < nowDateLima ||
+      (taskDateLima === nowDateLima && nowTimeLima >= task.horaEjecucion)
+    );
   });
 
   return (
@@ -595,17 +539,6 @@ export function TopBar({
                   <p className="text-sm font-semibold">{task.titulo}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{task.descripcion}</p>
                 </div>
-                {task.origenEvento === "CHECKOFF" ? (
-                  <button
-                    type="button"
-                    onClick={() => cerrarRecordatorio(task)}
-                    aria-label="Cerrar recordatorio"
-                    title="Cerrar recordatorio"
-                    className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                ) : null}
               </div>
               {task.origenEvento === "CHECKOFF" ? (
                 <div className="mt-3 space-y-3">
@@ -625,36 +558,11 @@ export function TopBar({
                           ...current,
                           [task.id]: {
                             horaEjecucion: event.target.value,
-                            repetirCadaHora:
-                              current[task.id]?.repetirCadaHora ??
-                              task.repetirCadaHora,
                           },
                         }))
                       }
                       className="rounded-md border border-input bg-background px-2 py-1 text-xs"
                     />
-                  </label>
-                  <label className="flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={
-                        work123ScheduleDrafts[task.id]?.repetirCadaHora ??
-                        task.repetirCadaHora
-                      }
-                      onChange={(event) =>
-                        setWork123ScheduleDrafts((current) => ({
-                          ...current,
-                          [task.id]: {
-                            horaEjecucion:
-                              current[task.id]?.horaEjecucion ??
-                              task.horaEjecucion,
-                            repetirCadaHora: event.target.checked,
-                          },
-                        }))
-                      }
-                      className="h-4 w-4 accent-primary"
-                    />
-                    Repetir cada hora si se cierra
                   </label>
                   <button
                     type="button"
@@ -663,7 +571,6 @@ export function TopBar({
                         task,
                         work123ScheduleDrafts[task.id] ?? {
                           horaEjecucion: task.horaEjecucion,
-                          repetirCadaHora: task.repetirCadaHora,
                         },
                       )
                     }
@@ -679,7 +586,9 @@ export function TopBar({
                 onClick={() => void confirmarTarea(task)}
                 disabled={
                   confirmingTaskId === task.id ||
-                  (task.origenEvento === "CHECKOFF" && nowTimeLima < task.horaEjecucion)
+                  (task.origenEvento === "CHECKOFF" &&
+                    limaDate(new Date(task.fechaLimite)) === nowDateLima &&
+                    nowTimeLima < task.horaEjecucion)
                 }
                 className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
               >
