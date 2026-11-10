@@ -38,11 +38,10 @@ interface Work123Reminder {
   descripcion: string;
   fechaLimite: string;
   horaEjecucion: string;
-  repetirCadaHora: boolean;
   origenEvento: string | null;
 }
 
-type ReminderDismissal = number | "closed";
+type ReminderDismissal = number;
 
 function reminderDismissalKey(userId: string, taskId: string): string {
   return `alquilaya:work123-dismissed:${userId}:${taskId}`;
@@ -95,7 +94,7 @@ export function TopBar({
     Record<string, ReminderDismissal>
   >({});
   const [work123ScheduleDrafts, setWork123ScheduleDrafts] = useState<
-    Record<string, { horaEjecucion: string; repetirCadaHora: boolean }>
+    Record<string, { horaEjecucion: string }>
   >({});
   const [work123Now, setWork123Now] = useState(() => Date.now());
   const knownNotificationIds = useRef<Set<string> | null>(null);
@@ -212,7 +211,6 @@ export function TopBar({
         for (const task of items) {
           next[task.id] ??= {
             horaEjecucion: task.horaEjecucion,
-            repetirCadaHora: task.repetirCadaHora,
           };
         }
         return next;
@@ -221,13 +219,16 @@ export function TopBar({
         const next: Record<string, ReminderDismissal> = {};
         for (const task of items) {
           const dismissal = current[task.id];
-          const stored = user?.id
-            ? window.sessionStorage.getItem(reminderDismissalKey(user.id, task.id))
+          const dismissalKey = user?.id
+            ? reminderDismissalKey(user.id, task.id)
+            : null;
+          const stored = dismissalKey
+            ? window.sessionStorage.getItem(dismissalKey)
             : null;
           if (dismissal !== undefined) {
             next[task.id] = dismissal;
-          } else if (stored === "closed") {
-            next[task.id] = "closed";
+          } else if (stored === "closed" && dismissalKey) {
+            window.sessionStorage.removeItem(dismissalKey);
           } else if (stored && Number.isFinite(Number(stored))) {
             next[task.id] = Number(stored);
           }
@@ -337,7 +338,7 @@ export function TopBar({
 
   async function guardarHorarioTarea(
     task: Work123Reminder,
-    schedule: { horaEjecucion: string; repetirCadaHora: boolean },
+    schedule: { horaEjecucion: string },
   ) {
     setSavingReminderTaskId(task.id);
     setWork123Error("");
@@ -348,7 +349,7 @@ export function TopBar({
         body: JSON.stringify({
           id: task.id,
           horaEjecucion: schedule.horaEjecucion,
-          repetirCadaHora: schedule.repetirCadaHora,
+          repetirCadaHora: true,
         }),
       });
       if (!response.ok) {
@@ -363,7 +364,6 @@ export function TopBar({
         ...current,
         [task.id]: {
           horaEjecucion: updated.horaEjecucion,
-          repetirCadaHora: updated.repetirCadaHora,
         },
       }));
       if (user?.id) {
@@ -385,9 +385,7 @@ export function TopBar({
 
   function cerrarRecordatorio(task: Work123Reminder) {
     if (!user?.id) return;
-    const dismissal: ReminderDismissal = task.repetirCadaHora
-      ? Date.now() + 60 * 60 * 1_000
-      : "closed";
+    const dismissal: ReminderDismissal = Date.now() + 60 * 60 * 1_000;
     const key = reminderDismissalKey(user.id, task.id);
     window.sessionStorage.setItem(key, String(dismissal));
     setWork123Dismissals((current) => ({ ...current, [task.id]: dismissal }));
@@ -416,7 +414,11 @@ export function TopBar({
     if (task.origenEvento !== "CHECKOFF") return true;
     const date = new Date(task.fechaLimite);
     if (Number.isNaN(date.getTime())) return false;
-    if (limaDate(date) !== nowDateLima || nowTimeLima < task.horaEjecucion) {
+    const taskDateLima = limaDate(date);
+    if (
+      taskDateLima > nowDateLima ||
+      (taskDateLima === nowDateLima && nowTimeLima < task.horaEjecucion)
+    ) {
       return false;
     }
     const dismissal = work123Dismissals[task.id];
@@ -625,37 +627,15 @@ export function TopBar({
                           ...current,
                           [task.id]: {
                             horaEjecucion: event.target.value,
-                            repetirCadaHora:
-                              current[task.id]?.repetirCadaHora ??
-                              task.repetirCadaHora,
                           },
                         }))
                       }
                       className="rounded-md border border-input bg-background px-2 py-1 text-xs"
                     />
                   </label>
-                  <label className="flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={
-                        work123ScheduleDrafts[task.id]?.repetirCadaHora ??
-                        task.repetirCadaHora
-                      }
-                      onChange={(event) =>
-                        setWork123ScheduleDrafts((current) => ({
-                          ...current,
-                          [task.id]: {
-                            horaEjecucion:
-                              current[task.id]?.horaEjecucion ??
-                              task.horaEjecucion,
-                            repetirCadaHora: event.target.checked,
-                          },
-                        }))
-                      }
-                      className="h-4 w-4 accent-primary"
-                    />
-                    Repetir cada hora si se cierra
-                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Si cierras este aviso, volverá a aparecer en una hora hasta completar la tarea.
+                  </p>
                   <button
                     type="button"
                     onClick={() =>
@@ -663,7 +643,6 @@ export function TopBar({
                         task,
                         work123ScheduleDrafts[task.id] ?? {
                           horaEjecucion: task.horaEjecucion,
-                          repetirCadaHora: task.repetirCadaHora,
                         },
                       )
                     }

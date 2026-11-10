@@ -133,15 +133,23 @@ export async function POST(req: Request) {
         descripcion: schema.tasks.descripcion,
         fechaLimite: schema.tasks.fechaLimite,
         horaEjecucion: schema.tasks.horaEjecucion,
-        repetirCadaHora: schema.tasks.repetirCadaHora,
         origenEvento: schema.tasks.origenEvento,
       })
       .from(schema.tasks)
       .where(and(
         inArray(schema.tasks.origenEvento, ["CHECKIN", "CHECKOFF"]),
         ne(schema.tasks.estado, "RESUELTA"),
-        gte(schema.tasks.fechaLimite, new Date(`${today}T00:00:00-05:00`)),
-        lt(schema.tasks.fechaLimite, new Date(`${tomorrow}T00:00:00-05:00`)),
+        or(
+          and(
+            eq(schema.tasks.origenEvento, "CHECKIN"),
+            gte(schema.tasks.fechaLimite, new Date(`${today}T00:00:00-05:00`)),
+            lt(schema.tasks.fechaLimite, new Date(`${tomorrow}T00:00:00-05:00`)),
+          ),
+          and(
+            eq(schema.tasks.origenEvento, "CHECKOFF"),
+            lt(schema.tasks.fechaLimite, new Date(`${tomorrow}T00:00:00-05:00`)),
+          ),
+        ),
       ));
     return NextResponse.json({ items: reminders });
   } catch (error) {
