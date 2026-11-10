@@ -106,7 +106,7 @@ const FILTERS = [
   { key: "PARCIAL", label: "Parciales" },
   { key: "VENCIDO", label: "Vencidos" },
   { key: "PAGADO", label: "Pagados" },
-  { key: "DEPOSITADO", label: "Depositados" },
+  { key: "DEPOSITADO", label: "Uploaded" },
   { key: "SERVICIOS_EXTRAS", label: "Servicios extras" },
 ] as const;
 
@@ -786,7 +786,7 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
 
   const ESTADO_META_LOCAL: Record<string, string> = {
     PAGADO: "Pagado",
-    DEPOSITADO: "Depositado",
+    DEPOSITADO: "Uploaded",
     PARCIAL: "Parcial",
     PENDIENTE: "Pendiente",
     VENCIDO: "Vencido",
@@ -888,7 +888,7 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
 
   const ESTADO_META: Record<string, { label: string; cls: string }> = {
     PAGADO: { label: "Pagado", cls: "bg-emerald-600" },
-    DEPOSITADO: { label: "Depositado", cls: "bg-amber-500" },
+    DEPOSITADO: { label: "Uploaded", cls: "bg-amber-500" },
     PARCIAL: { label: "Parcial", cls: "bg-amber-500" },
     PENDIENTE: { label: "Pendiente", cls: "bg-outline" },
     VENCIDO: { label: "Vencido", cls: "bg-destructive" },
@@ -1114,7 +1114,7 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                             type="button"
                             onClick={() => setMostrarVerificacion(true)}
                             title={f.pago.voucherVerificadoEn
-                              ? `Verificado el ${new Date(f.pago.voucherVerificadoEn).toLocaleString("es-PE")}`
+                              ? `Verified el ${new Date(f.pago.voucherVerificadoEn).toLocaleString("es-PE")}`
                               : "Pendiente de verificación"}
                             className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
                               f.estadoPago === "DEPOSITADO"
@@ -1125,7 +1125,9 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                             }`}
                           >
                             <ShieldCheck className="h-3.5 w-3.5" />
-                            {ESTADO_META[f.estadoPago]?.label ?? "Depositado"}
+                            {f.pago.voucherVerificadoEn
+                              ? "Verified"
+                              : ESTADO_META[f.estadoPago]?.label ?? "Uploaded"}
                           </button>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 font-label-md">

@@ -598,7 +598,7 @@ export function PaymentVerificationDialog({
                             : `Registro: ${new Date(payment.fechaRegistro).toLocaleDateString("es-PE")}`}
                           {" · "}
                           {!verified
-                            ? "Depositado"
+                            ? "Uploaded"
                             : payment.estado === "PARCIAL"
                               ? "Parcial"
                               : "Pagado"}
@@ -609,7 +609,7 @@ export function PaymentVerificationDialog({
                       {verified ? (
                         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-600/10 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
                           <CheckCircle2 className="h-4 w-4" />
-                          Pago verificado
+                          Verified
                         </span>
                       ) : soloLectura ? (
                         <span className="shrink-0 rounded-full bg-surface-container px-2.5 py-1 text-xs text-on-surface-variant">
@@ -661,7 +661,7 @@ export function PaymentVerificationDialog({
 
                     {verified ? (
                       <p className="mt-2 text-xs text-on-surface-variant">
-                        Verificado{" "}
+                        Verified{" "}
                         {new Date(payment.voucherVerificadoEn!).toLocaleString("es-PE")}
                         {payment.voucherVerificadoPor
                           ? ` · ${payment.voucherVerificadoPor}`

@@ -328,8 +328,9 @@ export default function ClienteContratoPage() {
     const filas: FilaCron[] = cuotas.map((d) => {
       const pStr = localDateStr(d);
       const pago = pagos.find((p) => p.periodo === pStr) ?? null;
+      const verificado = Boolean(pago?.voucherVerificadoEn);
       const vouchersPendientes =
-        vouchersDePago(pago).length > 0 && !pago?.voucherVerificadoEn;
+        vouchersDePago(pago).length > 0 && !verificado;
       const depositado =
         pago?.estado === "DEPOSITADO" || vouchersPendientes;
       const pagado = pago?.estado === "PAGADO" && !depositado;
@@ -338,7 +339,9 @@ export default function ClienteContratoPage() {
         fecha: d,
         pStr,
         estado: depositado
-          ? "Depositado"
+          ? verificado
+            ? "Verified"
+            : "Uploaded"
           : pagado
             ? "Pagado"
             : vencido
@@ -786,7 +789,9 @@ export default function ClienteContratoPage() {
                     const pStr = fila.pStr;
                     const pago = pagos.find((p) => p.periodo === pStr) ?? null;
                     const pagado = fila.estado === "Pagado";
-                    const depositado = fila.estado === "Depositado";
+                    const verificado = fila.estado === "Verified";
+                    const depositado =
+                      fila.estado === "Uploaded" || verificado;
                     const vencido = fila.estado === "Vencido";
                     const diasMora = pagado
                       ? pago?.fechaPago
@@ -802,13 +807,7 @@ export default function ClienteContratoPage() {
                       : vencido
                         ? Math.floor((inicioDia - d.getTime()) / 86_400_000)
                         : 0;
-                    const estado = pagado
-                      ? "Pagado"
-                      : depositado
-                        ? "Depositado"
-                        : vencido
-                          ? "Vencido"
-                          : "Pendiente";
+                    const estado = fila.estado;
                     const penalidad =
                       diasMora > 0
                         ? pago?.penalidad == null
@@ -852,7 +851,7 @@ export default function ClienteContratoPage() {
                         <td className="px-3 py-2">
                           <span
                             className={
-                              pagado
+                              pagado || verificado
                                 ? "font-medium text-emerald-600"
                                 : depositado
                                   ? "font-medium text-amber-600"
