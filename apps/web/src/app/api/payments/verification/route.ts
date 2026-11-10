@@ -84,7 +84,7 @@ export async function GET(req: Request) {
       .where(
         and(
           isNull(schema.contracts.eliminadoEn),
-          inArray(schema.payments.estado, ["PAGADO", "PARCIAL"]),
+          inArray(schema.payments.estado, ["DEPOSITADO", "PAGADO", "PARCIAL"]),
           or(
             and(
               gte(schema.payments.fechaPago, start),

@@ -28,7 +28,7 @@ type VerificationPayment = {
   periodo: string | null;
   fechaPago: string | null;
   fechaRegistro: string;
-  estado: "PAGADO" | "PARCIAL";
+  estado: "DEPOSITADO" | "PAGADO" | "PARCIAL";
   monto: string;
   mantenimiento: string;
   montoPagado: string;
@@ -235,13 +235,21 @@ export function PaymentVerificationDialog({
             : `Error ${response.status}`;
         throw new Error(responseError);
       }
+      const result = body as {
+        estado: VerificationPayment["estado"];
+        montoPagado: string;
+        voucherVerificadoEn: string;
+        voucherVerificadoPor: string;
+      };
       setPayments((current) =>
         current.map((item) =>
           item.id === payment.id
             ? {
                 ...item,
-                voucherVerificadoEn: new Date().toISOString(),
-                voucherVerificadoPor: "Tú",
+                estado: result.estado,
+                montoPagado: result.montoPagado,
+                voucherVerificadoEn: result.voucherVerificadoEn,
+                voucherVerificadoPor: result.voucherVerificadoPor,
               }
             : item
         )
@@ -557,7 +565,11 @@ export function PaymentVerificationDialog({
                       !payment.codigoContrato
                         .toUpperCase()
                         .startsWith(verificationAccess.verifyPrefix)));
-                const amount = Number(payment.montoPagado || 0);
+                const recordedAmount = Number(payment.montoPagado || 0);
+                const amount =
+                  verified && recordedAmount > 0
+                    ? recordedAmount
+                    : Number(payment.monto) + Number(payment.mantenimiento);
                 const selected = activePaymentId === payment.id;
                 return (
                   <li
@@ -585,7 +597,11 @@ export function PaymentVerificationDialog({
                             ? `Pago: ${new Date(`${payment.fechaPago}T12:00:00`).toLocaleDateString("es-PE")}`
                             : `Registro: ${new Date(payment.fechaRegistro).toLocaleDateString("es-PE")}`}
                           {" · "}
-                          {payment.estado === "PARCIAL" ? "Parcial" : "Pagado"}
+                          {!verified
+                            ? "Depositado"
+                            : payment.estado === "PARCIAL"
+                              ? "Parcial"
+                              : "Pagado"}
                           {" · "}
                           {moneda(amount)}
                         </p>

@@ -67,7 +67,8 @@ type PaymentApi = {
   fechaPago: string | null;
   voucherNombre: string | null;
   voucherUrl: string | null;
-  vouchers?: Array<{ nombre: string; url: string }>;
+  voucherVerificadoEn?: string | null;
+  vouchers?: Array<{ nombre: string; url: string; verificadoEn?: string | null }>;
 };
 
 const PENALIDAD_MORA = 70;
@@ -327,12 +328,22 @@ export default function ClienteContratoPage() {
     const filas: FilaCron[] = cuotas.map((d) => {
       const pStr = localDateStr(d);
       const pago = pagos.find((p) => p.periodo === pStr) ?? null;
-      const pagado = pago?.estado === "PAGADO";
-      const vencido = !pagado && d.getTime() < inicioDia;
+      const vouchersPendientes =
+        vouchersDePago(pago).length > 0 && !pago?.voucherVerificadoEn;
+      const depositado =
+        pago?.estado === "DEPOSITADO" || vouchersPendientes;
+      const pagado = pago?.estado === "PAGADO" && !depositado;
+      const vencido = !pagado && !depositado && d.getTime() < inicioDia;
       return {
         fecha: d,
         pStr,
-        estado: pagado ? "Pagado" : vencido ? "Vencido" : "Pendiente",
+        estado: depositado
+          ? "Depositado"
+          : pagado
+            ? "Pagado"
+            : vencido
+              ? "Vencido"
+              : "Pendiente",
       };
     });
     let salida = filtrarFilas(filas, busquedaCrono, (f) => [
@@ -775,6 +786,7 @@ export default function ClienteContratoPage() {
                     const pStr = fila.pStr;
                     const pago = pagos.find((p) => p.periodo === pStr) ?? null;
                     const pagado = fila.estado === "Pagado";
+                    const depositado = fila.estado === "Depositado";
                     const vencido = fila.estado === "Vencido";
                     const diasMora = pagado
                       ? pago?.fechaPago
@@ -792,9 +804,11 @@ export default function ClienteContratoPage() {
                         : 0;
                     const estado = pagado
                       ? "Pagado"
-                      : vencido
-                        ? "Vencido"
-                        : "Pendiente";
+                      : depositado
+                        ? "Depositado"
+                        : vencido
+                          ? "Vencido"
+                          : "Pendiente";
                     const penalidad =
                       diasMora > 0
                         ? pago?.penalidad == null
@@ -840,9 +854,11 @@ export default function ClienteContratoPage() {
                             className={
                               pagado
                                 ? "font-medium text-emerald-600"
-                                : vencido
-                                  ? "font-medium text-destructive"
-                                  : "text-on-surface-variant"
+                                : depositado
+                                  ? "font-medium text-amber-600"
+                                  : vencido
+                                    ? "font-medium text-destructive"
+                                    : "text-on-surface-variant"
                             }
                           >
                             {estado}

@@ -5,6 +5,8 @@ import { requirePermission, requireUser } from "@/lib/session";
 import { recordAdminAction } from "@/lib/audit-log";
 import { hasPaymentVerification } from "@/lib/payment-verification-session";
 import { canVerifyPayment } from "@/lib/payment-verification-access";
+import { addDaysToDate } from "@/lib/payment-overdue";
+import { settleVerifiedPayment } from "@/lib/payment-settlement";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +52,13 @@ export async function POST(req: Request) {
           id: schema.payments.id,
           contractId: schema.payments.contractId,
           estado: schema.payments.estado,
+          periodo: schema.payments.periodo,
+          fechaPago: schema.payments.fechaPago,
+          monto: schema.payments.monto,
+          mantenimiento: schema.payments.mantenimiento,
+          montoPagado: schema.payments.montoPagado,
+          diasIndulgencia: schema.payments.diasIndulgencia,
+          penalidad: schema.payments.penalidad,
           vouchers: schema.payments.vouchers,
           voucherUrl: schema.payments.voucherUrl,
           voucherNombre: schema.payments.voucherNombre,
@@ -71,8 +80,12 @@ export async function POST(req: Request) {
           403,
         );
       }
-      if (current.estado !== "PAGADO" && current.estado !== "PARCIAL") {
-        throw new VerificationError("Solo se pueden verificar pagos parciales o pagados", 400);
+      if (
+        current.estado !== "DEPOSITADO" &&
+        current.estado !== "PAGADO" &&
+        current.estado !== "PARCIAL"
+      ) {
+        throw new VerificationError("Solo se pueden verificar vouchers depositados", 400);
       }
       const vouchers =
         current.vouchers.length > 0
@@ -92,14 +105,35 @@ export async function POST(req: Request) {
         verificadoEn: verifiedAt.toISOString(),
         verificadoPor: auth.user.name,
       }));
+      const total = Number(current.monto) + Number(current.mantenimiento);
+      const settlement = settleVerifiedPayment(
+        vouchers,
+        total,
+        Number(current.montoPagado),
+      );
+      const fechaPago =
+        current.fechaPago ?? verifiedAt.toISOString().slice(0, 10);
+      const periodo = current.periodo.slice(0, 10);
+      const fechaPenalidad =
+        fechaPago > addDaysToDate(periodo, current.diasIndulgencia)
+          ? "70.00"
+          : "0.00";
       const [updated] = await tx
         .update(schema.payments)
-        .set({ vouchers: verifiedVouchers })
+        .set({
+          vouchers: verifiedVouchers,
+          estado: settlement.estado,
+          montoPagado: settlement.montoPagado.toFixed(2),
+          fechaPago,
+          penalidad: fechaPenalidad,
+        })
         .where(eq(schema.payments.id, paymentId))
         .returning({
           id: schema.payments.id,
           contractId: schema.payments.contractId,
           periodo: schema.payments.periodo,
+          estado: schema.payments.estado,
+          montoPagado: schema.payments.montoPagado,
         });
       if (!updated) throw new Error("No se pudo guardar la verificación del voucher");
       return updated;
@@ -113,6 +147,8 @@ export async function POST(req: Request) {
       current: {
         contractId: payment.contractId,
         periodo: payment.periodo,
+        estado: payment.estado,
+        montoPagado: payment.montoPagado,
         voucherVerificadoEn: verifiedAt.toISOString(),
       },
     });
@@ -120,6 +156,8 @@ export async function POST(req: Request) {
     const response = NextResponse.json({
       ok: true,
       paymentId: payment.id,
+      estado: payment.estado,
+      montoPagado: payment.montoPagado,
       voucherVerificadoEn: verifiedAt.toISOString(),
       voucherVerificadoPor: auth.user.name,
     });

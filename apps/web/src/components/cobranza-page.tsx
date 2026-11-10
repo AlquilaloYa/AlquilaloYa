@@ -33,6 +33,7 @@ type PaymentRow = {
   estado: string;
   fechaPago: string | null;
   voucherNombre: string | null;
+  tieneVoucher?: boolean;
   vouchers?: PaymentVoucher[];
   voucherVerificadoEn?: string | null;
   voucherVerificadoPor?: string | null;
@@ -78,7 +79,13 @@ type CuotaFila = {
   extras: number;
   montoPagado: number;
   saldo: number;
-  estadoPago: "PAGADO" | "PARCIAL" | "PENDIENTE" | "VENCIDO" | "FINALIZADO";
+  estadoPago:
+    | "PAGADO"
+    | "DEPOSITADO"
+    | "PARCIAL"
+    | "PENDIENTE"
+    | "VENCIDO"
+    | "FINALIZADO";
   diasMora: number;
   penalidad: number;
   indulgencia: number;
@@ -99,6 +106,7 @@ const FILTERS = [
   { key: "PARCIAL", label: "Parciales" },
   { key: "VENCIDO", label: "Vencidos" },
   { key: "PAGADO", label: "Pagados" },
+  { key: "DEPOSITADO", label: "Depositados" },
   { key: "SERVICIOS_EXTRAS", label: "Servicios extras" },
 ] as const;
 
@@ -712,21 +720,32 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
         Math.floor(Number(pago?.diasIndulgencia ?? DIAS_PRORROGA_POR_DEFECTO) || 0)
       );
       const vencimiento = new Date(cuota.getTime() + indulgencia * 86_400_000);
-      const pagado = pago?.estado === "PAGADO";
+      const depositado =
+        pago?.estado === "DEPOSITADO" ||
+        Boolean(
+          (pago?.tieneVoucher ?? Boolean(pago?.voucherNombre)) &&
+            !pago?.voucherVerificadoEn,
+        );
+      const pagado = pago?.estado === "PAGADO" && !depositado;
       // Cuando existe la fila de pago registrada con monto (> 0), respeta su
       // total: puede estar prorrateada por días (adenda de extensión).
       const total =
         pago && Number(pago.monto) > 0
           ? Number(pago.monto) + Number(pago.mantenimiento ?? 0)
           : Number(c.montoCanonMensual ?? 0) + Number(c.mantenimiento ?? 50);
-      const montoPagado = Math.max(0, Number(pago?.montoPagado ?? 0) || 0);
+      const montoPagado = depositado
+        ? 0
+        : Math.max(0, Number(pago?.montoPagado ?? 0) || 0);
       const saldo = Math.max(0, total - montoPagado);
-      const parcialActivo = !pagado && montoPagado > 0 && saldo > 0.001;
+      const parcialActivo =
+        !pagado && !depositado && montoPagado > 0 && saldo > 0.001;
       // La mora se mide desde este mes: las cuotas de meses anteriores no
       // cuentan como atraso (no hay antecedentes de mora).
       const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).getTime();
       const cuentaMora = cuota.getTime() >= inicioMes;
-      const diasMora = pagado
+      const diasMora = depositado
+        ? 0
+        : pagado
         ? cuentaMora && pago?.fechaPago && pago.fechaPago > localDateStr(vencimiento)
           ? Math.floor(
               (parseLocalDate(pago.fechaPago).getTime() - vencimiento.getTime()) /
@@ -736,7 +755,9 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
         : cuentaMora && vencimiento.getTime() < inicioDia
           ? Math.floor((inicioDia - vencimiento.getTime()) / 86_400_000)
           : 0;
-      const estadoPago = pagado
+      const estadoPago = depositado
+        ? "DEPOSITADO"
+        : pagado
         ? "PAGADO"
         : parcialActivo
           ? "PARCIAL"
@@ -765,6 +786,7 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
 
   const ESTADO_META_LOCAL: Record<string, string> = {
     PAGADO: "Pagado",
+    DEPOSITADO: "Depositado",
     PARCIAL: "Parcial",
     PENDIENTE: "Pendiente",
     VENCIDO: "Vencido",
@@ -866,6 +888,7 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
 
   const ESTADO_META: Record<string, { label: string; cls: string }> = {
     PAGADO: { label: "Pagado", cls: "bg-emerald-600" },
+    DEPOSITADO: { label: "Depositado", cls: "bg-amber-500" },
     PARCIAL: { label: "Parcial", cls: "bg-amber-500" },
     PENDIENTE: { label: "Pendiente", cls: "bg-outline" },
     VENCIDO: { label: "Vencido", cls: "bg-destructive" },
@@ -1086,21 +1109,23 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                         {f.extras > 0 ? moneda(f.extras) : "—"}
                       </td>
                       <td className="px-3 py-2">
-                        {f.pago ? (
+                        {f.pago?.tieneVoucher || f.pago?.voucherNombre ? (
                           <button
                             type="button"
                             onClick={() => setMostrarVerificacion(true)}
                             title={f.pago.voucherVerificadoEn
                               ? `Verificado el ${new Date(f.pago.voucherVerificadoEn).toLocaleString("es-PE")}`
-                              : "Sin verificación registrada"}
+                              : "Pendiente de verificación"}
                             className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                              f.pago.voucherVerificadoEn
+                              f.estadoPago === "DEPOSITADO"
+                                ? "border-amber-600/30 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
+                                : f.pago.voucherVerificadoEn
                                 ? "border-emerald-600/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
                                 : "border-red-600/30 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300"
                             }`}
                           >
                             <ShieldCheck className="h-3.5 w-3.5" />
-                            {f.pago.voucherVerificadoEn ? "Verificado" : "No verificado"}
+                            {ESTADO_META[f.estadoPago]?.label ?? "Depositado"}
                           </button>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 font-label-md">
@@ -1110,7 +1135,9 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        {f.estadoPago === "PAGADO" || f.estadoPago === "FINALIZADO" ? (
+                        {f.estadoPago === "PAGADO" ||
+                        f.estadoPago === "DEPOSITADO" ||
+                        f.estadoPago === "FINALIZADO" ? (
                           <span className="text-sm text-on-surface-variant">
                             {f.indulgencia > 0 ? `${f.indulgencia} d` : "—"}
                           </span>
@@ -1128,7 +1155,20 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                         {f.penalidad > 0 ? moneda(f.penalidad) : "—"}
                       </td>
                       <td className="px-3 py-2">
-                        {f.estadoPago === "PAGADO" ? (
+                        {f.estadoPago === "DEPOSITADO" ? (
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="text-xs text-on-surface-variant">
+                              {f.pago?.fechaPago ?? "—"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setMostrarVerificacion(true)}
+                              className="rounded border border-amber-600/30 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                            >
+                              Verificar voucher
+                            </button>
+                          </div>
+                        ) : f.estadoPago === "PAGADO" ? (
                           <div className="flex flex-col items-start gap-1">
                             <span className="text-xs text-on-surface-variant">
                               {f.pago?.fechaPago ?? "—"}

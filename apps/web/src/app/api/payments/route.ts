@@ -110,6 +110,8 @@ export async function GET(req: Request) {
           estado: schema.payments.estado,
           fechaPago: schema.payments.fechaPago,
           voucherNombre: schema.payments.voucherNombre,
+          tieneVoucher: sql<boolean>`jsonb_array_length(${safeVouchers}) > 0
+            OR ${schema.payments.voucherUrl} IS NOT NULL`,
           voucherVerificadoEn: sql<string | null>`CASE
             WHEN jsonb_array_length(${safeVouchers}) > 0
               AND NOT EXISTS (
@@ -261,9 +263,11 @@ export async function POST(req: Request) {
     );
 
     const total = totalDelMes(monto, mantenimiento);
-    const { montoPagado, estado } = derivarPago(vouchersFinal, total, estadoIn);
+    const derived = derivarPago(vouchersFinal, total, estadoIn);
+    const estado = vouchersFinal.length > 0 ? "DEPOSITADO" : derived.estado;
+    const montoPagado = vouchersFinal.length > 0 ? 0 : derived.montoPagado;
     const fechaPago: string | null =
-      estado === "PAGADO"
+      estado === "PAGADO" || estado === "DEPOSITADO"
         ? typeof body.fechaPago === "string"
           ? body.fechaPago
           : new Date().toISOString().slice(0, 10)
@@ -424,8 +428,16 @@ export async function PATCH(req: Request) {
         values.vouchers = vouchers;
         values.voucherUrl = vouchers[0]?.url ?? null;
         values.voucherNombre = vouchers[0]?.nombre ?? null;
+        values.estado = "DEPOSITADO";
+        values.montoPagado = "0.00";
       } else {
-        const vouchers: { nombre: string; url: string; monto?: number }[] =
+        let vouchers: {
+          nombre: string;
+          url: string;
+          monto?: number;
+          verificadoEn?: string;
+          verificadoPor?: string;
+        }[] =
           Array.isArray(values.vouchers) && values.vouchers.length > 0
             ? (values.vouchers as {
                 nombre: string;
@@ -439,7 +451,7 @@ export async function PATCH(req: Request) {
                 ])
               : Array.isArray(existente?.vouchers) &&
                   existente.vouchers.length > 0
-                ? normalizarVouchers(existente.vouchers)
+                ? existente.vouchers
                 : existente?.voucherUrl
                   ? normalizarVouchers([
                       {
@@ -448,6 +460,26 @@ export async function PATCH(req: Request) {
                       },
                     ])
                   : [];
+
+        const vouchersPrevios = Array.isArray(existente?.vouchers)
+          ? existente.vouchers
+          : [];
+        vouchers = vouchers.map((voucher) => {
+          const previo = vouchersPrevios.find(
+            (item) =>
+              item.nombre === voucher.nombre && item.url === voucher.url,
+          );
+          return previo?.verificadoEn
+            ? {
+                ...voucher,
+                verificadoEn: previo.verificadoEn,
+                ...(previo.verificadoPor
+                  ? { verificadoPor: previo.verificadoPor }
+                  : {}),
+              }
+            : voucher;
+        });
+        values.vouchers = vouchers;
 
         const total = totalDelMes(
           "monto" in patch ? patch.monto : existente?.monto,
@@ -459,11 +491,16 @@ export async function PATCH(req: Request) {
           typeof values.estado === "string"
             ? values.estado
             : (existente?.estado ?? "PENDIENTE");
-        const { montoPagado, estado } = derivarPago(
-          vouchers,
-          total,
-          estadoFallback,
-        );
+        const vouchersPendientesDeVerificacion =
+          vouchers.length > 0 &&
+          !vouchers.every((voucher) => Boolean(voucher.verificadoEn));
+        const settlement = derivarPago(vouchers, total, estadoFallback);
+        const estado = vouchersPendientesDeVerificacion
+          ? "DEPOSITADO"
+          : settlement.estado;
+        const montoPagado = vouchersPendientesDeVerificacion
+          ? 0
+          : settlement.montoPagado;
 
         if (
           (estado === "PARCIAL" || estado === "PAGADO") &&
@@ -480,7 +517,9 @@ export async function PATCH(req: Request) {
 
         values.estado = estado;
         const tieneMontos = vouchers.some((v) => typeof v.monto === "number");
-        if (tieneMontos) {
+        if (vouchersPendientesDeVerificacion) {
+          values.montoPagado = "0.00";
+        } else if (tieneMontos) {
           values.montoPagado = montoPagado.toFixed(2);
         } else if ("montoPagado" in patch) {
           values.montoPagado = Math.max(
