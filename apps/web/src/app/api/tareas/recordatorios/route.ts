@@ -169,9 +169,9 @@ export async function POST(req: Request) {
       }
       if (fechaEnLima(previa.fechaLimite) === fechaEnLima(nueva.fechaLimite)) continue;
       const patch: {
-        fechaLimite: Date;
-        titulo: string;
-        descripcion: string;
+        fechaLimite?: Date;
+        titulo?: string;
+        descripcion?: string;
         estado?: string;
         completedAt?: null;
         updatedAt: Date;
