@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Edit, FileText, Loader2, Plus, RefreshCw, Trash2, Wifi, Zap } from "lucide-react";
+import { Download, Edit, FileText, Loader2, Plus, RefreshCw, Trash2, Upload, Wifi, Zap } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { AccessControl, Permission } from "@contract/domain/rbac";
 
@@ -31,6 +31,7 @@ type ServicioExtra = {
   estado: string;
   filename: string | null;
   storageKey: string | null;
+  voucherFilename: string | null;
 };
 
 const OPCION_LABEL: Record<string, string> = {
@@ -88,6 +89,7 @@ export function ServiciosExtrasPanel({
   const [editando, setEditando] = useState<ServicioExtra | null>(null);
   const [regenerandoId, setRegenerandoId] = useState<string | null>(null);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
+  const [subiendoVoucherId, setSubiendoVoucherId] = useState<string | null>(null);
 
   const [clienteSel, setClienteSel] = useState(clienteId);
   const [internet, setInternet] = useState(false);
@@ -283,6 +285,32 @@ export function ServiciosExtrasPanel({
     }
   }
 
+  async function subirVoucher(servicio: ServicioExtra, file: File) {
+    setSubiendoVoucherId(servicio.id);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      const response = await fetch(
+        `/api/servicios-extras/${encodeURIComponent(servicio.id)}/voucher`,
+        { method: "POST", body: form },
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body.error ?? "No se pudo guardar el voucher");
+      }
+      await load();
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "No se pudo guardar el voucher",
+      );
+    } finally {
+      setSubiendoVoucherId(null);
+    }
+  }
+
   return (
     <div className="rounded-lg bg-surface-container-lowest p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -303,8 +331,8 @@ export function ServiciosExtrasPanel({
         Contrata de forma opcional el servicio de <strong>internet</strong> (S/. 39)
         y/o el <strong>recargo por carga eléctrica</strong> (S/. 60). Cada opción se
         documenta por separado y genera el documento &quot;Pagos extras por conexión y
-        medio de carga&quot; con firmas del arrendatario y el arrendador. El día de pago
-        es el mismo del contrato.
+        medio de carga&quot; con firmas del arrendatario y el arrendador. Si el servicio
+        incluye internet, el pago vence el mismo día en que se solicita.
       </p>
 
       {mostrarForm ? (
@@ -385,17 +413,23 @@ export function ServiciosExtrasPanel({
                 className="h-10 w-full rounded border border-outline-variant bg-surface-container-lowest px-2 font-body-md text-on-surface"
               />
             </div>
-            <div>
-              <label className="mb-1 block font-label-md text-on-surface-variant">
-                Día de pago (según contrato)
-              </label>
-              <input
-                type="date"
-                value={fechaPago}
-                onChange={(e) => setFechaPago(e.target.value)}
-                className="h-10 w-full rounded border border-outline-variant bg-surface-container-lowest px-2 font-body-md text-on-surface"
-              />
-            </div>
+            {!internet ? (
+              <div>
+                <label className="mb-1 block font-label-md text-on-surface-variant">
+                  Día de pago
+                </label>
+                <input
+                  type="date"
+                  value={fechaPago}
+                  onChange={(e) => setFechaPago(e.target.value)}
+                  className="h-10 w-full rounded border border-outline-variant bg-surface-container-lowest px-2 font-body-md text-on-surface"
+                />
+              </div>
+            ) : (
+              <p className="self-end pb-2 text-sm text-on-surface-variant">
+                El pago de internet vence el {fechaLegible(fechaOpcion)} (fecha de solicitud).
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -431,7 +465,7 @@ export function ServiciosExtrasPanel({
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-sm">
+          <table className="w-full min-w-[940px] text-left text-sm">
             <thead className="bg-surface-container-low text-xs text-on-surface-variant">
               <tr>
                 <th className="px-3 py-2 font-medium">Nombre</th>
@@ -440,6 +474,7 @@ export function ServiciosExtrasPanel({
                 <th className="px-3 py-2 font-medium">Día de pago</th>
                 <th className="px-3 py-2 font-medium">Monto</th>
                 <th className="px-3 py-2 font-medium">Documento</th>
+                <th className="px-3 py-2 font-medium">Voucher</th>
                 <th className="px-3 py-2 font-medium">Acciones</th>
               </tr>
             </thead>
@@ -479,6 +514,43 @@ export function ServiciosExtrasPanel({
                       <Download className="h-4 w-4" />
                       PDF
                     </button>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      {s.voucherFilename ? (
+                        <a
+                          href={`/api/servicios-extras/${encodeURIComponent(s.id)}/voucher`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary underline underline-offset-2"
+                        >
+                          Ver voucher
+                        </a>
+                      ) : null}
+                      {puedeGestionar ? (
+                        <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-outline-variant px-2.5 py-1.5 font-label-md text-primary hover:bg-surface-container dark:border-transparent">
+                          <Upload className="h-4 w-4" />
+                          {subiendoVoucherId === s.id
+                            ? "Subiendo…"
+                            : s.voucherFilename
+                              ? "Reemplazar"
+                              : "Subir"}
+                          <input
+                            type="file"
+                            accept="application/pdf,image/jpeg,image/png,image/webp"
+                            className="sr-only"
+                            disabled={subiendoVoucherId === s.id}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              event.target.value = "";
+                              if (file) void subirVoucher(s, file);
+                            }}
+                          />
+                        </label>
+                      ) : !s.voucherFilename ? (
+                        <span className="text-on-surface-variant">—</span>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="px-3 py-2">
                     {puedeGestionar ? (

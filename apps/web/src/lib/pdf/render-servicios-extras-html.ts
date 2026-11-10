@@ -303,7 +303,7 @@ export async function renderServiciosExtrasHtml(
 
     <p>Conste por el presente documento el acuerdo de <strong>PAGOS EXTRAS POR CONEXIÓN Y MEDIO DE CARGA</strong> correspondiente al contrato <strong>${codigoContrato}</strong>, que celebran de una parte ${arrendador.trat} <strong>${arrendador.nombres} ${arrendador.apellidos.toUpperCase()}</strong>, identificado con DNI N° <strong>${arrendador.dni}</strong>, domiciliado en <strong>${escapeHtml(domicilioArrendador)}</strong>, a quien en adelante se le denominará <strong>LA ARRENDADOR(A)</strong> y, de la otra parte, el Sr.(a) <strong>${escapeHtml(nombreCompleto)}</strong>, identificado con DNI / C.E. / Pasaporte N° <strong>${escapeHtml(clienteDocumento)}</strong>, de nacionalidad <strong>${escapeHtml(nacimiento)}</strong>, domiciliado en <strong>${escapeHtml(domicilio)}</strong>, a quien en adelante se denominará <strong>EL ARRENDATARIO</strong>, respecto del mini departamento N° <strong>${escapeHtml(deptoNumero)}</strong> ubicado en <strong>${escapeHtml(direccionInmueble(dep))}</strong>, en los términos y bajo las condiciones siguientes:</p>
 
-    <p>EL ARRENDATARIO tomó la opción indicada con fecha <strong>${fechaOpcion}</strong> y el día de pago será el mismo del contrato de arrendamiento: <strong>${fechaPago}</strong>.</p>
+    <p>EL ARRENDATARIO tomó la opción indicada con fecha <strong>${fechaOpcion}</strong> y la fecha de pago acordada es <strong>${fechaPago}</strong>.</p>
 
     ${bloques.join("\n")}
 

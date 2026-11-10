@@ -41,6 +41,9 @@ export const serviciosExtras = pgTable(
     filename: varchar("filename", { length: 255 }),
     storageKey: text("storage_key"),
     sha256: varchar("sha256", { length: 64 }),
+    voucherFilename: varchar("voucher_filename", { length: 255 }),
+    voucherStorageKey: text("voucher_storage_key"),
+    voucherMimeType: varchar("voucher_mime_type", { length: 100 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -52,4 +55,3 @@ export const serviciosExtras = pgTable(
 
 export type ServiciosExtrasRow = typeof serviciosExtras.$inferSelect;
 export type NewServiciosExtrasRow = typeof serviciosExtras.$inferInsert;
-
