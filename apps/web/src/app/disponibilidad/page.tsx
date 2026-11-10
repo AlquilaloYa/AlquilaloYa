@@ -25,13 +25,6 @@ function fmtPrecio(val: string | undefined): string {
   return `S/ ${numero.toLocaleString("es-PE", { minimumFractionDigits: 0 })}/mes`;
 }
 
-function tipoDepartamento(tipo: string): string {
-  const normalizado = tipo.toLowerCase();
-  if (normalizado.includes("mono")) return "Mono";
-  if (normalizado.includes("mini")) return "Mini";
-  return tipo;
-}
-
 function DatosTarjeta({ dept, className }: { dept: DisponibilidadDepartment; className: string }) {
   return (
     <span className="flex w-full flex-col items-center gap-1 text-center">
@@ -40,7 +33,7 @@ function DatosTarjeta({ dept, className }: { dept: DisponibilidadDepartment; cla
       </span>
       <span className="text-xs font-semibold text-foreground">{fmtPrecio(dept.precio)}</span>
       <span className="text-xs text-muted-foreground">Piso {dept.piso}</span>
-      <span className="text-xs text-muted-foreground">{tipoDepartamento(dept.tipo)}</span>
+      <span className="text-xs text-muted-foreground">{dept.tipo}</span>
     </span>
   );
 }
