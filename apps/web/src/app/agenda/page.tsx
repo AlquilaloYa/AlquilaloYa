@@ -274,6 +274,9 @@ export default function AgendaPage() {
             <p className="mx-auto max-w-md font-body-sm text-on-surface-variant mb-5">
               Vincula tu cuenta de Google para ver y gestionar tu agenda personal. Cada usuario tiene su propia agenda.
             </p>
+            <p className="mx-auto mb-5 max-w-xl rounded-md bg-surface-container p-3 text-left text-sm text-on-surface-variant">
+              Si Google muestra “Acceso bloqueado” o el error 403, el administrador debe agregar tu correo a los usuarios de prueba en la pantalla de consentimiento de Google Cloud, o publicar y verificar la aplicación. Ese bloqueo se configura en Google y no se puede resolver desde esta página.
+            </p>
             <a
               href="/api/agenda/google/authorize"
               className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 font-label-md text-primary-foreground hover:opacity-90"

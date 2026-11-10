@@ -135,6 +135,7 @@ export default function ClienteContratoPage() {
   const [registrando, setRegistrando] = useState<string | null>(null);
   const [optimizandoVoucher, setOptimizandoVoucher] = useState<string | null>(null);
   const [errorPago, setErrorPago] = useState<string | null>(null);
+  const [mensajePago, setMensajePago] = useState<string | null>(null);
   const [previewVoucher, setPreviewVoucher] = useState<{
     dataUrl: string;
     nombre: string;
@@ -468,6 +469,57 @@ export default function ClienteContratoPage() {
     }
   }
 
+  async function adjuntarVoucher(periodoStr: string) {
+    const pago = pagos.find((item) => item.periodo === periodoStr);
+    const seleccionados = vouchers[periodoStr] ?? [];
+    if (!pago) {
+      setErrorPago("No se encontró el pago al que adjuntar el baucher.");
+      return;
+    }
+    if (seleccionados.length === 0 || seleccionados.some((v) => !esJpeg(v))) {
+      setErrorPago("Adjunta al menos un baucher en imagen JPEG.");
+      return;
+    }
+
+    setRegistrando(periodoStr);
+    setErrorPago(null);
+    setMensajePago(null);
+    try {
+      const response = await apiFetch("/api/payments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: pago.id,
+          voucherOnly: true,
+          vouchers: seleccionados.map((voucher) => ({
+            nombre: voucher.nombre,
+            url: voucher.dataUrl,
+          })),
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${response.status}`);
+      }
+      const updated = (await response.json()) as PaymentApi;
+      setPagos((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setVouchers((prev) => {
+        const next = { ...prev };
+        delete next[periodoStr];
+        return next;
+      });
+      setMensajePago("Baucher adjuntado al pago registrado.");
+    } catch (cause) {
+      setErrorPago(
+        cause instanceof Error ? cause.message : "No se pudo adjuntar el baucher.",
+      );
+    } finally {
+      setRegistrando(null);
+    }
+  }
+
   async function leerVouchers(periodoStr: string, files: FileList | null) {
     if (!files || files.length === 0) return;
     const elegidos = Array.from(files);
@@ -482,6 +534,7 @@ export default function ClienteContratoPage() {
       return;
     }
     setErrorPago(null);
+    setMensajePago(null);
     setOptimizandoVoucher(periodoStr);
     try {
       const prepared: Array<{ nombre: string; dataUrl: string; tipo: string }> = [];
@@ -840,9 +893,51 @@ export default function ClienteContratoPage() {
                         </td>
                         <td className="whitespace-nowrap px-3 py-2">
                           {pagado ? (
-                            <span className="text-xs text-on-surface-variant">
-                              {pago?.fechaPago ?? ""}
-                            </span>
+                            <div className="flex flex-col items-start gap-1">
+                              <span className="text-xs text-on-surface-variant">
+                                {pago?.fechaPago ?? ""}
+                              </span>
+                              <label className="cursor-pointer rounded border border-outline-variant px-2 py-1 text-xs text-on-surface-variant hover:bg-surface-container">
+                                {selVouchers.length > 0
+                                  ? `✓ ${selVouchers.length} seleccionado(s)`
+                                  : vouchersPago.length > 0
+                                    ? "Agregar voucher"
+                                    : "Subir voucher"}
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  accept="image/jpeg"
+                                  multiple
+                                  disabled={
+                                    optimizandoVoucher !== null ||
+                                    registrando === pStr
+                                  }
+                                  onChange={(e) => {
+                                    void leerVouchers(pStr, e.target.files);
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                              {selVouchers.length > 0 ? (
+                                <>
+                                  <span className="text-on-surface-variant">
+                                    {selVouchers.map((v) => v.nombre).join(", ")}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      registrando === pStr ||
+                                      optimizandoVoucher === pStr ||
+                                      selVouchers.some((v) => !esJpeg(v))
+                                    }
+                                    onClick={() => void adjuntarVoucher(pStr)}
+                                    className="rounded bg-primary px-2 py-1 text-xs text-on-primary disabled:opacity-40"
+                                  >
+                                    {registrando === pStr ? "Guardando…" : "Guardar voucher"}
+                                  </button>
+                                </>
+                              ) : null}
+                            </div>
                           ) : (
                             <div className="flex flex-col items-start gap-1.5">
                               <div className="flex items-center gap-2">
@@ -930,6 +1025,11 @@ export default function ClienteContratoPage() {
           )}
           {errorPago ? (
             <p className="mt-2 text-sm text-destructive">{errorPago}</p>
+          ) : null}
+          {mensajePago ? (
+            <p className="mt-2 text-sm text-emerald-700" role="status">
+              {mensajePago}
+            </p>
           ) : null}
         </section>
 
