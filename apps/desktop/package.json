@@ -15,8 +15,8 @@
   "devDependencies": {
     "@contract/tsconfig": "workspace:*",
     "@eslint/js": "9.11.1",
-    "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/cli": "^2.11.4",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/cli": "^2.12.4",
     "@types/node": "^22.7.4",
     "eslint": "^9.11.1",
     "eslint-config-prettier": "9.1.0",
