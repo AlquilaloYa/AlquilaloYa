@@ -181,8 +181,9 @@ export async function renderServiciosExtrasHtml(
       <p>EL ARRENDATARIO dispone de la opción de contratar el servicio extra de internet; EL ARRENDADOR ya explicó las posibles falencias de conexión. Detalles del servicio:</p>
       <ol>
         <li>Pago de S/. 39 soles.</li>
-        <li>Conexión de alta latencia.</li>
-        <li>Baja conectividad por actividad masiva.</li>
+        <li>El pago es Mensual.</li>
+        <li>Internet Básico.</li>
+        <li>En caso falle por el proveedor debe de esperar hasta que la conexión sea repuesta, recuerde que es un servicio brindado por un tercero.</li>
       </ol>
     `);
   }
