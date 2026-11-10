@@ -119,7 +119,9 @@ export async function POST(req: Request) {
         montoCargaElectrica,
         montoTotal,
         fechaOpcion: fechaOpcion || new Date().toISOString().slice(0, 10),
-        fechaPago: fechaPago || contract.fechaInicio || null,
+        fechaPago: incluyeInternet
+          ? fechaOpcion || new Date().toISOString().slice(0, 10)
+          : fechaPago || contract.fechaInicio || null,
         departamentoNumero: deptoNumero,
         clienteNombre: cliente ? `${cliente.nombres} ${cliente.apellidos || ""}`.trim() : "",
         clienteDocumento: cliente?.documentoIdentidad || cliente?.ruc || "",
@@ -163,4 +165,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }
-

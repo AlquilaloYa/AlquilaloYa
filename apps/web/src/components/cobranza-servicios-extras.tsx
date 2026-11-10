@@ -20,6 +20,7 @@ type ServicioExtra = {
   clienteDocumento: string | null;
   estado: string;
   filename: string | null;
+  voucherFilename: string | null;
 };
 
 const OPCION_LABEL: Record<string, string> = {
@@ -146,6 +147,7 @@ export function CobranzaServiciosExtras() {
                 <th className="px-3 py-2 font-medium">Monto</th>
                 <th className="px-3 py-2 font-medium">Estado</th>
                 <th className="px-3 py-2 font-medium">Documento</th>
+                <th className="px-3 py-2 font-medium">Voucher</th>
               </tr>
             </thead>
             <tbody>
@@ -194,11 +196,25 @@ export function CobranzaServiciosExtras() {
                       PDF
                     </button>
                   </td>
+                  <td className="px-3 py-2">
+                    {s.voucherFilename ? (
+                      <a
+                        href={`/api/servicios-extras/${encodeURIComponent(s.id)}/voucher`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary underline underline-offset-2"
+                      >
+                        Ver voucher
+                      </a>
+                    ) : (
+                      <span className="text-on-surface-variant">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {visibles.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-on-surface-variant">
+                  <td colSpan={9} className="p-8 text-center text-on-surface-variant">
                     No hay servicios extras registrados.
                   </td>
                 </tr>
@@ -213,7 +229,7 @@ export function CobranzaServiciosExtras() {
                   <td className="whitespace-nowrap px-3 py-2 font-semibold text-on-surface">
                     {moneda(total)}
                   </td>
-                  <td colSpan={2} />
+                  <td colSpan={3} />
                 </tr>
               </tfoot>
             ) : null}

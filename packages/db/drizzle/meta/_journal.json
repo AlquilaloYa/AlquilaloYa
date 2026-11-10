@@ -148,6 +148,13 @@
       "when": 1794272400000,
       "tag": "0033_checkoff_schedule",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794276000000,
+      "tag": "0034_servicios_extras_voucher",
+      "breakpoints": true
     }
   ]
 }

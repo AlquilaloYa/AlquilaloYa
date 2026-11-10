@@ -10,6 +10,7 @@ interface DisponibilidadDepartment {
   codigo: string;
   nombre: string;
   numero: string;
+  tipo: string;
   piso: number;
   precio: string;
   disponibilidad: { disponible: false; fechaFin: string; dias: number } | null;
@@ -21,8 +22,27 @@ interface DisponibilidadDepartment {
 
 function fmtPrecio(val: string | undefined): string {
   const numero = Number(val ?? 0);
-  if (!numero) return "";
   return `S/ ${numero.toLocaleString("es-PE", { minimumFractionDigits: 0 })}/mes`;
+}
+
+function tipoDepartamento(tipo: string): string {
+  const normalizado = tipo.toLowerCase();
+  if (normalizado.includes("mono")) return "Mono";
+  if (normalizado.includes("mini")) return "Mini";
+  return tipo;
+}
+
+function DatosTarjeta({ dept, className }: { dept: DisponibilidadDepartment; className: string }) {
+  return (
+    <span className="flex w-full flex-col items-center gap-1 text-center">
+      <span className={`break-words font-mono-label text-sm font-bold sm:text-base ${className}`}>
+        {dept.codigo}
+      </span>
+      <span className="text-xs font-semibold text-foreground">{fmtPrecio(dept.precio)}</span>
+      <span className="text-xs text-muted-foreground">Piso {dept.piso}</span>
+      <span className="text-xs text-muted-foreground">{tipoDepartamento(dept.tipo)}</span>
+    </span>
+  );
 }
 
 function TarjetaDisponible({
@@ -39,9 +59,7 @@ function TarjetaDisponible({
       title="Ver propiedad"
       className="flex min-w-0 items-center justify-center rounded-xl border border-green-600/20 bg-green-500/10 border-l-4 border-l-green-600 p-2 transition-colors hover:bg-green-500/15 sm:p-4"
     >
-      <span className="break-words text-center font-mono-label text-sm font-bold text-green-700 sm:text-base dark:text-green-500">
-        {dept.codigo}
-      </span>
+      <DatosTarjeta dept={dept} className="text-green-700 dark:text-green-500" />
     </button>
   );
 }
@@ -60,9 +78,7 @@ function TarjetaOcupada({
       title="Ver propiedad"
       className="flex min-w-0 items-center justify-center rounded-xl border border-red-600/20 bg-red-500/10 border-l-4 border-l-red-600 p-2 transition-colors hover:bg-red-500/15 sm:p-4"
     >
-      <span className="break-words text-center font-mono-label text-sm font-bold text-red-700 sm:text-base dark:text-red-500">
-        {dept.codigo}
-      </span>
+      <DatosTarjeta dept={dept} className="text-red-700 dark:text-red-500" />
     </button>
   );
 }
@@ -81,9 +97,7 @@ function TarjetaMantenimiento({
       title="Cambiar estado"
       className="flex min-w-0 items-center justify-center rounded-xl border border-blue-600/20 bg-blue-500/10 border-l-4 border-l-blue-600 p-2 transition-colors hover:bg-blue-500/15 sm:p-4"
     >
-      <span className="break-words text-center font-mono-label text-sm font-bold text-blue-700 sm:text-base dark:text-blue-500">
-        {dept.codigo}
-      </span>
+      <DatosTarjeta dept={dept} className="text-blue-700 dark:text-blue-500" />
     </button>
   );
 }
@@ -312,7 +326,7 @@ function GrupoDepartamentos({
           {bloqueados.length > 0 && ` · ${bloqueados.length} bloqueados`}
         </span>
       </h2>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2 sm:gap-3">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2 sm:gap-3">
         {disponibles.map((dept) => (
           <TarjetaDisponible key={dept.id} dept={dept} onOpen={() => onAbrirCambio(dept)} />
         ))}

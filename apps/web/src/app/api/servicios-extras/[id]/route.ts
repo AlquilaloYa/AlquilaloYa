@@ -103,7 +103,11 @@ export async function PATCH(
         tipoServicio,
         montoTotal,
         fechaOpcion: body.fechaOpcion || existing.fechaOpcion,
-        fechaPago: body.fechaPago !== undefined ? body.fechaPago : existing.fechaPago,
+        fechaPago: internet
+          ? body.fechaOpcion || existing.fechaOpcion
+          : body.fechaPago !== undefined
+            ? body.fechaPago
+            : existing.fechaPago,
         updatedAt: new Date(),
       })
       .where(eq(schema.serviciosExtras.id, id))
@@ -136,7 +140,7 @@ export async function PATCH(
   }
 }
 
-/** DELETE /api/servicios-extras/:id — elimina el registro y su PDF almacenado. */
+/** DELETE /api/servicios-extras/:id — elimina el registro y sus archivos almacenados. */
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -166,11 +170,13 @@ export async function DELETE(
       return NextResponse.json({ error: "Registro no encontrado" }, { status: 404 });
     }
 
-    if (row.storageKey) {
-      try {
-        await deleteObject(row.storageKey);
-      } catch (error) {
-        return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+    for (const storageKey of [row.storageKey, row.voucherStorageKey]) {
+      if (storageKey) {
+        try {
+          await deleteObject(storageKey);
+        } catch (error) {
+          return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+        }
       }
     }
 
