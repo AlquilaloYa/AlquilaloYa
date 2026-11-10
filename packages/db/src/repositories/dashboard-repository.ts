@@ -18,6 +18,7 @@ export interface DashboardMetrics {
 
 export interface ProximoAVencer {
   id: string;
+  clienteId: string;
   codigoContrato: string;
   cliente: string;
   telefono: string | null;
@@ -191,6 +192,7 @@ export class DrizzleDashboardRepository {
     const porVencer = await db
       .select({
         id: schema.contracts.id,
+        clienteId: schema.contracts.clienteId,
         codigoContrato: schema.contracts.codigoContrato,
         fechaFin: schema.contracts.fechaFin,
         renuevaProximoMes: schema.contracts.renuevaProximoMes,
@@ -227,6 +229,7 @@ export class DrizzleDashboardRepository {
       );
       return {
         id: c.id,
+        clienteId: c.clienteId,
         codigoContrato: c.codigoContrato,
         cliente: c.cliente || "—",
         telefono: c.telefono,

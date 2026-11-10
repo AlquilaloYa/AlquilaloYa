@@ -1081,7 +1081,7 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                             }`}
                           >
                             <ShieldCheck className="h-3.5 w-3.5" />
-                            {f.pago?.voucherVerificadoEn ? "Verificado" : "No verificado"}
+                            {f.pago?.voucherVerificadoEn ? "Verificado" : "NO verificado"}
                           </button>
                         </div>
                       </td>
