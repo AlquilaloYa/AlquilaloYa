@@ -227,19 +227,23 @@ export function PaymentVerificationDialog({
     // Montos de los vouchers nuevos (sin verificar), en orden. Solo aplica a
     // pagos de contratos; la verificación de locales no registra montos.
     const montos: number[] = [];
+    let montoFaltante = false;
     if (!localMode) {
-      for (let index = 0; index < payment.vouchers.length; index += 1) {
-        const voucher = payment.vouchers[index];
-        if (voucher.verificadoEn) continue;
+      payment.vouchers.forEach((voucher, index) => {
+        if (voucher.verificadoEn) return;
         const texto = (montosVoucher[`${payment.id}-${index}`] ?? "").replace(",", ".");
         const monto = Number(texto);
         if (texto.trim() === "" || !Number.isFinite(monto) || monto < 0) {
-          setError("Ingresa el monto de cada voucher nuevo antes de confirmar.");
-          setBusyPaymentId(null);
+          montoFaltante = true;
           return;
         }
         montos.push(monto);
-      }
+      });
+    }
+    if (montoFaltante) {
+      setError("Ingresa el monto de cada voucher nuevo antes de confirmar.");
+      setBusyPaymentId(null);
+      return;
     }
     try {
       const response = await apiFetch(localMode ? "/api/locales/cobranza/verify" : "/api/payments/verify", {
