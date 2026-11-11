@@ -37,6 +37,7 @@ const PUBLIC_ROUTES = new Set<string>([
   "portal-cliente/uploads/route.ts",
   // Endpoints máquina-a-máquina (token/HMAC propio).
   "cron/automatizaciones/route.ts",
+  "cron/task-reminders/route.ts",
   "webhooks/mensajes/route.ts",
   "webhooks/meta/route.ts",
   // Observabilidad y lectura pública del sitio.
