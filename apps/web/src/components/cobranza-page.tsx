@@ -35,6 +35,8 @@ type PaymentRow = {
   voucherNombre: string | null;
   tieneVoucher?: boolean;
   vouchers?: PaymentVoucher[];
+  /** Suma de los montos anotados en los vouchers subidos (API compacta). */
+  vouchersMonto?: string;
   voucherVerificadoEn?: string | null;
   voucherVerificadoPor?: string | null;
 };
@@ -77,7 +79,7 @@ type CuotaFila = {
   internet: number;
   luzEx: number;
   extras: number;
-  montoPagado: number;
+  abonado: number;
   saldo: number;
   estadoPago:
     | "PAGADO"
@@ -369,7 +371,7 @@ function AbonoModal({
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wider text-on-surface-variant">Abonado</dt>
-            <dd className="font-semibold">{moneda(fila.montoPagado)}</dd>
+            <dd className="font-semibold">{moneda(fila.abonado)}</dd>
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wider text-on-surface-variant">Saldo</dt>
@@ -700,7 +702,7 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
           internet,
           luzEx,
           extras: internet + luzEx,
-          montoPagado: 0,
+          abonado: 0,
           saldo: 0,
           estadoPago: "FINALIZADO",
           diasMora: 0,
@@ -720,24 +722,35 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
         Math.floor(Number(pago?.diasIndulgencia ?? DIAS_PRORROGA_POR_DEFECTO) || 0)
       );
       const vencimiento = new Date(cuota.getTime() + indulgencia * 86_400_000);
-      // El estado guardado en la BD manda: PAGADO/PARCIAL se muestran como tal
-      // aunque sus vouchers aún no tengan marca de verificación (pagos
-      // históricos). Solo DEPOSITADO significa voucher pendiente de revisar.
-      const depositado = pago?.estado === "DEPOSITADO";
-      const pagado = pago?.estado === "PAGADO";
+      // Convención mostrada: "Uploaded" = voucher subido sin verificar (aunque
+      // la BD diga PAGADO en filas históricas), "Verified" = verificado y
+      // "Parcial" = verificado con abono menor al total. Solo DEPOSITADO de la
+      // BD o vouchers sin marca de verificación caen en Uploaded.
+      const tieneVoucher = Boolean(
+        pago?.tieneVoucher ?? Boolean(pago?.voucherNombre),
+      );
+      const verificadoTodos = Boolean(pago?.voucherVerificadoEn);
+      const depositado =
+        pago?.estado === "DEPOSITADO" || (tieneVoucher && !verificadoTodos);
+      const pagado =
+        pago?.estado === "PAGADO" && verificadoTodos && !depositado;
       // Cuando existe la fila de pago registrada con monto (> 0), respeta su
       // total: puede estar prorrateada por días (adenda de extensión).
       const total =
         pago && Number(pago.monto) > 0
           ? Number(pago.monto) + Number(pago.mantenimiento ?? 0)
           : Number(c.montoCanonMensual ?? 0) + Number(c.mantenimiento ?? 50);
-      const montoPagado = depositado
-        ? 0
-        : Math.max(0, Number(pago?.montoPagado ?? 0) || 0);
-      const saldo = Math.max(0, total - montoPagado);
+      // Abonado real: en filas Uploaded (DEPOSITADO) el montoPagado de la BD
+      // es 0 (espera verificación), pero los vouchers ya subidos llevan sus
+      // montos; en el resto manda el monto registrado.
+      const abonado =
+        pago?.estado === "DEPOSITADO"
+          ? Math.max(0, Number(pago?.vouchersMonto ?? 0) || 0)
+          : Math.max(0, Number(pago?.montoPagado ?? 0) || 0);
+      const saldo = Math.max(0, total - abonado);
       const parcialActivo =
-        pago?.estado === "PARCIAL" ||
-        (!pagado && !depositado && montoPagado > 0 && saldo > 0.001);
+        (pago?.estado === "PARCIAL" && !depositado) ||
+        (!pagado && !depositado && abonado > 0 && saldo > 0.001);
       // La mora se mide desde este mes: las cuotas de meses anteriores no
       // cuentan como atraso (no hay antecedentes de mora).
       const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).getTime();
@@ -771,7 +784,7 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
         internet,
         luzEx,
         extras: internet + luzEx,
-        montoPagado,
+        abonado,
         saldo,
         estadoPago,
         diasMora,
@@ -1168,6 +1181,35 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                             >
                               Verificar voucher
                             </button>
+                            {/* El abono directo solo en filas cuyo estado en
+                            la BD es DEPOSITADO: las filas históricas PAGADO
+                            con voucher sin verificar se revisan con el
+                            diálogo de verificación. */}
+                            {f.pago?.estado === "DEPOSITADO" ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setAbono({ fila: f, modo: "PARCIAL" })}
+                                  disabled={f.total <= 0}
+                                  className="rounded border border-outline-variant px-2 py-1 text-xs text-primary hover:bg-surface-container disabled:opacity-40"
+                                >
+                                  Pago parcial
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAbono({ fila: f, modo: "TOTAL" })}
+                                  disabled={f.total <= 0}
+                                  className="rounded bg-primary px-2 py-1 text-xs text-on-primary hover:opacity-90 disabled:opacity-40"
+                                >
+                                  Pago total
+                                </button>
+                              </div>
+                            ) : null}
+                            {f.abonado > 0 ? (
+                              <span className="text-xs text-on-surface-variant">
+                                Abonado {moneda(f.abonado)} · saldo {moneda(f.saldo)}
+                              </span>
+                            ) : null}
                           </div>
                         ) : f.estadoPago === "PAGADO" ? (
                           <div className="flex flex-col items-start gap-1">
@@ -1204,9 +1246,9 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                                 Pago total
                               </button>
                             </div>
-                            {f.montoPagado > 0 ? (
+                            {f.abonado > 0 ? (
                               <span className="text-xs text-on-surface-variant">
-                                Abonado {moneda(f.montoPagado)} · saldo {moneda(f.saldo)}
+                                Abonado {moneda(f.abonado)} · saldo {moneda(f.saldo)}
                               </span>
                             ) : null}
                           </div>

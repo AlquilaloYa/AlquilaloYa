@@ -335,9 +335,11 @@ export default function ClienteContratoPage() {
       const pStr = localDateStr(d);
       const pago = pagos.find((p) => p.periodo === pStr) ?? null;
       const verificado = Boolean(pago?.voucherVerificadoEn);
-      // El estado guardado en la BD manda: PAGADO/PARCIAL se muestran como tal
-      // aunque sus vouchers no tengan marca de verificación (pagos históricos).
-      const depositado = pago?.estado === "DEPOSITADO";
+      const vouchersPendientes =
+        vouchersDePago(pago).length > 0 && !verificado;
+      // Convención: "Uploaded" = voucher subido sin verificar (aunque la BD
+      // diga PAGADO en filas históricas), "Verified" = verificado.
+      const depositado = pago?.estado === "DEPOSITADO" || vouchersPendientes;
       const pagado = pago?.estado === "PAGADO" && !depositado;
       // Pago verificado con abono menor al total: falta depositar el saldo.
       const parcial = !depositado && !pagado && pago?.estado === "PARCIAL";

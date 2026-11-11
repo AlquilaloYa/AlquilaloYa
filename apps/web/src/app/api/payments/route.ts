@@ -132,6 +132,9 @@ export async function GET(req: Request) {
             THEN ${safeVouchers}->0->>'verificadoPor'
             ELSE NULL
           END`,
+          // Suma de los montos anotados en los vouchers subidos: refleja lo
+          // depositado aunque aún no se haya verificado el pago.
+          vouchersMonto: sql<string>`COALESCE((\n            SELECT SUM((voucher->>'monto')::numeric)\n            FROM jsonb_array_elements(${safeVouchers}) AS voucher\n            WHERE voucher->>'monto' IS NOT NULL\n          ), 0)::text`,
         })
         .from(schema.payments);
       return NextResponse.json(

@@ -687,8 +687,17 @@ export function PaymentVerificationDialog({
                               let primero = true;
                               payment.vouchers.forEach((voucher, index) => {
                                 if (voucher.verificadoEn) return;
-                                iniciales[`${payment.id}-${index}`] =
-                                  primero && saldo > 0 ? saldo.toFixed(2) : "";
+                                // Voucher con monto ya guardado (p. ej. el
+                                // abono parcial anotado al subirlo): prellena
+                                // con su monto. El saldo solo prellena el
+                                // primer voucher sin monto guardado.
+                                if (typeof voucher.monto === "number") {
+                                  iniciales[`${payment.id}-${index}`] =
+                                    voucher.monto.toFixed(2);
+                                } else {
+                                  iniciales[`${payment.id}-${index}`] =
+                                    primero && saldo > 0 ? saldo.toFixed(2) : "";
+                                }
                                 primero = false;
                               });
                               setMontosVoucher(iniciales);
