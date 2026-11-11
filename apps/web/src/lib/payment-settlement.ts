@@ -13,18 +13,15 @@ export function settleVerifiedPayment(
   total: number,
   amountAlreadyPaid: number,
 ): VerifiedPaymentSettlement {
-  // Los vouchers ya verificados en verificaciones anteriores ya están
-  // incluidos en `amountAlreadyPaid`; solo se suman los montos de los
-  // vouchers nuevos (sin verificar) que se están verificando ahora.
-  const nuevos = vouchers.filter((voucher) => !voucher.verificadoEn);
-  const nuevosTienenMontos =
-    nuevos.length > 0 &&
-    nuevos.every((voucher) => typeof voucher.monto === "number");
-  const montoNuevos = nuevosTienenMontos
-    ? nuevos.reduce((sum, voucher) => sum + (voucher.monto ?? 0), 0)
-    : 0;
-  const montoPagado = nuevosTienenMontos
-    ? amountAlreadyPaid + montoNuevos
+  // Cuando todos los vouchers (ya verificados y nuevos) tienen monto, el
+  // abonado es la suma de sus montos: los vouchers verificados conservan el
+  // suyo y los nuevos aportan el abono de esta verificación. Así no se
+  // duplica `amountAlreadyPaid` con pagos históricos ya marcados PAGADO.
+  const todosTienenMonto =
+    vouchers.length > 0 &&
+    vouchers.every((voucher) => typeof voucher.monto === "number");
+  const montoPagado = todosTienenMonto
+    ? vouchers.reduce((sum, voucher) => sum + (voucher.monto ?? 0), 0)
     : amountAlreadyPaid > 0
       ? amountAlreadyPaid
       : total;

@@ -720,13 +720,11 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
         Math.floor(Number(pago?.diasIndulgencia ?? DIAS_PRORROGA_POR_DEFECTO) || 0)
       );
       const vencimiento = new Date(cuota.getTime() + indulgencia * 86_400_000);
-      const depositado =
-        pago?.estado === "DEPOSITADO" ||
-        Boolean(
-          (pago?.tieneVoucher ?? Boolean(pago?.voucherNombre)) &&
-            !pago?.voucherVerificadoEn,
-        );
-      const pagado = pago?.estado === "PAGADO" && !depositado;
+      // El estado guardado en la BD manda: PAGADO/PARCIAL se muestran como tal
+      // aunque sus vouchers aún no tengan marca de verificación (pagos
+      // históricos). Solo DEPOSITADO significa voucher pendiente de revisar.
+      const depositado = pago?.estado === "DEPOSITADO";
+      const pagado = pago?.estado === "PAGADO";
       // Cuando existe la fila de pago registrada con monto (> 0), respeta su
       // total: puede estar prorrateada por días (adenda de extensión).
       const total =
@@ -738,7 +736,8 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
         : Math.max(0, Number(pago?.montoPagado ?? 0) || 0);
       const saldo = Math.max(0, total - montoPagado);
       const parcialActivo =
-        !pagado && !depositado && montoPagado > 0 && saldo > 0.001;
+        pago?.estado === "PARCIAL" ||
+        (!pagado && !depositado && montoPagado > 0 && saldo > 0.001);
       // La mora se mide desde este mes: las cuotas de meses anteriores no
       // cuentan como atraso (no hay antecedentes de mora).
       const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).getTime();
@@ -761,7 +760,7 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
         ? "PAGADO"
         : parcialActivo
           ? "PARCIAL"
-          : cuentaMora && vencimiento.getTime() < inicioDia
+          : vencimiento.getTime() < inicioDia
             ? "VENCIDO"
             : "PENDIENTE";
       out.push({
@@ -1117,9 +1116,9 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                               ? `Verified el ${new Date(f.pago.voucherVerificadoEn).toLocaleString("es-PE")}`
                               : "Pendiente de verificación"}
                             className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                              f.estadoPago === "DEPOSITADO"
+                              f.estadoPago === "DEPOSITADO" || f.estadoPago === "PARCIAL"
                                 ? "border-amber-600/30 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
-                                : f.pago.voucherVerificadoEn
+                                : f.estadoPago === "PAGADO" || f.pago.voucherVerificadoEn
                                 ? "border-emerald-600/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
                                 : "border-red-600/30 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300"
                             }`}

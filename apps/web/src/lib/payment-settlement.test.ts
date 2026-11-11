@@ -58,4 +58,10 @@ describe("verified payment settlement", () => {
       ),
     ).toEqual({ estado: "PARCIAL", montoPagado: 800 });
   });
+
+  it("does not double count a legacy PAGADO payment whose voucher is verified now", () => {
+    expect(
+      settleVerifiedPayment([{ monto: 1700 }], 1700, 1700),
+    ).toEqual({ estado: "PAGADO", montoPagado: 1700 });
+  });
 });
