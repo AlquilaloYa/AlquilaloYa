@@ -101,6 +101,20 @@ function vouchersDePago(
   return [];
 }
 
+// Monto abonado real: suma de los montos anotados en los vouchers subidos,
+// sin superar (toma el mayor con) el monto registrado en la BD.
+function montoAbonadoDePago(pago: PaymentApi | null | undefined): number {
+  if (!pago) return 0;
+  const vouchersMonto = (pago.vouchers ?? []).reduce(
+    (sum, voucher) => sum + (typeof voucher.monto === "number" ? voucher.monto : 0),
+    0
+  );
+  return Math.max(
+    vouchersMonto,
+    Math.max(0, Number(pago.montoPagado ?? 0) || 0)
+  );
+}
+
 function parseLocalDate(iso: string): Date {
   const partes = iso.slice(0, 10).split("-");
   const y = Number(partes[0] ?? 0);
@@ -335,14 +349,24 @@ export default function ClienteContratoPage() {
       const pStr = localDateStr(d);
       const pago = pagos.find((p) => p.periodo === pStr) ?? null;
       const verificado = Boolean(pago?.voucherVerificadoEn);
-      const vouchersPendientes =
-        vouchersDePago(pago).length > 0 && !verificado;
-      // Convención: "Uploaded" = voucher subido sin verificar (aunque la BD
-      // diga PAGADO en filas históricas), "Verified" = verificado.
-      const depositado = pago?.estado === "DEPOSITADO" || vouchersPendientes;
-      const pagado = pago?.estado === "PAGADO" && !depositado;
-      // Pago verificado con abono menor al total: falta depositar el saldo.
-      const parcial = !depositado && !pagado && pago?.estado === "PARCIAL";
+      const tieneVoucher = vouchersDePago(pago).length > 0;
+      const totalFila =
+        pago && Number(pago.monto) > 0
+          ? Number(pago.monto) + Number(pago.mantenimiento ?? 0)
+          : 0;
+      const abonadoFila = montoAbonadoDePago(pago);
+      const saldoFila = Math.max(0, totalFila - abonadoFila);
+      // Convención: "Parcial" = hay abono pero falta saldo (aunque el voucher
+      // no esté verificado), "Uploaded" = completo sin verificar y "Pagado" =
+      // verificado.
+      const pagado =
+        pago?.estado === "PAGADO" && (verificado || !tieneVoucher);
+      // Pago con abono menor al total: falta depositar el saldo.
+      const parcial = !pagado && abonadoFila > 0.001 && saldoFila > 0.001;
+      const depositado =
+        !pagado &&
+        !parcial &&
+        (pago?.estado === "DEPOSITADO" || (tieneVoucher && !verificado));
       const vencido = !pagado && !depositado && !parcial && d.getTime() < inicioDia;
       return {
         fecha: d,
@@ -821,7 +845,7 @@ export default function ClienteContratoPage() {
                         : 0;
                     const estado = fila.estado;
                     // En filas Parciales: monto ya abonado vs. total del mes.
-                    const abonadoParcial = Number(pago?.montoPagado ?? 0);
+                    const abonadoParcial = montoAbonadoDePago(pago);
                     const totalFila = pago
                       ? Number(pago.monto) + Number(pago.mantenimiento ?? 0)
                       : 0;
