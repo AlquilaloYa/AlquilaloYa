@@ -127,9 +127,9 @@ export async function POST(req: Request) {
       let montoIdx = 0;
       const vouchersConMontos = vouchers.map((voucher) => {
         if (voucher.verificadoEn || !montosNuevos) return voucher;
-        const conMonto = { ...voucher, monto: montosNuevos[montoIdx] };
+        const monto = montosNuevos[montoIdx];
         montoIdx += 1;
-        return conMonto;
+        return monto === undefined ? voucher : { ...voucher, monto };
       });
 
       const verifiedVouchers = vouchersConMontos.map((voucher) => ({
