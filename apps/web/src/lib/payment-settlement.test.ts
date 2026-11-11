@@ -28,4 +28,34 @@ describe("verified payment settlement", () => {
       montoPagado: 800,
     });
   });
+
+  it("adds the new voucher amount to the already verified amount", () => {
+    expect(
+      settleVerifiedPayment(
+        [{ monto: 800, verificadoEn: "2026-11-01T12:00:00.000Z" }, { monto: 850 }],
+        1650,
+        800,
+      ),
+    ).toEqual({ estado: "PAGADO", montoPagado: 1650 });
+  });
+
+  it("keeps PARCIAL when the accumulated amount still does not cover the total", () => {
+    expect(
+      settleVerifiedPayment(
+        [{ monto: 800, verificadoEn: "2026-11-01T12:00:00.000Z" }, { monto: 300 }],
+        1650,
+        800,
+      ),
+    ).toEqual({ estado: "PARCIAL", montoPagado: 1100 });
+  });
+
+  it("falls back to the recorded amount when a second deposit has no amounts", () => {
+    expect(
+      settleVerifiedPayment(
+        [{ monto: 800, verificadoEn: "2026-11-01T12:00:00.000Z" }, {}],
+        1650,
+        800,
+      ),
+    ).toEqual({ estado: "PARCIAL", montoPagado: 800 });
+  });
 });

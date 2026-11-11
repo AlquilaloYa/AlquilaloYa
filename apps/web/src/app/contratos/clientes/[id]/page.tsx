@@ -64,11 +64,17 @@ type PaymentApi = {
   mantenimiento: string;
   penalidad?: string;
   estado: string;
+  montoPagado?: string;
   fechaPago: string | null;
   voucherNombre: string | null;
   voucherUrl: string | null;
   voucherVerificadoEn?: string | null;
-  vouchers?: Array<{ nombre: string; url: string; verificadoEn?: string | null }>;
+  vouchers?: Array<{
+    nombre: string;
+    url: string;
+    monto?: number;
+    verificadoEn?: string | null;
+  }>;
 };
 
 const PENALIDAD_MORA = 70;
@@ -334,7 +340,9 @@ export default function ClienteContratoPage() {
       const depositado =
         pago?.estado === "DEPOSITADO" || vouchersPendientes;
       const pagado = pago?.estado === "PAGADO" && !depositado;
-      const vencido = !pagado && !depositado && d.getTime() < inicioDia;
+      // Pago verificado con abono menor al total: falta depositar el saldo.
+      const parcial = !depositado && !pagado && pago?.estado === "PARCIAL";
+      const vencido = !pagado && !depositado && !parcial && d.getTime() < inicioDia;
       return {
         fecha: d,
         pStr,
@@ -342,11 +350,13 @@ export default function ClienteContratoPage() {
           ? verificado
             ? "Verified"
             : "Uploaded"
-          : pagado
-            ? "Pagado"
-            : vencido
-              ? "Vencido"
-              : "Pendiente",
+          : parcial
+            ? "Parcial"
+            : pagado
+              ? "Pagado"
+              : vencido
+                ? "Vencido"
+                : "Pendiente",
       };
     });
     let salida = filtrarFilas(filas, busquedaCrono, (f) => [
@@ -792,8 +802,9 @@ export default function ClienteContratoPage() {
                     const verificado = fila.estado === "Verified";
                     const depositado =
                       fila.estado === "Uploaded" || verificado;
+                    const parcial = fila.estado === "Parcial";
                     const vencido = fila.estado === "Vencido";
-                    const diasMora = pagado
+                    const diasMora = pagado || parcial
                       ? pago?.fechaPago
                         ? Math.max(
                             0,
@@ -808,6 +819,11 @@ export default function ClienteContratoPage() {
                         ? Math.floor((inicioDia - d.getTime()) / 86_400_000)
                         : 0;
                     const estado = fila.estado;
+                    // En filas Parciales: monto ya abonado vs. total del mes.
+                    const abonadoParcial = Number(pago?.montoPagado ?? 0);
+                    const totalFila = pago
+                      ? Number(pago.monto) + Number(pago.mantenimiento ?? 0)
+                      : 0;
                     const penalidad =
                       diasMora > 0
                         ? pago?.penalidad == null
@@ -816,6 +832,10 @@ export default function ClienteContratoPage() {
                         : 0;
                     const selVouchers = vouchers[pStr] ?? [];
                     const vouchersPago = vouchersDePago(pago);
+                    // Cuando la fila de pago ya existe (Pagado/Parcial/Uploaded),
+                    // el voucher se adjunta al existente (se suma al abonado) en
+                    // lugar de reemplazar los vouchers previos.
+                    const usarAdjuntar = pagado || pago !== null;
                     return (
                       <tr key={d.toISOString()} className="border-t border-outline-variant/50">
                         <td className="whitespace-nowrap px-3 py-2 font-medium">
@@ -853,7 +873,7 @@ export default function ClienteContratoPage() {
                             className={
                               pagado || verificado
                                 ? "font-medium text-emerald-600"
-                                : depositado
+                                : depositado || parcial
                                   ? "font-medium text-amber-600"
                                   : vencido
                                     ? "font-medium text-destructive"
@@ -862,6 +882,11 @@ export default function ClienteContratoPage() {
                           >
                             {estado}
                           </span>
+                          {parcial && abonadoParcial > 0 ? (
+                            <span className="block text-xs text-on-surface-variant">
+                              Abonado {moneda(abonadoParcial)} de {moneda(totalFila)}
+                            </span>
+                          ) : null}
                         </td>
                         <td className="whitespace-nowrap px-3 py-2">
                           {diasMora > 0 ? `${diasMora} d` : "—"}
@@ -907,7 +932,7 @@ export default function ClienteContratoPage() {
                           )}
                         </td>
                         <td className="whitespace-nowrap px-3 py-2">
-                          {pagado ? (
+                          {usarAdjuntar ? (
                             <div className="flex flex-col items-start gap-1">
                               <span className="text-xs text-on-surface-variant">
                                 {pago?.fechaPago ?? ""}

@@ -402,6 +402,7 @@ export async function PATCH(req: Request) {
           periodo: schema.payments.periodo,
           fechaPago: schema.payments.fechaPago,
           diasIndulgencia: schema.payments.diasIndulgencia,
+          montoPagado: schema.payments.montoPagado,
         })
         .from(schema.payments)
         .where(sql`id = ${id}`)
@@ -429,7 +430,9 @@ export async function PATCH(req: Request) {
         values.voucherUrl = vouchers[0]?.url ?? null;
         values.voucherNombre = vouchers[0]?.nombre ?? null;
         values.estado = "DEPOSITADO";
-        values.montoPagado = "0.00";
+        // Preserva el monto ya verificado: al verificarse los vouchers nuevos
+        // se suma su monto al acumulado (flujo de pagos parciales).
+        values.montoPagado = existente.montoPagado ?? "0.00";
       } else {
         let vouchers: {
           nombre: string;

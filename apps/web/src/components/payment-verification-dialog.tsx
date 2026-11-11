@@ -6,7 +6,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
-type Voucher = { nombre: string; url: string; monto?: number };
+type Voucher = {
+  nombre: string;
+  url: string;
+  monto?: number;
+  verificadoEn?: string | null;
+};
 type Responsable = "miguel" | "emely";
 type VerificationStep = "loading" | "code" | "enroll" | "payments";
 type EnrolledTotp = { factorId: string; qrCode: string; secret: string };
@@ -72,6 +77,7 @@ export function PaymentVerificationDialog({
   const [code, setCode] = useState("");
   const [busyPaymentId, setBusyPaymentId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [montosVoucher, setMontosVoucher] = useState<Record<string, string>>({});
   const [step, setStep] = useState<VerificationStep>("loading");
   const [enroll, setEnroll] = useState<EnrolledTotp | null>(null);
   const [enrollmentPurpose, setEnrollmentPurpose] =
@@ -218,11 +224,28 @@ export function PaymentVerificationDialog({
   async function verificar(payment: VerificationPayment) {
     setBusyPaymentId(payment.id);
     setError("");
+    // Montos de los vouchers nuevos (sin verificar), en orden. Solo aplica a
+    // pagos de contratos; la verificación de locales no registra montos.
+    const montos: number[] = [];
+    if (!localMode) {
+      for (let index = 0; index < payment.vouchers.length; index += 1) {
+        const voucher = payment.vouchers[index];
+        if (voucher.verificadoEn) continue;
+        const texto = (montosVoucher[`${payment.id}-${index}`] ?? "").replace(",", ".");
+        const monto = Number(texto);
+        if (texto.trim() === "" || !Number.isFinite(monto) || monto < 0) {
+          setError("Ingresa el monto de cada voucher nuevo antes de confirmar.");
+          setBusyPaymentId(null);
+          return;
+        }
+        montos.push(monto);
+      }
+    }
     try {
       const response = await apiFetch(localMode ? "/api/locales/cobranza/verify" : "/api/payments/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentId: payment.id }),
+        body: JSON.stringify({ paymentId: payment.id, voucherMontos: montos }),
       });
       const body: unknown = await response.json().catch(() => null);
       if (!response.ok) {
@@ -250,11 +273,18 @@ export function PaymentVerificationDialog({
                 montoPagado: result.montoPagado,
                 voucherVerificadoEn: result.voucherVerificadoEn,
                 voucherVerificadoPor: result.voucherVerificadoPor,
+                vouchers: item.vouchers.map((voucher, index) => {
+                  if (voucher.verificadoEn) return voucher;
+                  const texto = (montosVoucher[`${item.id}-${index}`] ?? "").replace(",", ".");
+                  const monto = Number(texto);
+                  return Number.isFinite(monto) ? { ...voucher, monto } : voucher;
+                }),
               }
             : item
         )
       );
       setActivePaymentId(null);
+      setMontosVoucher({});
       onVerified();
     } catch (verificationError) {
       setError(
@@ -408,6 +438,7 @@ export function PaymentVerificationDialog({
               onChange={(event) => {
                 setMonth(event.target.value);
                 setActivePaymentId(null);
+                setMontosVoucher({});
                 setCode("");
                 setError("");
               }}
@@ -430,6 +461,7 @@ export function PaymentVerificationDialog({
                 onClick={() => {
                   setResponsable(item.key);
                   setActivePaymentId(null);
+                  setMontosVoucher({});
                   setCode("");
                   setError("");
                 }}
@@ -604,6 +636,16 @@ export function PaymentVerificationDialog({
                               : "Pagado"}
                           {" · "}
                           {moneda(amount)}
+                          {!verified && recordedAmount > 0
+                            ? ` · Falta ${moneda(
+                                Math.max(
+                                  0,
+                                  Number(payment.monto) +
+                                    Number(payment.mantenimiento) -
+                                    recordedAmount,
+                                ),
+                              )}`
+                            : ""}
                         </p>
                       </div>
                       {verified ? (
@@ -622,6 +664,31 @@ export function PaymentVerificationDialog({
                             setActivePaymentId(selected ? null : payment.id);
                             setCode("");
                             setError("");
+                            if (selected) {
+                              setMontosVoucher((prev) => {
+                                const next = { ...prev };
+                                for (const key of Object.keys(next)) {
+                                  if (key.startsWith(`${payment.id}-`)) delete next[key];
+                                }
+                                return next;
+                              });
+                            } else {
+                              const totalPendiente =
+                                Number(payment.monto) + Number(payment.mantenimiento);
+                              const saldo = Math.max(
+                                0,
+                                totalPendiente - Number(payment.montoPagado || 0),
+                              );
+                              const iniciales: Record<string, string> = {};
+                              let primero = true;
+                              payment.vouchers.forEach((voucher, index) => {
+                                if (voucher.verificadoEn) return;
+                                iniciales[`${payment.id}-${index}`] =
+                                  primero && saldo > 0 ? saldo.toFixed(2) : "";
+                                primero = false;
+                              });
+                              setMontosVoucher(iniciales);
+                            }
                           }}
                           className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-on-primary hover:opacity-90"
                         >
@@ -669,19 +736,67 @@ export function PaymentVerificationDialog({
                       </p>
                     ) : selected ? (
                         <div className="mt-4 rounded-md bg-surface-container p-3">
-                          {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-                          <button
-                            type="button"
-                            onClick={() => void verificar(payment)}
-                            disabled={busyPaymentId === payment.id}
-                            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {busyPaymentId === payment.id ? "Verificando..." : "Confirmar verificación"}
-                          </button>
-                          <p className="mt-2 flex items-center gap-1 text-xs text-on-surface-variant">
-                            <ShieldCheck className="h-3.5 w-3.5" />
-                            La autorización se valida al abrir el panel.
-                          </p>
+                          {(() => {
+                            const totalPendiente =
+                              Number(payment.monto) + Number(payment.mantenimiento);
+                            const abonado = Number(payment.montoPagado || 0);
+                            const saldo = Math.max(0, totalPendiente - abonado);
+                            const sinVerificar = payment.vouchers
+                              .map((voucher, index) => ({ voucher, index }))
+                              .filter((item) => !item.voucher.verificadoEn);
+                            return (
+                              <>
+                                {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+                                {abonado > 0 || saldo < totalPendiente ? (
+                                  <p className="mb-2 text-xs text-on-surface-variant">
+                                    Total {moneda(totalPendiente)}
+                                    {" · "}Abonado {moneda(abonado)}
+                                    {" · "}Falta {moneda(saldo)}
+                                  </p>
+                                ) : null}
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {!localMode &&
+                                    sinVerificar.map(({ voucher, index }) => (
+                                    <label
+                                      key={`${payment.id}-${index}`}
+                                      className="block text-xs font-medium text-on-surface"
+                                    >
+                                      <span className="mb-1 block break-all">
+                                        Monto del voucher "{voucher.nombre}"
+                                      </span>
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={montosVoucher[`${payment.id}-${index}`] ?? ""}
+                                        onChange={(event) =>
+                                          setMontosVoucher((prev) => ({
+                                            ...prev,
+                                            [`${payment.id}-${index}`]: event.target.value
+                                              .replace(/[^0-9.,]/g, "")
+                                              .slice(0, 10),
+                                          }))
+                                        }
+                                        placeholder="0.00"
+                                        className="w-full rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-on-surface"
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => void verificar(payment)}
+                                  disabled={busyPaymentId === payment.id}
+                                  className="mt-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {busyPaymentId === payment.id ? "Verificando..." : "Confirmar verificación"}
+                                </button>
+                                <p className="mt-2 flex items-center gap-1 text-xs text-on-surface-variant">
+                                  <ShieldCheck className="h-3.5 w-3.5" />
+                                  La autorización se valida al abrir el panel.
+                                </p>
+                              </>
+                            );
+                          })()}
                       </div>
                     ) : null}
                   </li>

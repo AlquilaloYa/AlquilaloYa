@@ -35,6 +35,7 @@ export async function POST(req: Request) {
 
     const body = (await req.json().catch(() => ({}))) as {
       paymentId?: unknown;
+      voucherMontos?: unknown;
     };
     const paymentId = typeof body.paymentId === "string" ? body.paymentId : "";
     if (!paymentId) {
@@ -100,14 +101,45 @@ export async function POST(req: Request) {
         throw new VerificationError("Este pago ya fue verificado", 409);
       }
 
-      const verifiedVouchers = vouchers.map((voucher) => ({
+      // Montos opcionales de los vouchers nuevos (en el mismo orden). Si vienen,
+      // se inyectan en cada voucher sin verificar para que el asentamiento sume
+      // su monto al ya abonado (pagos parciales).
+      const indiceNuevos = vouchers
+        .map((voucher, index) => ({ voucher, index }))
+        .filter((item) => !item.voucher.verificadoEn);
+      let montosNuevos: number[] | null = null;
+      if (Array.isArray(body.voucherMontos) && body.voucherMontos.length > 0) {
+        if (body.voucherMontos.length !== indiceNuevos.length) {
+          throw new VerificationError(
+            "Indica el monto de cada voucher nuevo.",
+            400,
+          );
+        }
+        const montos = body.voucherMontos.map((monto) => Number(monto));
+        if (montos.some((monto) => !Number.isFinite(monto) || monto < 0)) {
+          throw new VerificationError(
+            "Los montos de los vouchers deben ser números válidos.",
+            400,
+          );
+        }
+        montosNuevos = montos;
+      }
+      let montoIdx = 0;
+      const vouchersConMontos = vouchers.map((voucher) => {
+        if (voucher.verificadoEn || !montosNuevos) return voucher;
+        const conMonto = { ...voucher, monto: montosNuevos[montoIdx] };
+        montoIdx += 1;
+        return conMonto;
+      });
+
+      const verifiedVouchers = vouchersConMontos.map((voucher) => ({
         ...voucher,
         verificadoEn: verifiedAt.toISOString(),
         verificadoPor: auth.user.name,
       }));
       const total = Number(current.monto) + Number(current.mantenimiento);
       const settlement = settleVerifiedPayment(
-        vouchers,
+        vouchersConMontos,
         total,
         Number(current.montoPagado),
       );
