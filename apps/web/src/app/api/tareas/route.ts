@@ -34,6 +34,7 @@ function toView(r: {
   descripcion: string;
   asignadoA: string;
   empleadoId: string | null;
+  createdByUserId: string | null;
   fechaLimite: Date;
   horaEjecucion: string;
   repetirCadaHora: boolean;
@@ -52,6 +53,7 @@ function toView(r: {
     descripcion: r.descripcion,
     asignadoA: r.asignadoA,
     empleadoId: r.empleadoId,
+    createdByUserId: r.createdByUserId,
     fechaLimite: r.fechaLimite?.toISOString?.() ?? null,
     horaEjecucion: r.horaEjecucion,
     repetirCadaHora: r.repetirCadaHora,
@@ -140,6 +142,7 @@ export async function POST(req: Request) {
         fechaLimite: new Date(body.fechaLimite),
         estado,
         creadoPor: auth.user.name || auth.user.email,
+        createdByUserId: auth.user.id,
         completedAt: estado === "RESUELTA" ? new Date() : null,
       })
       .returning();
@@ -285,9 +288,6 @@ export async function DELETE(req: Request) {
     const dbModule = await import("@contract/db");
     const auth = await requireUser(dbModule, req);
     if ("error" in auth) return auth.error;
-    const denied = requirePermission(auth.user, Permission.CLIENT_UPDATE);
-    if (denied) return denied;
-
     const { db, schema } = dbModule as {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
@@ -296,6 +296,16 @@ export async function DELETE(req: Request) {
     if (!id) {
       return NextResponse.json({ error: "Falta id" }, { status: 400 });
     }
+    const [existing] = await db
+      .select({ createdByUserId: schema.tasks.createdByUserId })
+      .from(schema.tasks)
+      .where(eq(schema.tasks.id, id));
+    if (!existing) {
+      return NextResponse.json({ error: "Tarea no encontrada" }, { status: 404 });
+    }
+    const denied = requirePermission(auth.user, Permission.CLIENT_UPDATE);
+    if (denied && existing.createdByUserId !== auth.user.id) return denied;
+
     const [row] = await db
       .delete(schema.tasks)
       .where(eq(schema.tasks.id, id))

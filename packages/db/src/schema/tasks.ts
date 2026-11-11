@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { hrEmployees } from "./hr";
+import { users } from "./users";
 
 /** Tarea de trabajo interno asignada a una persona con fecha limite de resolucion. */
 export const tasks = pgTable(
@@ -20,6 +21,7 @@ export const tasks = pgTable(
     descripcion: text("descripcion").notNull().default(""),
     asignadoA: varchar("asignado_a", { length: 255 }).notNull().default(""),
     empleadoId: uuid("empleado_id").references(() => hrEmployees.id),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
     fechaLimite: timestamp("fecha_limite", { withTimezone: true }).notNull(),
     horaEjecucion: varchar("hora_ejecucion", { length: 5 }).notNull().default("09:00"),
     repetirCadaHora: boolean("repetir_cada_hora").notNull().default(false),

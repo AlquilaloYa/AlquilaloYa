@@ -107,6 +107,25 @@ corepack pnpm db:migrate
 Orden recomendado: **migrar → desplegar** (las migraciones son aditivas y
 retrocompatibles para no romper la versión en ejecución).
 
+### Avisos push de tareas en Agenda
+
+Para habilitar recordatorios push del navegador:
+
+1. Configura `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY` y
+   `WEB_PUSH_SUBJECT` en el entorno de producción. Genera el par con
+   `corepack pnpm --filter @contract/web exec web-push generate-vapid-keys`;
+   guarda la clave privada solo como secreto del servidor.
+2. Despliega la migración `20261111120000_task_browser_push.sql`.
+3. En GitHub Actions configura la variable `ERP_BASE_URL` con la URL HTTPS
+   pública del ERP y el secreto `CRON_SECRET` con el mismo valor configurado en
+   Vercel. El workflow `task-reminders.yml` invoca el endpoint cada 30 minutos;
+   Vercel Hobby no necesita ni usa un cron de alta frecuencia.
+4. Cada usuario debe conectar su Google Calendar y activar los avisos push desde
+   Agenda en cada navegador/dispositivo. Los avisos se envían a la cuenta que
+   creó la tarea, de 8:00 a. m. a 6:00 p. m. hora de Lima, el día de vencimiento.
+   Se repiten cada 30 minutos hasta eliminar la tarea de Agenda. GitHub puede
+   iniciar cron workflows con retraso, por lo que la hora exacta no está garantizada.
+
 ## Health & observabilidad
 
 - `GET /api/health` → estado de la DB y latencia.

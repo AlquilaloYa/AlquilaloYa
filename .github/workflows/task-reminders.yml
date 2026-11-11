@@ -1,0 +1,43 @@
+name: Recordatorios push de tareas
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  send-task-reminders:
+    name: Enviar recordatorios de tareas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    concurrency:
+      group: task-reminders
+      cancel-in-progress: false
+    steps:
+      - name: Validar configuración
+        env:
+          ERP_BASE_URL: ${{ vars.ERP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [[ "$ERP_BASE_URL" != https://* ]]; then
+            echo "::error::Configura ERP_BASE_URL como variable HTTPS de GitHub Actions."
+            exit 1
+          fi
+          if [[ -z "$CRON_SECRET" ]]; then
+            echo "::error::Configura CRON_SECRET como secreto de GitHub Actions."
+            exit 1
+          fi
+
+      - name: Invocar recordatorios de tareas
+        env:
+          ERP_BASE_URL: ${{ vars.ERP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 2 \
+            --request POST \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "${ERP_BASE_URL%/}/api/cron/task-reminders"

@@ -162,6 +162,13 @@
       "when": 1794279600000,
       "tag": "0035_dias_extras_voucher",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794400000000,
+      "tag": "0036_task_browser_push",
+      "breakpoints": true
     }
   ]
 }

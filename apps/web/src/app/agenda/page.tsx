@@ -3,16 +3,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { apiFetch } from "@/lib/api";
+import { AccessControl, Permission } from "@contract/domain/rbac";
+import { useAuth } from "@/lib/auth-context";
+import { work123DateKey } from "@/lib/work-123-calendar";
 import {
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Check,
   LogIn,
   Link2Off,
   Plus,
   RefreshCw,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -24,6 +29,25 @@ type GEvent = {
   end: string;
   allDay: boolean;
   htmlLink?: string;
+};
+
+type TaskState = "PENDIENTE" | "EN_RESOLUCION" | "RESUELTA";
+
+type Task = {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  asignadoA: string;
+  createdByUserId?: string | null;
+  fechaLimite: string | null;
+  estado: TaskState;
+};
+
+type TaskPushStatus = {
+  configured: boolean;
+  calendarConnected: boolean;
+  subscribed: boolean;
+  publicKey: string | null;
 };
 
 const DIA_SEMANA = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"];
@@ -47,13 +71,20 @@ function fmtHora(ev: GEvent): string {
 }
 
 export default function AgendaPage() {
+  const { user } = useAuth();
+  const access = user ? AccessControl.forRole(user.role, user.additionalPermissions) : null;
+  const canCreateTask = access?.can(Permission.CLIENT_CREATE) ?? false;
+  const canUpdateTask = access?.can(Permission.CLIENT_UPDATE) ?? false;
   const [configured, setConfigured] = useState(true);
   const [connected, setConnected] = useState(false);
   const [canCreate, setCanCreate] = useState(false);
   const [events, setEvents] = useState<GEvent[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [pushStatus, setPushStatus] = useState<TaskPushStatus | null>(null);
   const [, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
 
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
@@ -62,18 +93,27 @@ export default function AgendaPage() {
   const [selectedDay, setSelectedDay] = useState<string>(dayKey(new Date()));
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ titulo: "", descripcion: "", fecha: "", hora: "09:00", allDay: false });
+  const [taskForm, setTaskForm] = useState({ titulo: "", descripcion: "", fechaLimite: "" });
 
   const load = useCallback(async () => {
     setError(null);
     try {
       const min = new Date(cursor.getFullYear(), cursor.getMonth(), 1).toISOString();
       const max = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59).toISOString();
-      const res = await apiFetch(`/api/agenda?timeMin=${encodeURIComponent(min)}&timeMax=${encodeURIComponent(max)}`);
+      const [res, taskRes] = await Promise.all([
+        apiFetch(`/api/agenda?timeMin=${encodeURIComponent(min)}&timeMax=${encodeURIComponent(max)}`),
+        apiFetch("/api/tareas"),
+      ]);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      if (!taskRes.ok) {
+        const body = await taskRes.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${taskRes.status}`);
       }
       const data = (await res.json()) as {
         configured: boolean;
@@ -81,10 +121,12 @@ export default function AgendaPage() {
         canCreate: boolean;
         events: GEvent[];
       };
+      const taskRows = (await taskRes.json()) as Task[];
       setConfigured(data.configured);
       setConnected(data.connected);
       setCanCreate(data.canCreate);
       setEvents(data.events ?? []);
+      setTasks(taskRows);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -92,9 +134,26 @@ export default function AgendaPage() {
     }
   }, [cursor]);
 
+  const refreshPushStatus = useCallback(async () => {
+    try {
+      const res = await apiFetch("/api/agenda/push");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      setPushStatus((await res.json()) as TaskPushStatus);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void refreshPushStatus();
+  }, [refreshPushStatus]);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -114,7 +173,20 @@ export default function AgendaPage() {
     return map;
   }, [events]);
 
+  const tasksByDay = useMemo(() => {
+    const map = new Map<string, Task[]>();
+    for (const task of tasks) {
+      const key = work123DateKey(task.fechaLimite);
+      if (!key) continue;
+      const dayTasks = map.get(key) ?? [];
+      dayTasks.push(task);
+      map.set(key, dayTasks);
+    }
+    return map;
+  }, [tasks]);
+
   const eventsOfDay = eventsByDay.get(selectedDay) ?? [];
+  const tasksOfDay = tasksByDay.get(selectedDay) ?? [];
 
   const calendarCells = useMemo(() => {
     const year = cursor.getFullYear();
@@ -136,6 +208,122 @@ export default function AgendaPage() {
   function openCreate() {
     setForm({ titulo: "", descripcion: "", fecha: selectedDay, hora: "09:00", allDay: false });
     setModalOpen(true);
+  }
+
+  function openCreateTask() {
+    setTaskForm({ titulo: "", descripcion: "", fechaLimite: selectedDay });
+    setTaskModalOpen(true);
+  }
+
+  async function saveTask() {
+    if (!taskForm.titulo.trim()) {
+      setError("Indica el título de la tarea");
+      return;
+    }
+    if (!taskForm.fechaLimite) {
+      setError("Indica la fecha límite");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await apiFetch("/api/tareas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(taskForm),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      setTaskModalOpen(false);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function completeTask(task: Task) {
+    setError(null);
+    try {
+      const res = await apiFetch("/api/tareas", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: task.id, estado: "RESUELTA" }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function enableTaskPush() {
+    if (!pushStatus?.publicKey) return;
+    if (
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window) ||
+      !("Notification" in window)
+    ) {
+      setError("Este navegador no admite notificaciones push.");
+      return;
+    }
+    setPushBusy(true);
+    setError(null);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        throw new Error("Permite las notificaciones del navegador para activarlas.");
+      }
+      const registration = await navigator.serviceWorker.register("/service-worker.js");
+      const base64Key = pushStatus.publicKey.replace(/-/g, "+").replace(/_/g, "/");
+      const paddedKey = base64Key + "=".repeat((4 - (base64Key.length % 4)) % 4);
+      const subscription =
+        (await registration.pushManager.getSubscription()) ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: Uint8Array.from(
+            atob(paddedKey),
+            (character) => character.charCodeAt(0),
+          ),
+        }));
+      const res = await apiFetch("/api/agenda/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(subscription.toJSON()),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      await refreshPushStatus();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function deleteTask(task: Task) {
+    if (!window.confirm(`¿Eliminar la tarea "${task.titulo}" de la agenda?`)) return;
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/tareas?id=${encodeURIComponent(task.id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }
 
   async function saveEvent() {
@@ -209,6 +397,7 @@ export default function AgendaPage() {
       await apiFetch("/api/agenda/google/disconnect", { method: "POST" });
       setConnected(false);
       setEvents([]);
+      await refreshPushStatus();
     } catch (e) {
       setError((e as Error).message);
     }
@@ -224,26 +413,31 @@ export default function AgendaPage() {
               Tu calendario personal sincronizado con Google Calendar
             </p>
           </div>
-          {connected ? (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void load()}
+              className="flex items-center gap-2 rounded-md bg-surface-container-low px-4 py-2 font-label-md text-on-surface hover:bg-surface-variant"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refrescar
+            </button>
+            {connected && canCreate ? (
               <button
-                onClick={() => void load()}
-                className="flex items-center gap-2 rounded-md bg-surface-container-low px-4 py-2 font-label-md text-on-surface hover:bg-surface-variant"
+                onClick={openCreate}
+                className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground hover:opacity-90"
               >
-                <RefreshCw className="h-4 w-4" />
-                Refrescar
+                <Plus className="h-4 w-4" />
+                Nueva cita
               </button>
-              {canCreate ? (
-                <button
-                  onClick={openCreate}
-                  className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground hover:opacity-90"
-                >
-                  <Plus className="h-4 w-4" />
-                  Nueva cita
-                </button>
-              ) : null}
-            </div>
-          ) : null}
+            ) : null}
+            {pushStatus?.configured &&
+            pushStatus.calendarConnected &&
+            pushStatus.subscribed ? (
+              <span className="rounded-md bg-green-100 px-3 py-2 font-label-md text-green-800">
+                Avisos push activos
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {banner ? (
@@ -285,8 +479,9 @@ export default function AgendaPage() {
               Conectar con Google
             </a>
           </div>
-        ) : (
-          <>
+        ) : null}
+
+        <>
             <section className="rounded-lg bg-surface-container-lowest p-4 shadow-sm">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="font-headline-md text-primary capitalize">
@@ -302,10 +497,12 @@ export default function AgendaPage() {
                   <button onClick={() => changeMonth(1)} className="rounded-md p-1.5 text-on-surface-variant hover:bg-surface-container-high" aria-label="Mes siguiente">
                     <ChevronRight className="h-4 w-4" />
                   </button>
-                  <button onClick={() => void disconnect()} className="ml-2 flex items-center gap-1 rounded-md bg-error-container px-3 py-1.5 font-label-md text-error-container-foreground" title="Desconectar Google">
-                    <Link2Off className="h-4 w-4" />
-                    Desconectar
-                  </button>
+                  {connected ? (
+                    <button onClick={() => void disconnect()} className="ml-2 flex items-center gap-1 rounded-md bg-error-container px-3 py-1.5 font-label-md text-error-container-foreground" title="Desconectar Google">
+                      <Link2Off className="h-4 w-4" />
+                      Desconectar
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
@@ -319,6 +516,7 @@ export default function AgendaPage() {
                   if (day === null) return <div key={`blank-${i}`} />;
                   const key = dayKey(new Date(cursor.getFullYear(), cursor.getMonth(), day));
                   const dayEvents = eventsByDay.get(key) ?? [];
+                  const dayTasks = tasksByDay.get(key) ?? [];
                   const isToday = key === todayKey;
                   const isSelected = key === selectedDay;
                   return (
@@ -338,8 +536,13 @@ export default function AgendaPage() {
                             {fmtHora(ev)} {ev.summary}
                           </div>
                         ))}
-                        {dayEvents.length > 3 ? (
-                          <div className="px-1 text-[10px] font-medium text-on-surface-variant">+{dayEvents.length - 3} más</div>
+                        {dayTasks.slice(0, Math.max(0, 3 - dayEvents.length)).map((task) => (
+                          <div key={task.id} className={`truncate rounded px-1 py-0.5 text-[10px] font-medium ${task.estado === "RESUELTA" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`} title={`Tarea · ${task.titulo}`}>
+                            Tarea: {task.titulo}
+                          </div>
+                        ))}
+                        {dayEvents.length + dayTasks.length > 3 ? (
+                          <div className="px-1 text-[10px] font-medium text-on-surface-variant">+{dayEvents.length + dayTasks.length - 3} más</div>
                         ) : null}
                       </div>
                     </button>
@@ -349,9 +552,35 @@ export default function AgendaPage() {
             </section>
 
             <section className="rounded-lg bg-surface-container-lowest p-4 shadow-sm">
-              <h3 className="font-headline-md text-primary mb-3">
-                Citas del {new Date(`${selectedDay}T00:00:00`).toLocaleDateString("es-PE", { weekday: "long", day: "2-digit", month: "long" })}
-              </h3>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-headline-md text-primary">
+                  Agenda del {new Date(`${selectedDay}T00:00:00`).toLocaleDateString("es-PE", { weekday: "long", day: "2-digit", month: "long" })}
+                </h3>
+                <div className="flex items-center gap-2">
+                  {pushStatus?.configured &&
+                      pushStatus.calendarConnected ? (
+                        <button
+                          onClick={() => void enableTaskPush()}
+                          disabled={pushBusy}
+                          className="rounded-md bg-surface-container-high px-3 py-1.5 font-label-md text-on-surface disabled:opacity-50"
+                        >
+                          {pushBusy ? "Activando…" : "Activar en este navegador"}
+                        </button>
+                      ) : null}
+                  {canCreateTask ? (
+                    <button onClick={openCreateTask} className="flex items-center gap-1 rounded-md bg-amber-100 px-3 py-1.5 font-label-md text-amber-800 hover:bg-amber-200">
+                      <Plus className="h-4 w-4" />
+                      Nueva tarea
+                    </button>
+                  ) : null}
+                  {connected && canCreate ? (
+                    <button onClick={openCreate} className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 font-label-md text-primary-foreground hover:opacity-90">
+                      <Plus className="h-4 w-4" />
+                      Nueva cita
+                    </button>
+                  ) : null}
+                </div>
+              </div>
               {eventsOfDay.length === 0 ? (
                 <p className="font-body-sm text-on-surface-variant">Sin citas este día.</p>
               ) : (
@@ -378,9 +607,43 @@ export default function AgendaPage() {
                   ))}
                 </ul>
               )}
+              {tasksOfDay.length === 0 ? (
+                <p className="mt-3 font-body-sm text-on-surface-variant">Sin tareas para este día.</p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {tasksOfDay.map((task) => (
+                    <li key={task.id} className="flex items-start justify-between gap-3 rounded-md border border-amber-300/60 bg-amber-50 p-3">
+                      <div>
+                        <p className={`font-label-md ${task.estado === "RESUELTA" ? "text-green-800 line-through" : "text-on-surface"}`}>
+                          <span className="text-amber-800">Tarea</span> · {task.titulo}
+                        </p>
+                        {task.descripcion ? <p className="mt-0.5 font-body-sm text-on-surface-variant">{task.descripcion}</p> : null}
+                        <p className="mt-1 font-body-sm text-on-surface-variant">
+                          {task.asignadoA ? `Asignada a ${task.asignadoA} · ` : ""}{task.estado === "RESUELTA" ? "Resuelta" : task.estado === "EN_RESOLUCION" ? "En resolución" : "Pendiente"}
+                        </p>
+                      </div>
+                      {task.estado !== "RESUELTA" && canUpdateTask ? (
+                        <button onClick={() => void completeTask(task)} className="flex shrink-0 items-center gap-1 rounded-md bg-green-100 px-2 py-1.5 font-label-sm text-green-800 hover:bg-green-200" title="Marcar como resuelta">
+                          <Check className="h-4 w-4" />
+                          Resolver
+                        </button>
+                      ) : null}
+                      {canUpdateTask || task.createdByUserId === user?.id ? (
+                        <button
+                          onClick={() => void deleteTask(task)}
+                          className="flex shrink-0 items-center gap-1 rounded-md bg-error-container px-2 py-1.5 font-label-sm text-error-container-foreground hover:opacity-80"
+                          title="Eliminar tarea y detener sus avisos"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Eliminar
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
-          </>
-        )}
+        </>
       </div>
 
       {modalOpen ? (
@@ -418,6 +681,36 @@ export default function AgendaPage() {
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button onClick={() => setModalOpen(false)} className="rounded-md bg-surface-container-high px-4 py-2 font-label-md text-on-surface">Cancelar</button>
                 <button onClick={() => void saveEvent()} disabled={saving} className="rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground disabled:opacity-40">{saving ? "Guardando…" : "Guardar"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {taskModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setTaskModalOpen(false)}>
+          <div className="w-full max-w-md rounded-lg bg-surface-container-low p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="font-headline-md text-primary">Nueva tarea</h3>
+              <button onClick={() => setTaskModalOpen(false)} className="rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high" aria-label="Cerrar">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block font-label-md text-on-surface">Título *</label>
+                <input value={taskForm.titulo} onChange={(e) => setTaskForm({ ...taskForm, titulo: e.target.value })} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface focus:border-primary focus:outline-none" placeholder="Ej. Revisar documentación" />
+              </div>
+              <div>
+                <label className="mb-1 block font-label-md text-on-surface">Descripción</label>
+                <textarea value={taskForm.descripcion} onChange={(e) => setTaskForm({ ...taskForm, descripcion: e.target.value })} rows={2} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface focus:border-primary focus:outline-none" placeholder="Detalle opcional" />
+              </div>
+              <div>
+                <label className="mb-1 block font-label-md text-on-surface">Fecha límite *</label>
+                <input type="date" value={taskForm.fechaLimite} onChange={(e) => setTaskForm({ ...taskForm, fechaLimite: e.target.value })} className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface focus:border-primary focus:outline-none" />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button onClick={() => setTaskModalOpen(false)} className="rounded-md bg-surface-container-high px-4 py-2 font-label-md text-on-surface">Cancelar</button>
+                <button onClick={() => void saveTask()} disabled={saving} className="rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground disabled:opacity-40">{saving ? "Guardando…" : "Guardar tarea"}</button>
               </div>
             </div>
           </div>

@@ -63,3 +63,42 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { title: "Recordatorio de tarea", body: "Tienes una tarea pendiente.", href: "/agenda" };
+  }
+  const title = typeof payload.title === "string" ? payload.title : "Recordatorio de tarea";
+  const body = typeof payload.body === "string" ? payload.body : "Tienes una tarea pendiente.";
+  const href =
+    typeof payload.href === "string" && payload.href.startsWith("/")
+      ? payload.href
+      : "/agenda";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: "/logo-light.svg",
+      badge: "/app-icon.png",
+      data: { href },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const path = event.notification.data?.href;
+  const target = new URL(
+    typeof path === "string" && path.startsWith("/") ? path : "/agenda",
+    self.location.origin,
+  ).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((client) => client.url === target);
+      if (existing) return existing.focus();
+      return self.clients.openWindow(target);
+    }),
+  );
+});
