@@ -38,6 +38,11 @@ export default function HomePage() {
           </Link>
         </div>
       </div>
+      <footer className="absolute inset-x-0 bottom-6 text-center text-sm text-white/80">
+        <Link href="/politica-privacidad" className="underline underline-offset-4 hover:text-white">
+          Políticas de privacidad
+        </Link>
+      </footer>
     </main>
   );
 }

@@ -212,9 +212,10 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/google/tasks", label: "Google Tasks", icon: ListTodo, section: "Google SyS", group: "operatividad" },
 ];
 
-const FOOTER_ITEMS: { label: string; icon: LucideIcon }[] = [
+const FOOTER_ITEMS: { label: string; icon: LucideIcon; href?: string }[] = [
   { label: "Configuración", icon: Settings },
   { label: "Soporte", icon: HelpCircle },
+  { label: "Políticas de privacidad", icon: ShieldCheck, href: "/politica-privacidad" },
 ];
 
 const CONFIGURATION_ITEMS: NavItem[] = [
@@ -650,19 +651,33 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               const isConfiguration = item.label === "Configuración";
               return (
                 <li key={item.label}>
-                  <button
-                    onClick={() => isConfiguration && setConfigurationOpen((open) => !open)}
-                    title={collapsed ? item.label : undefined}
-                    className={`flex w-full items-center gap-3 rounded-r-md px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:bg-surface-container-high dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white ${
-                      collapsed ? "justify-center px-0" : ""
-                    }`}
-                  >
-                    <Icon className="h-[18px] w-[18px] shrink-0" />
-                    {!collapsed ? item.label : null}
-                    {!collapsed && isConfiguration && configurationItems.length > 0 ? (
-                      <ChevronDown className={`ml-auto h-4 w-4 transition-transform ${configurationOpen ? "rotate-180" : ""}`} />
-                    ) : null}
-                  </button>
+                  {item.href ? (
+                    <Link
+                      href={item.href}
+                      onClick={() => setMobileOpen(false)}
+                      title={collapsed ? item.label : undefined}
+                      className={`flex w-full items-center gap-3 rounded-r-md px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:bg-surface-container-high dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white ${
+                        collapsed ? "justify-center px-0" : ""
+                      }`}
+                    >
+                      <Icon className="h-[18px] w-[18px] shrink-0" />
+                      {!collapsed ? item.label : null}
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => isConfiguration && setConfigurationOpen((open) => !open)}
+                      title={collapsed ? item.label : undefined}
+                      className={`flex w-full items-center gap-3 rounded-r-md px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:bg-surface-container-high dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white ${
+                        collapsed ? "justify-center px-0" : ""
+                      }`}
+                    >
+                      <Icon className="h-[18px] w-[18px] shrink-0" />
+                      {!collapsed ? item.label : null}
+                      {!collapsed && isConfiguration && configurationItems.length > 0 ? (
+                        <ChevronDown className={`ml-auto h-4 w-4 transition-transform ${configurationOpen ? "rotate-180" : ""}`} />
+                      ) : null}
+                    </button>
+                  )}
                   {isConfiguration && configurationOpen && configurationItems.length > 0 ? (
                     <div className={collapsed ? "mt-1" : "ml-5 mt-1 border-l border-outline-variant/40 pl-2 dark:border-white/10"}>
                       {configurationItems.map((configurationItem) => (

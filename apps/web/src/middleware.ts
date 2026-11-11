@@ -14,7 +14,7 @@ const CLIENT_PORTAL_ACCESS_COOKIE = `${CLIENT_PORTAL_COOKIE_PREFIX}client_portal
 const CLIENT_PORTAL_REFRESH_COOKIE = `${CLIENT_PORTAL_COOKIE_PREFIX}client_portal_rt`;
 
 /** Rutas accesibles sin sesión (landing + login). */
-const PUBLIC_PATHS = new Set(["/", "/login"]);
+const PUBLIC_PATHS = new Set(["/", "/login", "/politica-privacidad"]);
 
 function withSecurityHeaders(
   res: NextResponse,
