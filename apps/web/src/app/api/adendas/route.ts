@@ -7,6 +7,10 @@ import { generateAdendaPdf } from "@/lib/pdf/generate-pdf";
 import { findDocumentById, registerGeneratedDocument } from "@/lib/documents";
 import { logger } from "@/lib/logger";
 import { sincronizarTareasContrato } from "@/lib/tareas-contrato";
+import {
+  addMonthsIso,
+  calcularProrrateoUltimaCuota,
+} from "@/lib/adenda-prorrateo";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -41,15 +45,6 @@ async function sincronizarTareasDeContrato(
   }
 }
 
-function addMonthsIso(iso: string, months: number): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  const date = new Date(Date.UTC(y as number, (m as number) - 1, d as number));
-  date.setUTCMonth(date.getUTCMonth() + months);
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  return `${date.getUTCFullYear()}-${mm}-${dd}`;
-}
-
 function fmtFechaEs(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return `${d} de ${MESES[(m as number) - 1]} de ${y}`;
@@ -66,18 +61,6 @@ function periodosExtension(fechaFinActual: string, nuevaFechaFin: string): strin
     guard += 1;
   }
   return periodos;
-}
-
-/** Días entre dos fechas ISO HH:MM mediodía UTC (checkout exclusivo). */
-function diffDias(desde: string, hasta: string): number {
-  return Math.round(
-    (Date.parse(`${hasta}T12:00:00Z`) - Date.parse(`${desde}T12:00:00Z`)) / 86400000
-  );
-}
-
-/** Redondea a 2 decimales el prorrateo diario (tarifa mensual / 30). */
-function montoPorDias(montoMensual: number, dias: number): string {
-  return (Math.round((montoMensual * dias / 30) * 100) / 100).toFixed(2);
 }
 
 export interface CuotaExtensionValor {
@@ -275,17 +258,15 @@ interface ResultadoCuotas {
 }
 
 /**
- * Valores de las cuotas de una extensión. Si cobroPorDias está activo y el
- * último período es parcial (fin de mes completo > nueva fecha de fin), esa
- * cuota se prorratea por días: solo se cobra los días que el inquilino ocupará.
+ * La ultima cuota se prorratea automaticamente cuando el plazo termina antes
+ * de completar su periodo mensual.
  */
 function valoresCuotasExtension(
   contractId: string,
   cuotasNuevas: string[],
   nuevaFechaFin: string,
   montoCanonMensual: number,
-  mantenimientoMensual: number,
-  cobroPorDias: boolean
+  mantenimientoMensual: number
 ): ResultadoCuotas {
   const valores: CuotaExtensionValor[] = cuotasNuevas.map((periodo) => ({
     contractId,
@@ -299,15 +280,19 @@ function valoresCuotasExtension(
   let montoUltimaCuota: string | null = null;
   let mantenimientoUltimaCuota: string | null = null;
 
-  if (cobroPorDias && valores.length > 0) {
+  if (valores.length > 0) {
     const ultima = valores[valores.length - 1];
     if (ultima) {
-      const finMesCompleto = addMonthsIso(ultima.periodo, 1);
-      if (finMesCompleto > nuevaFechaFin) {
-        const dias = Math.max(1, diffDias(ultima.periodo, nuevaFechaFin));
-        ultima.monto = montoPorDias(montoCanonMensual, dias);
-        ultima.mantenimiento = montoPorDias(mantenimientoMensual, dias);
-        diasProrrateo = dias;
+      const prorrateo = calcularProrrateoUltimaCuota(
+        ultima.periodo,
+        nuevaFechaFin,
+        montoCanonMensual,
+        mantenimientoMensual,
+      );
+      if (prorrateo) {
+        ultima.monto = prorrateo.monto.toFixed(2);
+        ultima.mantenimiento = prorrateo.mantenimiento.toFixed(2);
+        diasProrrateo = prorrateo.dias;
         montoUltimaCuota = ultima.monto;
         mantenimientoUltimaCuota = ultima.mantenimiento;
       }
@@ -434,7 +419,6 @@ export async function POST(request: Request) {
       numeroAdenda?: string;
       fechaInicioAdenda?: string;
       fechaFinAdenda?: string;
-      cobroPorDias?: boolean;
     };
 
     if (!body.contractId) {
@@ -558,14 +542,12 @@ export async function POST(request: Request) {
       cuotasNuevas = periodosExtension(fechaFinActual, nuevaFechaFin);
       const montoCanon = Number(contract.montoCanonMensual);
       const mantMensual = Number(contract.mantenimiento ?? "50");
-      const cobroPorDias = Boolean(body.cobroPorDias);
       const cuotasValores = valoresCuotasExtension(
         contract.id,
         cuotasNuevas,
         nuevaFechaFin,
         montoCanon,
-        mantMensual,
-        cobroPorDias
+        mantMensual
       );
       await actualizarExtensionYCobros(
         dbModule,
@@ -770,7 +752,6 @@ export async function PATCH(request: Request) {
       fechaFinAdenda?: string;
       nuevaFechaFin?: string;
       documentoHtml?: string;
-      cobroPorDias?: boolean;
     };
     if (!body.documentId) {
       return NextResponse.json(
@@ -877,8 +858,7 @@ export async function PATCH(request: Request) {
         cuotasNuevas,
         nuevaFechaFinAdenda,
         Number(contract.montoCanonMensual),
-        Number(contract.mantenimiento ?? "50"),
-        Boolean(body.cobroPorDias)
+        Number(contract.mantenimiento ?? "50")
       );
       await actualizarExtensionYCobros(
         dbModule,
