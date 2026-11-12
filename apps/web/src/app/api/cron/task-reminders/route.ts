@@ -1,8 +1,12 @@
-import { and, eq, gte, lt } from "drizzle-orm";
+import { and, eq, gte, lt, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { safeEqual } from "@/lib/secure-compare";
-import { taskReminderDateRange, taskReminderSlot } from "@/lib/task-reminder-schedule";
+import {
+  taskReminderDateRange,
+  taskReminderMatchesTime,
+  taskReminderSlot,
+} from "@/lib/task-reminder-schedule";
 import { sendTaskReminderPush } from "@/lib/task-web-push";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +18,15 @@ function isStaleSubscriptionError(error: unknown): boolean {
   }
   const statusCode = error.statusCode;
   return statusCode === 404 || statusCode === 410;
+}
+
+function formatLimaTime(value: string): string {
+  return new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(`2000-01-01T${value}:00-05:00`));
 }
 
 async function run(req: Request) {
@@ -44,25 +57,35 @@ async function run(req: Request) {
         id: schema.tasks.id,
         titulo: schema.tasks.titulo,
         descripcion: schema.tasks.descripcion,
+        horaEjecucion: schema.tasks.horaEjecucion,
+        repetirCadaHora: schema.tasks.repetirCadaHora,
+        origenEvento: schema.tasks.origenEvento,
         userId: schema.tasks.createdByUserId,
       })
       .from(schema.tasks)
       .innerJoin(schema.users, eq(schema.tasks.createdByUserId, schema.users.id))
-      .innerJoin(
-        schema.userGoogleTokens,
-        eq(schema.users.email, schema.userGoogleTokens.email),
-      )
       .where(
         and(
           gte(schema.tasks.fechaLimite, start),
           lt(schema.tasks.fechaLimite, end),
+          ne(schema.tasks.estado, "RESUELTA"),
         ),
       );
+    const slotTime = slot.slice(11);
 
     let sent = 0;
     let skipped = 0;
     for (const task of dueTasks) {
       if (!task.userId) continue;
+      if (
+        !taskReminderMatchesTime(
+          slotTime,
+          task.horaEjecucion,
+          task.origenEvento === "CHECKOFF" && task.repetirCadaHora,
+        )
+      ) {
+        continue;
+      }
       const [claim] = await db
         .insert(schema.taskPushReminders)
         .values({ taskId: task.id, slot })
@@ -100,7 +123,10 @@ async function run(req: Request) {
             },
             {
               title: "Tarea pendiente para hoy",
-              body: task.titulo,
+              body:
+                task.origenEvento === "CHECKOFF"
+                  ? `${task.titulo} · Hora del check-out: ${formatLimaTime(task.horaEjecucion)}`
+                  : task.titulo,
               href: "/agenda",
             },
           );

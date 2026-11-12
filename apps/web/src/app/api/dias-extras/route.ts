@@ -168,7 +168,7 @@ export async function POST(req: Request) {
     });
     let taskSyncWarning: string | null = null;
     try {
-      await sincronizarTareasContrato(contract.id);
+      await sincronizarTareasContrato(contract.id, auth.user.id);
     } catch (error) {
       taskSyncWarning =
         "Los días extras se registraron, pero no se pudo actualizar el aviso de check-out. Actualiza la tarea manualmente o vuelve a intentar la sincronización.";

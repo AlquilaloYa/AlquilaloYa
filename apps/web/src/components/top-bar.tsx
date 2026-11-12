@@ -634,6 +634,11 @@ export function TopBar({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">{task.titulo}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{task.descripcion}</p>
+                  {task.origenEvento === "CHECKOFF" ? (
+                    <p className="mt-1 text-xs font-medium text-violet-700 dark:text-violet-300">
+                      Hora programada: {task.horaEjecucion} (Lima)
+                    </p>
+                  ) : null}
                 </div>
                 {task.origenEvento === "CHECKOFF" ? (
                   <button

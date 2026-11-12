@@ -21,7 +21,8 @@ const DEFAULT_CONNECTORS: NewConnectorInstanceInput[] = [
     description: "Mensajería mediante WhatsApp Cloud API",
     config: {
       phoneNumberId: "",
-      apiVersion: "v20.0",
+      businessAccountId: "",
+      apiVersion: "v25.0",
     },
   },
   {

@@ -395,7 +395,7 @@ function ProximosAVencerBox({
   onCambio,
 }: {
   contratos: ProximoAVencer[];
-  onCambio: (id: string, renueva: boolean, meses: number | null) => Promise<void>;
+  onCambio: (id: string, renueva: boolean | null, meses: number | null) => Promise<void>;
 }) {
   const [clientesReportados, setClientesReportados] = useState<
     Record<string, ClienteReportado["reportes"]>
@@ -403,21 +403,20 @@ function ProximosAVencerBox({
   const [cargandoReportes, setCargandoReportes] = useState(true);
   const [errorReportes, setErrorReportes] = useState<string | null>(null);
   const [clienteAbierto, setClienteAbierto] = useState<string | null>(null);
-  const [guardados, setGuardados] = useState<Record<string, { renueva: boolean; meses: string }>>(
+  const [guardados, setGuardados] = useState<Record<string, { renueva: boolean | null; meses: string }>>(
     () => {
-      const init: Record<string, { renueva: boolean; meses: string }> = {};
+      const init: Record<string, { renueva: boolean | null; meses: string }> = {};
       for (const c of contratos) {
-        if (c.renuevaProximoMes !== null) {
-          init[c.id] = {
-            renueva: Boolean(c.renuevaProximoMes),
-            meses: c.renovacionMeses ? String(c.renovacionMeses) : "",
-          };
-        }
+        init[c.id] = {
+          renueva: c.renuevaProximoMes,
+          meses: c.renovacionMeses ? String(c.renovacionMeses) : "",
+        };
       }
       return init;
     }
   );
   const [salvando, setSalvando] = useState<string | null>(null);
+  const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -466,14 +465,17 @@ function ProximosAVencerBox({
     };
   }, []);
 
-  async function guardar(id: string, renueva: boolean, meses: string) {
+  async function guardar(id: string, renueva: boolean | null, meses: string) {
     const mesesNum = meses.trim() === "" ? null : Number(meses);
     setSalvando(id);
+    setErrorGuardar(null);
     try {
       await onCambio(id, renueva, mesesNum);
       setGuardados((prev) => ({ ...prev, [id]: { renueva, meses } }));
-    } catch {
-      /* error de red: se deja sin cambio */
+    } catch (error) {
+      setErrorGuardar(
+        error instanceof Error ? error.message : "No se pudo guardar la renovación.",
+      );
     } finally {
       setSalvando(null);
     }
@@ -501,11 +503,14 @@ function ProximosAVencerBox({
           ? "contrato vence en el próximo mes:"
           : "contratos vencen en el próximo mes:"}
       </div>
+        {errorGuardar ? (
+          <p role="alert" className="mb-2 text-xs text-destructive">{errorGuardar}</p>
+        ) : null}
       <ul className="divide-y divide-amber-400/20">
         {contratos.map((p) => {
           const estado = guardados[p.id];
-          const marcado = estado?.renueva ?? false;
-          const noMarcado = estado ? !estado.renueva : false;
+          const renovacion = estado?.renueva ?? null;
+          const marcado = renovacion === true;
           const meses = estado?.meses ?? "";
           const enProceso = salvando === p.id;
           const whatsapp = numeroWhatsApp(p.telefono, p.codigoPais);
@@ -632,28 +637,38 @@ function ProximosAVencerBox({
                   Vence el{" "}
                   {new Date(`${p.fechaFin}T12:00:00`).toLocaleDateString("es-PE")}
                 </span>
-                <label className="flex items-center gap-1 whitespace-nowrap font-medium text-emerald-700 dark:text-emerald-300">
-                  <input
-                    type="checkbox"
-                    checked={marcado}
-                    onChange={(e) =>
-                      void guardar(p.id, e.target.checked, e.target.checked ? "12" : "")
-                    }
-                    className="h-3.5 w-3.5 accent-emerald-600"
-                  />
-                  Renueva
-                </label>
-                <label className="flex items-center gap-1 whitespace-nowrap font-medium text-destructive">
-                  <input
-                    type="checkbox"
-                    checked={noMarcado}
-                    onChange={(e) =>
-                      void guardar(p.id, false, e.target.checked ? "" : "12")
-                    }
-                    className="h-3.5 w-3.5 accent-destructive"
-                  />
-                  No renueva
-                </label>
+                <div
+                  role="group"
+                  aria-label={`Estado de renovación de ${p.codigoContrato}`}
+                  className="inline-flex rounded-full border border-outline-variant bg-surface p-0.5"
+                >
+                  {([
+                    { value: true, label: "Renueva", selected: "bg-emerald-600 text-white" },
+                    { value: null, label: "Por confirmar", selected: "bg-amber-500 text-white" },
+                    { value: false, label: "No renueva", selected: "bg-destructive text-white" },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      aria-pressed={renovacion === option.value}
+                      disabled={enProceso}
+                      onClick={() =>
+                        void guardar(
+                          p.id,
+                          option.value,
+                          option.value === true ? (meses || "12") : "",
+                        )
+                      }
+                      className={`rounded-full px-2 py-1 text-[11px] font-medium transition-colors disabled:cursor-wait disabled:opacity-60 ${
+                        renovacion === option.value
+                          ? option.selected
+                          : "text-on-surface-variant hover:bg-surface-container-high"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
                 {marcado ? (
                   <label className="col-span-2 flex items-center gap-1 text-on-surface-variant sm:col-span-1">
                     <span>Renueva por</span>

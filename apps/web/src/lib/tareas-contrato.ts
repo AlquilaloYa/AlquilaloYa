@@ -53,7 +53,8 @@ function shiftDias(iso: string, dias: number): string {
  * usuario ya las resolvio, no se tocan su estado ni su asignado.
  */
 export async function sincronizarTareasContrato(
-  contractId: string
+  contractId: string,
+  createdByUserId?: string,
 ): Promise<{ creadas: number; actualizadas: number }> {
   const dbModule = await import("@contract/db");
   const { db, schema } = dbModule as {
@@ -158,6 +159,9 @@ export async function sincronizarTareasContrato(
         titulo: ev.titulo,
         descripcion,
         asignadoA: "",
+        createdByUserId: createdByUserId ?? null,
+        horaEjecucion: "09:00",
+        repetirCadaHora: ev.kind === "CHECKOFF",
         fechaLimite: limite,
         estado: "PENDIENTE",
         creadoPor: "Sistema (contrato)",
@@ -173,9 +177,14 @@ export async function sincronizarTareasContrato(
       descripcion?: string;
       estado?: string;
       completedAt?: Date | null;
+      createdByUserId?: string;
       updatedAt: Date;
     } = { updatedAt: new Date() };
     let toco = false;
+    if (!prev.createdByUserId && createdByUserId) {
+      patch.createdByUserId = createdByUserId;
+      toco = true;
+    }
     if (fechaEnLima(prev.fechaLimite) !== ev.fecha) {
       patch.fechaLimite = limite;
       toco = true;

@@ -234,7 +234,7 @@ export async function POST(request: Request) {
       datosArrendatario: body.datosArrendatario ?? null,
     });
     try {
-      await sincronizarTareasContrato(created.id);
+      await sincronizarTareasContrato(created.id, auth.user.id);
     } catch {
       /* las tareas automaticas no deben bloquear la creacion del contrato */
     }

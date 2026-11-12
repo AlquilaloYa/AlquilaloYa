@@ -92,6 +92,8 @@ interface Task {
   asignadoA: string;
   empleadoId?: string | null;
   fechaLimite: string | null;
+  horaEjecucion: string;
+  repetirCadaHora: boolean;
   estado: TaskState;
   creadoPor: string;
   origenTipo?: string;
@@ -200,7 +202,7 @@ export default function Work123Page() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
-  const [form, setForm] = useState({ titulo: "", descripcion: "", asignadoA: "", empleadoId: "", fechaLimite: "", estado: "PENDIENTE" as TaskState });
+  const [form, setForm] = useState({ titulo: "", descripcion: "", asignadoA: "", empleadoId: "", fechaLimite: "", horaEjecucion: "09:00", repetirCadaHora: false, estado: "PENDIENTE" as TaskState });
 
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<TaskState | null>(null);
@@ -221,12 +223,7 @@ export default function Work123Page() {
       const contractRows = resContratos?.ok
         ? ((await resContratos.json()) as ContractBrief[])
         : [];
-      const contractsById = new Map(contractRows.map((contract) => [contract.id, contract]));
-      setTasks(taskRows.map((task) => {
-        if (task.origenEvento !== "CHECKOFF" || !task.origenContratoId) return task;
-        const contractEnd = contractsById.get(task.origenContratoId)?.fechaFin;
-        return contractEnd ? { ...task, fechaLimite: contractEnd } : task;
-      }));
+      setTasks(taskRows);
       setContracts(contractRows);
       if (resEmployees?.ok) {
         const staff = (await resEmployees.json()) as EmployeeBrief[];
@@ -323,7 +320,7 @@ export default function Work123Page() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ titulo: "", descripcion: "", asignadoA: "", empleadoId: "", fechaLimite: selectedDay, estado: "PENDIENTE" });
+    setForm({ titulo: "", descripcion: "", asignadoA: "", empleadoId: "", fechaLimite: selectedDay, horaEjecucion: "09:00", repetirCadaHora: false, estado: "PENDIENTE" });
     setModalOpen(true);
   }
 
@@ -335,6 +332,8 @@ export default function Work123Page() {
       asignadoA: task.asignadoA,
       empleadoId: task.empleadoId ?? "",
       fechaLimite: work123DateKey(task.fechaLimite) ?? "",
+      horaEjecucion: task.horaEjecucion,
+      repetirCadaHora: task.repetirCadaHora,
       estado: task.estado,
     });
     setModalOpen(true);
@@ -349,18 +348,30 @@ export default function Work123Page() {
       setError("Indica la fecha límite");
       return;
     }
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(form.horaEjecucion)) {
+      setError("Indica una hora válida");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const payload = {
-        id: editing?.id,
-        titulo: form.titulo,
-        descripcion: form.descripcion,
-        asignadoA: form.asignadoA,
-        empleadoId: form.empleadoId || null,
-        fechaLimite: form.fechaLimite,
-        estado: form.estado,
-      };
+      const payload = editing?.origenEvento === "CHECKOFF"
+        ? {
+            id: editing.id,
+            horaEjecucion: form.horaEjecucion,
+            repetirCadaHora: form.repetirCadaHora,
+          }
+        : {
+            id: editing?.id,
+            titulo: form.titulo,
+            descripcion: form.descripcion,
+            asignadoA: form.asignadoA,
+            empleadoId: form.empleadoId || null,
+            fechaLimite: form.fechaLimite,
+            horaEjecucion: form.horaEjecucion,
+            repetirCadaHora: form.repetirCadaHora,
+            estado: form.estado,
+          };
       const res = await apiFetch("/api/tareas", {
         method: editing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -647,7 +658,7 @@ export default function Work123Page() {
                         </span>
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {fmtFecha(t.fechaLimite)}
+                          {fmtFecha(t.fechaLimite)} · {t.horaEjecucion}
                         </span>
                       </div>
                     </li>
@@ -732,7 +743,7 @@ export default function Work123Page() {
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3" />
-                                  {fmtFecha(t.fechaLimite)}
+                                  {fmtFecha(t.fechaLimite)} · {t.horaEjecucion}
                                 </span>
                               </div>
                             </li>
@@ -820,6 +831,15 @@ export default function Work123Page() {
                 />
               </div>
               <div>
+                <label className="mb-1 block font-label-md text-on-surface">Hora del aviso *</label>
+                <input
+                  type="time"
+                  value={form.horaEjecucion}
+                  onChange={(e) => setForm({ ...form, horaEjecucion: e.target.value })}
+                  className="w-full rounded-md border border-outline-variant bg-surface p-2 font-body-md text-on-surface focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div>
                 <label className="mb-1 block font-label-md text-on-surface">Estado</label>
                 <select
                   value={form.estado}
@@ -833,6 +853,17 @@ export default function Work123Page() {
                   ))}
                 </select>
               </div>
+              {editing?.origenEvento === "CHECKOFF" ? (
+                <label className="flex items-start gap-2 text-sm text-on-surface">
+                  <input
+                    type="checkbox"
+                    checked={form.repetirCadaHora}
+                    onChange={(e) => setForm({ ...form, repetirCadaHora: e.target.checked })}
+                    className="mt-0.5 accent-primary"
+                  />
+                  <span>Repetir el aviso cada hora hasta completar el check-out</span>
+                </label>
+              ) : null}
             </div>
             <div className="flex items-center justify-between gap-2 pt-2">
               {editing ? (

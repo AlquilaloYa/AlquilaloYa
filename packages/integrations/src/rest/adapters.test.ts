@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { GoogleFormsAdapter } from "../rest/google-forms-adapter";
 import { GmailAdapter } from "../rest/gmail-adapter";
 import { WhatsAppAdapter } from "../rest/whatsapp-adapter";
@@ -65,7 +65,43 @@ describe("WhatsAppAdapter", () => {
     const adapter = new WhatsAppAdapter({ accessToken: "EAAG..." });
     const result = await adapter.dispatch({ kind: "TEST_CONNECTION", payload: {} });
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("phoneNumberId");
+    expect(result.error).toContain("WABA ID");
+  });
+
+  it("consulta las plantillas de WhatsApp por WABA ID con la versión configurada", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: [] }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const adapter = new WhatsAppAdapter({
+        accessToken: "test-token",
+        businessAccountId: "123456789",
+        apiVersion: "v25.0",
+      });
+      const result = await adapter.dispatch({ kind: "TEST_CONNECTION" });
+      expect(result.ok).toBe(true);
+      expect(result.providerMessage).toContain("acceso a plantillas confirmado");
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://graph.facebook.com/v25.0/123456789/message_templates?limit=1",
+        expect.objectContaining({
+          method: "GET",
+          headers: { Authorization: "Bearer test-token" },
+        }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("rechaza un WABA ID que no sea numérico", async () => {
+    const adapter = new WhatsAppAdapter({
+      accessToken: "test-token",
+      businessAccountId: "123/invalid",
+    });
+    const result = await adapter.dispatch({ kind: "TEST_CONNECTION" });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("WABA ID");
   });
 
   it("dispatch sin to falla", async () => {

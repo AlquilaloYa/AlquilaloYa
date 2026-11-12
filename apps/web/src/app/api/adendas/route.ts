@@ -27,9 +27,12 @@ function dstr(v: unknown): string {
   return String(v ?? "").slice(0, 10);
 }
 
-async function sincronizarTareasDeContrato(contractId: string): Promise<void> {
+async function sincronizarTareasDeContrato(
+  contractId: string,
+  createdByUserId: string,
+): Promise<void> {
   try {
-    await sincronizarTareasContrato(contractId);
+    await sincronizarTareasContrato(contractId, createdByUserId);
   } catch (error) {
     logger.warn("No se pudieron sincronizar las tareas del contrato", {
       contractId,
@@ -571,7 +574,7 @@ export async function POST(request: Request) {
         nuevaFechaFin,
         cuotasValores.valores,
       );
-      await sincronizarTareasDeContrato(contract.id);
+      await sincronizarTareasDeContrato(contract.id, auth.user.id);
       camposContrato = {
         fechaFinAnterior: fechaFinActual,
         codigoBase: contract.codigoContrato,
@@ -884,7 +887,7 @@ export async function PATCH(request: Request) {
         nuevaFechaFinAdenda,
         cuotasValores.valores,
       );
-      await sincronizarTareasDeContrato(contract.id);
+      await sincronizarTareasDeContrato(contract.id, auth.user.id);
     }
 
     // 2) Snapshot actualizado (título, numeración, contenido y plazo).

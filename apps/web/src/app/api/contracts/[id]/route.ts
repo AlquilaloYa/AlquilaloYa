@@ -88,7 +88,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
       typeof expectedRevision === "number" ? expectedRevision : undefined
     );
     try {
-      await sincronizarTareasContrato(params.id);
+      await sincronizarTareasContrato(params.id, auth.user.id);
     } catch {
       /* las tareas automaticas no deben bloquear la edicion del contrato */
     }
@@ -330,7 +330,7 @@ export async function POST(request: Request, { params }: Ctx) {
         if (denied) return denied;
         const data = body as {
           action: string;
-          renueva?: boolean;
+          renueva?: boolean | null;
           meses?: number | null;
         };
         const renueva = data.renueva ?? null;

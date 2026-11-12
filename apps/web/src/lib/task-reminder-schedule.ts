@@ -31,8 +31,27 @@ export function taskReminderSlot(now: Date): string | null {
 
 export function taskReminderDateRange(slot: string): { start: Date; end: Date } {
   const date = slot.slice(0, 10);
-  const start = new Date(`${date}T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
+  const start = new Date(`${date}T00:00:00.000-05:00`);
+  const nextDate = new Date(`${date}T12:00:00.000Z`);
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+  const end = new Date(`${nextDate.toISOString().slice(0, 10)}T00:00:00.000-05:00`);
   return { start, end };
+}
+
+export function taskReminderMatchesTime(
+  slotTime: string,
+  horaEjecucion: string,
+  repetirCadaHora: boolean,
+): boolean {
+  const toMinutes = (value: string): number | null => {
+    const match = /^(?:[01]\d|2[0-3]):[0-5]\d$/.exec(value);
+    if (!match) return null;
+    const [hour, minute] = value.split(":").map(Number);
+    return hour! * 60 + minute!;
+  };
+  const slot = toMinutes(slotTime);
+  const scheduled = toMinutes(horaEjecucion);
+  if (slot === null || scheduled === null) return false;
+  if (!repetirCadaHora) return slot === scheduled;
+  return slot >= scheduled && (slot - scheduled) % 60 === 0;
 }

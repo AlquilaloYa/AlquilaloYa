@@ -66,7 +66,8 @@ export default function IntegracionesPage() {
     apiKeyHeader: "X-API-Key",
     token: "",
     phoneNumberId: "",
-    apiVersion: "v20.0",
+    businessAccountId: "",
+    apiVersion: "v25.0",
     idempotencyKey: "",
     payloadJson: "{}",
   });
@@ -134,7 +135,11 @@ export default function IntegracionesPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             config: isWhatsApp
-              ? { phoneNumberId: form.phoneNumberId, apiVersion: form.apiVersion || "v20.0" }
+              ? {
+                  phoneNumberId: form.phoneNumberId,
+                  businessAccountId: form.businessAccountId,
+                  apiVersion: form.apiVersion || "v25.0",
+                }
               : {
                   baseUrl: form.baseUrl,
                   method: form.method,
@@ -168,7 +173,11 @@ export default function IntegracionesPage() {
             name: form.name,
             description: form.description || null,
             config: isWhatsApp
-              ? { phoneNumberId: form.phoneNumberId, apiVersion: form.apiVersion || "v20.0" }
+              ? {
+                  phoneNumberId: form.phoneNumberId,
+                  businessAccountId: form.businessAccountId,
+                  apiVersion: form.apiVersion || "v25.0",
+                }
               : {
                   baseUrl: form.baseUrl,
                   method: form.method,
@@ -194,7 +203,7 @@ export default function IntegracionesPage() {
         ...f,
         name: "", provider: "", description: "", baseUrl: "", method: "POST",
         path: "/webhook", authType: "NONE", apiKeyHeader: "X-API-Key", token: "",
-        phoneNumberId: "", apiVersion: "v20.0", idempotencyKey: "", payloadJson: "{}",
+        phoneNumberId: "", businessAccountId: "", apiVersion: "v25.0", idempotencyKey: "", payloadJson: "{}",
       }));
       await load();
     } catch (e) {
@@ -317,14 +326,20 @@ export default function IntegracionesPage() {
                   <Field label="Phone Number ID (WhatsApp Business)">
                     <input value={form.phoneNumberId} onChange={(e) => setForm({ ...form, phoneNumberId: e.target.value })} placeholder="11383872334..." className={inputCls} />
                   </Field>
+                  <Field label="WABA ID (cuenta de WhatsApp Business)">
+                    <input value={form.businessAccountId} onChange={(e) => setForm({ ...form, businessAccountId: e.target.value })} placeholder="ID numérico de la cuenta" className={inputCls} />
+                  </Field>
                   <Field label="Versión API">
                     <select value={form.apiVersion} onChange={(e) => setForm({ ...form, apiVersion: e.target.value })} className={inputCls}>
-                      {["v20.0", "v21.0", "v22.0"].map((v) => <option key={v} value={v}>{v}</option>)}
+                      {["v25.0", "v22.0", "v21.0", "v20.0"].map((v) => <option key={v} value={v}>{v}</option>)}
                     </select>
                   </Field>
                   <Field label="Token de acceso (Bearer)" full>
                     <input value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} placeholder="EAAG..." type="password" className={inputCls} />
                   </Field>
+                  <p className="md:col-span-2 text-xs text-on-surface-variant">
+                    Al pulsar Probar, si indicas el WABA ID se consultará message_templates para validar el acceso de administración de WhatsApp.
+                  </p>
                 </>
               ) : (
                 <>
@@ -427,7 +442,10 @@ export default function IntegracionesPage() {
                   <Chip label="Base URL" value={String((c.config as { baseUrl?: string }).baseUrl ?? "-")} />
                   <Chip label="Auth" value={String((c.config as { authType?: string }).authType ?? "NONE")} />
                   {c.type === "WHATSAPP" ? (
-                    <Chip label="Phone" value={String((c.config as { phoneNumberId?: string }).phoneNumberId ?? "-")} />
+                    <>
+                      <Chip label="Phone" value={String((c.config as { phoneNumberId?: string }).phoneNumberId ?? "-")} />
+                      <Chip label="WABA" value={String((c.config as { businessAccountId?: string }).businessAccountId ?? "-")} />
+                    </>
                   ) : null}
                   {c.credentialId ? <Chip label="Credencial" value="cifrada ✓" /> : null}
                 </div>
@@ -449,7 +467,8 @@ export default function IntegracionesPage() {
                           authType: String(cfg.authType ?? "NONE"),
                           apiKeyHeader: String(cfg.apiKeyHeader ?? "X-API-Key"),
                           phoneNumberId: String(cfg.phoneNumberId ?? ""),
-                          apiVersion: String(cfg.apiVersion ?? "v20.0"),
+                          businessAccountId: String(cfg.businessAccountId ?? ""),
+                          apiVersion: String(cfg.apiVersion ?? "v25.0"),
                           token: "",
                           payloadJson: f.payloadJson,
                         }));

@@ -30,6 +30,9 @@ type TareaContratoNueva = {
   descripcion: string;
   asignadoA: string;
   fechaLimite: Date;
+  horaEjecucion: string;
+  repetirCadaHora: boolean;
+  createdByUserId: string;
   estado: string;
   creadoPor: string;
   origenTipo: string;
@@ -134,7 +137,10 @@ export async function POST(req: Request) {
           titulo: `${event.label} ${contract.departamento || contract.numero || "departamento"} · ${contract.codigo}`,
           descripcion: `${event.label} de ${[contract.cliente, contract.apellidos].filter(Boolean).join(" ")}. Programado para el ${event.date}. Confirmar que se realizó.`,
           asignadoA: "",
+          createdByUserId: auth.user.id,
           fechaLimite: new Date(`${event.date}T12:00:00-05:00`),
+          horaEjecucion: "09:00",
+          repetirCadaHora: event.kind === "CHECKOFF",
           estado: "PENDIENTE",
           creadoPor: "Sistema (contrato)",
           origenTipo: "CONTRATO",
@@ -162,6 +168,7 @@ export async function POST(req: Request) {
             origenEvento: schema.tasks.origenEvento,
             fechaLimite: schema.tasks.fechaLimite,
             estado: schema.tasks.estado,
+            createdByUserId: schema.tasks.createdByUserId,
           })
           .from(schema.tasks)
           .where(and(
@@ -186,6 +193,8 @@ export async function POST(req: Request) {
         descripcion?: string;
         estado?: string;
         completedAt?: null;
+        createdByUserId?: string;
+        repetirCadaHora?: boolean;
         updatedAt: Date;
       } = {
         fechaLimite: nueva.fechaLimite,
@@ -193,11 +202,26 @@ export async function POST(req: Request) {
         descripcion: nueva.descripcion,
         updatedAt: new Date(),
       };
+      if (!previa.createdByUserId) {
+        patch.createdByUserId = auth.user.id;
+        if (nueva.origenEvento === "CHECKOFF") patch.repetirCadaHora = true;
+      }
       if (nueva.origenEvento === "CHECKOFF" && previa.estado === "RESUELTA") {
         patch.estado = "PENDIENTE";
         patch.completedAt = null;
       }
       await db.update(schema.tasks).set(patch).where(eq(schema.tasks.id, previa.id));
+    }
+    for (const task of existentes) {
+      if (task.origenEvento !== "CHECKOFF" || task.createdByUserId) continue;
+      await db
+        .update(schema.tasks)
+        .set({
+          createdByUserId: auth.user.id,
+          repetirCadaHora: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.tasks.id, task.id));
     }
     for (let offset = 0; offset < tareasAInsertar.length; offset += 500) {
       await db

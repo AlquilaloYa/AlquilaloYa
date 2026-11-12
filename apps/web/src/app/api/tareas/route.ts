@@ -176,6 +176,7 @@ export async function PUT(req: Request) {
         estado: schema.tasks.estado,
         empleadoId: schema.tasks.empleadoId,
         origenEvento: schema.tasks.origenEvento,
+        createdByUserId: schema.tasks.createdByUserId,
       })
       .from(schema.tasks)
       .where(eq(schema.tasks.id, body.id));
@@ -214,6 +215,7 @@ export async function PUT(req: Request) {
       estado?: string;
       empleadoId?: string | null;
       completedAt?: Date | null;
+      createdByUserId?: string;
       updatedAt: Date;
     } = {
       updatedAt: new Date(),
@@ -259,6 +261,13 @@ export async function PUT(req: Request) {
         return NextResponse.json({ error: "El valor de repetición no es válido" }, { status: 400 });
       }
       patch.repetirCadaHora = body.repetirCadaHora;
+    }
+    if (
+      existing.origenEvento === "CHECKOFF" &&
+      !existing.createdByUserId &&
+      (body.horaEjecucion !== undefined || body.repetirCadaHora !== undefined)
+    ) {
+      patch.createdByUserId = auth.user.id;
     }
     if (body.estado !== undefined && isState(body.estado)) {
       patch.estado = body.estado;

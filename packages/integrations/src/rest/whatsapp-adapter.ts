@@ -3,7 +3,7 @@ import type { ConnectorTransport, DispatchResult } from "../core/connector";
 /**
  * Adaptador para WhatsApp Business API.
  * Envía mensajes de texto o plantillas vía la API de Meta/WhatsApp.
- * Config de la instancia: { phoneNumberId?, apiVersion?, accessToken? }
+ * Config de la instancia: { phoneNumberId?, businessAccountId?, apiVersion?, accessToken? }
  * El token debe venir resuelto desde las credenciales descifradas (config.accessToken),
  * con fallback a payload.accessToken para compatibilidad con despachos manuales.
  * Payload esperado: { to (número E.164), template?, text?, type? }
@@ -12,6 +12,7 @@ export class WhatsAppAdapter implements ConnectorTransport {
   constructor(
     private readonly config: {
       phoneNumberId?: string;
+      businessAccountId?: string;
       apiVersion?: string;
       accessToken?: string;
       timeoutMs?: number;
@@ -25,7 +26,9 @@ export class WhatsAppAdapter implements ConnectorTransport {
     if (kind === "TEST_CONNECTION") {
       const accessToken = this.config.accessToken ?? (payload.accessToken as string);
       const phoneNumberId = this.config.phoneNumberId ?? (payload.phoneNumberId as string);
-      const apiVersion = this.config.apiVersion ?? "v20.0";
+      const businessAccountId =
+        this.config.businessAccountId ?? (payload.businessAccountId as string);
+      const apiVersion = this.config.apiVersion ?? "v25.0";
 
       if (!accessToken) {
         return {
@@ -35,16 +38,26 @@ export class WhatsAppAdapter implements ConnectorTransport {
           error: "WhatsApp: falta accessToken (token de WhatsApp Business)",
         };
       }
-      if (!phoneNumberId) {
+      if (businessAccountId && !/^\d+$/.test(businessAccountId)) {
         return {
           ok: false,
           statusCode: null,
           providerMessage: null,
-          error: "WhatsApp: falta phoneNumberId en la configuración del conector",
+          error: "WhatsApp: el WABA ID debe contener solo dígitos",
+        };
+      }
+      if (!businessAccountId && !phoneNumberId) {
+        return {
+          ok: false,
+          statusCode: null,
+          providerMessage: null,
+          error: "WhatsApp: configura el WABA ID o el phoneNumberId",
         };
       }
 
-      const url = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}?fields=display_phone_number,verified_name`;
+      const url = businessAccountId
+        ? `https://graph.facebook.com/${apiVersion}/${businessAccountId}/message_templates?limit=1`
+        : `https://graph.facebook.com/${apiVersion}/${phoneNumberId}?fields=display_phone_number,verified_name`;
       try {
         const response = await fetch(url, {
           method: "GET",
@@ -52,14 +65,18 @@ export class WhatsAppAdapter implements ConnectorTransport {
           signal: AbortSignal.timeout(this.config.timeoutMs ?? 15000),
         });
         if (response.ok) {
-          const data = (await response.json().catch(() => null)) as
-            | { display_phone_number?: string; verified_name?: string }
-            | null;
+          const data = (await response.json().catch(() => null)) as {
+            display_phone_number?: string;
+            verified_name?: string;
+            data?: unknown[];
+          } | null;
           return {
             ok: true,
             statusCode: response.status,
             providerMessage: data
-              ? `Conectado: ${data.display_phone_number ?? "número"} (${data.verified_name ?? "empresa"})`
+              ? businessAccountId
+                ? `Conectado: acceso a plantillas confirmado (${data.data?.length ?? 0} consultada(s))`
+                : `Conectado: ${data.display_phone_number ?? "número"} (${data.verified_name ?? "empresa"})`
               : "Conexión exitosa con WhatsApp Business",
           };
         }
@@ -105,7 +122,7 @@ export class WhatsAppAdapter implements ConnectorTransport {
     }
 
     const phoneNumberId = this.config.phoneNumberId ?? (payload.phoneNumberId as string);
-    const apiVersion = this.config.apiVersion ?? "v18.0";
+    const apiVersion = this.config.apiVersion ?? "v25.0";
 
     if (!phoneNumberId) {
       return {
