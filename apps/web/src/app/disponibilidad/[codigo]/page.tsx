@@ -16,6 +16,7 @@ interface DisponibilidadDepartment {
   piso: number;
   precio: string;
   disponibilidad: { disponible: false; fechaFin: string; dias: number } | null;
+  separado?: boolean;
   enMantenimiento?: boolean;
   bloqueado?: boolean;
   estadoManual?: string | null;
@@ -45,6 +46,7 @@ function estadoDe(dept: DisponibilidadDepartment): {
       badge: "bg-blue-500/10 text-blue-700 dark:text-blue-500",
     };
   }
+  if (dept.separado) return { label: "Separado", badge: "bg-amber-500/10 text-amber-700 dark:text-amber-500" };
   return { label: "Disponible", badge: "bg-green-500/10 text-green-700 dark:text-green-500" };
 }
 
@@ -162,7 +164,16 @@ export default function PropiedadPage() {
                 </div>
               </div>
 
-              {dept.disponibilidad ? (
+              {dept.separado ? (
+                <div className="rounded-xl border bg-background p-5 shadow-sm">
+                  <h2 className="mb-2 font-headline-md text-base font-semibold text-foreground">
+                    Separación vigente
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Esta propiedad no está disponible para alquilar mientras la separación siga vigente.
+                  </p>
+                </div>
+              ) : dept.disponibilidad ? (
                 <div className="rounded-xl border bg-background p-5 shadow-sm">
                   <h2 className="mb-2 font-headline-md text-base font-semibold text-foreground">
                     Ocupante actual
