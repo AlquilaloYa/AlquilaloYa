@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { safeEqual } from "@/lib/secure-compare";
 import {
-  taskReminderDateRange,
+  taskReminderDateRangeForDays,
+  taskReminderDaysUntil,
+  taskReminderIntervalMinutes,
   taskReminderMatchesTime,
   taskReminderSlot,
 } from "@/lib/task-reminder-schedule";
@@ -29,6 +31,15 @@ function formatLimaTime(value: string): string {
   }).format(new Date(`2000-01-01T${value}:00-05:00`));
 }
 
+function limaDate(value: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Lima",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
+}
+
 async function run(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
@@ -51,12 +62,13 @@ async function run(req: Request) {
   try {
     const dbModule = await import("@contract/db");
     const { db, schema } = dbModule;
-    const { start, end } = taskReminderDateRange(slot);
+    const { start, end } = taskReminderDateRangeForDays(slot, 3);
     const dueTasks = await db
       .select({
         id: schema.tasks.id,
         titulo: schema.tasks.titulo,
         descripcion: schema.tasks.descripcion,
+        fechaLimite: schema.tasks.fechaLimite,
         horaEjecucion: schema.tasks.horaEjecucion,
         origenEvento: schema.tasks.origenEvento,
         userId: schema.tasks.createdByUserId,
@@ -78,11 +90,15 @@ async function run(req: Request) {
       if (!task.userId) continue;
       const esRecordatorioDeContrato =
         task.origenEvento === "CHECKIN" || task.origenEvento === "CHECKOFF";
+      const daysUntilEvent = esRecordatorioDeContrato
+        ? taskReminderDaysUntil(slot.slice(0, 10), limaDate(task.fechaLimite))
+        : -1;
+      const intervalMinutes = taskReminderIntervalMinutes(daysUntilEvent);
       if (
         !taskReminderMatchesTime(
           slotTime,
           task.horaEjecucion,
-          esRecordatorioDeContrato,
+          intervalMinutes,
         )
       ) {
         continue;

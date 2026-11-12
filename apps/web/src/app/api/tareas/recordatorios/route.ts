@@ -56,6 +56,9 @@ export async function POST(req: Request) {
     const dayAfterTomorrowDate = new Date(`${tomorrow}T12:00:00Z`);
     dayAfterTomorrowDate.setUTCDate(dayAfterTomorrowDate.getUTCDate() + 1);
     const dayAfterTomorrow = dayAfterTomorrowDate.toISOString().slice(0, 10);
+    const dayThreeAfterDate = new Date(`${dayAfterTomorrow}T12:00:00Z`);
+    dayThreeAfterDate.setUTCDate(dayThreeAfterDate.getUTCDate() + 1);
+    const dayThreeAfter = dayThreeAfterDate.toISOString().slice(0, 10);
     const earliestCheckOutDate = new Date(`${today}T12:00:00Z`);
     earliestCheckOutDate.setUTCDate(earliestCheckOutDate.getUTCDate() - MAX_DIAS_EXTRAS);
     const earliestCheckOut = earliestCheckOutDate.toISOString().slice(0, 10);
@@ -78,10 +81,13 @@ export async function POST(req: Request) {
         inArray(schema.contracts.estado, ["FIRMADO", "NOTARIADO", "ACTIVO", "VIGENTE"]),
         isNull(schema.contracts.eliminadoEn),
         or(
-          eq(schema.contracts.fechaInicio, today),
+          and(
+            gte(schema.contracts.fechaInicio, today),
+            lte(schema.contracts.fechaInicio, dayAfterTomorrow),
+          ),
           and(
             gte(schema.contracts.fechaFin, earliestCheckOut),
-            lte(schema.contracts.fechaFin, tomorrow),
+            lte(schema.contracts.fechaFin, dayAfterTomorrow),
           ),
         ),
       ));
@@ -97,7 +103,7 @@ export async function POST(req: Request) {
           .where(and(
             inArray(schema.diasExtras.contractId, contracts.map((contract) => contract.contractId)),
             gte(schema.diasExtras.fechaFinPeriodo, earliestCheckOut),
-            lte(schema.diasExtras.fechaFinPeriodo, tomorrow),
+            lte(schema.diasExtras.fechaFinPeriodo, dayAfterTomorrow),
           ))
       : [];
 
@@ -121,12 +127,12 @@ export async function POST(req: Request) {
           })),
       );
       const contractEvents: Array<{ kind: "CHECKIN" | "CHECKOFF"; label: string; date: string }> = [
-        ...(fechaInicio === today ? [{
+        ...(fechaInicio >= today && fechaInicio <= dayAfterTomorrow ? [{
           kind: "CHECKIN" as const,
           label: "Check-in",
           date: fechaInicio,
         }] : []),
-        ...(checkout.fecha >= today && checkout.fecha <= tomorrow ? [{
+        ...(checkout.fecha >= today && checkout.fecha <= dayAfterTomorrow ? [{
           kind: "CHECKOFF" as const,
           label: "Check out",
           date: checkout.fecha,
@@ -244,12 +250,12 @@ export async function POST(req: Request) {
           and(
             eq(schema.tasks.origenEvento, "CHECKIN"),
             gte(schema.tasks.fechaLimite, new Date(`${today}T00:00:00-05:00`)),
-            lt(schema.tasks.fechaLimite, new Date(`${tomorrow}T00:00:00-05:00`)),
+            lt(schema.tasks.fechaLimite, new Date(`${dayThreeAfter}T00:00:00-05:00`)),
           ),
           and(
             eq(schema.tasks.origenEvento, "CHECKOFF"),
             gte(schema.tasks.fechaLimite, new Date(`${today}T00:00:00-05:00`)),
-            lt(schema.tasks.fechaLimite, new Date(`${dayAfterTomorrow}T00:00:00-05:00`)),
+            lt(schema.tasks.fechaLimite, new Date(`${dayThreeAfter}T00:00:00-05:00`)),
           ),
         ),
       ));

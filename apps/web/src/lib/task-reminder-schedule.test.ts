@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   taskReminderDateRange,
+  taskReminderDateRangeForDays,
+  taskReminderDaysUntil,
+  taskReminderIntervalMinutes,
   taskReminderMatchesTime,
   taskReminderSlot,
 } from "./task-reminder-schedule";
@@ -24,17 +27,28 @@ describe("task reminder schedule", () => {
     expect(range.end.toISOString()).toBe("2026-11-12T05:00:00.000Z");
   });
 
-  it("sends a one-time task reminder only at its configured hour", () => {
-    expect(taskReminderMatchesTime("11:30", "11:30", false)).toBe(true);
-    expect(taskReminderMatchesTime("11:00", "11:30", false)).toBe(false);
+  it("uses the lead-time interval for contract reminders", () => {
+    expect(taskReminderIntervalMinutes(2)).toBe(120);
+    expect(taskReminderIntervalMinutes(1)).toBe(60);
+    expect(taskReminderIntervalMinutes(0)).toBe(30);
+    expect(taskReminderIntervalMinutes(3)).toBeNull();
+    expect(taskReminderDaysUntil("2026-11-11", "2026-11-13")).toBe(2);
+    const range = taskReminderDateRangeForDays("2026-11-11T08:00", 3);
+    expect(range.end.toISOString()).toBe("2026-11-14T05:00:00.000Z");
   });
 
-  it("repeats contract reminders every half hour after the configured time", () => {
-    expect(taskReminderMatchesTime("11:30", "09:30", true)).toBe(true);
-    expect(taskReminderMatchesTime("11:00", "09:30", true)).toBe(true);
-    expect(taskReminderMatchesTime("09:00", "09:30", true)).toBe(false);
-    expect(taskReminderMatchesTime("10:00", "09:45", true)).toBe(true);
-    expect(taskReminderMatchesTime("10:30", "09:45", true)).toBe(true);
-    expect(taskReminderMatchesTime("10:15", "09:00", true)).toBe(false);
+  it("matches the reminder interval after the first half-hour slot at or after scheduled time", () => {
+    expect(taskReminderMatchesTime("11:30", "09:30", 30)).toBe(true);
+    expect(taskReminderMatchesTime("11:00", "09:30", 30)).toBe(true);
+    expect(taskReminderMatchesTime("09:00", "09:30", 30)).toBe(false);
+    expect(taskReminderMatchesTime("10:30", "09:30", 60)).toBe(true);
+    expect(taskReminderMatchesTime("11:00", "09:30", 60)).toBe(false);
+    expect(taskReminderMatchesTime("11:00", "09:00", 120)).toBe(true);
+    expect(taskReminderMatchesTime("10:00", "09:00", 120)).toBe(false);
+    expect(taskReminderMatchesTime("10:00", "09:45", 30)).toBe(true);
+    expect(taskReminderMatchesTime("10:30", "09:45", 30)).toBe(true);
+    expect(taskReminderMatchesTime("10:15", "09:00", 30)).toBe(false);
+    expect(taskReminderMatchesTime("11:30", "11:30", null)).toBe(true);
+    expect(taskReminderMatchesTime("11:00", "11:30", null)).toBe(false);
   });
 });

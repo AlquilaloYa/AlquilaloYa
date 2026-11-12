@@ -23,6 +23,7 @@ import {
   Wallet,
   Wrench,
   ChevronDown,
+  ChevronUp,
   ChevronLeft,
   ChevronRight,
   Trash2,
@@ -417,6 +418,7 @@ function ProximosAVencerBox({
   );
   const [salvando, setSalvando] = useState<string | null>(null);
   const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
+  const [colapsado, setColapsado] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -496,18 +498,38 @@ function ProximosAVencerBox({
 
   return (
     <div className="rounded-lg border border-amber-400/60 bg-amber-400/10 p-3">
-      <div className="mb-2 flex items-center gap-2 font-label-md text-amber-700 dark:text-amber-300">
-        <AlertTriangle className="h-4 w-4" />
-        {contratos.length}{" "}
-        {contratos.length === 1
-          ? "contrato vence en el próximo mes:"
-          : "contratos vencen en el próximo mes:"}
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 font-label-md text-amber-700 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4" />
+          {contratos.length}{" "}
+          {contratos.length === 1
+            ? "contrato vence en el próximo mes"
+            : "contratos vencen en el próximo mes"}
+        </div>
+        <button
+          type="button"
+          aria-expanded={!colapsado}
+          aria-controls="contratos-proximos-lista"
+          aria-label={colapsado ? "Expandir contratos próximos a vencer" : "Contraer contratos próximos a vencer"}
+          onClick={() => setColapsado((value) => !value)}
+          className="rounded-md p-1 text-amber-700 transition-colors hover:bg-amber-400/20 dark:text-amber-300"
+        >
+          {colapsado ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+        </button>
       </div>
-        {errorGuardar ? (
-          <p role="alert" className="mb-2 text-xs text-destructive">{errorGuardar}</p>
-        ) : null}
-      <ul className="divide-y divide-amber-400/20">
-        {contratos.map((p) => {
+      <div
+        id="contratos-proximos-lista"
+        className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${
+          colapsado ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
+        }`}
+        aria-hidden={colapsado}
+      >
+        <div className="min-h-0 overflow-hidden">
+          {errorGuardar ? (
+            <p role="alert" className="mb-2 text-xs text-destructive">{errorGuardar}</p>
+          ) : null}
+          <ul className="divide-y divide-amber-400/20">
+            {contratos.map((p) => {
           const estado = guardados[p.id];
           const renovacion = estado?.renueva ?? null;
           const marcado = renovacion === true;
@@ -689,9 +711,11 @@ function ProximosAVencerBox({
                 ) : null}
               </div>
             </li>
-          );
-        })}
-      </ul>
+            );
+            })}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
