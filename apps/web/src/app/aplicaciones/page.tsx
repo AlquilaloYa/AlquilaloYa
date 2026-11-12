@@ -65,7 +65,7 @@ const APLICACIONES: AppCardData[] = [
       "AlquilaYa Repair: el técnico de mantenimiento recibe sus órdenes de trabajo, registra evidencias y firma en el lugar.",
     estado: "disponible",
     accion: "descarga",
-    detalle: "Versión 1.0.4 · Android 7.0+",
+    detalle: "Versión 1.0.5 · Android 7.0+",
   },
   {
     key: "cliente-android",
@@ -127,7 +127,7 @@ function TarjetaApp({ app }: { app: AppCardData }) {
       <div className="mt-4">
         {app.accion === "descarga" ? (
           <a
-            href="/aplicaciones/FieldOps-v1.0.4.apk"
+            href="/aplicaciones/FieldOps-v1.0.5.apk"
             download
             className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition-opacity hover:opacity-90"
           >

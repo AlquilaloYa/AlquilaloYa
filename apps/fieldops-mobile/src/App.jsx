@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { PushNotifications } from '@capacitor/push-notifications'
 import { SpeechRecognition } from '@capacitor-community/speech-recognition'
 import { fieldopsApi } from './fieldops-api'
 import './App.css'
+
+const MediaCapture = registerPlugin('MediaCapture')
 
 const primaryTabs = [
   { id: 'home', icon: 'home', label: 'Inicio' },
@@ -573,33 +575,77 @@ function PhotoField({ multiple = false, value = [], onChange, disabled = false, 
   const cameraRef = useRef(null)
   const videoRef = useRef(null)
   const galleryRef = useRef(null)
-  const [processingVideos, setProcessingVideos] = useState(false)
+  const [processingMedia, setProcessingMedia] = useState(false)
   const files = Array.isArray(value) ? value : value ? [value] : []
+
+  async function addPickedFiles(picked) {
+    const optimizedFiles = []
+    for (const file of picked) {
+      if (!file.type.startsWith('video/')) {
+        optimizedFiles.push(file)
+        continue
+      }
+      optimizedFiles.push(await optimizeVideo(file))
+    }
+    if (multiple) {
+      onChange([...files, ...optimizedFiles])
+    } else {
+      onChange([optimizedFiles[0]])
+    }
+    onError?.('')
+  }
 
   async function handlePicked(event) {
     const picked = Array.from(event.target.files ?? [])
     event.target.value = ''
     if (!picked.length) return
-    setProcessingVideos(true)
+    setProcessingMedia(true)
     try {
-      const optimizedFiles = []
-      for (const file of picked) {
-        if (!file.type.startsWith('video/')) {
-          optimizedFiles.push(file)
-          continue
-        }
-        optimizedFiles.push(await optimizeVideo(file))
-      }
-      if (multiple) {
-        onChange([...files, ...optimizedFiles])
-      } else {
-        onChange([optimizedFiles[0]])
-      }
-      onError?.('')
+      await addPickedFiles(picked)
     } catch (error) {
       onError?.(error.message)
     } finally {
-      setProcessingVideos(false)
+      setProcessingMedia(false)
+    }
+  }
+
+  async function handleCapture(kind, fallbackInput) {
+    if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android' || !Capacitor.isPluginAvailable('MediaCapture')) {
+      fallbackInput.current?.click()
+      return
+    }
+
+    let capturedPath = ''
+    setProcessingMedia(true)
+    try {
+      const capture = await MediaCapture.capture({ kind })
+      if (capture.cancelled) return
+
+      capturedPath = capture.path
+      const response = await fetch(Capacitor.convertFileSrc(capturedPath))
+      if (!response.ok) {
+        throw new Error('No se pudo leer el archivo capturado por la cámara.')
+      }
+      const blob = await response.blob()
+      await MediaCapture.removeCaptureFile({ path: capturedPath })
+      capturedPath = ''
+
+      const capturedFile = new File([blob], capture.name, {
+        type: capture.mimeType,
+        lastModified: Date.now(),
+      })
+      await addPickedFiles([capturedFile])
+    } catch (error) {
+      if (capturedPath) {
+        try {
+          await MediaCapture.removeCaptureFile({ path: capturedPath })
+        } catch (cleanupError) {
+          console.error('No se pudo limpiar el archivo temporal de cámara.', cleanupError)
+        }
+      }
+      onError?.(error.message)
+    } finally {
+      setProcessingMedia(false)
     }
   }
 
@@ -610,17 +656,17 @@ function PhotoField({ multiple = false, value = [], onChange, disabled = false, 
   return (
     <div className="photo-field">
       <div className="photo-actions">
-        <button type="button" className="photo-btn" disabled={disabled || processingVideos} onClick={() => cameraRef.current?.click()}>
+        <button type="button" className="photo-btn" disabled={disabled || processingMedia} onClick={() => handleCapture('photo', cameraRef)}>
           <CameraIcon />
           <span>Tomar foto</span>
         </button>
         {allowVideo && (
-          <button type="button" className="photo-btn" disabled={disabled || processingVideos} onClick={() => videoRef.current?.click()}>
+          <button type="button" className="photo-btn" disabled={disabled || processingMedia} onClick={() => handleCapture('video', videoRef)}>
             <CameraIcon />
             <span>Grabar video</span>
           </button>
         )}
-        <button type="button" className="photo-btn" disabled={disabled || processingVideos} onClick={() => galleryRef.current?.click()}>
+        <button type="button" className="photo-btn" disabled={disabled || processingMedia} onClick={() => galleryRef.current?.click()}>
           <GalleryIcon />
           <span>Elegir de galería</span>
         </button>
@@ -628,7 +674,7 @@ function PhotoField({ multiple = false, value = [], onChange, disabled = false, 
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple={multiple} hidden onChange={handlePicked} />
       {allowVideo && <input ref={videoRef} type="file" accept="video/*" capture="environment" hidden onChange={handlePicked} />}
       <input ref={galleryRef} type="file" accept={allowVideo ? 'image/jpeg,image/png,image/webp,video/mp4,video/webm' : 'image/jpeg,image/png,image/webp'} multiple={multiple} hidden onChange={handlePicked} />
-      {processingVideos && <p className="prototype-note" role="status">Optimizando video a un máximo de 720p/30 fps antes de adjuntarlo…</p>}
+      {processingMedia && <p className="prototype-note" role="status">Preparando captura y optimizando videos…</p>}
       {files.length > 0 && (
         <ul className="photo-file-list">
           {files.map((file, index) => (
