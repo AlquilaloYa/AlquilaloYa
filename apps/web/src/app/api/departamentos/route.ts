@@ -3,6 +3,7 @@ import { Permission } from "@contract/domain/rbac";
 import { requireUser, requirePermission } from "@/lib/session";
 import { clasificarSinOcupante, normalizarEstadoManual } from "@/lib/estado-departamento";
 import { ESTADOS_CONTRATO_OCUPANTES } from "@/lib/estado-contrato";
+import { getEstadoSeparacion, type SeparacionRecord } from "@/lib/separaciones";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,38 @@ export async function GET(req: Request) {
           isNull(schema.contracts.eliminadoEn)
         )
       );
+
+    const separaciones = await db
+      .select()
+      .from(schema.separations)
+      .where(isNull(schema.separations.eliminadoEn));
+    const departamentosSeparados = new Set<string>();
+    for (const sep of separaciones) {
+      const fechaBase = sep.fechaSeparacion.getTime();
+      const fechaLimite48h = new Date(fechaBase + 48 * 3600000).toISOString();
+      const fechaLimite120h = new Date(fechaBase + 120 * 3600000).toISOString();
+      const fechaLimite168h = new Date(fechaBase + 168 * 3600000).toISOString();
+      const estado = getEstadoSeparacion({
+        departamentoId: sep.departamentoId,
+        contactoId: sep.contactoId ?? "",
+        montoSeparacion: Number(sep.montoSeparacion),
+        tipoSeparacion: sep.tipoSeparacion === "TOTAL" || sep.tipoSeparacion === "FLUCTUANTE"
+          ? sep.tipoSeparacion
+          : "500",
+        garantiaExtendida: sep.garantiaExtendida,
+        fechaSeparacion: sep.fechaSeparacion.toISOString(),
+        ...(sep.diasTiempo !== null ? { diasTiempo: sep.diasTiempo } : {}),
+        ...(sep.fechaLimiteManual ? { fechaLimiteManual: sep.fechaLimiteManual.toISOString() } : {}),
+        fechaLimite48h,
+        fechaLimite120h,
+        fechaLimite168h,
+        baucherSeparacion: sep.baucherSeparacion ?? "",
+        estado: sep.estado,
+      } satisfies Omit<SeparacionRecord, "estado"> & { estado: string });
+      if (!["PERDER_TODO", "INACTIVO_48H", "INACTIVO_168H", "CONTRATO_REAL"].includes(estado)) {
+        departamentosSeparados.add(sep.departamentoId);
+      }
+    }
 
     const contratoEstadoPorDepartamento = new Map<string, string>();
     const ultimoFinPorDepartamento = new Map<string, string>();
@@ -105,7 +138,18 @@ export async function GET(req: Request) {
           ultimoFin: ultimoFinPorDepartamento.get(d.id) ?? null,
           hoy: hoyISO,
         });
-        return { ...d, contratoEstado, disponibilidad: null, enMantenimiento, bloqueado };
+        return {
+          ...d,
+          contratoEstado,
+          disponibilidad: null,
+          separado:
+            departamentosSeparados.has(d.id) &&
+            !enMantenimiento &&
+            !bloqueado &&
+            !["FIRMADO", "NOTARIADO", "ACTIVO", "VIGENTE"].includes(contratoEstado ?? ""),
+          enMantenimiento,
+          bloqueado,
+        };
       }
       const cliente = clientePorId.get(contratoVigente.clienteId);
       const fechaFin = fechaFinOcupadaPorDepartamento.get(d.id) ?? contratoVigente.fechaFin;
@@ -117,6 +161,7 @@ export async function GET(req: Request) {
           fechaFin,
           dias: diasRestantes(fechaFin),
         },
+        separado: false,
         enMantenimiento: false,
         bloqueado: false,
         ocupante: cliente

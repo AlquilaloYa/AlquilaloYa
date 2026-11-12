@@ -96,6 +96,7 @@ interface DepartamentoDashboard {
   enMantenimiento?: boolean;
   bloqueado?: boolean;
   estadoManual?: string | null;
+  separado?: boolean;
   maintenanceReason?: string | null;
   maintenanceEstimatedDays?: number | null;
   maintenanceStage?: string;
@@ -832,13 +833,15 @@ function UnidadesTotalesPopup({ onCerrar }: { onCerrar: () => void }) {
     if (departamento.disponibilidad) return { texto: "Ocupado", clase: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200" };
     if (departamento.bloqueado) return { texto: "Bloqueado", clase: "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200" };
     if (departamento.enMantenimiento) return { texto: "Mantenimiento", clase: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200" };
+    if (departamento.separado) return { texto: "Separado", clase: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200" };
     return { texto: "Disponible", clase: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" };
   }
 
   const ocupados = departamentos.filter((departamento) => departamento.disponibilidad).length;
   const bloqueados = departamentos.filter((departamento) => !departamento.disponibilidad && departamento.bloqueado).length;
   const mantenimiento = departamentos.filter((departamento) => !departamento.disponibilidad && !departamento.bloqueado && departamento.enMantenimiento).length;
-  const disponibles = departamentos.length - ocupados - bloqueados - mantenimiento;
+  const separados = departamentos.filter((departamento) => !departamento.disponibilidad && !departamento.bloqueado && !departamento.enMantenimiento && departamento.separado).length;
+  const disponibles = departamentos.length - ocupados - bloqueados - mantenimiento - separados;
 
   return (
     <DashboardPanel titulo="Unidades totales" subtitulo={`${departamentos.length} departamentos · inventario por sede y estado`} onCerrar={onCerrar}>
@@ -849,6 +852,7 @@ function UnidadesTotalesPopup({ onCerrar }: { onCerrar: () => void }) {
             <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{disponibles} disponibles</span>
             <span className="rounded-full bg-rose-100 px-2.5 py-1 text-rose-800 dark:bg-rose-950 dark:text-rose-200">{ocupados} ocupados</span>
             <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sky-800 dark:bg-sky-950 dark:text-sky-200">{mantenimiento} mantenimiento</span>
+            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800 dark:bg-amber-950 dark:text-amber-200">{separados} separados</span>
             <span className="rounded-full bg-zinc-200 px-2.5 py-1 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">{bloqueados} bloqueados</span>
           </div>
           {grupos.length === 0 ? (
@@ -870,14 +874,18 @@ function UnidadesTotalesPopup({ onCerrar }: { onCerrar: () => void }) {
                           ? "border-black bg-black border-l-black hover:opacity-90"
                           : departamento.enMantenimiento
                             ? "border-blue-600/20 bg-blue-500/10 border-l-blue-600 hover:bg-blue-500/15"
-                            : "border-green-600/20 bg-green-500/10 border-l-green-600 hover:bg-green-500/15";
+                            : departamento.separado
+                              ? "border-amber-600/20 bg-amber-500/10 border-l-amber-600 hover:bg-amber-500/15"
+                              : "border-green-600/20 bg-green-500/10 border-l-green-600 hover:bg-green-500/15";
                       const codigoClase = departamento.disponibilidad
                         ? "text-red-700 dark:text-red-500"
                         : departamento.bloqueado
                           ? "text-white"
                           : departamento.enMantenimiento
                             ? "text-blue-700 dark:text-blue-500"
-                            : "text-green-700 dark:text-green-500";
+                            : departamento.separado
+                              ? "text-amber-700 dark:text-amber-500"
+                              : "text-green-700 dark:text-green-500";
                       return (
                         <li key={departamento.id}>
                           <Link
@@ -909,9 +917,10 @@ function DisponiblesPopup({ onCerrar }: { onCerrar: () => void }) {
   const [guardando, setGuardando] = useState<string | null>(null);
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
   const departamentos = (data ?? []).filter((departamento) => departamento.activo && !departamento.disponibilidad);
-  const disponibles = departamentos.filter((departamento) => !departamento.enMantenimiento && !departamento.bloqueado);
+  const disponibles = departamentos.filter((departamento) => !departamento.enMantenimiento && !departamento.bloqueado && !departamento.separado);
   const mantenimiento = departamentos.filter((departamento) => departamento.enMantenimiento);
   const bloqueados = departamentos.filter((departamento) => departamento.bloqueado);
+  const separados = departamentos.filter((departamento) => !departamento.enMantenimiento && !departamento.bloqueado && departamento.separado);
 
   useEffect(() => {
     if (data) {
@@ -1059,6 +1068,10 @@ function DisponiblesPopup({ onCerrar }: { onCerrar: () => void }) {
             endpoint="/api/departamentos/pdf"
             filename="disponibilidad-departamentos.pdf"
           />
+          <section>
+            <h3 className="border-b border-outline-variant pb-2 font-label-lg text-on-surface">Separados ({separados.length})</h3>
+            {separados.length === 0 ? <p className="py-3 text-sm text-on-surface-variant">No hay departamentos separados.</p> : <ul className="divide-y divide-outline-variant">{separados.map((departamento) => <li key={departamento.id} className="py-3 font-medium text-on-surface">{departamento.codigo} · {departamento.nombre}</li>)}</ul>}
+          </section>
           {[
             { titulo: `Disponibles (${disponibles.length})`, elementos: disponibles, estado: "DISPONIBLE" as const },
             { titulo: `En mantenimiento (${mantenimiento.length})`, elementos: mantenimiento, estado: "MANTENIMIENTO" as const },
@@ -1147,6 +1160,7 @@ function MantenimientoPopup({ onCerrar }: { onCerrar: () => void }) {
     if (department.disponibilidad) return "Ocupado";
     if (department.bloqueado) return "Bloqueado";
     if (department.enMantenimiento) return "Mantenimiento";
+    if (department.separado) return "Separado";
     return "Disponible";
   }
 

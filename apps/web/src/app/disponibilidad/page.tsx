@@ -13,10 +13,32 @@ interface DisponibilidadDepartment {
   piso: number;
   precio: string;
   disponibilidad: { disponible: false; fechaFin: string; dias: number } | null;
+  separado?: boolean;
   enMantenimiento?: boolean;
   bloqueado?: boolean;
   estadoManual?: string | null;
   ocupante: { nombres: string; apellidos: string | null; telefono: string | null } | null;
+}
+
+function TarjetaSeparada({
+  dept,
+  onOpen,
+}: {
+  dept: DisponibilidadDepartment;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title="Departamento separado"
+      className="flex min-w-0 items-center justify-center rounded-xl border border-amber-600/20 bg-amber-500/10 border-l-4 border-l-amber-600 p-2 transition-colors hover:bg-amber-500/15 sm:p-4"
+    >
+      <span className="break-words text-center font-mono-label text-sm font-bold text-amber-700 sm:text-base dark:text-amber-500">
+        {dept.codigo}
+      </span>
+    </button>
+  );
 }
 
 function fmtPrecio(val: string | undefined): string {
@@ -127,7 +149,9 @@ function PopupCambiarEstado({
       ? "Bloqueado"
       : dept.enMantenimiento
         ? "En mantenimiento"
-        : "Disponible";
+        : dept.separado
+          ? "Separado"
+          : "Disponible";
   const nombreOcupante = [dept.ocupante?.nombres, dept.ocupante?.apellidos]
     .filter(Boolean)
     .join(" ");
@@ -296,9 +320,10 @@ function GrupoDepartamentos({
   departamentos: DisponibilidadDepartment[];
   onAbrirCambio: (dept: DisponibilidadDepartment) => void;
 }) {
-  const disponibles = departamentos.filter((d) => !d.disponibilidad && !d.enMantenimiento && !d.bloqueado);
+  const disponibles = departamentos.filter((d) => !d.disponibilidad && !d.enMantenimiento && !d.bloqueado && !d.separado);
   const mantenimiento = departamentos.filter((d) => !d.disponibilidad && d.enMantenimiento && !d.bloqueado);
   const bloqueados = departamentos.filter((d) => !d.disponibilidad && d.bloqueado);
+  const separados = departamentos.filter((d) => !d.disponibilidad && !d.enMantenimiento && !d.bloqueado && d.separado);
   const ocupados = departamentos.filter((d) => d.disponibilidad);
 
   if (departamentos.length === 0) return null;
@@ -307,7 +332,7 @@ function GrupoDepartamentos({
       <h2 className="mb-3 flex items-center gap-2 font-headline-md text-lg font-bold text-foreground">
         {titulo}
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-          {disponibles.length} libres · {ocupados.length} ocupados
+          {disponibles.length} libres · {separados.length} separados · {ocupados.length} ocupados
           {mantenimiento.length > 0 && ` · ${mantenimiento.length} en mant.`}
           {bloqueados.length > 0 && ` · ${bloqueados.length} bloqueados`}
         </span>
@@ -329,6 +354,9 @@ function GrupoDepartamentos({
             dept={dept}
             onOpen={() => onAbrirCambio(dept)}
           />
+        ))}
+        {separados.map((dept) => (
+          <TarjetaSeparada key={dept.id} dept={dept} onOpen={() => onAbrirCambio(dept)} />
         ))}
         {ocupados.map((dept) => (
           <TarjetaOcupada key={dept.id} dept={dept} onOpen={() => onAbrirCambio(dept)} />
@@ -383,6 +411,7 @@ export default function DisponibilidadPage() {
   }, [departamentos]);
 
   const ocupados = departamentos.filter((d) => d.disponibilidad).length;
+  const separados = departamentos.filter((d) => !d.disponibilidad && d.separado && !d.enMantenimiento && !d.bloqueado).length;
   const mantenimiento = departamentos.filter((d) => !d.disponibilidad && d.enMantenimiento && !d.bloqueado).length;
   const bloqueados = departamentos.filter((d) => !d.disponibilidad && d.bloqueado).length;
 
@@ -397,7 +426,7 @@ export default function DisponibilidadPage() {
             <p className="text-sm text-muted-foreground">
               {departamentos.length} departamentos ·{" "}
               <span className="font-semibold text-[#5A7D00] dark:text-[#A8CC4C]">
-                {departamentos.length - ocupados - mantenimiento - bloqueados} disponibles
+                {departamentos.length - ocupados - mantenimiento - bloqueados - separados} disponibles
               </span>{" "}
               ·{" "}
               <span className="font-semibold text-[#C41230] dark:text-[#FF5C77]">
@@ -409,6 +438,15 @@ export default function DisponibilidadPage() {
                   ·{" "}
                   <span className="font-semibold text-blue-700 dark:text-blue-500">
                     {mantenimiento} en mantenimiento
+                  </span>
+                </>
+              )}
+              {separados > 0 && (
+                <>
+                  {" "}
+                  ·{" "}
+                  <span className="font-semibold text-amber-700 dark:text-amber-500">
+                    {separados} separados
                   </span>
                 </>
               )}

@@ -16,12 +16,26 @@
   estado: "SEPARADO" | "GARANTIA_COMPLETADA" | "INACTIVO_48H" | "INACTIVO_168H" | "PERDER_TODO" | "CONTRATO_PREVIO" | "CONTRATO_REAL";
 }
 
-export function getTipoSeparacion(sep: SeparacionRecord): "500" | "TOTAL" | "FLUCTUANTE" {
+export function getTipoSeparacion(
+  sep: Pick<SeparacionRecord, "tipoSeparacion" | "montoSeparacion">
+): "500" | "TOTAL" | "FLUCTUANTE" {
   if (sep.tipoSeparacion) return sep.tipoSeparacion;
   return sep.montoSeparacion === 500 ? "500" : "TOTAL";
 }
 
-export function getFechaLimiteActiva(sep: SeparacionRecord): string {
+export function getFechaLimiteActiva(
+  sep: Pick<
+    SeparacionRecord,
+    | "fechaLimiteManual"
+    | "diasTiempo"
+    | "fechaSeparacion"
+    | "fechaLimite48h"
+    | "fechaLimite168h"
+    | "tipoSeparacion"
+    | "montoSeparacion"
+    | "garantiaExtendida"
+  >
+): string {
   if (sep.fechaLimiteManual) return sep.fechaLimiteManual;
   if (sep.diasTiempo && sep.fechaSeparacion) {
     return new Date(new Date(sep.fechaSeparacion).getTime() + sep.diasTiempo * 86400000).toISOString();
@@ -35,7 +49,9 @@ export function getFechaLimiteActiva(sep: SeparacionRecord): string {
   return sep.fechaLimite48h;
 }
 
-export function getEstadoSeparacion(sep: SeparacionRecord): string {
+export function getEstadoSeparacion(
+  sep: Omit<SeparacionRecord, "estado"> & { estado: string }
+): string {
   const ahora = Date.now();
   if (sep.estado === "PERDER_TODO" || sep.estado === "CONTRATO_REAL") return sep.estado;
   if (sep.estado === "CONTRATO_PREVIO") return "CONTRATO_PREVIO";
