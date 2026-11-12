@@ -58,7 +58,6 @@ async function run(req: Request) {
         titulo: schema.tasks.titulo,
         descripcion: schema.tasks.descripcion,
         horaEjecucion: schema.tasks.horaEjecucion,
-        repetirCadaHora: schema.tasks.repetirCadaHora,
         origenEvento: schema.tasks.origenEvento,
         userId: schema.tasks.createdByUserId,
       })
@@ -77,11 +76,13 @@ async function run(req: Request) {
     let skipped = 0;
     for (const task of dueTasks) {
       if (!task.userId) continue;
+      const esRecordatorioDeContrato =
+        task.origenEvento === "CHECKIN" || task.origenEvento === "CHECKOFF";
       if (
         !taskReminderMatchesTime(
           slotTime,
           task.horaEjecucion,
-          task.origenEvento === "CHECKOFF" && task.repetirCadaHora,
+          esRecordatorioDeContrato,
         )
       ) {
         continue;
@@ -124,8 +125,8 @@ async function run(req: Request) {
             {
               title: "Tarea pendiente para hoy",
               body:
-                task.origenEvento === "CHECKOFF"
-                  ? `${task.titulo} · Hora del check-out: ${formatLimaTime(task.horaEjecucion)}`
+                esRecordatorioDeContrato
+                  ? `${task.titulo} · Hora: ${formatLimaTime(task.horaEjecucion)}`
                   : task.titulo,
               href: "/agenda",
             },

@@ -29,9 +29,12 @@ describe("task reminder schedule", () => {
     expect(taskReminderMatchesTime("11:00", "11:30", false)).toBe(false);
   });
 
-  it("repeats checkout reminders each hour from the configured time", () => {
+  it("repeats contract reminders every half hour after the configured time", () => {
     expect(taskReminderMatchesTime("11:30", "09:30", true)).toBe(true);
-    expect(taskReminderMatchesTime("11:00", "09:30", true)).toBe(false);
+    expect(taskReminderMatchesTime("11:00", "09:30", true)).toBe(true);
     expect(taskReminderMatchesTime("09:00", "09:30", true)).toBe(false);
+    expect(taskReminderMatchesTime("10:00", "09:45", true)).toBe(true);
+    expect(taskReminderMatchesTime("10:30", "09:45", true)).toBe(true);
+    expect(taskReminderMatchesTime("10:15", "09:00", true)).toBe(false);
   });
 });

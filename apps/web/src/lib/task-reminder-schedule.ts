@@ -41,7 +41,7 @@ export function taskReminderDateRange(slot: string): { start: Date; end: Date } 
 export function taskReminderMatchesTime(
   slotTime: string,
   horaEjecucion: string,
-  repetirCadaHora: boolean,
+  repetirCadaTreintaMinutos: boolean,
 ): boolean {
   const toMinutes = (value: string): number | null => {
     const match = /^(?:[01]\d|2[0-3]):[0-5]\d$/.exec(value);
@@ -52,6 +52,6 @@ export function taskReminderMatchesTime(
   const slot = toMinutes(slotTime);
   const scheduled = toMinutes(horaEjecucion);
   if (slot === null || scheduled === null) return false;
-  if (!repetirCadaHora) return slot === scheduled;
-  return slot >= scheduled && (slot - scheduled) % 60 === 0;
+  if (!repetirCadaTreintaMinutos) return slot === scheduled;
+  return slot >= scheduled && slot % 30 === 0;
 }

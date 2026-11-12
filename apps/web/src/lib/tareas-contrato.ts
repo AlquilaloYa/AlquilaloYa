@@ -161,7 +161,7 @@ export async function sincronizarTareasContrato(
         asignadoA: "",
         createdByUserId: createdByUserId ?? null,
         horaEjecucion: "09:00",
-        repetirCadaHora: ev.kind === "CHECKOFF",
+        repetirCadaHora: ev.kind === "CHECKIN" || ev.kind === "CHECKOFF",
         fechaLimite: limite,
         estado: "PENDIENTE",
         creadoPor: "Sistema (contrato)",
@@ -178,11 +178,19 @@ export async function sincronizarTareasContrato(
       estado?: string;
       completedAt?: Date | null;
       createdByUserId?: string;
+      repetirCadaHora?: boolean;
       updatedAt: Date;
     } = { updatedAt: new Date() };
     let toco = false;
     if (!prev.createdByUserId && createdByUserId) {
       patch.createdByUserId = createdByUserId;
+      toco = true;
+    }
+    if (
+      (ev.kind === "CHECKIN" || ev.kind === "CHECKOFF") &&
+      !prev.repetirCadaHora
+    ) {
+      patch.repetirCadaHora = true;
       toco = true;
     }
     if (fechaEnLima(prev.fechaLimite) !== ev.fecha) {

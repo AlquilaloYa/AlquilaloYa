@@ -355,11 +355,14 @@ export default function Work123Page() {
     setSaving(true);
     setError(null);
     try {
+      const contractReminder =
+        editing?.origenEvento === "CHECKIN" ||
+        editing?.origenEvento === "CHECKOFF";
       const payload = editing?.origenEvento === "CHECKOFF"
         ? {
             id: editing.id,
             horaEjecucion: form.horaEjecucion,
-            repetirCadaHora: form.repetirCadaHora,
+            repetirCadaHora: true,
           }
         : {
             id: editing?.id,
@@ -369,7 +372,7 @@ export default function Work123Page() {
             empleadoId: form.empleadoId || null,
             fechaLimite: form.fechaLimite,
             horaEjecucion: form.horaEjecucion,
-            repetirCadaHora: form.repetirCadaHora,
+            repetirCadaHora: contractReminder || form.repetirCadaHora,
             estado: form.estado,
           };
       const res = await apiFetch("/api/tareas", {
@@ -853,16 +856,10 @@ export default function Work123Page() {
                   ))}
                 </select>
               </div>
-              {editing?.origenEvento === "CHECKOFF" ? (
-                <label className="flex items-start gap-2 text-sm text-on-surface">
-                  <input
-                    type="checkbox"
-                    checked={form.repetirCadaHora}
-                    onChange={(e) => setForm({ ...form, repetirCadaHora: e.target.checked })}
-                    className="mt-0.5 accent-primary"
-                  />
-                  <span>Repetir el aviso cada hora hasta completar el check-out</span>
-                </label>
+              {editing?.origenEvento === "CHECKIN" || editing?.origenEvento === "CHECKOFF" ? (
+                <p className="text-sm text-on-surface-variant">
+                  El aviso se repetirá cada 30 minutos hasta completar la tarea.
+                </p>
               ) : null}
             </div>
             <div className="flex items-center justify-between gap-2 pt-2">

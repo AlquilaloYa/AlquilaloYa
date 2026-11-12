@@ -140,7 +140,7 @@ export async function POST(req: Request) {
           createdByUserId: auth.user.id,
           fechaLimite: new Date(`${event.date}T12:00:00-05:00`),
           horaEjecucion: "09:00",
-          repetirCadaHora: event.kind === "CHECKOFF",
+          repetirCadaHora: true,
           estado: "PENDIENTE",
           creadoPor: "Sistema (contrato)",
           origenTipo: "CONTRATO",
@@ -169,6 +169,7 @@ export async function POST(req: Request) {
             fechaLimite: schema.tasks.fechaLimite,
             estado: schema.tasks.estado,
             createdByUserId: schema.tasks.createdByUserId,
+            repetirCadaHora: schema.tasks.repetirCadaHora,
           })
           .from(schema.tasks)
           .where(and(
@@ -202,10 +203,6 @@ export async function POST(req: Request) {
         descripcion: nueva.descripcion,
         updatedAt: new Date(),
       };
-      if (!previa.createdByUserId) {
-        patch.createdByUserId = auth.user.id;
-        if (nueva.origenEvento === "CHECKOFF") patch.repetirCadaHora = true;
-      }
       if (nueva.origenEvento === "CHECKOFF" && previa.estado === "RESUELTA") {
         patch.estado = "PENDIENTE";
         patch.completedAt = null;
@@ -213,11 +210,11 @@ export async function POST(req: Request) {
       await db.update(schema.tasks).set(patch).where(eq(schema.tasks.id, previa.id));
     }
     for (const task of existentes) {
-      if (task.origenEvento !== "CHECKOFF" || task.createdByUserId) continue;
+      if (task.createdByUserId && task.repetirCadaHora) continue;
       await db
         .update(schema.tasks)
         .set({
-          createdByUserId: auth.user.id,
+          ...(!task.createdByUserId ? { createdByUserId: auth.user.id } : {}),
           repetirCadaHora: true,
           updatedAt: new Date(),
         })
