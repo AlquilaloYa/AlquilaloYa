@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  currentMonthlyPaymentPeriod,
   monthlyPaymentCents,
   paymentReminderKind,
   servicePaymentCents,
@@ -49,6 +50,18 @@ describe("client payment utilities", () => {
     expect(paymentReminderKind("2026-11-20", "2026-11-20")).toBe("DUE_DATE");
     expect(paymentReminderKind("2026-11-20", "2026-11-19")).toBeNull();
     expect(shiftIsoDate("2026-11-30", 2)).toBe("2026-12-02");
+  });
+
+  it("calculates the active contract's current monthly due date", () => {
+    expect(
+      currentMonthlyPaymentPeriod("2024-11-21", "2027-01-21", "2026-11-13"),
+    ).toBe("2026-11-21");
+    expect(
+      currentMonthlyPaymentPeriod("2026-01-31", "2026-03-01", "2026-02-02"),
+    ).toBe("2026-02-28");
+    expect(
+      currentMonthlyPaymentPeriod("2024-11-21", "2026-11-21", "2026-11-13"),
+    ).toBeNull();
   });
 
   it("allows partial deposits before the due date", () => {

@@ -59,6 +59,39 @@ function parseIsoDate(value: string): number | null {
   return timestamp;
 }
 
+export function currentMonthlyPaymentPeriod(
+  startsAt: string,
+  endsAt: string,
+  today: string,
+): string | null {
+  const start = parseIsoDate(startsAt);
+  const end = parseIsoDate(endsAt);
+  const current = parseIsoDate(today);
+  if (start === null || end === null || current === null) return null;
+
+  const startDate = new Date(start);
+  const currentDate = new Date(current);
+  const months =
+    (currentDate.getUTCFullYear() - startDate.getUTCFullYear()) * 12 +
+    currentDate.getUTCMonth() -
+    startDate.getUTCMonth();
+  if (months < 0) return null;
+
+  const dueMonth = new Date(
+    Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + months, 1),
+  );
+  const lastDay = new Date(
+    Date.UTC(dueMonth.getUTCFullYear(), dueMonth.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  const due = Date.UTC(
+    dueMonth.getUTCFullYear(),
+    dueMonth.getUTCMonth(),
+    Math.min(startDate.getUTCDate(), lastDay),
+  );
+  if (due >= end) return null;
+  return new Date(due).toISOString().slice(0, 10);
+}
+
 export function shiftIsoDate(value: string, days: number): string | null {
   const timestamp = parseIsoDate(value);
   if (timestamp === null || !Number.isInteger(days)) return null;
