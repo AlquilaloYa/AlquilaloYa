@@ -13,6 +13,7 @@ import { clientIp } from "@/lib/rate-limit";
 import { getClientPaymentNotificationRecipients } from "@/lib/client-payment-notifications";
 import {
   centsToMoney,
+  currentMonthlyPaymentPeriod,
   moneyToCents,
   monthlyPaymentCents,
   servicePaymentCents,
@@ -152,6 +153,42 @@ export async function GET(request: Request) {
     const dbModule = await import("@contract/db");
     const { session, contract } = await getActiveContract(request, dbModule);
     const today = peruDateString();
+    const [contractPaymentDetails] = await dbModule.db
+      .select({
+        rent: dbModule.schema.contracts.montoCanonMensual,
+        maintenance: dbModule.schema.contracts.mantenimiento,
+        startsAt: dbModule.schema.contracts.fechaInicio,
+      })
+      .from(dbModule.schema.contracts)
+      .where(eq(dbModule.schema.contracts.id, contract.id))
+      .limit(1);
+    if (!contractPaymentDetails) {
+      throw new PortalPaymentError("No encontramos el contrato vigente.", 404);
+    }
+
+    const currentPeriod = currentMonthlyPaymentPeriod(
+      contractPaymentDetails.startsAt,
+      contract.endsAt,
+      today,
+    );
+    if (currentPeriod) {
+      await dbModule.db
+        .insert(dbModule.schema.payments)
+        .values({
+          contractId: contract.id,
+          periodo: currentPeriod,
+          monto: contractPaymentDetails.rent,
+          mantenimiento: contractPaymentDetails.maintenance,
+          estado: "PENDIENTE",
+        })
+        .onConflictDoNothing({
+          target: [
+            dbModule.schema.payments.contractId,
+            dbModule.schema.payments.periodo,
+          ],
+        });
+    }
+
     const [monthlyRows, serviceRows, approvalRows] = await Promise.all([
       dbModule.db
         .select({
