@@ -711,32 +711,52 @@ export function PaymentVerificationDialog({
                     </div>
 
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      {payment.vouchers.map((voucher, index) => (
-                        <figure key={`${voucher.nombre}-${index}`} className="overflow-hidden rounded-md border border-outline-variant/70">
-                          <a
-                            href={voucher.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block bg-surface-container p-2"
-                            aria-label={`Abrir voucher ${voucher.nombre} en otra pestaña`}
+                      {payment.vouchers.map((voucher, index) => {
+                        const isPdf = /\.pdf$/i.test(voucher.nombre);
+                        return (
+                          <figure
+                            key={`${voucher.nombre}-${index}`}
+                            className="overflow-hidden rounded-md border border-outline-variant/70"
                           >
-                            <Image
-                              src={voucher.url}
-                              alt={`Voucher ${voucher.nombre}`}
-                              width={1000}
-                              height={700}
-                              unoptimized
-                              className="h-64 w-full object-contain"
-                            />
-                          </a>
-                          <figcaption className="flex flex-wrap justify-between gap-2 px-3 py-2 text-xs text-on-surface-variant">
-                            <span className="break-all">{voucher.nombre}</span>
-                            {typeof voucher.monto === "number" ? (
-                              <span className="font-medium">{moneda(voucher.monto)}</span>
-                            ) : null}
-                          </figcaption>
-                        </figure>
-                      ))}
+                            {isPdf ? (
+                              <a
+                                href={voucher.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex h-64 items-center justify-center bg-surface-container p-2 font-medium text-primary underline"
+                                aria-label={`Abrir voucher PDF ${voucher.nombre} en otra pestaña`}
+                              >
+                                Abrir voucher PDF
+                              </a>
+                            ) : (
+                              <a
+                                href={voucher.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block bg-surface-container p-2"
+                                aria-label={`Abrir voucher ${voucher.nombre} en otra pestaña`}
+                              >
+                                <Image
+                                  src={voucher.url}
+                                  alt={`Voucher ${voucher.nombre}`}
+                                  width={1000}
+                                  height={700}
+                                  unoptimized
+                                  className="h-64 w-full object-contain"
+                                />
+                              </a>
+                            )}
+                            <figcaption className="flex flex-wrap justify-between gap-2 px-3 py-2 text-xs text-on-surface-variant">
+                              <span className="break-all">{voucher.nombre}</span>
+                              {typeof voucher.monto === "number" ? (
+                                <span className="font-medium">
+                                  {moneda(voucher.monto)}
+                                </span>
+                              ) : null}
+                            </figcaption>
+                          </figure>
+                        );
+                      })}
                     </div>
 
                     {verified ? (

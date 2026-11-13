@@ -301,7 +301,7 @@ Fuente: `packages/db/src/schema/*` (Drizzle).
 | Contratos | `contracts`, `contract_snapshots`, `contract_clauses`, `contract_annexes` |
 | Plantillas / cláusulas / anexos | `templates`, `template_versions`, `template_departments`, `clauses`, `clause_versions`, `annexes`, `annex_versions` |
 | Documentos | `documents` |
-| Pagos | `payments` |
+| Pagos | `payments`, `client_payment_approval_requests` |
 | Operaciones | `contacts`, `separations`, `department_inventories`, `inventario_catalogo`, `inspections`, `inspection_questions`, `inspection_templates` |
 | Tareas / agenda | `tasks`, `user_google_tokens` |
 | RR. HH. | `hr_employees`, `hr_organizations`, `hr_sites`, `hr_departments`, `hr_teams`, `hr_positions`, `hr_employments`, `hr_employee_documents`, `hr_requests`, `hr_employee_history`, `hr_onboarding_processes`, `hr_onboarding_tasks`, `attendance` |
@@ -313,6 +313,13 @@ Workflow de migraciones: Drizzle genera SQL en `packages/db/drizzle/` y también
 se versionan migraciones en `supabase/migrations/` (0001 → 0050 y series
 `202610071*`). Comandos: `pnpm db:generate`, `pnpm db:migrate`, `pnpm db:push`,
 `pnpm db:seed`, `pnpm db:users`.
+
+El portal de clientes consulta mensualidades y servicios registrados en el ERP.
+Las mensualidades incluyen canon y mantenimiento, sin penalidades; permite
+depósitos parciales antes del vencimiento. Los pagos vencidos requieren
+aprobación en **Operatividad → Pedidos de clientes** antes de subir el voucher.
+Los avisos de vencimiento se envían al cliente y al ERP dos días antes y el día
+de pago; al cargar un voucher, ambos reciben una notificación.
 
 ---
 

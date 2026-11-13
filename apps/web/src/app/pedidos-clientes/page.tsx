@@ -29,6 +29,21 @@ type ClientRequest = {
   }>;
 };
 
+type PaymentApproval = {
+  id: string;
+  clientName: string;
+  departmentCode: string | null;
+  targetType: "MONTHLY" | "SERVICE";
+  targetTitle: string;
+  period: string | null;
+  dueDate: string;
+  requestedAmount: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "USED";
+  reviewNote: string | null;
+  reviewedAt: string | null;
+  requestedAt: string;
+};
+
 type Employee = {
   id: string;
   nombres: string;
@@ -49,11 +64,17 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
+function formatDateOnly(value: string): string {
+  const [year, month, day] = value.slice(0, 10).split("-");
+  return year && month && day ? `${day}/${month}/${year}` : value;
+}
+
 export default function ClientRequestsPage() {
   const { user } = useAuth();
   const canRead = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.WORK_ORDER_READ);
   const canConvert = !!user && AccessControl.forRole(user.role, user.additionalPermissions).can(Permission.WORK_ORDER_CREATE);
   const [items, setItems] = useState<ClientRequest[]>([]);
+  const [paymentApprovals, setPaymentApprovals] = useState<PaymentApproval[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [formValues, setFormValues] = useState<
     Record<string, { priority: Priority; assignedEmployeeId: string }>
@@ -63,15 +84,31 @@ export default function ClientRequestsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [previewAttachment, setPreviewAttachment] = useState<PreviewAttachment | null>(null);
+  const [activeTab, setActiveTab] = useState<"requests" | "payments">("requests");
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const response = await apiFetch("/api/client-requests", { cache: "no-store" });
-      const body = (await response.json()) as { items?: ClientRequest[]; error?: string };
+      const [response, paymentsResponse] = await Promise.all([
+        apiFetch("/api/client-requests", { cache: "no-store" }),
+        apiFetch("/api/pedidos-clientes/pagos", { cache: "no-store" }),
+      ]);
+      const [body, paymentsBody] = await Promise.all([
+        response.json() as Promise<{ items?: ClientRequest[]; error?: string }>,
+        paymentsResponse.json() as Promise<{
+          items?: PaymentApproval[];
+          error?: string;
+        }>,
+      ]);
       if (!response.ok) throw new Error(body.error ?? `Error ${response.status}`);
+      if (!paymentsResponse.ok) {
+        throw new Error(
+          paymentsBody.error ?? `Error ${paymentsResponse.status}`,
+        );
+      }
       setItems(body.items ?? []);
+      setPaymentApprovals(paymentsBody.items ?? []);
       if (canConvert) {
         const employeesResponse = await apiFetch("/api/operaciones/empleados", {
           cache: "no-store",
@@ -135,6 +172,44 @@ export default function ClientRequestsPage() {
     }
   }
 
+  async function reviewPaymentApproval(
+    item: PaymentApproval,
+    action: "approve" | "reject",
+  ) {
+    setBusyId(item.id);
+    setError("");
+    setNotice("");
+    try {
+      const response = await apiFetch(`/api/pedidos-clientes/pagos/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const body = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? `Error ${response.status}`);
+      setNotice(
+        action === "approve"
+          ? "Solicitud aprobada. El cliente ya puede continuar con el depósito."
+          : "Solicitud rechazada.",
+      );
+      await load();
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "No se pudo actualizar la solicitud de pago.",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "pagos") {
+      setActiveTab("payments");
+    }
+  }, []);
+
   return (
     <DashboardShell>
       <main className="mx-auto max-w-6xl space-y-6">
@@ -142,7 +217,7 @@ export default function ClientRequestsPage() {
           <div>
             <h1 className="font-headline-lg text-primary">Pedidos de clientes</h1>
             <p className="mt-1 font-body-sm text-on-surface-variant">
-              Revisa los reportes enviados por los inquilinos y deriva los aprobados a órdenes de trabajo.
+              Revisa reportes de mantenimiento y solicitudes de autorización para pagos vencidos.
             </p>
           </div>
           <button
@@ -172,9 +247,125 @@ export default function ClientRequestsPage() {
           </div>
         ) : null}
 
+        <div className="flex flex-wrap gap-2 border-b border-outline-variant">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "requests"}
+            onClick={() => setActiveTab("requests")}
+            className={`border-b-2 px-4 py-2 font-label-md ${
+              activeTab === "requests"
+                ? "border-primary text-primary"
+                : "border-transparent text-on-surface-variant hover:text-on-surface"
+            }`}
+          >
+            Reportes de averías
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "payments"}
+            onClick={() => setActiveTab("payments")}
+            className={`border-b-2 px-4 py-2 font-label-md ${
+              activeTab === "payments"
+                ? "border-primary text-primary"
+                : "border-transparent text-on-surface-variant hover:text-on-surface"
+            }`}
+          >
+            Autorizaciones de pago ({paymentApprovals.filter((item) => item.status === "PENDING").length})
+          </button>
+        </div>
+
         {loading ? (
           <div className="rounded-lg bg-surface-container-lowest p-10 text-center font-body-sm text-on-surface-variant">
             Cargando solicitudes…
+          </div>
+        ) : activeTab === "payments" ? paymentApprovals.length === 0 ? (
+          <div className="rounded-lg bg-surface-container-lowest p-10 text-center font-body-sm text-on-surface-variant">
+            <ClipboardList className="mx-auto mb-3 h-8 w-8 text-on-surface-variant" />
+            No hay solicitudes de autorización por pagos vencidos.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {paymentApprovals.map((item) => (
+              <article
+                key={item.id}
+                className="space-y-4 rounded-lg bg-surface-container-lowest p-5 shadow-sm"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-mono-label text-on-surface-variant">
+                      {item.departmentCode ?? "Sin departamento"} · {item.clientName}
+                    </p>
+                    <h2 className="mt-1 font-headline-md text-on-surface">
+                      {item.targetTitle}
+                    </h2>
+                    <p className="mt-1 font-body-sm text-on-surface-variant">
+                      Vencimiento {formatDateOnly(item.dueDate)}
+                      {item.period ? ` · Periodo ${item.period}` : ""}
+                      {" · "}Solicitud {formatDate(item.requestedAt)}
+                    </p>
+                  </div>
+                  <span
+                    className={`rounded-full px-3 py-1 font-label-md ${
+                      item.status === "PENDING"
+                        ? "bg-amber-100 text-amber-900"
+                        : item.status === "APPROVED"
+                          ? "bg-secondary-container text-secondary-container-foreground"
+                          : item.status === "USED"
+                            ? "bg-surface-variant text-on-surface-variant"
+                            : "bg-error-container text-error-container-foreground"
+                    }`}
+                  >
+                    {item.status === "PENDING"
+                      ? "Pendiente de validación"
+                      : item.status === "APPROVED"
+                        ? "Aprobada"
+                        : item.status === "USED"
+                          ? "Voucher enviado"
+                          : "Rechazada"}
+                  </span>
+                </div>
+                <p className="rounded-md bg-surface-container-low p-4 font-body-sm text-on-surface">
+                  Saldo solicitado:{" "}
+                  <strong>
+                    {Number(item.requestedAmount).toLocaleString("es-PE", {
+                      style: "currency",
+                      currency: "PEN",
+                    })}
+                  </strong>
+                  . Este importe corresponde a la mensualidad y mantenimiento o al
+                  servicio registrado por el ERP; no incluye penalidades.
+                </p>
+                {item.reviewNote ? (
+                  <p className="font-body-sm text-on-surface-variant">
+                    Nota: {item.reviewNote}
+                  </p>
+                ) : null}
+                {item.status === "PENDING" && canConvert ? (
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void reviewPaymentApproval(item, "reject")}
+                      disabled={busyId === item.id}
+                      className="inline-flex items-center gap-2 rounded-md border border-outline-variant px-4 py-2 font-label-md text-on-surface hover:bg-surface-container-low disabled:opacity-40"
+                    >
+                      <X className="h-4 w-4" />
+                      Rechazar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void reviewPaymentApproval(item, "approve")}
+                      disabled={busyId === item.id}
+                      className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground hover:opacity-90 disabled:opacity-40"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      {busyId === item.id ? "Guardando…" : "Aprobar depósito"}
+                    </button>
+                  </div>
+                ) : null}
+              </article>
+            ))}
           </div>
         ) : items.length === 0 ? (
           <div className="rounded-lg bg-surface-container-lowest p-10 text-center font-body-sm text-on-surface-variant">

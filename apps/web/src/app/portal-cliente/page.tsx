@@ -7,8 +7,10 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  CalendarDays,
   Camera,
   CreditCard,
+  FileUp,
   LoaderCircle,
   LogOut,
   MessageCircle,
@@ -30,6 +32,21 @@ import { AvailabilityPicker } from "./availability-picker";
 import "./portal-client.css";
 
 type PortalClient = { names: string; departmentCode: string };
+type PaymentObligation = {
+  id: string;
+  targetType: "MONTHLY" | "SERVICE";
+  title: string;
+  dueDate: string;
+  totalAmount: string;
+  paidAmount: string;
+  remainingAmount: string;
+  status: "PAID" | "UPLOADED" | "DUE";
+  canUpload: boolean;
+  approvalStatus: "PENDING" | "APPROVED" | "REJECTED" | "USED" | null;
+  approvalId: string | null;
+  period?: string;
+  voucherFilename?: string | null;
+};
 type Order = {
   id: string;
   code: string;
@@ -141,6 +158,19 @@ function formatDate(value: string): string {
   return `${date} ${time}`;
 }
 
+function formatDateOnly(value: string): string {
+  const [year, month, day] = value.slice(0, 10).split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
+function formatMoney(value: string | number): string {
+  return Number(value).toLocaleString("es-PE", {
+    style: "currency",
+    currency: "PEN",
+  });
+}
+
 function formatVisitWindow(startsAt: string, endsAt: string): string {
   const date = new Intl.DateTimeFormat("es-PE", {
     day: "2-digit",
@@ -171,7 +201,9 @@ export default function ClientPortalPage() {
   const [requests, setRequests] = useState<ClientRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const [activeView, setActiveView] = useState<"dashboard" | "reports">("dashboard");
+  const [activeView, setActiveView] = useState<
+    "dashboard" | "reports" | "payments"
+  >("dashboard");
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [submitStage, setSubmitStage] = useState<"uploading" | "saving" | "refreshing">("saving");
@@ -193,6 +225,16 @@ export default function ClientPortalPage() {
   const [chatBusy, setChatBusy] = useState(false);
   const [notifications, setNotifications] = useState<ClientPortalNotification[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [paymentItems, setPaymentItems] = useState<PaymentObligation[]>([]);
+  const [paymentToday, setPaymentToday] = useState("");
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentBusyId, setPaymentBusyId] = useState<string | null>(null);
+  const [paymentApprovalBusyId, setPaymentApprovalBusyId] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState("");
+  const [paymentNotice, setPaymentNotice] = useState("");
+  const [openPaymentFormId, setOpenPaymentFormId] = useState<string | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentFile, setPaymentFile] = useState<File | null>(null);
   const [previewAttachment, setPreviewAttachment] = useState<{
     fileName: string;
     mimeType: string;
@@ -252,6 +294,38 @@ export default function ClientPortalPage() {
     if (!response.ok) throw new Error(body.error ?? "No se pudieron consultar los reportes");
     setOrders(body.orders ?? []);
     setRequests(body.requests ?? []);
+  }, [router]);
+
+  const loadPayments = useCallback(async () => {
+    setPaymentLoading(true);
+    setPaymentError("");
+    try {
+      const response = await fetch("/api/portal-cliente/pagos", {
+        cache: "no-store",
+      });
+      if (response.status === 401) {
+        router.replace("/portal-cliente/login");
+        return;
+      }
+      const body = (await response.json()) as {
+        obligations?: PaymentObligation[];
+        today?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(body.error ?? "No se pudieron consultar tus pagos.");
+      }
+      setPaymentItems(body.obligations ?? []);
+      setPaymentToday(body.today ?? "");
+    } catch (reason) {
+      setPaymentError(
+        reason instanceof Error
+          ? reason.message
+          : "No se pudieron consultar tus pagos.",
+      );
+    } finally {
+      setPaymentLoading(false);
+    }
   }, [router]);
 
   const loadNotifications = useCallback(
@@ -546,6 +620,98 @@ export default function ClientPortalPage() {
     }
   }
 
+  async function requestPaymentApproval(item: PaymentObligation) {
+    setPaymentApprovalBusyId(item.id);
+    setPaymentError("");
+    setPaymentNotice("");
+    try {
+      const response = await fetch("/api/portal-cliente/pagos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "request-approval",
+          targetType: item.targetType,
+          targetId: item.id,
+        }),
+      });
+      const body = (await response.json()) as { error?: string };
+      if (response.status === 401) {
+        router.replace("/portal-cliente/login");
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(body.error ?? "No se pudo enviar la solicitud.");
+      }
+      setPaymentNotice(
+        "Solicitud enviada a Pedidos de clientes. Podrás subir el voucher cuando el ERP la apruebe.",
+      );
+      await loadPayments();
+    } catch (reason) {
+      setPaymentError(
+        reason instanceof Error
+          ? reason.message
+          : "No se pudo enviar la solicitud de autorización.",
+      );
+    } finally {
+      setPaymentApprovalBusyId(null);
+    }
+  }
+
+  async function submitPaymentVoucher(
+    item: PaymentObligation,
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    if (!paymentFile || !paymentAmount) {
+      setPaymentError("Selecciona el voucher e indica el monto a depositar.");
+      return;
+    }
+    setPaymentBusyId(item.id);
+    setPaymentError("");
+    setPaymentNotice("");
+    try {
+      const form = new FormData();
+      form.set("targetType", item.targetType);
+      form.set("targetId", item.id);
+      form.set("amount", paymentAmount);
+      form.set("file", paymentFile);
+      if (
+        item.approvalStatus === "APPROVED" &&
+        item.approvalId &&
+        item.dueDate < paymentToday
+      ) {
+        form.set("approvalRequestId", item.approvalId);
+      }
+      const response = await fetch("/api/portal-cliente/pagos", {
+        method: "POST",
+        body: form,
+      });
+      const body = (await response.json()) as { error?: string };
+      if (response.status === 401) {
+        router.replace("/portal-cliente/login");
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(body.error ?? "No se pudo registrar el voucher.");
+      }
+      setPaymentNotice(
+        "Voucher recibido. El ERP fue notificado y lo revisará para confirmar el pago.",
+      );
+      setOpenPaymentFormId(null);
+      setPaymentAmount("");
+      setPaymentFile(null);
+      await loadPayments();
+    } catch (reason) {
+      setPaymentError(
+        reason instanceof Error
+          ? reason.message
+          : "No se pudo registrar el voucher.",
+      );
+    } finally {
+      setPaymentBusyId(null);
+    }
+  }
+
   async function logout() {
     await fetch("/api/portal-cliente/auth/logout", { method: "POST" });
     router.replace("/portal-cliente/login");
@@ -626,9 +792,6 @@ export default function ClientPortalPage() {
   )}`;
   const contactWhatsappUrl = `https://wa.me/${COMPANY_WHATSAPP}?text=${encodeURIComponent(
     `Hola AlquilaYa, necesito comunicarme con atención al cliente del departamento ${client?.departmentCode ?? ""}.`,
-  )}`;
-  const paymentWhatsappUrl = `https://wa.me/${COMPANY_WHATSAPP}?text=${encodeURIComponent(
-    `Hola AlquilaYa, quisiera consultar sobre mis pagos del departamento ${client?.departmentCode ?? ""}.`,
   )}`;
   const unreadNotificationCount = notifications.filter((item) => !item.isRead).length;
 
@@ -805,11 +968,13 @@ export default function ClientPortalPage() {
                 </span>
                 <ArrowRight aria-hidden className="portal-dashboard-card-arrow" />
               </button>
-              <a
-                href={paymentWhatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
                 className="portal-dashboard-card portal-dashboard-card-payments"
+                onClick={() => {
+                  setActiveView("payments");
+                  void loadPayments();
+                }}
               >
                 <span className="portal-dashboard-card-icons">
                   <CreditCard aria-hidden />
@@ -817,10 +982,10 @@ export default function ClientPortalPage() {
                 </span>
                 <span className="portal-dashboard-card-copy">
                   <strong>Pagos</strong>
-                  <span>Consulta tus pagos y recibe orientación por WhatsApp.</span>
+                  <span>Revisa tus cuotas, servicios y vouchers.</span>
                 </span>
-                <ArrowUpRight aria-hidden className="portal-dashboard-card-arrow" />
-              </a>
+                <ArrowRight aria-hidden className="portal-dashboard-card-arrow" />
+              </button>
               <a
                 href={contactWhatsappUrl}
                 target="_blank"
@@ -838,6 +1003,264 @@ export default function ClientPortalPage() {
               </a>
             </div>
           </section>
+        ) : activeView === "payments" ? (
+          <>
+            <button
+              type="button"
+              className="portal-report-back"
+              onClick={() => setActiveView("dashboard")}
+            >
+              <ArrowLeft aria-hidden />
+              Volver al Dashboard
+            </button>
+            <section className="space-y-5" aria-labelledby="portal-payments-title">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h2 id="portal-payments-title" className="text-2xl font-semibold">
+                    Pagos
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Mensualidad, mantenimiento y servicios registrados por el ERP.
+                  </p>
+                  <p className="mt-2 text-xs text-emerald-200">
+                    Los importes de mensualidad incluyen solo canon y mantenimiento; no incluyen penalidades.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadPayments()}
+                  disabled={paymentLoading}
+                  className="flex h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 hover:text-white disabled:opacity-50"
+                  aria-label="Actualizar pagos"
+                >
+                  <RefreshCw aria-hidden className="h-4 w-4" />
+                  Actualizar
+                </button>
+              </div>
+              {paymentError ? (
+                <div role="alert" className="rounded-lg border border-red-900 bg-red-950/50 p-3 text-sm text-red-200">
+                  {paymentError}
+                </div>
+              ) : null}
+              {paymentNotice ? (
+                <div role="status" className="rounded-lg border border-emerald-900 bg-emerald-950/50 p-3 text-sm text-emerald-200">
+                  {paymentNotice}
+                </div>
+              ) : null}
+              {paymentLoading ? (
+                <div className="rounded-2xl border border-white/10 bg-slate-900 p-8 text-center text-sm text-slate-400">
+                  Cargando tus pagos…
+                </div>
+              ) : paymentItems.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-400">
+                  El ERP aún no registra pagos o servicios para este contrato.
+                </div>
+              ) : (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {paymentItems.map((item) => {
+                    const overdue = item.dueDate < paymentToday;
+                    const canRequestApproval =
+                      overdue &&
+                      Number(item.remainingAmount) > 0 &&
+                      item.status !== "PAID" &&
+                      item.approvalStatus !== "PENDING" &&
+                      item.approvalStatus !== "APPROVED" &&
+                      item.approvalStatus !== "USED";
+                    const partialAllowed =
+                      item.targetType === "MONTHLY" &&
+                      item.dueDate > paymentToday;
+                    const formOpen = openPaymentFormId === item.id;
+                    return (
+                      <article
+                        key={`${item.targetType}-${item.id}`}
+                        className="space-y-4 rounded-2xl border border-white/10 bg-slate-900 p-5"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-medium uppercase tracking-wide text-cyan-300">
+                              {item.targetType === "MONTHLY" ? "Mensualidad" : "Servicio"}
+                              {item.period ? ` · ${item.period}` : ""}
+                            </p>
+                            <h3 className="mt-1 text-lg font-semibold">{item.title}</h3>
+                          </div>
+                          <span
+                            className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                              item.status === "PAID"
+                                ? "bg-emerald-950 text-emerald-200"
+                                : item.status === "UPLOADED"
+                                  ? "bg-amber-950 text-amber-200"
+                                  : overdue
+                                    ? "bg-red-950 text-red-200"
+                                    : "bg-slate-800 text-slate-200"
+                            }`}
+                          >
+                            {item.status === "PAID"
+                              ? "Pagado"
+                              : item.status === "UPLOADED"
+                                ? "Voucher en revisión"
+                                : overdue
+                                  ? "Vencido"
+                                  : "Pendiente"}
+                          </span>
+                        </div>
+                        <div className="grid gap-3 rounded-xl bg-slate-950/70 p-4 sm:grid-cols-2">
+                          <div>
+                            <p className="flex items-center gap-2 text-xs text-slate-400">
+                              <CalendarDays aria-hidden className="h-4 w-4" />
+                              Fecha de pago
+                            </p>
+                            <p className="mt-1 font-medium">{formatDateOnly(item.dueDate)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-400">
+                              {item.targetType === "MONTHLY" ? "Mensualidad + mantenimiento" : "Monto del servicio"}
+                            </p>
+                            <p className="mt-1 font-semibold">{formatMoney(item.totalAmount)}</p>
+                          </div>
+                          {item.targetType === "MONTHLY" ? (
+                            <div>
+                              <p className="text-xs text-slate-400">Saldo pendiente</p>
+                              <p className="mt-1 font-semibold text-cyan-200">
+                                {formatMoney(item.remainingAmount)}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+                        {item.approvalStatus === "PENDING" ? (
+                          <p className="rounded-lg border border-amber-800 bg-amber-950/40 p-3 text-sm text-amber-100">
+                            Solicitud enviada a Pedidos de clientes. Espera la validación del ERP antes de depositar.
+                          </p>
+                        ) : item.approvalStatus === "APPROVED" ? (
+                          <p className="rounded-lg border border-emerald-800 bg-emerald-950/40 p-3 text-sm text-emerald-100">
+                            El ERP aprobó la solicitud. Ya puedes subir el voucher del saldo completo.
+                          </p>
+                        ) : item.approvalStatus === "REJECTED" ? (
+                          <p className="rounded-lg border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
+                            La solicitud fue rechazada. Puedes enviar una nueva solicitud al ERP.
+                          </p>
+                        ) : null}
+                        {item.status === "UPLOADED" ? (
+                          <p className="text-sm text-amber-100">
+                            Tu voucher fue recibido y está pendiente de verificación.
+                          </p>
+                        ) : null}
+                        {canRequestApproval ? (
+                          <button
+                            type="button"
+                            onClick={() => void requestPaymentApproval(item)}
+                            disabled={paymentApprovalBusyId === item.id}
+                            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-amber-700 px-4 text-sm font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-50"
+                          >
+                            <CreditCard aria-hidden className="h-4 w-4" />
+                            {paymentApprovalBusyId === item.id
+                              ? "Enviando solicitud…"
+                              : "Solicitar autorización al ERP"}
+                          </button>
+                        ) : null}
+                        {item.canUpload && item.status !== "PAID" ? (
+                          formOpen ? (
+                            <form
+                              onSubmit={(event) => void submitPaymentVoucher(item, event)}
+                              className="space-y-3 border-t border-white/10 pt-4"
+                            >
+                              {partialAllowed ? (
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPaymentAmount(item.remainingAmount)}
+                                    className="rounded-md border border-slate-700 px-3 py-2 text-xs font-medium text-slate-200 hover:border-cyan-400"
+                                  >
+                                    Pago total
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPaymentAmount("")}
+                                    className="rounded-md border border-slate-700 px-3 py-2 text-xs font-medium text-slate-200 hover:border-cyan-400"
+                                  >
+                                    Pago parcial
+                                  </button>
+                                </div>
+                              ) : (
+                                <p className="text-xs text-slate-400">
+                                  {overdue
+                                    ? "Con autorización aprobada, debes depositar el saldo completo."
+                                    : "En la fecha de vencimiento se requiere el pago completo."}
+                                </p>
+                              )}
+                              <label className="block space-y-1.5 text-sm">
+                                <span className="font-medium">Monto del depósito (S/)</span>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  min="0.01"
+                                  max={item.remainingAmount}
+                                  step="0.01"
+                                  required
+                                  value={paymentAmount}
+                                  onChange={(event) => setPaymentAmount(event.target.value)}
+                                  readOnly={!partialAllowed}
+                                  className="h-11 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 outline-none focus:border-cyan-400 read-only:text-slate-400"
+                                />
+                                <span className="block text-xs text-slate-400">
+                                  Saldo disponible: {formatMoney(item.remainingAmount)}
+                                </span>
+                              </label>
+                              <label className="block space-y-1.5 text-sm">
+                                <span className="font-medium">Voucher (PDF, JPG, PNG o WebP)</span>
+                                <input
+                                  required
+                                  type="file"
+                                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                                  onChange={(event) =>
+                                    setPaymentFile(event.target.files?.[0] ?? null)
+                                  }
+                                  className="block w-full text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-100 hover:file:bg-slate-700"
+                                />
+                              </label>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenPaymentFormId(null);
+                                    setPaymentFile(null);
+                                  }}
+                                  className="min-h-11 flex-1 rounded-lg border border-slate-700 px-4 text-sm font-medium text-slate-200 hover:border-slate-500"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="submit"
+                                  disabled={paymentBusyId === item.id}
+                                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-slate-950 hover:bg-cyan-200 disabled:opacity-50"
+                                >
+                                  <FileUp aria-hidden className="h-4 w-4" />
+                                  {paymentBusyId === item.id ? "Subiendo…" : "Subir voucher"}
+                                </button>
+                              </div>
+                            </form>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenPaymentFormId(item.id);
+                                setPaymentAmount(item.remainingAmount);
+                                setPaymentFile(null);
+                                setPaymentError("");
+                              }}
+                              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-slate-950 hover:bg-cyan-200"
+                            >
+                              <FileUp aria-hidden className="h-4 w-4" />
+                              Depositar y subir voucher
+                            </button>
+                          )
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </>
         ) : (
           <>
             <button
