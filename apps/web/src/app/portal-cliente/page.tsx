@@ -3,14 +3,20 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpRight,
   Bell,
   Camera,
+  CreditCard,
   LoaderCircle,
   LogOut,
   MessageCircle,
   Paperclip,
+  Receipt,
   RefreshCw,
   Send,
+  Wrench,
   X,
 } from "lucide-react";
 import {
@@ -164,6 +170,8 @@ export default function ClientPortalPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [requests, setRequests] = useState<ClientRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [activeView, setActiveView] = useState<"dashboard" | "reports">("dashboard");
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [submitStage, setSubmitStage] = useState<"uploading" | "saving" | "refreshing">("saving");
@@ -284,6 +292,7 @@ export default function ClientPortalPage() {
     let alive = true;
     async function initialize() {
       try {
+        setLoadingProgress(10);
         const today = localDateInputValue(new Date());
         setCurrentLocalDate(today);
         setAvailability(emptyAvailabilityOptions(today));
@@ -298,14 +307,20 @@ export default function ClientPortalPage() {
         }
         if (!alive) return;
         setClient(body.client);
+        setLoadingProgress(35);
         await loadOrders();
+        setLoadingProgress(70);
         await loadNotifications();
+        setLoadingProgress(92);
       } catch (reason) {
         if (alive) {
           setError(reason instanceof Error ? reason.message : "Error al cargar el portal");
         }
       } finally {
-        if (alive) setLoading(false);
+        if (alive) {
+          setLoadingProgress(100);
+          setLoading(false);
+        }
       }
     }
     void initialize();
@@ -609,26 +624,29 @@ export default function ClientPortalPage() {
   const urgentWhatsappUrl = `https://wa.me/${COMPANY_WHATSAPP}?text=${encodeURIComponent(
     `Hola AlquilaYa, estoy aquí ahora y necesito atención urgente en el departamento ${client?.departmentCode ?? ""}.`,
   )}`;
+  const contactWhatsappUrl = `https://wa.me/${COMPANY_WHATSAPP}?text=${encodeURIComponent(
+    `Hola AlquilaYa, necesito comunicarme con atención al cliente del departamento ${client?.departmentCode ?? ""}.`,
+  )}`;
+  const paymentWhatsappUrl = `https://wa.me/${COMPANY_WHATSAPP}?text=${encodeURIComponent(
+    `Hola AlquilaYa, quisiera consultar sobre mis pagos del departamento ${client?.departmentCode ?? ""}.`,
+  )}`;
   const unreadNotificationCount = notifications.filter((item) => !item.isRead).length;
 
-  if (loading) {
-    return (
-      <main className="client-portal-app flex min-h-[100svh] items-center justify-center bg-slate-950 text-slate-300">
-        Cargando tus reportes…
-      </main>
-    );
-  }
-
   return (
-    <main className="client-portal-app min-h-[100svh] bg-slate-950 px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <main
+      className="client-portal-app min-h-[100svh] bg-slate-950 px-4 py-6 text-slate-100 sm:px-6 lg:px-8"
+      aria-busy={loading}
+    >
       <div className="mx-auto max-w-6xl" inert={submitting}>
-        <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
+        <header className="portal-client-header mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
           <div className="portal-dashboard-brand">
             <img src="/logo-white-mode.png" alt="AlquilaYa" />
             <div>
               <p className="text-sm font-semibold text-cyan-300">ALQUILAYA REPAIR</p>
-              <h1 className="mt-1 text-2xl font-semibold">Hola, {client?.names}</h1>
-              <p className="mt-1 text-sm text-slate-400">Departamento {client?.departmentCode}</p>
+              <h1 className="mt-1 text-2xl font-semibold">Hola, {client?.names ?? "…"}</h1>
+              <p className="mt-1 text-sm text-slate-400">
+                Departamento {client?.departmentCode ?? "—"}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -724,6 +742,35 @@ export default function ClientPortalPage() {
           </div>
         </header>
 
+        {loading ? (
+          <div className="portal-loading-content" role="status" aria-live="polite">
+            <div className="portal-loading-card">
+              <div
+                className="portal-loading-progress"
+                role="progressbar"
+                aria-label="Cargando tus reportes"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={loadingProgress}
+              >
+                <svg viewBox="0 0 72 72" aria-hidden="true">
+                  <circle className="portal-loading-progress-track" cx="36" cy="36" r="31" />
+                  <circle
+                    className="portal-loading-progress-value"
+                    cx="36"
+                    cy="36"
+                    r="31"
+                    style={{ strokeDashoffset: `${194.78 * (1 - loadingProgress / 100)}` }}
+                  />
+                </svg>
+                <img src="/app-icon.png" alt="" />
+              </div>
+              <p className="portal-loading-label">Cargando tus reportes</p>
+              <span className="portal-loading-percent">{loadingProgress}%</span>
+            </div>
+          </div>
+        ) : (
+          <>
         {error && (
           <div role="alert" className="mb-6 rounded-lg border border-red-900 bg-red-950/50 p-3 text-sm text-red-200">
             {error}
@@ -735,7 +782,71 @@ export default function ClientPortalPage() {
           </div>
         )}
 
-        <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        {activeView === "dashboard" ? (
+          <section className="portal-dashboard" aria-labelledby="portal-dashboard-title">
+            <div className="portal-dashboard-intro">
+              <h2 id="portal-dashboard-title">Dashboard</h2>
+              <p>Selecciona una opción para continuar.</p>
+            </div>
+            <div className="portal-dashboard-cards">
+              <button
+                type="button"
+                className="portal-dashboard-card portal-dashboard-card-reports"
+                onClick={() => setActiveView("reports")}
+              >
+                <span className="portal-dashboard-card-icons">
+                  <Wrench aria-hidden />
+                </span>
+                <span className="portal-dashboard-card-copy">
+                  <strong>Reportes de averías</strong>
+                  <span>Crea un reporte y revisa el avance de mantenimiento.</span>
+                </span>
+                <ArrowRight aria-hidden className="portal-dashboard-card-arrow" />
+              </button>
+              <a
+                href={paymentWhatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="portal-dashboard-card portal-dashboard-card-payments"
+              >
+                <span className="portal-dashboard-card-icons">
+                  <CreditCard aria-hidden />
+                  <Receipt aria-hidden />
+                </span>
+                <span className="portal-dashboard-card-copy">
+                  <strong>Pagos</strong>
+                  <span>Consulta tus pagos y recibe orientación por WhatsApp.</span>
+                </span>
+                <ArrowUpRight aria-hidden className="portal-dashboard-card-arrow" />
+              </a>
+              <a
+                href={contactWhatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="portal-dashboard-card portal-dashboard-card-contact"
+              >
+                <span className="portal-dashboard-card-icons">
+                  <MessageCircle aria-hidden />
+                </span>
+                <span className="portal-dashboard-card-copy">
+                  <strong>Contáctenos</strong>
+                  <span>Escríbenos directamente por WhatsApp.</span>
+                </span>
+                <ArrowUpRight aria-hidden className="portal-dashboard-card-arrow" />
+              </a>
+            </div>
+          </section>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="portal-report-back"
+              onClick={() => setActiveView("dashboard")}
+            >
+              <ArrowLeft aria-hidden />
+              Volver al Dashboard
+            </button>
+            <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
           <form onSubmit={submitReport} className="h-fit space-y-5 rounded-2xl border border-white/10 bg-slate-900 p-5 sm:p-7">
             <div>
               <h2 className="text-xl font-semibold">Crear un reporte</h2>
@@ -1149,7 +1260,9 @@ export default function ClientPortalPage() {
               ))
             ) : null}
           </section>
-        </section>
+            </section>
+          </>
+        )}
         {previewAttachment ? (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 sm:p-8"
@@ -1194,6 +1307,8 @@ export default function ClientPortalPage() {
         <footer className="mt-10 border-t border-white/10 pt-5 text-center text-xs text-slate-500">
           Portal independiente de clientes · Acceso exclusivo a reportes del departamento
         </footer>
+          </>
+        )}
       </div>
       {submitting && (
         <section
