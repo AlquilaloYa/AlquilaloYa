@@ -29,6 +29,13 @@ export const contacts = pgTable(
     codigoPais: varchar("codigo_pais", { length: 10 }).notNull().default("51"),
     domicilio: text("domicilio"),
     nacionalidad: varchar("nacionalidad", { length: 50 }),
+    /** Segundo inquilino (co-arrendatario) del contacto. */
+    segundoInquilino: varchar("segundo_inquilino", { length: 255 }),
+    segundoInquilinoDni: varchar("segundo_inquilino_dni", { length: 30 }),
+    segundoInquilinoNacionalidad: varchar(
+      "segundo_inquilino_nacionalidad",
+      { length: 50 }
+    ),
     contactoEmergencia: jsonb("contacto_emergencia"),
     mascotas: boolean("mascotas").notNull().default(false),
     mascotasItems: jsonb("mascotas_items").notNull().default([]),

@@ -17,6 +17,10 @@ export interface ContactSeed {
   ruc?: string | null;
   domicilio?: string;
   nacionalidad?: string;
+  /** Segundo inquilino (co-arrendatario): nombre y apellido, DNI y nacionalidad. */
+  segundoInquilino?: string;
+  segundoInquilinoDni?: string;
+  segundoInquilinoNacionalidad?: string;
   email: string;
   telefono: string;
   codigoPais?: string;
@@ -44,6 +48,9 @@ export interface ContactoResumen {
   codigoPais: string;
   domicilio: string;
   nacionalidad: string;
+  segundoInquilino?: string;
+  segundoInquilinoDni?: string;
+  segundoInquilinoNacionalidad?: string;
   contactoEmergencia?: ContactSeed["contactoEmergencia"];
   mascotas: boolean;
   mascotasItems: string[];

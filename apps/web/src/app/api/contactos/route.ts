@@ -20,8 +20,11 @@ type Body = {
   email?: string;
 telefono?: string;
   codigoPais?: string | null;
- domicilio?: string | null;
+  domicilio?: string | null;
   nacionalidad?: string | null;
+  segundoInquilino?: string | null;
+  segundoInquilinoDni?: string | null;
+  segundoInquilinoNacionalidad?: string | null;
   contactoEmergencia?: unknown;
   mascotas?: boolean;
   mascotasItems?: string[];
@@ -42,6 +45,9 @@ email: string;
   codigoPais: string | null;
  domicilio: string | null;
   nacionalidad: string | null;
+  segundoInquilino: string | null;
+  segundoInquilinoDni: string | null;
+  segundoInquilinoNacionalidad: string | null;
   contactoEmergencia: unknown;
   mascotas: boolean;
   mascotasItems: unknown;
@@ -62,6 +68,9 @@ telefono: r.telefono ?? "",
     codigoPais: r.codigoPais ?? "51",
     domicilio: r.domicilio ?? "",
     nacionalidad: r.nacionalidad ?? "",
+    segundoInquilino: r.segundoInquilino ?? "",
+    segundoInquilinoDni: r.segundoInquilinoDni ?? "",
+    segundoInquilinoNacionalidad: r.segundoInquilinoNacionalidad ?? "",
     contactoEmergencia: r.contactoEmergencia ?? null,
     mascotas: r.mascotas,
     mascotasItems: Array.isArray(r.mascotasItems) ? r.mascotasItems : [],
@@ -275,6 +284,9 @@ export async function GET(req: Request) {
           codigoPais: schema.contacts.codigoPais,
           domicilio: schema.contacts.domicilio,
           nacionalidad: schema.contacts.nacionalidad,
+          segundoInquilino: schema.contacts.segundoInquilino,
+          segundoInquilinoDni: schema.contacts.segundoInquilinoDni,
+          segundoInquilinoNacionalidad: schema.contacts.segundoInquilinoNacionalidad,
           contactoEmergencia: schema.contacts.contactoEmergencia,
           mascotas: schema.contacts.mascotas,
           mascotasItems: schema.contacts.mascotasItems,
@@ -353,6 +365,9 @@ ruc: body.ruc || null,
         codigoPais: body.codigoPais || "51",
         domicilio: body.domicilio || null,
         nacionalidad: body.nacionalidad || null,
+        segundoInquilino: body.segundoInquilino?.trim() || null,
+        segundoInquilinoDni: body.segundoInquilinoDni?.trim() || null,
+        segundoInquilinoNacionalidad: body.segundoInquilinoNacionalidad?.trim() || null,
         contactoEmergencia: body.contactoEmergencia ?? null,
         mascotas: Boolean(body.mascotas),
         mascotasItems: body.mascotasItems ?? [],
@@ -375,6 +390,9 @@ ruc: body.ruc || null,
       codigoPais: row.codigoPais ?? "51",
       domicilio: row.domicilio,
       nacionalidad: row.nacionalidad,
+      segundoInquilino: row.segundoInquilino,
+      segundoInquilinoDni: row.segundoInquilinoDni,
+      segundoInquilinoNacionalidad: row.segundoInquilinoNacionalidad,
     });
     return NextResponse.json(toView(row), { status: 201 });
   } catch (error) {
@@ -439,6 +457,9 @@ ruc: body.ruc || null,
         codigoPais: body.codigoPais || "51",
         domicilio: body.domicilio || null,
         nacionalidad: body.nacionalidad || null,
+        segundoInquilino: body.segundoInquilino?.trim() || null,
+        segundoInquilinoDni: body.segundoInquilinoDni?.trim() || null,
+        segundoInquilinoNacionalidad: body.segundoInquilinoNacionalidad?.trim() || null,
         contactoEmergencia: body.contactoEmergencia ?? null,
         mascotas: Boolean(body.mascotas),
         mascotasItems: body.mascotasItems ?? [],
@@ -463,6 +484,9 @@ ruc: body.ruc || null,
       codigoPais: row.codigoPais ?? "51",
       domicilio: row.domicilio,
       nacionalidad: row.nacionalidad,
+      segundoInquilino: row.segundoInquilino,
+      segundoInquilinoDni: row.segundoInquilinoDni,
+      segundoInquilinoNacionalidad: row.segundoInquilinoNacionalidad,
     });
     return NextResponse.json(toView(row));
   } catch (error) {

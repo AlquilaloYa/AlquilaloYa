@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@contract/ui/component
 import { Input } from "@contract/ui/components/input";
 import { Label } from "@contract/ui/components/label";
 import { PersonType } from "@contract/domain/client";
-import { Plus, FileText, X, Check, Upload, Trash2, ShieldAlert } from "lucide-react";
+import { Plus, FileText, X, Check, Upload, Trash2, ShieldAlert, ChevronDown } from "lucide-react";
 import {
   type ContactSeed as ContactView,
   type ContactoResumen,
@@ -674,6 +674,9 @@ export default function ContactosPage() {
     ruc: null,
     domicilio: "",
     nacionalidad: "",
+    segundoInquilino: "",
+    segundoInquilinoDni: "",
+    segundoInquilinoNacionalidad: "",
     email: "",
     telefono: "",
     codigoPais: "51",
@@ -685,6 +688,7 @@ export default function ContactosPage() {
     mascotasItems: [],
   });
   const [error, setError] = useState<string | null>(null);
+  const [formAbierto, setFormAbierto] = useState(false);
   const [preview, setPreview] = useState<{
     titulo: string;
     archivos: ArchivoAdjunto[];
@@ -931,6 +935,9 @@ export default function ContactosPage() {
       ruc: null,
       domicilio: "",
       nacionalidad: "",
+      segundoInquilino: "",
+      segundoInquilinoDni: "",
+      segundoInquilinoNacionalidad: "",
       email: "",
       telefono: "",
       codigoPais: "51",
@@ -940,6 +947,7 @@ export default function ContactosPage() {
       contactoEmergencia: { ...EMERGENCIA_VACIO },
       mascotas: false,
     });
+    setFormAbierto(false);
   }
 
   async function agregarArchivos(
@@ -1085,6 +1093,9 @@ export default function ContactosPage() {
       ruc: completo.ruc ?? null,
       domicilio: completo.domicilio ?? "",
       nacionalidad: completo.nacionalidad ?? "",
+      segundoInquilino: completo.segundoInquilino ?? "",
+      segundoInquilinoDni: completo.segundoInquilinoDni ?? "",
+      segundoInquilinoNacionalidad: completo.segundoInquilinoNacionalidad ?? "",
       email: completo.email,
       telefono: normalizarTelefono(completo.telefono ?? "", codigoPais),
       codigoPais,
@@ -1096,6 +1107,7 @@ export default function ContactosPage() {
       mascotasItems: completo.mascotasItems ?? [],
     });
     setError(null);
+    setFormAbierto(true);
     requestAnimationFrame(() => {
       formCardRef.current?.scrollIntoView({
         behavior: "smooth",
@@ -1122,6 +1134,7 @@ export default function ContactosPage() {
 
   function cancelarEdicion() {
     setEditandoId(null);
+    setFormAbierto(false);
     setForm({
       id: "",
       nombre: "",
@@ -1131,6 +1144,9 @@ export default function ContactosPage() {
       ruc: null,
       domicilio: "",
       nacionalidad: "",
+      segundoInquilino: "",
+      segundoInquilinoDni: "",
+      segundoInquilinoNacionalidad: "",
       email: "",
       telefono: "",
       codigoPais: "51",
@@ -1157,33 +1173,56 @@ export default function ContactosPage() {
         <Card ref={formCardRef}>
           <CardHeader>
             <div className="flex items-center justify-between gap-4">
-              <CardTitle className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                {editandoId ? "Editar contacto" : "Nuevo contacto"}
-              </CardTitle>
-              {editandoId ? (
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={procesandoAdjuntos}
-                    onClick={cancelarEdicion}
-                  >
-                    Cancelar
-                  </Button>
+              <button
+                type="button"
+                onClick={() => setFormAbierto((abierto) => !abierto)}
+                aria-expanded={formAbierto}
+                className="flex items-center gap-2 text-left"
+                title={formAbierto ? "Contraer formulario" : "Expandir formulario"}
+              >
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  {editandoId ? "Editar contacto" : "Nuevo contacto"}
+                </CardTitle>
+                <ChevronDown
+                  className={`h-5 w-5 shrink-0 text-on-surface-variant transition-transform duration-300 ${
+                    formAbierto ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {formAbierto ? (
+                editandoId ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={procesandoAdjuntos}
+                      onClick={cancelarEdicion}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button type="submit" form="form-nuevo-contacto" size="sm" disabled={procesandoAdjuntos}>
+                      {procesandoAdjuntos ? "Optimizando archivos…" : "Guardar cambios"}
+                    </Button>
+                  </div>
+                ) : (
                   <Button type="submit" form="form-nuevo-contacto" size="sm" disabled={procesandoAdjuntos}>
-                    {procesandoAdjuntos ? "Optimizando archivos…" : "Guardar cambios"}
+                    {procesandoAdjuntos ? "Optimizando archivos…" : "Crear contacto"}
                   </Button>
-                </div>
-              ) : (
-                <Button type="submit" form="form-nuevo-contacto" size="sm" disabled={procesandoAdjuntos}>
-                  {procesandoAdjuntos ? "Optimizando archivos…" : "Crear contacto"}
-                </Button>
-              )}
+                )
+              ) : null}
             </div>
           </CardHeader>
           <CardContent>
+            {/* El contenido se contrae hacia arriba: el alto del bloque baja a 0
+            de forma animada (grid-rows de 1fr a 0fr). */}
+            <div
+              className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+                formAbierto ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+              }`}
+            >
+              <div className="min-h-0 overflow-hidden" aria-hidden={!formAbierto}>
             <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-input bg-surface-container-lowest/40 p-3">
               <div className="flex items-center gap-2 text-sm font-medium text-on-surface">
                 <FileText className="h-4 w-4 text-primary" />
@@ -1315,6 +1354,41 @@ export default function ContactosPage() {
                   codigoPais={form.codigoPais ?? "51"}
                   onCodigoPaisChange={(codigoPais) => setForm({ ...form, codigoPais })}
                   onChange={(telefono) => setForm({ ...form, telefono })}
+                />
+              </div>
+              <div className="sm:col-span-2 lg:col-span-4">
+                <Label className="text-sm font-semibold">
+                  Segundo inquilino (opcional)
+                </Label>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nombre y apellido</Label>
+                <Input
+                  value={form.segundoInquilino ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, segundoInquilino: e.target.value })
+                  }
+                  placeholder="Ej: María Torres"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>DNI</Label>
+                <Input
+                  value={form.segundoInquilinoDni ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, segundoInquilinoDni: e.target.value })
+                  }
+                  placeholder="Ej: 41239876"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nacionalidad</Label>
+                <Input
+                  value={form.segundoInquilinoNacionalidad ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, segundoInquilinoNacionalidad: e.target.value })
+                  }
+                  placeholder="Peruana"
                 />
               </div>
               </fieldset>
@@ -1520,6 +1594,8 @@ export default function ContactosPage() {
               <span className="text-destructive">*</span> Los campos marcados
               son obligatorios.
             </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
