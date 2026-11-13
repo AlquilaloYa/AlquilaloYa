@@ -144,6 +144,11 @@ export async function POST(
         voucherFilename: safeFilename,
         voucherStorageKey: uploaded.key,
         voucherMimeType: file.type,
+        // Voucher nuevo subido = sin verificar: pasa a DEPOSITADO (Uploaded)
+        // y se limpia cualquier verificación previa.
+        estado: "DEPOSITADO",
+        voucherVerificadoEn: null,
+        voucherVerificadoPor: null,
         updatedAt: new Date(),
       })
       .where(eq(dbModule.schema.serviciosExtras.id, id))

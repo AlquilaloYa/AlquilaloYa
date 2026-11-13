@@ -44,6 +44,9 @@ export const serviciosExtras = pgTable(
     voucherFilename: varchar("voucher_filename", { length: 255 }),
     voucherStorageKey: text("voucher_storage_key"),
     voucherMimeType: varchar("voucher_mime_type", { length: 100 }),
+    /** Verificación del voucher (flujo con MFA, igual que pagos). */
+    voucherVerificadoEn: timestamp("voucher_verificado_en", { withTimezone: true }),
+    voucherVerificadoPor: varchar("voucher_verificado_por", { length: 100 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

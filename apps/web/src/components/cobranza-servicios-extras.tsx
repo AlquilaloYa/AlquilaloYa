@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Download } from "lucide-react";
+import { Download, ShieldCheck, Upload } from "lucide-react";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas } from "@/components/tabla-busqueda";
+import { ServiciosExtrasVerificationDialog } from "@/components/servicios-extras-verification-dialog";
 
 type ServicioExtra = {
   id: string;
@@ -21,6 +22,8 @@ type ServicioExtra = {
   estado: string;
   filename: string | null;
   voucherFilename: string | null;
+  voucherVerificadoEn: string | null;
+  voucherVerificadoPor: string | null;
 };
 
 const OPCION_LABEL: Record<string, string> = {
@@ -40,11 +43,60 @@ function fechaLegible(value: string | null | undefined): string {
   return `${d}/${m}/${y}`;
 }
 
+/**
+ * Estado mostrado en Cobranza (misma convención que pagos):
+ * - Pagado (verde): voucher verificado, o legacy PAGADO sin voucher.
+ * - Uploaded (ámbar): voucher subido sin verificar.
+ * - Pendiente: sin voucher.
+ */
+function estadoVoucher(s: ServicioExtra): {
+  label: string;
+  className: string;
+} {
+  if (s.voucherVerificadoEn) {
+    return {
+      label: "Pagado",
+      className:
+        "border-emerald-600/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300",
+    };
+  }
+  if (s.voucherFilename) {
+    return {
+      label: "Uploaded",
+      className:
+        "border-amber-600/30 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300",
+    };
+  }
+  if (s.estado === "PAGADO") {
+    return {
+      label: "Pagado",
+      className:
+        "border-emerald-600/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300",
+    };
+  }
+  return {
+    label: "Pendiente",
+    className:
+      "border-outline-variant bg-surface-container text-on-surface-variant",
+  };
+}
+
+/** Cantidad de vouchers subidos que faltan por verificar. */
+function pendientesDeVerificacion(servicios: ServicioExtra[]): number {
+  return servicios.filter(
+    (s) => Boolean(s.voucherFilename) && !s.voucherVerificadoEn
+  ).length;
+}
+
 export function CobranzaServiciosExtras() {
   const [servicios, setServicios] = useState<ServicioExtra[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
+  const [subiendoId, setSubiendoId] = useState<string | null>(null);
+  const [verificacionAbierta, setVerificacionAbierta] = useState(false);
+  const inputVoucherRef = useRef<HTMLInputElement | null>(null);
+  const objetivoVoucherRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,6 +157,36 @@ export function CobranzaServiciosExtras() {
     }
   }
 
+  function abrirSelectorVoucher(id: string) {
+    objetivoVoucherRef.current = id;
+    setError(null);
+    inputVoucherRef.current?.click();
+  }
+
+  async function subirVoucher(id: string, file: File) {
+    setSubiendoId(id);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`/api/servicios-extras/${encodeURIComponent(id)}/voucher`, {
+        method: "POST",
+        body: form,
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSubiendoId(null);
+      objetivoVoucherRef.current = null;
+      if (inputVoucherRef.current) inputVoucherRef.current.value = "";
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -115,13 +197,43 @@ export function CobranzaServiciosExtras() {
             opción del cliente.
           </p>
         </div>
-        <BusquedaInput
-          value={busqueda}
-          onChange={setBusqueda}
-          placeholder="Buscar servicio extra…"
-          className="w-72"
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <BusquedaInput
+            value={busqueda}
+            onChange={setBusqueda}
+            placeholder="Buscar servicio extra…"
+            className="w-72"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setVerificacionAbierta(true);
+            }}
+            className="inline-flex items-center gap-2 rounded-md border border-amber-600/40 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/60"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            Verificar vouchers
+            {pendientesDeVerificacion(servicios) > 0 ? (
+              <span className="rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white">
+                {pendientesDeVerificacion(servicios)}
+              </span>
+            ) : null}
+          </button>
+        </div>
       </div>
+
+      <input
+        ref={inputVoucherRef}
+        type="file"
+        accept="application/pdf,image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          const id = objetivoVoucherRef.current;
+          if (file && id) void subirVoucher(id, file);
+        }}
+      />
 
       {error ? (
         <p className="rounded-md bg-error-container px-3 py-2 text-sm text-error-container-foreground">
@@ -181,7 +293,18 @@ export function CobranzaServiciosExtras() {
                   <td className="whitespace-nowrap px-3 py-2 text-on-surface">
                     {moneda(Number(s.montoTotal ?? 0))}
                   </td>
-                  <td className="px-3 py-2 text-on-surface-variant">{s.estado}</td>
+                  <td className="px-3 py-2">
+                    {(() => {
+                      const estado = estadoVoucher(s);
+                      return (
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${estado.className}`}
+                        >
+                          {estado.label}
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td className="px-3 py-2">
                     <button
                       onClick={() =>
@@ -197,18 +320,31 @@ export function CobranzaServiciosExtras() {
                     </button>
                   </td>
                   <td className="px-3 py-2">
-                    {s.voucherFilename ? (
-                      <a
-                        href={`/api/servicios-extras/${encodeURIComponent(s.id)}/voucher`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary underline underline-offset-2"
+                    <div className="flex flex-wrap items-center gap-2">
+                      {s.voucherFilename ? (
+                        <a
+                          href={`/api/servicios-extras/${encodeURIComponent(s.id)}/voucher`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary underline underline-offset-2"
+                        >
+                          Ver voucher
+                        </a>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => abrirSelectorVoucher(s.id)}
+                        disabled={subiendoId === s.id}
+                        className="inline-flex items-center gap-1.5 rounded border border-outline-variant px-2.5 py-1.5 font-label-md text-primary hover:bg-surface-container dark:border-transparent disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Ver voucher
-                      </a>
-                    ) : (
-                      <span className="text-on-surface-variant">—</span>
-                    )}
+                        <Upload className="h-4 w-4" />
+                        {subiendoId === s.id
+                          ? "Subiendo…"
+                          : s.voucherFilename
+                            ? "Reemplazar"
+                            : "Subir voucher"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -236,6 +372,13 @@ export function CobranzaServiciosExtras() {
           </table>
         </TableScroll>
       )}
+
+      {verificacionAbierta ? (
+        <ServiciosExtrasVerificationDialog
+          onClose={() => setVerificacionAbierta(false)}
+          onVerified={() => void load()}
+        />
+      ) : null}
     </div>
   );
 }
