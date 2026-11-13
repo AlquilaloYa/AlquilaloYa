@@ -19,6 +19,7 @@ export type PaymentVoucher = {
   monto?: number;
   verificadoEn?: string;
   verificadoPor?: string;
+  storageKey?: string;
 };
 
 /**

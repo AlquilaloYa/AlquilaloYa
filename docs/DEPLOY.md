@@ -97,12 +97,15 @@ del compose y apunta `DATABASE_URL` al pooler.
 
 ## Migraciones en despliegue
 
-Antes de subir la nueva versión de la app:
+Antes de subir la nueva versión, aplica en Supabase, en este orden:
 
-```bash
-# desde el repo (necesita DATABASE_URL)
-corepack pnpm db:migrate
-```
+1. `supabase/migrations/20261113132351_servicios_extras_pagos.sql`
+2. `supabase/migrations/20261113132352_client_payment_approval_requests.sql`
+
+La primera crea los pagos mensuales de servicios y migra los vouchers existentes
+usando las columnas presentes en la tabla de servicios. Esta carpeta es la fuente
+de verdad para la base administrada; no uses `pnpm db:migrate` en producción porque
+el historial de Drizzle está desincronizado (ver `README.md`).
 
 Orden recomendado: **migrar → desplegar** (las migraciones son aditivas y
 retrocompatibles para no romper la versión en ejecución).

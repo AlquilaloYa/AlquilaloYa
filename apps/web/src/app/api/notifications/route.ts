@@ -21,6 +21,9 @@ export async function GET(req: Request) {
         "WORK_ORDER_ASSIGNED",
         "WORK_ORDER_UPDATE",
         "CLIENT_REQUEST_NEW",
+        "CLIENT_PAYMENT_DUE",
+        "CLIENT_PAYMENT_APPROVAL",
+        "CLIENT_PAYMENT_UPLOADED",
       );
     }
     if (

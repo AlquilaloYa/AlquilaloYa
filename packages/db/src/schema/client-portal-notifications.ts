@@ -21,7 +21,6 @@ export const clientPortalNotifications = pgTable(
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
     workOrderId: uuid("work_order_id")
-      .notNull()
       .references(() => workOrders.id, { onDelete: "cascade" }),
     type: varchar("type", { length: 40 }).notNull(),
     title: varchar("title", { length: 180 }).notNull(),
@@ -36,7 +35,15 @@ export const clientPortalNotifications = pgTable(
   (table) => [
     check(
       "client_portal_notifications_type_check",
-      sql`${table.type} in ('REQUEST_CONVERTED', 'VISIT_CONFIRMED')`,
+      sql`${table.type} in (
+        'REQUEST_CONVERTED',
+        'VISIT_CONFIRMED',
+        'PAYMENT_DUE',
+        'PAYMENT_APPROVAL_REQUESTED',
+        'PAYMENT_APPROVAL_APPROVED',
+        'PAYMENT_APPROVAL_REJECTED',
+        'PAYMENT_VOUCHER_UPLOADED'
+      )`,
     ),
     unique("client_portal_notifications_client_dedupe_unique").on(
       table.clientId,
