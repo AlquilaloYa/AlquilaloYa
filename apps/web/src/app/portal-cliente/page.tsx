@@ -638,6 +638,7 @@ export default function ClientPortalPage() {
       aria-busy={loading}
     >
       <div className="mx-auto max-w-6xl" inert={submitting}>
+        {!loading && (
         <header className="portal-client-header mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
           <div className="portal-dashboard-brand">
             <img src="/logo-white-mode.png" alt="AlquilaYa" />
@@ -741,6 +742,7 @@ export default function ClientPortalPage() {
             </button>
           </div>
         </header>
+        )}
 
         {loading ? (
           <div className="portal-loading-content" role="status" aria-live="polite">
