@@ -278,7 +278,7 @@
 
 .portal-loading-content {
   display: grid;
-  min-height: min(65svh, 560px);
+  min-height: calc(100svh - 72px);
   place-items: center;
 }
 
@@ -1146,6 +1146,10 @@
 
   .client-portal-app > div {
     padding-top: 12px;
+  }
+
+  .portal-loading-content {
+    min-height: calc(100svh - 60px);
   }
 
   .portal-client-header {
