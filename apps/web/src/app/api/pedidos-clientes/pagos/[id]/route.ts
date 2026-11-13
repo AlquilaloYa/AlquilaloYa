@@ -61,6 +61,7 @@ export async function PATCH(
           id: dbModule.schema.clientPaymentApprovalRequests.id,
           clientId: dbModule.schema.clientPaymentApprovalRequests.clientId,
           contractId: dbModule.schema.clientPaymentApprovalRequests.contractId,
+          paymentId: dbModule.schema.clientPaymentApprovalRequests.paymentId,
           status: dbModule.schema.clientPaymentApprovalRequests.status,
           requestedAmount:
             dbModule.schema.clientPaymentApprovalRequests.requestedAmount,
@@ -123,7 +124,9 @@ export async function PATCH(
               : "Solicitud de pago rechazada",
           body:
             nextStatus === "APPROVED"
-              ? "El ERP aprobó tu solicitud. Ya puedes subir el voucher del saldo pendiente."
+              ? current.paymentId
+                ? "Administración aprobó el permiso. Puedes subir un voucher total o parcial hasta el saldo pendiente."
+                : "Administración aprobó el pago del servicio. Ya puedes subir el voucher por el monto completo."
               : typeof values.note === "string" && values.note.trim()
                 ? `El ERP rechazó tu solicitud: ${values.note.trim()}`
                 : "El ERP rechazó tu solicitud. Comunícate con administración para más información.",

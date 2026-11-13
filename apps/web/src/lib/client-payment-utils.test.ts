@@ -51,7 +51,7 @@ describe("client payment utilities", () => {
     expect(shiftIsoDate("2026-11-30", 2)).toBe("2026-12-02");
   });
 
-  it("allows partial deposits only before the due date", () => {
+  it("allows partial deposits before the due date", () => {
     const beforeDue = {
       amountCents: 5000,
       remainingCents: 125000,
@@ -68,5 +68,25 @@ describe("client payment utilities", () => {
         amountCents: 125001,
       }),
     ).toBe("amount_exceeds_balance");
+  });
+
+  it("allows overdue partial deposits only with approved authorization", () => {
+    const overdue = {
+      amountCents: 5000,
+      remainingCents: 125000,
+      dueDate: "2026-11-18",
+      today: "2026-11-19",
+    };
+    expect(validatePaymentAmount(overdue)).toBe("full_payment_required");
+    expect(
+      validatePaymentAmount({ ...overdue, allowPartialWhenOverdue: true }),
+    ).toBeNull();
+    expect(
+      validatePaymentAmount({
+        ...overdue,
+        dueDate: overdue.today,
+        allowPartialWhenOverdue: true,
+      }),
+    ).toBe("full_payment_required");
   });
 });

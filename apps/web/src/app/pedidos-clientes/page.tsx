@@ -327,15 +327,18 @@ export default function ClientRequestsPage() {
                   </span>
                 </div>
                 <p className="rounded-md bg-surface-container-low p-4 font-body-sm text-on-surface">
-                  Saldo solicitado:{" "}
+                  {item.targetType === "MONTHLY"
+                    ? "Saldo pendiente al solicitar permiso: "
+                    : "Importe del servicio: "}
                   <strong>
                     {Number(item.requestedAmount).toLocaleString("es-PE", {
                       style: "currency",
                       currency: "PEN",
                     })}
                   </strong>
-                  . Este importe corresponde a la mensualidad y mantenimiento o al
-                  servicio registrado por el ERP; no incluye penalidades.
+                  {item.targetType === "MONTHLY"
+                    ? ". El permiso autoriza un voucher total o parcial hasta este saldo; no incluye penalidades."
+                    : ". Este importe lo registra el ERP y requiere voucher por el monto completo."}
                 </p>
                 {item.reviewNote ? (
                   <p className="font-body-sm text-on-surface-variant">
@@ -360,7 +363,7 @@ export default function ClientRequestsPage() {
                       className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 font-label-md text-primary-foreground hover:opacity-90 disabled:opacity-40"
                     >
                       <CheckCircle2 className="h-4 w-4" />
-                      {busyId === item.id ? "Guardando…" : "Aprobar depósito"}
+                      {busyId === item.id ? "Guardando…" : "Aprobar autorización"}
                     </button>
                   </div>
                 ) : null}

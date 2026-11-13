@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import {
   addSessionCookiesIfRefreshed,
@@ -171,7 +171,7 @@ export async function GET(request: Request) {
             isNull(dbModule.schema.payments.eliminadoEn),
           ),
         )
-        .orderBy(asc(dbModule.schema.payments.periodo))
+        .orderBy(desc(dbModule.schema.payments.periodo))
         .limit(36),
       dbModule.db
         .select({
@@ -202,7 +202,7 @@ export async function GET(request: Request) {
           ),
         )
         .where(eq(dbModule.schema.serviciosExtras.contractId, contract.id))
-        .orderBy(asc(dbModule.schema.serviciosExtrasPagos.fechaVencimiento))
+        .orderBy(desc(dbModule.schema.serviciosExtrasPagos.fechaVencimiento))
         .limit(36),
       dbModule.db
         .select()
@@ -498,9 +498,14 @@ export async function POST(request: Request) {
           }
 
           let approvalId: string | null = null;
+          let approvedAmountCents: number | null = null;
           if (dueDate < today) {
             const [approval] = await tx
-              .select()
+              .select({
+                id: dbModule.schema.clientPaymentApprovalRequests.id,
+                requestedAmount:
+                  dbModule.schema.clientPaymentApprovalRequests.requestedAmount,
+              })
               .from(dbModule.schema.clientPaymentApprovalRequests)
               .where(
                 and(
@@ -530,6 +535,16 @@ export async function POST(request: Request) {
               );
             }
             approvalId = approval.id;
+            approvedAmountCents = moneyToCents(approval.requestedAmount);
+            if (
+              approvedAmountCents === null ||
+              amountCents > approvedAmountCents
+            ) {
+              throw new PortalPaymentError(
+                "El monto supera el saldo autorizado por administración.",
+                403,
+              );
+            }
           } else if (approvalRequestId !== null) {
             throw new PortalPaymentError(
               "La autorización no corresponde a este pago.",
@@ -541,6 +556,8 @@ export async function POST(request: Request) {
             remainingCents,
             dueDate,
             today,
+            allowPartialWhenOverdue:
+              targetType === "MONTHLY" && approvalId !== null,
           });
           if (amountError) {
             throw new PortalPaymentError(
