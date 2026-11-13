@@ -5,13 +5,13 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
-type ServicioExtra = {
+type ServicioPago = {
   id: string;
-  contractId: string;
+  periodo: string;
+  fechaVencimiento: string;
   codigoContrato: string | null;
   tipoServicio: string | null;
   montoTotal: string | null;
-  fechaPago: string | null;
   clienteNombre: string | null;
   voucherFilename: string | null;
   voucherVerificadoEn: string | null;
@@ -27,8 +27,28 @@ const OPCION_LABEL: Record<string, string> = {
   CARGA_ELECTRICA: "Carga eléctrica",
 };
 
+const MESES_CORTOS = [
+  "ene", "feb", "mar", "abr", "may", "jun",
+  "jul", "ago", "set", "oct", "nov", "dic",
+];
+
 function moneda(n: number): string {
   return n.toLocaleString("es-PE", { style: "currency", currency: "PEN" });
+}
+
+/** "2026-11" → "nov 2026". */
+function periodoLegible(periodo: string): string {
+  const [y, m] = periodo.split("-");
+  const indice = Number(m) - 1;
+  if (!y || Number.isNaN(indice) || indice < 0 || indice > 11) return periodo;
+  return `${MESES_CORTOS[indice]} ${y}`;
+}
+
+function fechaLegible(value: string | null | undefined): string {
+  if (!value) return "—";
+  const [y, m, d] = value.slice(0, 10).split("-");
+  if (!y || !m || !d) return value;
+  return `${d}/${m}/${y}`;
 }
 
 export function ServiciosExtrasVerificationDialog({
@@ -38,7 +58,7 @@ export function ServiciosExtrasVerificationDialog({
   onClose: () => void;
   onVerified: () => void;
 }) {
-  const [servicios, setServicios] = useState<ServicioExtra[]>([]);
+  const [pagos, setPagos] = useState<ServicioPago[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [code, setCode] = useState("");
@@ -52,7 +72,7 @@ export function ServiciosExtrasVerificationDialog({
     setLoading(true);
     setLoadError("");
     try {
-      const response = await apiFetch("/api/servicios-extras", { cache: "no-store" });
+      const response = await apiFetch("/api/servicios-extras/pagos", { cache: "no-store" });
       const body: unknown = await response.json().catch(() => null);
       if (!response.ok || !Array.isArray(body)) {
         throw new Error(
@@ -66,9 +86,9 @@ export function ServiciosExtrasVerificationDialog({
       }
       // Pendientes de verificar: con voucher subido y sin verificación
       // (estado "Uploaded").
-      setServicios(
-        (body as ServicioExtra[]).filter(
-          (s) => Boolean(s.voucherFilename) && !s.voucherVerificadoEn
+      setPagos(
+        (body as ServicioPago[]).filter(
+          (p) => Boolean(p.voucherFilename) && !p.voucherVerificadoEn
         )
       );
     } catch (loadFailure) {
@@ -157,12 +177,12 @@ export function ServiciosExtrasVerificationDialog({
     if (step === "servicios") void load();
   }, [load, step]);
 
-  async function verificar(servicio: ServicioExtra) {
-    setBusyId(servicio.id);
+  async function verificar(pago: ServicioPago) {
+    setBusyId(pago.id);
     setError("");
     try {
       const response = await apiFetch(
-        `/api/servicios-extras/${encodeURIComponent(servicio.id)}/verify`,
+        `/api/servicios-extras/pagos/${encodeURIComponent(pago.id)}/verify`,
         { method: "POST" }
       );
       const body: unknown = await response.json().catch(() => null);
@@ -177,9 +197,9 @@ export function ServiciosExtrasVerificationDialog({
         );
       }
       const result = body as { voucherVerificadoEn: string; voucherVerificadoPor: string };
-      setServicios((current) =>
+      setPagos((current) =>
         current.map((item) =>
-          item.id === servicio.id
+          item.id === pago.id
             ? {
                 ...item,
                 voucherVerificadoEn: result.voucherVerificadoEn,
@@ -267,7 +287,7 @@ export function ServiciosExtrasVerificationDialog({
               Verificación de vouchers — servicios extras
             </h2>
             <p className="mt-1 text-sm text-on-surface-variant">
-              Confirma los vouchers subidos de internet y carga eléctrica.
+              Confirma los vouchers mensuales subidos de internet y carga eléctrica.
             </p>
           </div>
           <button
@@ -360,7 +380,7 @@ export function ServiciosExtrasVerificationDialog({
                 Reintentar
               </button>
             </div>
-          ) : servicios.length === 0 ? (
+          ) : pagos.length === 0 ? (
             <p className="py-10 text-center text-sm text-on-surface-variant">
               No hay vouchers por verificar. Todo está al día.
             </p>
@@ -372,39 +392,44 @@ export function ServiciosExtrasVerificationDialog({
                 </p>
               ) : null}
               <ul className="space-y-3">
-                {servicios.map((servicio) => {
-                  const verificado = Boolean(servicio.voucherVerificadoEn);
+                {pagos.map((pago) => {
+                  const verificado = Boolean(pago.voucherVerificadoEn);
                   return (
                     <li
-                      key={servicio.id}
+                      key={pago.id}
                       className="rounded-lg border border-outline-variant p-4"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="font-semibold text-on-surface">
-                            {servicio.clienteNombre || "Cliente sin nombre"}
+                            {pago.clienteNombre || "Cliente sin nombre"}
                           </p>
                           <p className="mt-1 text-sm text-on-surface-variant">
-                            {servicio.codigoContrato ?? "—"}
+                            {pago.codigoContrato ?? "—"}
                             {" · "}
-                            {OPCION_LABEL[servicio.tipoServicio ?? ""] ?? servicio.tipoServicio ?? "—"}
+                            {OPCION_LABEL[pago.tipoServicio ?? ""] ?? pago.tipoServicio ?? "—"}
                             {" · "}
-                            {moneda(Number(servicio.montoTotal ?? 0))}
+                            {periodoLegible(pago.periodo)}
+                            {" · "}
+                            {moneda(Number(pago.montoTotal ?? 0))}
+                          </p>
+                          <p className="text-xs text-on-surface-variant">
+                            Vence {fechaLegible(pago.fechaVencimiento)}
                           </p>
                           {verificado ? (
                             <p className="mt-1 text-xs text-on-surface-variant">
                               Verified{" "}
-                              {new Date(servicio.voucherVerificadoEn!).toLocaleString("es-PE")}
-                              {servicio.voucherVerificadoPor
-                                ? ` · ${servicio.voucherVerificadoPor}`
+                              {new Date(pago.voucherVerificadoEn!).toLocaleString("es-PE")}
+                              {pago.voucherVerificadoPor
+                                ? ` · ${pago.voucherVerificadoPor}`
                                 : ""}
                             </p>
                           ) : null}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          {servicio.voucherFilename ? (
+                          {pago.voucherFilename ? (
                             <a
-                              href={`/api/servicios-extras/${encodeURIComponent(servicio.id)}/voucher`}
+                              href={`/api/servicios-extras/pagos/${encodeURIComponent(pago.id)}/voucher`}
                               target="_blank"
                               rel="noreferrer"
                               className="rounded-md border border-outline-variant px-3 py-1.5 text-sm font-medium text-primary hover:bg-surface-container"
@@ -420,11 +445,11 @@ export function ServiciosExtrasVerificationDialog({
                           ) : (
                             <button
                               type="button"
-                              onClick={() => void verificar(servicio)}
-                              disabled={busyId === servicio.id}
+                              onClick={() => void verificar(pago)}
+                              disabled={busyId === pago.id}
                               className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-on-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {busyId === servicio.id ? "Verificando..." : "Verificar"}
+                              {busyId === pago.id ? "Verificando..." : "Verificar"}
                             </button>
                           )}
                         </div>

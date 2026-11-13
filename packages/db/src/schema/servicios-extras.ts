@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
   varchar,
   boolean,
@@ -56,5 +57,41 @@ export const serviciosExtras = pgTable(
   ]
 );
 
+/**
+ * Pagos mensuales de un servicio extra (ej. internet se paga todos los meses).
+ * Cada mes genera una fila con su propio voucher y verificación (con MFA).
+ */
+export const serviciosExtrasPagos = pgTable(
+  "servicios_extras_pagos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    servicioId: uuid("servicio_id")
+      .notNull()
+      .references(() => serviciosExtras.id, { onDelete: "cascade" }),
+    /** Mes del pago, formato "YYYY-MM". */
+    periodo: varchar("periodo", { length: 7 }).notNull(),
+    fechaVencimiento: date("fecha_vencimiento").notNull(),
+    voucherFilename: varchar("voucher_filename", { length: 255 }),
+    voucherStorageKey: text("voucher_storage_key"),
+    voucherMimeType: varchar("voucher_mime_type", { length: 100 }),
+    voucherSizeBytes: numeric("voucher_size_bytes", { precision: 15, scale: 0 }),
+    voucherSha256: varchar("voucher_sha256", { length: 64 }),
+    voucherVerificadoEn: timestamp("voucher_verificado_en", { withTimezone: true }),
+    voucherVerificadoPor: varchar("voucher_verificado_por", { length: 100 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("servicios_extras_pagos_servicio_periodo_key").on(
+      table.servicioId,
+      table.periodo,
+    ),
+    index("servicios_extras_pagos_servicio_idx").on(table.servicioId),
+    index("servicios_extras_pagos_vencimiento_idx").on(table.fechaVencimiento),
+  ],
+);
+
 export type ServiciosExtrasRow = typeof serviciosExtras.$inferSelect;
 export type NewServiciosExtrasRow = typeof serviciosExtras.$inferInsert;
+export type ServiciosExtrasPagosRow = typeof serviciosExtrasPagos.$inferSelect;
+export type NewServiciosExtrasPagosRow = typeof serviciosExtrasPagos.$inferInsert;
