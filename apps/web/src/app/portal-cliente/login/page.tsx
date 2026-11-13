@@ -2,13 +2,14 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, KeyRound } from "lucide-react";
 import "../portal-client.css";
 
 export default function ClientPortalLoginPage() {
   const router = useRouter();
   const [departmentCode, setDepartmentCode] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -62,21 +63,33 @@ export default function ClientPortalLoginPage() {
                 placeholder="Ej. ANG170-1"
               />
             </label>
-            <label className="portal-login-field">
-              <span>Contraseña</span>
-              <input
-                required
-                type="password"
-                maxLength={128}
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </label>
+            <div className="portal-login-field">
+              <label htmlFor="portal-client-password">Contraseña</label>
+              <span className="portal-login-password">
+                <input
+                  id="portal-client-password"
+                  required
+                  type={passwordVisible ? "text" : "password"}
+                  maxLength={128}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="portal-login-password-toggle"
+                  aria-label={passwordVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-pressed={passwordVisible}
+                  onClick={() => setPasswordVisible((visible) => !visible)}
+                >
+                  {passwordVisible ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
+                </button>
+              </span>
+            </div>
             <button disabled={busy} className="portal-login-submit">
               <KeyRound aria-hidden className="h-4 w-4" />
               {busy ? "Ingresando…" : "Ingresar"}
-              <span aria-hidden="true">→</span>
+              <span aria-hidden="true"><ArrowRight /></span>
             </button>
           </form>
 

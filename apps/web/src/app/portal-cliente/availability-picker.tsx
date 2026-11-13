@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CalendarDays,
   ChevronLeft,
@@ -176,6 +177,7 @@ function TimeWheelPicker({ value, onChange, onClose }: TimeWheelPickerProps) {
     <div
       className="portal-picker-popover portal-time-popover"
       role="dialog"
+      aria-modal="true"
       aria-label="Elegir hora de la visita"
     >
       <div className="portal-time-wheel-header">
@@ -262,6 +264,7 @@ export function AvailabilityPicker({
     return selected ?? current;
   });
   const optionRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   // Cierra cualquier popover tocando cualquier parte fuera de la tarjeta.
   useEffect(() => {
@@ -271,7 +274,8 @@ export function AvailabilityPicker({
       if (
         optionRef.current &&
         target instanceof Node &&
-        !optionRef.current.contains(target)
+        !optionRef.current.contains(target) &&
+        !popoverRef.current?.contains(target)
       ) {
         setOpenPicker(null);
       }
@@ -342,78 +346,90 @@ export function AvailabilityPicker({
             <span>{formatDate(option.date)}</span>
           </button>
           {openPicker === "calendar" && (
-            <div
-              className="portal-picker-popover portal-calendar-popover"
-              role="dialog"
-              aria-label={`Calendario para la opción ${index + 1}`}
-            >
-              <div className="portal-calendar-header">
-                <button
-                  type="button"
-                  aria-label="Mes anterior"
-                  disabled={isPreviousMonthDisabled}
-                  onClick={() => setVisibleMonth(previousMonth)}
+            typeof document !== "undefined" && createPortal(
+              <div
+                className="client-portal-app portal-picker-overlay"
+                onPointerDown={(event) => {
+                  if (event.target === event.currentTarget) setOpenPicker(null);
+                }}
+              >
+                <div
+                  ref={popoverRef}
+                  className="portal-picker-popover portal-calendar-popover"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={`Calendario para la opción ${index + 1}`}
                 >
-                  <ChevronLeft aria-hidden />
-                </button>
-                <h4>{formatMonth(visibleMonth)}</h4>
-                <button
-                  type="button"
-                  aria-label="Mes siguiente"
-                  onClick={() => setVisibleMonth(
-                    new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1, 12),
-                  )}
-                >
-                  <ChevronRight aria-hidden />
-                </button>
-              </div>
-              <div className="portal-calendar-grid">
-                {WEEK_DAYS.map((day, dayIndex) => (
-                  <span className="portal-calendar-weekday" key={`${day}-${dayIndex}`}>
-                    {day}
-                  </span>
-                ))}
-                {Array.from({ length: firstWeekday }, (_, dayIndex) => (
-                  <span className="portal-calendar-empty" key={`empty-${dayIndex}`} />
-                ))}
-                {Array.from({ length: daysInMonth }, (_, dayIndex) => {
-                  const day = dayIndex + 1;
-                  const value = dateKey(new Date(
-                    visibleMonth.getFullYear(),
-                    visibleMonth.getMonth(),
-                    day,
-                    12,
-                  ));
-                  const isDisabled = value < today;
-                  const isSelected = value === option.date;
-                  const isToday = value === today;
-                  return (
+                  <div className="portal-calendar-header">
                     <button
-                      key={value}
                       type="button"
-                      disabled={isDisabled}
-                      aria-label={new Intl.DateTimeFormat("es-PE", {
-                        dateStyle: "full",
-                      }).format(new Date(
+                      aria-label="Mes anterior"
+                      disabled={isPreviousMonthDisabled}
+                      onClick={() => setVisibleMonth(previousMonth)}
+                    >
+                      <ChevronLeft aria-hidden />
+                    </button>
+                    <h4>{formatMonth(visibleMonth)}</h4>
+                    <button
+                      type="button"
+                      aria-label="Mes siguiente"
+                      onClick={() => setVisibleMonth(
+                        new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1, 12),
+                      )}
+                    >
+                      <ChevronRight aria-hidden />
+                    </button>
+                  </div>
+                  <div className="portal-calendar-grid">
+                    {WEEK_DAYS.map((day, dayIndex) => (
+                      <span className="portal-calendar-weekday" key={`${day}-${dayIndex}`}>
+                        {day}
+                      </span>
+                    ))}
+                    {Array.from({ length: firstWeekday }, (_, dayIndex) => (
+                      <span className="portal-calendar-empty" key={`empty-${dayIndex}`} />
+                    ))}
+                    {Array.from({ length: daysInMonth }, (_, dayIndex) => {
+                      const day = dayIndex + 1;
+                      const value = dateKey(new Date(
                         visibleMonth.getFullYear(),
                         visibleMonth.getMonth(),
                         day,
                         12,
-                      ))}
-                      aria-pressed={isSelected}
-                      className={[
-                        "portal-calendar-day",
-                        isSelected ? "selected" : "",
-                        isToday ? "today" : "",
-                      ].filter(Boolean).join(" ")}
-                      onClick={() => setDate(value)}
-                    >
-                      {day}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                      ));
+                      const isDisabled = value < today;
+                      const isSelected = value === option.date;
+                      const isToday = value === today;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          disabled={isDisabled}
+                          aria-label={new Intl.DateTimeFormat("es-PE", {
+                            dateStyle: "full",
+                          }).format(new Date(
+                            visibleMonth.getFullYear(),
+                            visibleMonth.getMonth(),
+                            day,
+                            12,
+                          ))}
+                          aria-pressed={isSelected}
+                          className={[
+                            "portal-calendar-day",
+                            isSelected ? "selected" : "",
+                            isToday ? "today" : "",
+                          ].filter(Boolean).join(" ")}
+                          onClick={() => setDate(value)}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
           )}
         </div>
 
@@ -434,11 +450,23 @@ export function AvailabilityPicker({
             <span>{option.time ? formatTimeValue(option.time) : "--:--"}</span>
           </button>
           {openPicker === "time" && (
-            <TimeWheelPicker
-              value={option.time}
-              onChange={(value) => onChange("time", value)}
-              onClose={() => setOpenPicker(null)}
-            />
+            typeof document !== "undefined" && createPortal(
+              <div
+                className="client-portal-app portal-picker-overlay"
+                onPointerDown={(event) => {
+                  if (event.target === event.currentTarget) setOpenPicker(null);
+                }}
+              >
+                <div ref={popoverRef}>
+                  <TimeWheelPicker
+                    value={option.time}
+                    onChange={(value) => onChange("time", value)}
+                    onClose={() => setOpenPicker(null)}
+                  />
+                </div>
+              </div>,
+              document.body,
+            )
           )}
         </div>
       </div>
