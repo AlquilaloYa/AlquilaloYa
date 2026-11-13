@@ -390,9 +390,6 @@ ruc: body.ruc || null,
       codigoPais: row.codigoPais ?? "51",
       domicilio: row.domicilio,
       nacionalidad: row.nacionalidad,
-      segundoInquilino: row.segundoInquilino,
-      segundoInquilinoDni: row.segundoInquilinoDni,
-      segundoInquilinoNacionalidad: row.segundoInquilinoNacionalidad,
     });
     return NextResponse.json(toView(row), { status: 201 });
   } catch (error) {
@@ -484,9 +481,6 @@ ruc: body.ruc || null,
       codigoPais: row.codigoPais ?? "51",
       domicilio: row.domicilio,
       nacionalidad: row.nacionalidad,
-      segundoInquilino: row.segundoInquilino,
-      segundoInquilinoDni: row.segundoInquilinoDni,
-      segundoInquilinoNacionalidad: row.segundoInquilinoNacionalidad,
     });
     return NextResponse.json(toView(row));
   } catch (error) {
