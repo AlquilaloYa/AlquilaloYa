@@ -83,6 +83,7 @@ export function validatePaymentAmount(input: {
   remainingCents: number;
   dueDate: string;
   today: string;
+  allowPartialWhenOverdue?: boolean;
 }): PaymentAmountError | null {
   const due = parseIsoDate(input.dueDate);
   const current = parseIsoDate(input.today);
@@ -98,7 +99,11 @@ export function validatePaymentAmount(input: {
   if (input.amountCents > input.remainingCents) {
     return "amount_exceeds_balance";
   }
-  if (current >= due && input.amountCents !== input.remainingCents) {
+  if (
+    current >= due &&
+    input.amountCents !== input.remainingCents &&
+    !(input.allowPartialWhenOverdue && current > due)
+  ) {
     return "full_payment_required";
   }
   return null;

@@ -164,6 +164,17 @@ function formatDateOnly(value: string): string {
   return `${day}/${month}/${year}`;
 }
 
+function formatMonthLabel(value: string): string {
+  const [year, month] = value.slice(0, 7).split("-");
+  if (!year || !month) return value;
+  const label = new Intl.DateTimeFormat("es-PE", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(Number(year), Number(month) - 1, 1)));
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function formatMoney(value: string | number): string {
   return Number(value).toLocaleString("es-PE", {
     style: "currency",
@@ -234,6 +245,9 @@ export default function ClientPortalPage() {
   const [paymentNotice, setPaymentNotice] = useState("");
   const [openPaymentFormId, setOpenPaymentFormId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentAmountMode, setPaymentAmountMode] = useState<
+    "TOTAL" | "PARTIAL" | null
+  >(null);
   const [paymentFile, setPaymentFile] = useState<File | null>(null);
   const [previewAttachment, setPreviewAttachment] = useState<{
     fileName: string;
@@ -643,7 +657,9 @@ export default function ClientPortalPage() {
         throw new Error(body.error ?? "No se pudo enviar la solicitud.");
       }
       setPaymentNotice(
-        "Solicitud enviada a Pedidos de clientes. Podrás subir el voucher cuando el ERP la apruebe.",
+        item.targetType === "MONTHLY"
+          ? "Solicitud enviada a administración. Podrás subir un voucher total o parcial cuando aprueben el permiso."
+          : "Solicitud enviada a administración. Podrás subir el voucher cuando aprueben el permiso.",
       );
       await loadPayments();
     } catch (reason) {
@@ -699,6 +715,7 @@ export default function ClientPortalPage() {
       );
       setOpenPaymentFormId(null);
       setPaymentAmount("");
+      setPaymentAmountMode(null);
       setPaymentFile(null);
       await loadPayments();
     } catch (reason) {
@@ -794,6 +811,286 @@ export default function ClientPortalPage() {
     `Hola AlquilaYa, necesito comunicarme con atención al cliente del departamento ${client?.departmentCode ?? ""}.`,
   )}`;
   const unreadNotificationCount = notifications.filter((item) => !item.isRead).length;
+  const currentPaymentMonth = (
+    paymentToday || currentLocalDate
+  ).slice(0, 7);
+  const currentPaymentMonthLabel = currentPaymentMonth
+    ? formatMonthLabel(currentPaymentMonth)
+    : "este mes";
+  const monthlyPaymentItems = paymentItems
+    .filter((item) => item.targetType === "MONTHLY")
+    .sort((left, right) => right.dueDate.localeCompare(left.dueDate));
+  const currentMonthPayments = monthlyPaymentItems.filter(
+    (item) => item.dueDate.slice(0, 7) === currentPaymentMonth,
+  );
+  const previousMonthPayments = monthlyPaymentItems.filter(
+    (item) => item.dueDate.slice(0, 7) < currentPaymentMonth,
+  );
+  const futureMonthPayments = monthlyPaymentItems
+    .filter((item) => item.dueDate.slice(0, 7) > currentPaymentMonth)
+    .reverse();
+  const servicePaymentItems = paymentItems.filter(
+    (item) => item.targetType === "SERVICE",
+  );
+
+  function openPaymentVoucherForm(
+    item: PaymentObligation,
+    mode: "TOTAL" | "PARTIAL",
+  ) {
+    setOpenPaymentFormId(item.id);
+    setPaymentAmount(mode === "TOTAL" ? item.remainingAmount : "");
+    setPaymentAmountMode(mode);
+    setPaymentFile(null);
+    setPaymentError("");
+  }
+
+  function renderPaymentCard(
+    item: PaymentObligation,
+    variant: "featured" | "compact" | "standard",
+  ) {
+    const featured = variant === "featured";
+    const compact = variant === "compact";
+    const overdue = item.dueDate < paymentToday;
+    const canRequestApproval =
+      overdue &&
+      Number(item.remainingAmount) > 0 &&
+      item.status !== "PAID" &&
+      item.status !== "UPLOADED" &&
+      item.approvalStatus !== "PENDING" &&
+      item.approvalStatus !== "APPROVED";
+    const partialAllowed =
+      item.targetType === "MONTHLY" &&
+      (item.dueDate > paymentToday ||
+        (overdue && item.approvalStatus === "APPROVED"));
+    const formOpen = openPaymentFormId === item.id;
+    const canUploadVoucher =
+      item.canUpload && item.status !== "PAID" && item.status !== "UPLOADED";
+
+    return (
+      <article
+        key={`${item.targetType}-${item.id}`}
+        className={`${compact ? "space-y-3" : "space-y-4"} rounded-2xl border border-white/10 bg-slate-900 ${
+          featured ? "p-5 sm:p-7" : compact ? "p-4" : "p-5"
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-cyan-300">
+              {item.targetType === "MONTHLY" ? "Mensualidad" : "Servicio"}
+              {` · ${formatMonthLabel(item.dueDate)}`}
+            </p>
+            <h4 className={`mt-1 font-semibold ${featured ? "text-xl sm:text-2xl" : compact ? "text-base" : "text-lg"}`}>
+              {item.title}
+            </h4>
+          </div>
+          <span
+            className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+              item.status === "PAID"
+                ? "bg-emerald-950 text-emerald-200"
+                : item.status === "UPLOADED"
+                  ? "bg-amber-950 text-amber-200"
+                  : overdue
+                    ? "bg-red-950 text-red-200"
+                    : "bg-slate-800 text-slate-200"
+            }`}
+          >
+            {item.status === "PAID"
+              ? "Pagado"
+              : item.status === "UPLOADED"
+                ? "Voucher en revisión"
+                : overdue
+                  ? "Vencido"
+                  : "Pendiente"}
+          </span>
+        </div>
+
+        {featured ? (
+          <div className="grid gap-4 rounded-xl bg-emerald-50 p-5 sm:grid-cols-[1.2fr_1fr_1fr]">
+            <div>
+              <p className="text-sm text-slate-500">Monto del mes</p>
+              <p className="mt-1 text-4xl font-bold tracking-tight text-emerald-900 sm:text-5xl">
+                {formatMoney(item.totalAmount)}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-slate-500">Saldo pendiente</p>
+              <p className="mt-2 text-2xl font-semibold text-emerald-800">
+                {formatMoney(item.remainingAmount)}
+              </p>
+            </div>
+            <div>
+              <p className="flex items-center gap-2 text-sm text-slate-500">
+                <CalendarDays aria-hidden className="h-4 w-4" />
+                Fecha de pago
+              </p>
+              <p className="mt-2 text-lg font-semibold text-slate-800">
+                {formatDateOnly(item.dueDate)}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={`grid gap-3 rounded-xl bg-slate-950/70 ${
+              compact ? "grid-cols-2 p-3 text-xs" : "sm:grid-cols-2 p-4"
+            }`}
+          >
+            <div>
+              <p className="flex items-center gap-2 text-xs text-slate-400">
+                <CalendarDays aria-hidden className="h-4 w-4" />
+                Fecha de pago
+              </p>
+              <p className="mt-1 font-medium">{formatDateOnly(item.dueDate)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">
+                {item.targetType === "MONTHLY"
+                  ? "Mensualidad + mantenimiento"
+                  : "Monto del servicio"}
+              </p>
+              <p className={`mt-1 font-semibold ${compact ? "" : "text-lg"}`}>
+                {formatMoney(item.totalAmount)}
+              </p>
+            </div>
+            {item.targetType === "MONTHLY" ? (
+              <div className={compact ? "col-span-2" : ""}>
+                <p className="text-xs text-slate-400">Saldo pendiente</p>
+                <p className="mt-1 font-semibold text-cyan-200">
+                  {formatMoney(item.remainingAmount)}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {item.approvalStatus === "PENDING" ? (
+          <p className={`rounded-lg border border-amber-800 bg-amber-950/40 p-3 text-amber-100 ${compact ? "text-xs" : "text-sm"}`}>
+            Solicitud enviada a administración. Espera la aprobación antes de depositar.
+          </p>
+        ) : item.approvalStatus === "APPROVED" ? (
+          <p className={`rounded-lg border border-emerald-800 bg-emerald-950/40 p-3 text-emerald-100 ${compact ? "text-xs" : "text-sm"}`}>
+            {item.targetType === "MONTHLY"
+              ? "Administración aprobó el permiso. Puedes subir un voucher total o parcial hasta el saldo pendiente."
+              : "Administración aprobó el pago. Ya puedes subir el voucher del servicio."}
+          </p>
+        ) : item.approvalStatus === "REJECTED" ? (
+          <p className={`rounded-lg border border-red-900 bg-red-950/40 p-3 text-red-200 ${compact ? "text-xs" : "text-sm"}`}>
+            La solicitud fue rechazada. Puedes enviar una nueva solicitud.
+          </p>
+        ) : null}
+
+        {item.status === "UPLOADED" ? (
+          <p className={compact ? "text-xs text-amber-100" : "text-sm text-amber-100"}>
+            Tu voucher fue recibido y está pendiente de verificación.
+          </p>
+        ) : null}
+
+        {canRequestApproval ? (
+          <button
+            type="button"
+            onClick={() => void requestPaymentApproval(item)}
+            disabled={paymentApprovalBusyId === item.id}
+            className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-amber-700 px-4 font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-50 ${
+              compact ? "text-xs" : "text-sm"
+            }`}
+          >
+            <CreditCard aria-hidden className="h-4 w-4" />
+            {paymentApprovalBusyId === item.id
+              ? "Enviando solicitud…"
+              : item.targetType === "MONTHLY"
+                ? "Solicitar permiso para pago parcial"
+                : "Solicitar autorización a administración"}
+          </button>
+        ) : null}
+
+        {canUploadVoucher ? (
+          formOpen ? (
+            <form
+              onSubmit={(event) => void submitPaymentVoucher(item, event)}
+              className="space-y-3 border-t border-white/10 pt-4"
+            >
+              <p className="font-semibold">
+                {paymentAmountMode === "PARTIAL"
+                  ? "Voucher de pago parcial"
+                  : "Voucher de pago total"}
+              </p>
+              <label className="block space-y-1.5 text-sm">
+                <span className="font-medium">Monto del depósito (S/)</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0.01"
+                  max={item.remainingAmount}
+                  step="0.01"
+                  required
+                  value={paymentAmount}
+                  onChange={(event) => setPaymentAmount(event.target.value)}
+                  readOnly={paymentAmountMode !== "PARTIAL"}
+                  className="h-11 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 outline-none focus:border-cyan-400 read-only:text-slate-400"
+                />
+                <span className="block text-xs text-slate-400">
+                  Saldo disponible: {formatMoney(item.remainingAmount)}
+                </span>
+              </label>
+              <label className="block space-y-1.5 text-sm">
+                <span className="font-medium">Voucher (PDF, JPG, PNG o WebP)</span>
+                <input
+                  required
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  onChange={(event) =>
+                    setPaymentFile(event.target.files?.[0] ?? null)
+                  }
+                  className="block w-full text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-100 hover:file:bg-slate-700"
+                />
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenPaymentFormId(null);
+                    setPaymentAmountMode(null);
+                    setPaymentFile(null);
+                  }}
+                  className="min-h-11 flex-1 rounded-lg border border-slate-700 px-4 text-sm font-medium text-slate-200 hover:border-slate-500"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={paymentBusyId === item.id}
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-slate-950 hover:bg-cyan-200 disabled:opacity-50"
+                >
+                  <FileUp aria-hidden className="h-4 w-4" />
+                  {paymentBusyId === item.id ? "Subiendo…" : "Enviar voucher"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className={partialAllowed ? "grid gap-3 sm:grid-cols-2" : ""}>
+              <button
+                type="button"
+                onClick={() => openPaymentVoucherForm(item, "TOTAL")}
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-slate-950 hover:bg-cyan-200"
+              >
+                <FileUp aria-hidden className="h-4 w-4" />
+                Subir voucher total
+              </button>
+              {partialAllowed ? (
+                <button
+                  type="button"
+                  onClick={() => openPaymentVoucherForm(item, "PARTIAL")}
+                  className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-cyan-700 px-4 text-sm font-semibold text-cyan-800 hover:bg-cyan-50"
+                >
+                  <FileUp aria-hidden className="h-4 w-4" />
+                  Subir voucher parcial
+                </button>
+              ) : null}
+            </div>
+          )
+        ) : null}
+      </article>
+    );
+  }
 
   return (
     <main
@@ -1056,207 +1353,101 @@ export default function ClientPortalPage() {
                   El ERP aún no registra pagos o servicios para este contrato.
                 </div>
               ) : (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {paymentItems.map((item) => {
-                    const overdue = item.dueDate < paymentToday;
-                    const canRequestApproval =
-                      overdue &&
-                      Number(item.remainingAmount) > 0 &&
-                      item.status !== "PAID" &&
-                      item.approvalStatus !== "PENDING" &&
-                      item.approvalStatus !== "APPROVED" &&
-                      item.approvalStatus !== "USED";
-                    const partialAllowed =
-                      item.targetType === "MONTHLY" &&
-                      item.dueDate > paymentToday;
-                    const formOpen = openPaymentFormId === item.id;
-                    return (
-                      <article
-                        key={`${item.targetType}-${item.id}`}
-                        className="space-y-4 rounded-2xl border border-white/10 bg-slate-900 p-5"
+                <div className="space-y-8">
+                  <section
+                    className="space-y-4"
+                    aria-labelledby="current-month-payment-title"
+                  >
+                    <div>
+                      <h3
+                        id="current-month-payment-title"
+                        className="text-lg font-semibold text-slate-800"
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-medium uppercase tracking-wide text-cyan-300">
-                              {item.targetType === "MONTHLY" ? "Mensualidad" : "Servicio"}
-                              {item.period ? ` · ${item.period}` : ""}
-                            </p>
-                            <h3 className="mt-1 text-lg font-semibold">{item.title}</h3>
-                          </div>
-                          <span
-                            className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                              item.status === "PAID"
-                                ? "bg-emerald-950 text-emerald-200"
-                                : item.status === "UPLOADED"
-                                  ? "bg-amber-950 text-amber-200"
-                                  : overdue
-                                    ? "bg-red-950 text-red-200"
-                                    : "bg-slate-800 text-slate-200"
-                            }`}
-                          >
-                            {item.status === "PAID"
-                              ? "Pagado"
-                              : item.status === "UPLOADED"
-                                ? "Voucher en revisión"
-                                : overdue
-                                  ? "Vencido"
-                                  : "Pendiente"}
-                          </span>
-                        </div>
-                        <div className="grid gap-3 rounded-xl bg-slate-950/70 p-4 sm:grid-cols-2">
-                          <div>
-                            <p className="flex items-center gap-2 text-xs text-slate-400">
-                              <CalendarDays aria-hidden className="h-4 w-4" />
-                              Fecha de pago
-                            </p>
-                            <p className="mt-1 font-medium">{formatDateOnly(item.dueDate)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-400">
-                              {item.targetType === "MONTHLY" ? "Mensualidad + mantenimiento" : "Monto del servicio"}
-                            </p>
-                            <p className="mt-1 font-semibold">{formatMoney(item.totalAmount)}</p>
-                          </div>
-                          {item.targetType === "MONTHLY" ? (
-                            <div>
-                              <p className="text-xs text-slate-400">Saldo pendiente</p>
-                              <p className="mt-1 font-semibold text-cyan-200">
-                                {formatMoney(item.remainingAmount)}
-                              </p>
-                            </div>
-                          ) : null}
-                        </div>
-                        {item.approvalStatus === "PENDING" ? (
-                          <p className="rounded-lg border border-amber-800 bg-amber-950/40 p-3 text-sm text-amber-100">
-                            Solicitud enviada a Pedidos de clientes. Espera la validación del ERP antes de depositar.
-                          </p>
-                        ) : item.approvalStatus === "APPROVED" ? (
-                          <p className="rounded-lg border border-emerald-800 bg-emerald-950/40 p-3 text-sm text-emerald-100">
-                            El ERP aprobó la solicitud. Ya puedes subir el voucher del saldo completo.
-                          </p>
-                        ) : item.approvalStatus === "REJECTED" ? (
-                          <p className="rounded-lg border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
-                            La solicitud fue rechazada. Puedes enviar una nueva solicitud al ERP.
-                          </p>
-                        ) : null}
-                        {item.status === "UPLOADED" ? (
-                          <p className="text-sm text-amber-100">
-                            Tu voucher fue recibido y está pendiente de verificación.
-                          </p>
-                        ) : null}
-                        {canRequestApproval ? (
-                          <button
-                            type="button"
-                            onClick={() => void requestPaymentApproval(item)}
-                            disabled={paymentApprovalBusyId === item.id}
-                            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-amber-700 px-4 text-sm font-semibold text-amber-100 hover:bg-amber-950/50 disabled:opacity-50"
-                          >
-                            <CreditCard aria-hidden className="h-4 w-4" />
-                            {paymentApprovalBusyId === item.id
-                              ? "Enviando solicitud…"
-                              : "Solicitar autorización al ERP"}
-                          </button>
-                        ) : null}
-                        {item.canUpload && item.status !== "PAID" ? (
-                          formOpen ? (
-                            <form
-                              onSubmit={(event) => void submitPaymentVoucher(item, event)}
-                              className="space-y-3 border-t border-white/10 pt-4"
-                            >
-                              {partialAllowed ? (
-                                <div className="flex gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => setPaymentAmount(item.remainingAmount)}
-                                    className="rounded-md border border-slate-700 px-3 py-2 text-xs font-medium text-slate-200 hover:border-cyan-400"
-                                  >
-                                    Pago total
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setPaymentAmount("")}
-                                    className="rounded-md border border-slate-700 px-3 py-2 text-xs font-medium text-slate-200 hover:border-cyan-400"
-                                  >
-                                    Pago parcial
-                                  </button>
-                                </div>
-                              ) : (
-                                <p className="text-xs text-slate-400">
-                                  {overdue
-                                    ? "Con autorización aprobada, debes depositar el saldo completo."
-                                    : "En la fecha de vencimiento se requiere el pago completo."}
-                                </p>
-                              )}
-                              <label className="block space-y-1.5 text-sm">
-                                <span className="font-medium">Monto del depósito (S/)</span>
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  min="0.01"
-                                  max={item.remainingAmount}
-                                  step="0.01"
-                                  required
-                                  value={paymentAmount}
-                                  onChange={(event) => setPaymentAmount(event.target.value)}
-                                  readOnly={!partialAllowed}
-                                  className="h-11 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 outline-none focus:border-cyan-400 read-only:text-slate-400"
-                                />
-                                <span className="block text-xs text-slate-400">
-                                  Saldo disponible: {formatMoney(item.remainingAmount)}
-                                </span>
-                              </label>
-                              <label className="block space-y-1.5 text-sm">
-                                <span className="font-medium">Voucher (PDF, JPG, PNG o WebP)</span>
-                                <input
-                                  required
-                                  type="file"
-                                  accept="application/pdf,image/jpeg,image/png,image/webp"
-                                  onChange={(event) =>
-                                    setPaymentFile(event.target.files?.[0] ?? null)
-                                  }
-                                  className="block w-full text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-100 hover:file:bg-slate-700"
-                                />
-                              </label>
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setOpenPaymentFormId(null);
-                                    setPaymentFile(null);
-                                  }}
-                                  className="min-h-11 flex-1 rounded-lg border border-slate-700 px-4 text-sm font-medium text-slate-200 hover:border-slate-500"
-                                >
-                                  Cancelar
-                                </button>
-                                <button
-                                  type="submit"
-                                  disabled={paymentBusyId === item.id}
-                                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-slate-950 hover:bg-cyan-200 disabled:opacity-50"
-                                >
-                                  <FileUp aria-hidden className="h-4 w-4" />
-                                  {paymentBusyId === item.id ? "Subiendo…" : "Subir voucher"}
-                                </button>
-                              </div>
-                            </form>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenPaymentFormId(item.id);
-                                setPaymentAmount(item.remainingAmount);
-                                setPaymentFile(null);
-                                setPaymentError("");
-                              }}
-                              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-cyan-300 px-4 text-sm font-semibold text-slate-950 hover:bg-cyan-200"
-                            >
-                              <FileUp aria-hidden className="h-4 w-4" />
-                              Depositar y subir voucher
-                            </button>
-                          )
-                        ) : null}
-                      </article>
-                    );
-                  })}
+                        Mensualidad de {currentPaymentMonthLabel}
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Monto y opciones de voucher del mes actual.
+                      </p>
+                    </div>
+                    {currentMonthPayments.length ? (
+                      <div className="space-y-4">
+                        {currentMonthPayments.map((item) =>
+                          renderPaymentCard(item, "featured"),
+                        )}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-slate-700 p-6 text-sm text-slate-400">
+                        El ERP aún no registra una mensualidad para {currentPaymentMonthLabel}.
+                      </div>
+                    )}
+                  </section>
+
+                  {previousMonthPayments.length ? (
+                    <section
+                      className="space-y-4"
+                      aria-labelledby="previous-month-payments-title"
+                    >
+                      <div>
+                        <h3
+                          id="previous-month-payments-title"
+                          className="text-lg font-semibold text-slate-800"
+                        >
+                          Meses anteriores
+                        </h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Historial resumido de mensualidades y saldos.
+                        </p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {previousMonthPayments.map((item) =>
+                          renderPaymentCard(item, "compact"),
+                        )}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {futureMonthPayments.length ? (
+                    <section
+                      className="space-y-4"
+                      aria-labelledby="future-month-payments-title"
+                    >
+                      <h3
+                        id="future-month-payments-title"
+                        className="text-lg font-semibold text-slate-800"
+                      >
+                        Próximas mensualidades
+                      </h3>
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        {futureMonthPayments.map((item) =>
+                          renderPaymentCard(item, "standard"),
+                        )}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {servicePaymentItems.length ? (
+                    <section
+                      className="space-y-4"
+                      aria-labelledby="service-payments-title"
+                    >
+                      <div>
+                        <h3
+                          id="service-payments-title"
+                          className="text-lg font-semibold text-slate-800"
+                        >
+                          Internet y otros servicios
+                        </h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Los servicios y sus montos provienen del ERP.
+                        </p>
+                      </div>
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        {servicePaymentItems.map((item) =>
+                          renderPaymentCard(item, "standard"),
+                        )}
+                      </div>
+                    </section>
+                  ) : null}
                 </div>
               )}
             </section>
