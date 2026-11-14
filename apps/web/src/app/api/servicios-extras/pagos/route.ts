@@ -120,6 +120,20 @@ export async function GET(req: Request) {
     const denied = requirePermission(auth.user, Permission.CONTRACT_READ);
     if (denied) return denied;
 
+    // Mes a mostrar: por defecto el mes actual (hora Lima), admite ?month=YYYY-MM
+    // para consultar un mes específico.
+    const mesParametro = new URL(req.url).searchParams.get("month");
+    const mesValido =
+      mesParametro && /^(?:\d{4})-(?:0[1-9]|1[0-2])$/.test(mesParametro)
+        ? mesParametro
+        : null;
+    const mesActual = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Lima",
+      year: "numeric",
+      month: "2-digit",
+    }).format(new Date());
+    const mes = mesValido ?? mesActual;
+
     const { db, schema } = dbModule as {
       db: typeof import("@contract/db").db;
       schema: typeof import("@contract/db").schema;
@@ -149,6 +163,7 @@ export async function GET(req: Request) {
         schema.serviciosExtras,
         eq(schema.serviciosExtrasPagos.servicioId, schema.serviciosExtras.id),
       )
+      .where(eq(schema.serviciosExtrasPagos.periodo, mes))
       .orderBy(schema.serviciosExtrasPagos.fechaVencimiento);
 
     return NextResponse.json(
