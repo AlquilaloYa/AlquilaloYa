@@ -358,9 +358,11 @@ export default function ContratosPage() {
     setError(null);
     try {
       let ultimoError: Error = new Error("No se pudieron cargar los contratos.");
-      for (let intento = 0; intento < 3; intento += 1) {
+      for (let intento = 0; intento < 2; intento += 1) {
         try {
-          const res = await apiFetch("/api/contracts/bootstrap?mode=contracts");
+          const res = await apiFetch("/api/contracts/bootstrap?mode=contracts", {
+            timeoutMs: 15_000,
+          });
           if (!res.ok) {
             const body = await res.json().catch(() => ({}));
             const error = new Error(
@@ -379,8 +381,8 @@ export default function ContratosPage() {
         } catch (error) {
           ultimoError = error as Error;
           if ((error as Error & { noReintentar?: boolean }).noReintentar) break;
-          if (intento < 2) {
-            await new Promise((resolve) => setTimeout(resolve, 500 * (intento + 1)));
+          if (intento < 1) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
           }
         }
       }
@@ -392,11 +394,12 @@ export default function ContratosPage() {
 
   useEffect(() => {
     let active = true;
-    void migrarDatosLocales().then(() => {
+    void cargarDatosIniciales().finally(() => {
       if (!active) return;
-      void cargarDatosIniciales();
-      void cargarInventarios(true).catch((err: Error) => {
-        if (active) setError(err.message);
+      void migrarDatosLocales().then(() => {
+        void cargarInventarios(true).catch((err: Error) => {
+          if (active) setError(err.message);
+        });
       });
     });
     return () => {
