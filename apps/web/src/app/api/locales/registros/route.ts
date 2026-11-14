@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { Permission } from "@contract/domain/rbac";
 import {
   isLocalModule,
@@ -43,9 +43,9 @@ async function validateReferences(
     const [contact] = await dbModule.db
       .select({ id: schema.localContacts.id })
       .from(schema.localContacts)
-      .where(and(eq(schema.localContacts.id, record.contactId), eq(schema.localContacts.localId, record.localId)))
+      .where(eq(schema.localContacts.id, record.contactId))
       .limit(1);
-    if (!contact) return "El contacto no pertenece al local seleccionado.";
+    if (!contact) return "Contacto no encontrado.";
     return null;
   }
   if (record.tipo === "contratos") {
@@ -84,9 +84,9 @@ async function validateReferences(
     const [contact] = await dbModule.db
       .select({ id: schema.localContacts.id })
       .from(schema.localContacts)
-      .where(and(eq(schema.localContacts.id, record.contactId), eq(schema.localContacts.localId, record.localId)))
+      .where(eq(schema.localContacts.id, record.contactId))
       .limit(1);
-    if (!contact) return "El contacto no pertenece al local seleccionado.";
+    if (!contact) return "Contacto no encontrado.";
     if (record.separationId) {
       const [separation] = await dbModule.db
         .select({
@@ -142,11 +142,12 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const tipo = url.searchParams.get("tipo");
-    const localId = url.searchParams.get("localId");
+    const localId = url.searchParams.get("localId") ?? "";
     if (!isLocalModule(tipo)) {
       return NextResponse.json({ error: "Selecciona una sección válida." }, { status: 400 });
     }
-    if (!localId || !UUID.test(localId)) {
+    const allowsAllLocals = tipo === "contactos" || tipo === "separaciones" || tipo === "contratos";
+    if ((localId && !UUID.test(localId)) || (!allowsAllLocals && !localId)) {
       return NextResponse.json({ error: "Identificador de local inválido." }, { status: 400 });
     }
     const requestedLimit = Number(url.searchParams.get("limit") ?? 50);
@@ -171,6 +172,7 @@ export async function GET(request: Request) {
         rows = await dbModule.db.select({
           id: schema.localContacts.id,
           localId: schema.localContacts.localId,
+          localCodigo: schema.locales.codigo,
           nombres: schema.localContacts.nombres,
           apellidos: schema.localContacts.apellidos,
           documento: schema.localContacts.documento,
@@ -190,15 +192,20 @@ export async function GET(request: Request) {
           createdAt: schema.localContacts.createdAt,
           updatedAt: schema.localContacts.updatedAt,
         }).from(schema.localContacts)
-          .where(eq(schema.localContacts.localId, localId))
+          .innerJoin(schema.locales, eq(schema.locales.id, schema.localContacts.localId))
+          .where(localId ? eq(schema.localContacts.localId, localId) : undefined)
           .orderBy(desc(schema.localContacts.createdAt))
           .limit(limit).offset(offset);
         total = (await dbModule.db.select({ count: count() }).from(schema.localContacts)
-          .where(eq(schema.localContacts.localId, localId)))[0]?.count ?? 0;
+          .where(localId ? eq(schema.localContacts.localId, localId) : undefined))[0]?.count ?? 0;
         break;
       case "separaciones":
-        rows = (await dbModule.db.select().from(schema.localSeparations)
-          .where(eq(schema.localSeparations.localId, localId))
+        rows = (await dbModule.db.select({
+          ...getTableColumns(schema.localSeparations),
+          localCodigo: schema.locales.codigo,
+        }).from(schema.localSeparations)
+          .innerJoin(schema.locales, eq(schema.locales.id, schema.localSeparations.localId))
+          .where(localId ? eq(schema.localSeparations.localId, localId) : undefined)
           .orderBy(desc(schema.localSeparations.createdAt))
           .limit(limit).offset(offset)).map((separation) => {
             const fechaLimiteManual = effectiveSeparationDeadline(separation);
@@ -211,15 +218,19 @@ export async function GET(request: Request) {
             return { ...separation, fechaLimiteManual, estadoVista };
           });
         total = (await dbModule.db.select({ count: count() }).from(schema.localSeparations)
-          .where(eq(schema.localSeparations.localId, localId)))[0]?.count ?? 0;
+          .where(localId ? eq(schema.localSeparations.localId, localId) : undefined))[0]?.count ?? 0;
         break;
       case "contratos":
-        rows = await dbModule.db.select().from(schema.localContracts)
-          .where(eq(schema.localContracts.localId, localId))
+        rows = await dbModule.db.select({
+          ...getTableColumns(schema.localContracts),
+          localCodigo: schema.locales.codigo,
+        }).from(schema.localContracts)
+          .innerJoin(schema.locales, eq(schema.locales.id, schema.localContracts.localId))
+          .where(localId ? eq(schema.localContracts.localId, localId) : undefined)
           .orderBy(desc(schema.localContracts.createdAt))
           .limit(limit).offset(offset);
         total = (await dbModule.db.select({ count: count() }).from(schema.localContracts)
-          .where(eq(schema.localContracts.localId, localId)))[0]?.count ?? 0;
+          .where(localId ? eq(schema.localContracts.localId, localId) : undefined))[0]?.count ?? 0;
         break;
       case "adendas":
         rows = await dbModule.db.select().from(schema.localAnnexes)

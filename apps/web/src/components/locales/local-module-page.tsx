@@ -43,6 +43,14 @@ type DataRow = Record<string, string | number | boolean | null | string[] | Loca
 
 type FieldType = "text" | "email" | "tel" | "date" | "number" | "textarea" | "select" | "checkbox" | "file";
 type LocalContactAttachment = { id: string; nombre: string; tipo: string; dataUrl: string };
+type ContactDocumentGroup = {
+  label: string;
+  attachments: LocalContactAttachment[];
+};
+type ContactDocumentPreview = {
+  title: string;
+  groups: ContactDocumentGroup[];
+};
 const CONTACT_ATTACHMENT_FIELDS = ["copiaDni", "copiaBoletas", "copiaAntecedentes"] as const;
 
 function parseContactAttachments(value: string): LocalContactAttachment[] {
@@ -129,9 +137,10 @@ function separationNotExpired(record: DataRow) {
 const MODULES: Record<LocalModule, ModuleConfig> = {
   contactos: {
     title: "Contactos de Locales",
-    description: "Contactos independientes, asociados solo al local seleccionado.",
+    description: "Contactos registrados en esta sección, asociados al local indicado.",
     singular: "contacto",
     fields: [
+      { name: "localId", label: "Local", type: "select", required: true },
       { name: "tipoPersona", label: "Tipo de persona", type: "select", required: true, options: [
         { value: PersonType.NATURAL, label: "Persona natural" },
         { value: PersonType.LEGAL, label: "Persona jurídica" },
@@ -144,7 +153,6 @@ const MODULES: Record<LocalModule, ModuleConfig> = {
       { name: "nacionalidad", label: "Nacionalidad", type: "text" },
       { name: "codigoPais", label: "Código de país", type: "text", required: true },
       { name: "telefono", label: "Teléfono", type: "tel" },
-      { name: "email", label: "Correo electrónico", type: "email" },
       { name: "contactoEmergenciaNombre", label: "Contacto de emergencia", type: "text" },
       { name: "contactoEmergenciaParentesco", label: "Parentesco", type: "text" },
       { name: "contactoEmergenciaTelefono", label: "Teléfono de emergencia", type: "tel" },
@@ -155,13 +163,13 @@ const MODULES: Record<LocalModule, ModuleConfig> = {
       { name: "copiaAntecedentes", label: "Antecedentes penales", type: "file" },
     ],
     columns: [
+      { name: "localCodigo", label: "Local" },
       { name: "nombres", label: "Nombres" },
       { name: "apellidos", label: "Apellidos" },
       { name: "tipoPersona", label: "Tipo" },
       { name: "documento", label: "DNI/CE" },
       { name: "ruc", label: "RUC" },
       { name: "telefono", label: "Teléfono" },
-      { name: "email", label: "Correo" },
       { name: "domicilio", label: "Domicilio" },
       { name: "nacionalidad", label: "Nacionalidad" },
       { name: "mascotas", label: "Mascotas" },
@@ -170,9 +178,10 @@ const MODULES: Record<LocalModule, ModuleConfig> = {
   },
   separaciones: {
     title: "Separaciones de Locales",
-    description: "Registra separaciones vinculadas a contactos de este local.",
+    description: "Registra y consulta separaciones de contactos de Locales para cualquier local.",
     singular: "separación",
     fields: [
+      { name: "localId", label: "Local solicitado", type: "select", required: true },
       { name: "contactId", label: "Contacto", type: "select", required: true },
       { name: "tipoSeparacion", label: "Tipo de separación", type: "select", required: true, options: TYPE_SEPARATION },
       { name: "monto", label: "Monto (S/)", type: "number", required: true },
@@ -182,6 +191,7 @@ const MODULES: Record<LocalModule, ModuleConfig> = {
       { name: "observaciones", label: "Observaciones", type: "textarea" },
     ],
     columns: [
+      { name: "localCodigo", label: "Local" },
       { name: "contactId", label: "Contacto", format: "reference" },
       { name: "tipoSeparacion", label: "Tipo" },
       { name: "monto", label: "Monto", format: "money" },
@@ -195,9 +205,10 @@ const MODULES: Record<LocalModule, ModuleConfig> = {
   },
   contratos: {
     title: "Contratos de Locales",
-    description: "Emite contratos para este local y completa la garantía, la primera mensualidad y el contrato firmado.",
+    description: "Consulta contratos de todos los locales y emite nuevos para el local que elijas.",
     singular: "contrato",
     fields: [
+      { name: "localId", label: "Local", type: "select", required: true },
       { name: "codigo", label: "Código del contrato", type: "text", required: true },
       { name: "plantillaVersionId", label: "Plantilla de contrato", type: "select", required: true },
       { name: "contactId", label: "Contacto", type: "select", required: true },
@@ -210,6 +221,7 @@ const MODULES: Record<LocalModule, ModuleConfig> = {
       { name: "estado", label: "Estado", type: "select", required: true, options: [STATUS_CONTRACT[0]!] },
     ],
     columns: [
+      { name: "localCodigo", label: "Local" },
       { name: "codigo", label: "Código" },
       { name: "contactId", label: "Contacto", format: "reference" },
       { name: "montoCanon", label: "Canon", format: "money" },
@@ -296,10 +308,40 @@ function emptyForm(config: ModuleConfig): Record<string, string | boolean> {
 
 function recordLabel(type: "contactos" | "separaciones" | "contratos", row: DataRow) {
   if (type === "contactos") {
-    return [row.nombres, row.apellidos, row.documento].filter(Boolean).join(" ");
+    return [row.nombres, row.apellidos, row.documento, row.localCodigo]
+      .filter(Boolean)
+      .join(" · ");
   }
   if (type === "contratos") return String(row.codigo ?? "");
   return `${row.fecha ?? ""} · ${row.estado ?? ""}`;
+}
+
+async function loadReferenceRecords(
+  type: "contactos" | "separaciones" | "contratos",
+  localId?: string,
+) {
+  const limit = 100;
+  const loadPage = async (offset: number) => {
+    const params = new URLSearchParams({ tipo: type, limit: String(limit), offset: String(offset) });
+    if (localId) params.set("localId", localId);
+    const response = await apiFetch(`/api/locales/registros?${params}`);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? `No se pudieron cargar los ${type}.`);
+    }
+    return (await response.json()) as { records: DataRow[]; total: number };
+  };
+
+  const firstPage = await loadPage(0);
+  const records = [...firstPage.records];
+  for (let offset = records.length; offset < firstPage.total; offset += limit) {
+    const page = await loadPage(offset);
+    if (page.records.length === 0) {
+      throw new Error(`No se pudieron cargar todos los ${type}.`);
+    }
+    records.push(...page.records);
+  }
+  return records;
 }
 
 function formatCell(value: string | number | boolean | null | undefined, format?: "money" | "date") {
@@ -333,17 +375,24 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contactDocuments, setContactDocuments] = useState<ContactDocumentPreview | null>(null);
+  const [loadingContactDocuments, setLoadingContactDocuments] = useState(false);
   const [workflow, setWorkflow] = useState<{
     ownerType: LocalDocumentOwner;
     ownerId: string;
+    localId: string;
     action: "completar" | "extender";
     requiredDocuments: { tipo: string; label: string }[];
   } | null>(null);
   const limit = 50;
 
   const local = useMemo(() => locales.find((item) => item.id === localId), [localId, locales]);
+  const contactFormLocal = useMemo(
+    () => locales.find((item) => item.id === String(form.localId ?? "")),
+    [form.localId, locales],
+  );
   const canCreateContract = module !== "contratos" ||
-    (availableContractLocalIds !== null && availableContractLocalIds.includes(localId));
+    (availableContractLocalIds !== null && availableContractLocalIds.length > 0);
 
   const loadAvailableContractLocals = useCallback(async () => {
     const response = await apiFetch("/api/locales?availableForContract=1");
@@ -384,9 +433,11 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
         setLocales(items);
         const requestedLocalId = new URLSearchParams(window.location.search).get("localId");
         setLocalId((current) =>
-          items.some((item) => item.id === current)
-            ? current
-            : items.find((item) => item.id === requestedLocalId)?.id ?? items[0]?.id ?? "",
+          module === "contactos"
+            ? ""
+            : items.some((item) => item.id === current)
+              ? current
+              : items.find((item) => item.id === requestedLocalId)?.id ?? items[0]?.id ?? "",
         );
       })
       .catch((loadError: unknown) => {
@@ -398,7 +449,7 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [module]);
 
   useEffect(() => {
     if (module !== "contratos") {
@@ -453,19 +504,16 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
   }, [module]);
 
   const loadRecords = useCallback(async () => {
-    if (!localId) {
+    const allRecords = ["contactos", "separaciones", "contratos"].includes(module);
+    if (!localId && !allRecords) {
       setRecords([]);
       setTotal(0);
       return;
     }
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        tipo: module,
-        localId,
-        limit: String(limit),
-        offset: String(offset),
-      });
+      const params = new URLSearchParams({ tipo: module, limit: String(limit), offset: String(offset) });
+      if (!allRecords) params.set("localId", localId);
       const response = await apiFetch(`/api/locales/registros?${params}`);
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -489,20 +537,19 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
   useEffect(() => {
     let active = true;
     const dependencyTypes = Object.keys(config.references) as ("contactos" | "separaciones" | "contratos")[];
-    if (!localId || dependencyTypes.length === 0) {
+    const referenceLocalId = module === "contratos" && isOpen
+      ? String(form.localId ?? "")
+      : localId;
+    const allContacts = module === "separaciones" || module === "contratos";
+    const needsLocalId = dependencyTypes.some((type) => !(allContacts && type === "contactos"));
+    if (dependencyTypes.length === 0 || (needsLocalId && !referenceLocalId)) {
       setReferences({});
       return;
     }
     void Promise.all(
       dependencyTypes.map(async (type) => {
-        const params = new URLSearchParams({ tipo: type, localId, limit: "100", offset: "0" });
-        const response = await apiFetch(`/api/locales/registros?${params}`);
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(body.error ?? `No se pudieron cargar los ${type}.`);
-        }
-        const result = (await response.json()) as { records: DataRow[] };
-        return [type, result.records] as const;
+        const typeLocalId = allContacts && type === "contactos" ? undefined : referenceLocalId;
+        return [type, await loadReferenceRecords(type, typeLocalId)] as const;
       }),
     )
       .then((entries) => {
@@ -514,7 +561,7 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
     return () => {
       active = false;
     };
-  }, [config.references, localId]);
+  }, [config.references, form.localId, isOpen, localId, module]);
 
   function openEditor(record: DataRow | null) {
     setEditing(record);
@@ -553,17 +600,23 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
     if (!record) {
       if (module === "separaciones") {
         Object.assign(initialForm, {
+          localId,
           monto: "500",
           diasTiempo: "1",
           garantiaExtendida: false,
           fecha: new Date().toISOString().slice(0, 10),
         });
       } else if (module === "contratos") {
+        const defaultContractLocalId = availableContractLocalIds?.includes(localId)
+          ? localId
+          : availableContractLocalIds?.[0] ?? "";
+        const defaultContractLocal = locales.find((item) => item.id === defaultContractLocalId);
         Object.assign(initialForm, {
-          codigo: local?.codigo ?? "",
-          montoCanon: local?.precioAlquiler ?? "0",
-          depositoGarantia: local?.garantia ?? "0",
-          mantenimiento: local?.mantenimiento ?? "0",
+          localId: defaultContractLocalId,
+          codigo: defaultContractLocal?.codigo ?? "",
+          montoCanon: defaultContractLocal?.precioAlquiler ?? "0",
+          depositoGarantia: defaultContractLocal?.garantia ?? "0",
+          mantenimiento: defaultContractLocal?.mantenimiento ?? "0",
           fechaInicio: new Date().toISOString().slice(0, 10),
           fechaFin: "",
         });
@@ -609,6 +662,44 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
       openEditor(body as DataRow);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "No se pudieron cargar los datos del contacto.");
+    }
+  }
+
+  async function viewContactDocuments(record: DataRow) {
+    setLoadingContactDocuments(true);
+    setError(null);
+    try {
+      const response = await apiFetch(`/api/locales/registros/${record.id}?tipo=contactos`);
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok || typeof body !== "object" || body === null || !("id" in body)) {
+        throw new Error(
+          typeof body === "object" && body !== null && "error" in body
+            ? String(body.error)
+            : "No se pudieron cargar los documentos del contacto.",
+        );
+      }
+      const contact = body as Record<string, unknown>;
+      setContactDocuments({
+        title: [contact.nombres, contact.apellidos].filter(Boolean).join(" ") || recordLabel("contactos", record),
+        groups: [
+          {
+            label: "DNI/CE",
+            attachments: parseContactAttachments(JSON.stringify(contact.copiaDni ?? [])),
+          },
+          {
+            label: "Boletas de pago",
+            attachments: parseContactAttachments(JSON.stringify(contact.copiaBoletas ?? [])),
+          },
+          {
+            label: "Antecedentes penales",
+            attachments: parseContactAttachments(JSON.stringify(contact.copiaAntecedentes ?? [])),
+          },
+        ],
+      });
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "No se pudieron cargar los documentos del contacto.");
+    } finally {
+      setLoadingContactDocuments(false);
     }
   }
 
@@ -680,12 +771,19 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
 
   async function saveRecord(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!localId) return;
+    const recordLocalId = ["contactos", "separaciones", "contratos"].includes(module)
+      ? String(form.localId ?? "")
+      : localId;
+    if (!recordLocalId) {
+      setError("Selecciona un local.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const payload: Record<string, unknown> = { ...form, tipo: module, localId };
+      const payload: Record<string, unknown> = { ...form, tipo: module, localId: recordLocalId };
       if (module === "contactos") {
+        payload.email = editing ? String(editing.email ?? "") : "";
         payload.contactoEmergencia = {
           nombre: String(form.contactoEmergenciaNombre ?? ""),
           parentesco: String(form.contactoEmergenciaParentesco ?? ""),
@@ -724,14 +822,10 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
       }
       const dependencyTypes = Object.keys(config.references) as ("contactos" | "separaciones" | "contratos")[];
       const refreshed = await Promise.all(dependencyTypes.map(async (type) => {
-        const params = new URLSearchParams({ tipo: type, localId, limit: "100", offset: "0" });
-        const response = await apiFetch(`/api/locales/registros?${params}`);
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(body.error ?? `No se pudieron actualizar los ${type}.`);
-        }
-        const body = (await response.json()) as { records: DataRow[] };
-        return [type, body.records] as const;
+        const typeLocalId = (module === "separaciones" || module === "contratos") && type === "contactos"
+          ? undefined
+          : recordLocalId;
+        return [type, await loadReferenceRecords(type, typeLocalId)] as const;
       }));
       setReferences((current) => ({ ...current, ...Object.fromEntries(refreshed) }));
     } catch (saveError) {
@@ -742,13 +836,22 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
   }
 
   function fieldOptions(field: FieldConfig) {
+    if (field.name === "localId") {
+      const availableContractLocals = module === "contratos" && !editing && availableContractLocalIds !== null
+        ? locales.filter((item) => availableContractLocalIds.includes(item.id))
+        : locales;
+      return availableContractLocals.map((item) => ({
+        value: item.id,
+        label: `${item.codigo} · ${item.sede}`,
+      }));
+    }
     if (field.name === "codigo") {
       if (editing) {
         const codigo = String(editing.codigo ?? "");
         return codigo ? [{ value: codigo, label: codigo }] : [];
       }
-      return local && availableContractLocalIds?.includes(local.id)
-        ? [{ value: local.codigo, label: local.codigo }]
+      return contactFormLocal && availableContractLocalIds?.includes(contactFormLocal.id)
+        ? [{ value: contactFormLocal.codigo, label: contactFormLocal.codigo }]
         : [];
     }
     if (field.name === "plantillaVersionId") {
@@ -798,8 +901,12 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
   }
 
   async function openWorkflow(record: DataRow, action: "completar" | "extender" = "completar") {
-    if (!localId) return;
     if (module === "contactos" || module === "servicios") return;
+    const recordLocalId = String(record.localId ?? "");
+    if (!recordLocalId) {
+      setError("No se pudo identificar el local del registro.");
+      return;
+    }
     const ownerType: LocalDocumentOwner = module;
     const isInitialState =
       (module === "contratos" && record.estado === "BORRADOR") ||
@@ -832,7 +939,7 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
             { tipo: "CONTRATO_FIRMADO", label: "Contrato firmado (PDF o imagen)" },
           ]
         : [{ tipo: "ADENDA_FIRMADA", label: "Adenda firmada (PDF o imagen)" }];
-    setWorkflow({ ownerType, ownerId: record.id, action, requiredDocuments });
+    setWorkflow({ ownerType, ownerId: record.id, localId: recordLocalId, action, requiredDocuments });
   }
 
   async function completeWorkflow() {
@@ -868,34 +975,39 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               Actualizar
             </button>
-            <button type="button" onClick={() => openEditor(null)} disabled={!localId || !canCreateContract} className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm text-primary-foreground disabled:opacity-50">
+            {["separaciones", "contratos"].includes(module) ? (
+              <span className="inline-flex h-10 items-center text-sm text-muted-foreground">{total} registros</span>
+            ) : null}
+            <button type="button" onClick={() => openEditor(null)} disabled={(module === "contactos" ? locales.length === 0 : !localId) || !canCreateContract} className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm text-primary-foreground disabled:opacity-50">
               <Plus className="h-4 w-4" />
               Nuevo {config.singular}
             </button>
           </div>
         </div>
-        {module === "contratos" && localId && availableContractLocalIds !== null && !canCreateContract ? (
-          <p className="text-sm text-muted-foreground">Este local ya tiene un contrato y no está disponible para un nuevo contrato.</p>
+        {module === "contratos" && availableContractLocalIds !== null && !canCreateContract ? (
+          <p className="text-sm text-muted-foreground">No hay locales disponibles para crear un nuevo contrato.</p>
         ) : null}
 
-        <section className="flex flex-wrap items-center gap-3 rounded-lg bg-card p-4 shadow-sm">
-          <label htmlFor="local-filter" className="text-sm font-medium">Local</label>
-          <select
-            id="local-filter"
-            value={localId}
-            onChange={(event) => {
-              setOffset(0);
-              setLocalId(event.target.value);
-            }}
-            className="h-10 min-w-56 rounded-md border bg-background px-3 text-sm"
-          >
-            {locales.map((item) => (
-              <option key={item.id} value={item.id}>{item.codigo} · {item.sede}</option>
-            ))}
-          </select>
-          {local ? <span className="text-sm text-muted-foreground">{local.nombre}</span> : null}
-          <span className="ml-auto text-sm text-muted-foreground">{total} registros</span>
-        </section>
+        {!["contactos", "separaciones", "contratos"].includes(module) ? (
+          <section className="flex flex-wrap items-center gap-3 rounded-lg bg-card p-4 shadow-sm">
+            <label htmlFor="local-filter" className="text-sm font-medium">Local</label>
+            <select
+              id="local-filter"
+              value={localId}
+              onChange={(event) => {
+                setOffset(0);
+                setLocalId(event.target.value);
+              }}
+              className="h-10 min-w-56 rounded-md border bg-background px-3 text-sm"
+            >
+              {locales.map((item) => (
+                <option key={item.id} value={item.id}>{item.codigo} · {item.sede}</option>
+              ))}
+            </select>
+            {local ? <span className="text-sm text-muted-foreground">{local.nombre}</span> : null}
+            <span className="ml-auto text-sm text-muted-foreground">{total} registros</span>
+          </section>
+        ) : null}
 
         {error && !isOpen ? (
           <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>
@@ -905,7 +1017,13 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
           <p className="p-8 text-center text-sm text-muted-foreground">Cargando registros…</p>
         ) : records.length === 0 ? (
           <div className="rounded-lg border border-dashed p-10 text-center">
-            <p className="font-medium">No hay {config.title.toLowerCase()} en este local.</p>
+            <p className="font-medium">
+              {module === "contactos"
+                ? "No hay contactos registrados desde esta sección."
+                : ["separaciones", "contratos"].includes(module)
+                  ? `No hay ${config.title.toLowerCase()} registrados.`
+                  : `No hay ${config.title.toLowerCase()} en este local.`}
+            </p>
             <p className="mt-1 text-sm text-muted-foreground">Los registros se almacenan aparte de Departamentos y de los módulos generales.</p>
           </div>
         ) : (
@@ -915,46 +1033,68 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
                 <thead className="border-b bg-muted/40">
                   <tr>
                     {config.columns.map((column) => <th key={column.name} className="whitespace-nowrap px-4 py-3 font-medium">{column.label}</th>)}
+                    {module === "contactos" ? <th className="whitespace-nowrap px-4 py-3 font-medium">Documentación</th> : null}
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map((record) => (
-                    <tr key={record.id} className="border-b last:border-0">
-                      {config.columns.map((column) => (
-                        <td key={column.name} className="max-w-64 truncate px-4 py-3">
-                          {cellValue(column, record)}
+                  {records.map((record) => {
+                    const documentCount = Number(record.copiaDniCount ?? 0) +
+                      Number(record.copiaBoletasCount ?? 0) +
+                      Number(record.copiaAntecedentesCount ?? 0);
+                    return (
+                      <tr key={record.id} className="border-b last:border-0">
+                        {config.columns.map((column) => (
+                          <td key={column.name} className="max-w-64 truncate px-4 py-3">
+                            {cellValue(column, record)}
+                          </td>
+                        ))}
+                        {module === "contactos" ? (
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() => void viewContactDocuments(record)}
+                              disabled={documentCount === 0 || loadingContactDocuments}
+                              className="rounded-md border px-3 py-1.5 text-sm text-primary hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {loadingContactDocuments
+                                ? "Cargando…"
+                                : documentCount === 0
+                                  ? "Sin documentos"
+                                  : `Ver documentos (${documentCount})`}
+                            </button>
+                          </td>
+                        ) : null}
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-2">
+                            {module === "separaciones" && record.estado === "PENDIENTE" && separationNotExpired(record) ? (
+                              <button type="button" onClick={() => void openWorkflow(record)} className="rounded-md border border-primary px-3 py-1.5 text-sm text-primary hover:bg-primary/5">
+                                Voucher y confirmar
+                              </button>
+                            ) : null}
+                            {module === "separaciones" && record.estado !== "CANCELADA" && !record.garantiaExtendida && separationNotExpired(record) ? (
+                              <button type="button" onClick={() => void openWorkflow(record, "extender")} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">
+                                Extender garantía
+                              </button>
+                            ) : null}
+                            {module === "contratos" && (record.estado === "BORRADOR" || record.estado === "EMITIDO") ? (
+                              <button type="button" onClick={() => void openWorkflow(record)} className="rounded-md border border-primary px-3 py-1.5 text-sm text-primary hover:bg-primary/5">
+                                {record.estado === "BORRADOR" ? "Emitir contrato" : "Completar contrato"}
+                              </button>
+                            ) : null}
+                            {module === "adendas" && (record.estado === "BORRADOR" || record.estado === "EMITIDA") ? (
+                              <button type="button" onClick={() => void openWorkflow(record)} className="rounded-md border border-primary px-3 py-1.5 text-sm text-primary hover:bg-primary/5">
+                                {record.estado === "BORRADOR" ? "Emitir adenda" : "Completar adenda"}
+                              </button>
+                            ) : null}
+                            <button type="button" onClick={() => void editRecord(record)} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">
+                              Editar
+                            </button>
+                          </div>
                         </td>
-                      ))}
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          {module === "separaciones" && record.estado === "PENDIENTE" && separationNotExpired(record) ? (
-                            <button type="button" onClick={() => void openWorkflow(record)} className="rounded-md border border-primary px-3 py-1.5 text-sm text-primary hover:bg-primary/5">
-                              Voucher y confirmar
-                            </button>
-                          ) : null}
-                          {module === "separaciones" && record.estado !== "CANCELADA" && !record.garantiaExtendida && separationNotExpired(record) ? (
-                            <button type="button" onClick={() => void openWorkflow(record, "extender")} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">
-                              Extender garantía
-                            </button>
-                          ) : null}
-                          {module === "contratos" && (record.estado === "BORRADOR" || record.estado === "EMITIDO") ? (
-                            <button type="button" onClick={() => void openWorkflow(record)} className="rounded-md border border-primary px-3 py-1.5 text-sm text-primary hover:bg-primary/5">
-                              {record.estado === "BORRADOR" ? "Emitir contrato" : "Completar contrato"}
-                            </button>
-                          ) : null}
-                          {module === "adendas" && (record.estado === "BORRADOR" || record.estado === "EMITIDA") ? (
-                            <button type="button" onClick={() => void openWorkflow(record)} className="rounded-md border border-primary px-3 py-1.5 text-sm text-primary hover:bg-primary/5">
-                              {record.estado === "BORRADOR" ? "Emitir adenda" : "Completar adenda"}
-                            </button>
-                          ) : null}
-                          <button type="button" onClick={() => void editRecord(record)} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted">
-                            Editar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </TableScroll>
@@ -979,7 +1119,15 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold">{editing ? `Editar ${config.singular}` : `Nuevo ${config.singular}`}</h2>
-                <p className="text-sm text-muted-foreground">{local?.codigo} · Este registro pertenece solo a este local.</p>
+                <p className="text-sm text-muted-foreground">
+                  {module === "contactos"
+                    ? `${contactFormLocal?.codigo ?? "Selecciona un local"} · Contacto asociado al local indicado.`
+                    : module === "separaciones"
+                      ? `${contactFormLocal?.codigo ?? "Selecciona un local"} · La separación se registra en este local.`
+                      : module === "contratos"
+                        ? `${contactFormLocal?.codigo ?? "Selecciona un local"} · El contrato se registra en este local.`
+                        : `${local?.codigo} · Este registro pertenece solo a este local.`}
+                </p>
               </div>
               <button type="button" onClick={() => setIsOpen(false)} disabled={saving} aria-label="Cerrar">
                 <X className="h-5 w-5" />
@@ -1032,13 +1180,33 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
                     ) : field.type === "textarea" ? (
                       <textarea required={required} maxLength={field.name === "descripcion" ? 4000 : 2000} rows={3} value={String(value)} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))} className="w-full rounded-md border bg-background px-3 py-2" />
                     ) : field.type === "select" ? (
-                      <select required={required && !(editing && field.name === "plantillaVersionId")} value={String(value)} disabled={missingOptions || (field.name === "estado" && Boolean(editing)) || (field.name === "codigo" && Boolean(editing))} onChange={(event) => setForm((current) => ({
+                      <select required={required && !(editing && field.name === "plantillaVersionId")} value={String(value)} disabled={missingOptions || (field.name === "estado" && Boolean(editing)) || (field.name === "codigo" && Boolean(editing)) || (field.name === "localId" && Boolean(editing))} onChange={(event) => setForm((current) => ({
                         ...current,
                         [field.name]: event.target.value,
+                        ...(field.name === "localId" && module === "contratos"
+                          ? (() => {
+                              const selectedLocal = locales.find((item) => item.id === event.target.value);
+                              return {
+                                codigo: selectedLocal?.codigo ?? "",
+                                montoCanon: selectedLocal?.precioAlquiler ?? "0",
+                                depositoGarantia: selectedLocal?.garantia ?? "0",
+                                mantenimiento: selectedLocal?.mantenimiento ?? "0",
+                                separationId: "",
+                              };
+                            })()
+                          : {}),
+                        ...(field.name === "localId" && module === "separaciones"
+                          ? {
+                              monto: form.tipoSeparacion === "TOTAL"
+                                ? locales.find((item) => item.id === event.target.value)?.precioAlquiler ?? "0"
+                                : "500",
+                            }
+                          : {}),
                         ...(field.name === "tipoSeparacion" && event.target.value !== "FLUCTUANTE"
-                          ? { monto: event.target.value === "TOTAL" ? local?.precioAlquiler ?? "0" : "500" }
+                          ? { monto: event.target.value === "TOTAL" ? contactFormLocal?.precioAlquiler ?? "0" : "500" }
                           : {}),
                       }))} className="h-10 w-full rounded-md border bg-background px-3 disabled:opacity-50">
+                        {field.name === "localId" && !value ? <option value="">Selecciona un local</option> : null}
                         {!field.required ? <option value="">Ninguno</option> : null}
                         {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                       </select>
@@ -1053,22 +1221,74 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
                 );
               })}
             </div>
+            {module === "contactos" && !locales.length ? (
+              <p className="text-xs text-muted-foreground">Primero registra un local en el catálogo.</p>
+            ) : null}
             <div className="flex justify-end gap-2 border-t pt-4">
               <button type="button" onClick={() => setIsOpen(false)} disabled={saving} className="rounded-md border px-4 py-2 text-sm">Cancelar</button>
-              <button type="submit" disabled={saving || !localId} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">{saving ? "Guardando…" : "Guardar"}</button>
+              <button type="submit" disabled={saving || (["contactos", "separaciones", "contratos"].includes(module) ? !String(form.localId ?? "") : !localId)} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">{saving ? "Guardando…" : "Guardar"}</button>
             </div>
           </form>
         </div>
       ) : null}
-      {workflow && localId ? (
+      {workflow ? (
         <LocalDocumentsModal
-          localId={localId}
+          localId={workflow.localId}
           ownerId={workflow.ownerId}
           ownerType={workflow.ownerType}
           requiredDocuments={workflow.requiredDocuments}
           onClose={() => setWorkflow(null)}
           onComplete={completeWorkflow}
         />
+      ) : null}
+      {contactDocuments ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="contact-documents-title"
+            className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-xl bg-background p-5 shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="contact-documents-title" className="text-xl font-semibold">Documentación adjunta</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{contactDocuments.title}</p>
+              </div>
+              <button type="button" onClick={() => setContactDocuments(null)} aria-label="Cerrar" className="rounded p-1">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {loadingContactDocuments ? <p className="text-sm text-muted-foreground">Cargando documentos…</p> : null}
+            {contactDocuments.groups.map((group) => (
+              <section key={group.label} className="rounded-lg border p-3">
+                <h3 className="text-sm font-semibold">{group.label}</h3>
+                {group.attachments.length ? (
+                  <ul className="mt-2 space-y-2">
+                    {group.attachments.map((attachment) => (
+                      <li key={attachment.id}>
+                        <a
+                          href={attachment.dataUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block truncate text-sm text-primary underline"
+                        >
+                          {attachment.nombre}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">Sin documentos adjuntos.</p>
+                )}
+              </section>
+            ))}
+            <div className="flex justify-end border-t pt-4">
+              <button type="button" onClick={() => setContactDocuments(null)} className="rounded-md border px-4 py-2 text-sm">
+                Cerrar
+              </button>
+            </div>
+          </section>
+        </div>
       ) : null}
     </DashboardShell>
   );
