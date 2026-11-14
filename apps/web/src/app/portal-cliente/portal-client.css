@@ -537,6 +537,15 @@
   background: #f7fbff;
 }
 
+.portal-dashboard-card-contracts {
+  background: #f8fbf9;
+}
+
+.portal-dashboard-card-contracts .portal-dashboard-card-icons {
+  background: #e4f3ec;
+  color: #1a8458;
+}
+
 .portal-dashboard-card-contact {
   background: #f6fcf8;
 }

@@ -35,4 +35,5 @@ export * from "./tenant-scoring";
 export * from "./client-portal";
 export * from "./client-portal-notifications";
 export * from "./client-payment-approvals";
+export * from "./client-contract-renewals";
 export * from "./issue-types";

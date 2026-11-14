@@ -36,6 +36,8 @@ const PUBLIC_ROUTES = new Set<string>([
   "portal-cliente/pagos/route.ts",
   "portal-cliente/session/route.ts",
   "portal-cliente/uploads/route.ts",
+  "portal-cliente/contratos/route.ts",
+  "portal-cliente/contratos/documento/route.ts",
   // Endpoints máquina-a-máquina (token/HMAC propio).
   "cron/automatizaciones/route.ts",
   "cron/client-payment-reminders/route.ts",

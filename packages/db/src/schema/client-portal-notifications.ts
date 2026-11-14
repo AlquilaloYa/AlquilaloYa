@@ -42,7 +42,8 @@ export const clientPortalNotifications = pgTable(
         'PAYMENT_APPROVAL_REQUESTED',
         'PAYMENT_APPROVAL_APPROVED',
         'PAYMENT_APPROVAL_REJECTED',
-        'PAYMENT_VOUCHER_UPLOADED'
+        'PAYMENT_VOUCHER_UPLOADED',
+        'CONTRACT_RENEWAL_REQUESTED'
       )`,
     ),
     unique("client_portal_notifications_client_dedupe_unique").on(

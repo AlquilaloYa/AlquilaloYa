@@ -10,6 +10,7 @@ import {
   CalendarDays,
   Camera,
   CreditCard,
+  FileText,
   FileUp,
   LoaderCircle,
   LogOut,
@@ -32,6 +33,42 @@ import { AvailabilityPicker } from "./availability-picker";
 import "./portal-client.css";
 
 type PortalClient = { names: string; departmentCode: string };
+type ContractAdenda = {
+  id: string;
+  tipo: string;
+  version: number;
+  filename: string;
+  createdAt: string | null;
+  fechaFinAdenda: string | null;
+};
+type ContractInfo = {
+  id: string;
+  codigoContrato: string;
+  estado: string;
+  departamentoNombre: string;
+  departamentoCodigo: string;
+  fechaInicio: string;
+  fechaFin: string;
+  fechaFinEfectiva: string;
+  montoCanonMensual: string;
+  mantenimiento: string;
+  depositoGarantia: string;
+  renovacionMeses: number | null;
+  renuevaProximoMes: boolean | null;
+};
+type ContractRenewalRequest = {
+  id: string;
+  status: string;
+  createdAt: string | null;
+  reviewedAt: string | null;
+};
+type ContractData = {
+  contract: ContractInfo;
+  contratoPdf: { id: string; filename: string; createdAt: string | null } | null;
+  adendas: ContractAdenda[];
+  renewalRequest: ContractRenewalRequest | null;
+  today: string;
+};
 type PaymentObligation = {
   id: string;
   targetType: "MONTHLY" | "SERVICE";
@@ -182,6 +219,36 @@ function formatMoney(value: string | number): string {
   });
 }
 
+const CONTRACT_ESTADO_LABELS: Record<string, string> = {
+  FIRMADO: "Firmado",
+  NOTARIADO: "Notariado",
+  ACTIVO: "Activo",
+  VIGENTE: "Vigente",
+  RENOVADO: "Renovado",
+};
+
+/**
+ * Fin de la vigencia en ms: la medianoche de Lima (UTC-5, sin horario de
+ * verano) del día siguiente a la fecha de fin. El contrato cubre todo el
+ * día de la fecha de fin.
+ */
+function contractDeadlineMs(fechaFinEfectiva: string): number {
+  return Date.parse(`${fechaFinEfectiva.slice(0, 10)}T05:00:00Z`) + 86_400_000;
+}
+
+function contractRemainingLabel(fechaFinEfectiva: string): string {
+  const remaining = contractDeadlineMs(fechaFinEfectiva) - Date.now();
+  if (remaining <= 0) return "Tu contrato ha finalizado.";
+  const days = Math.floor(remaining / 86_400_000);
+  const hours = Math.floor((remaining % 86_400_000) / 3_600_000);
+  if (days >= 1) {
+    return `${days} ${days === 1 ? "día" : "días"} y ${hours} ${
+      hours === 1 ? "hora" : "horas"
+    } de contrato restante${days === 1 && hours === 1 ? "" : "s"}`;
+  }
+  return `${hours} ${hours === 1 ? "hora" : "horas"} de contrato restantes`;
+}
+
 function formatVisitWindow(startsAt: string, endsAt: string): string {
   const date = new Intl.DateTimeFormat("es-PE", {
     day: "2-digit",
@@ -213,7 +280,7 @@ export default function ClientPortalPage() {
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [activeView, setActiveView] = useState<
-    "dashboard" | "reports" | "payments"
+    "dashboard" | "reports" | "payments" | "contracts"
   >("dashboard");
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -237,6 +304,12 @@ export default function ClientPortalPage() {
   const [notifications, setNotifications] = useState<ClientPortalNotification[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [paymentItems, setPaymentItems] = useState<PaymentObligation[]>([]);
+  const [contractData, setContractData] = useState<ContractData | null>(null);
+  const [contractLoading, setContractLoading] = useState(false);
+  const [contractError, setContractError] = useState("");
+  const [contractNotice, setContractNotice] = useState("");
+  const [renewalBusy, setRenewalBusy] = useState(false);
+  const [contractCountdown, setContractCountdown] = useState("");
   const [paymentToday, setPaymentToday] = useState("");
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentBusyId, setPaymentBusyId] = useState<string | null>(null);
@@ -341,6 +414,89 @@ export default function ClientPortalPage() {
       setPaymentLoading(false);
     }
   }, [router]);
+
+  const loadContracts = useCallback(async () => {
+    setContractLoading(true);
+    setContractError("");
+    try {
+      const response = await fetch("/api/portal-cliente/contratos", {
+        cache: "no-store",
+      });
+      if (response.status === 401) {
+        router.replace("/portal-cliente/login");
+        return;
+      }
+      const body = (await response.json()) as ContractData & { error?: string };
+      if (!response.ok) {
+        throw new Error(body.error ?? "No se pudo consultar tu contrato.");
+      }
+      setContractData(body);
+    } catch (reason) {
+      setContractError(
+        reason instanceof Error
+          ? reason.message
+          : "No se pudo consultar tu contrato.",
+      );
+    } finally {
+      setContractLoading(false);
+    }
+  }, [router]);
+
+  async function requestContractRenewal() {
+    if (!contractData || renewalBusy) return;
+    setRenewalBusy(true);
+    setContractError("");
+    setContractNotice("");
+    try {
+      const response = await fetch("/api/portal-cliente/contratos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request-renewal" }),
+      });
+      if (response.status === 401) {
+        router.replace("/portal-cliente/login");
+        return;
+      }
+      const body = (await response.json()) as {
+        renewalRequest?: ContractRenewalRequest;
+        alreadyRequested?: boolean;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(body.error ?? "No se pudo enviar la solicitud.");
+      }
+      if (body.renewalRequest) {
+        setContractData({
+          ...contractData,
+          renewalRequest: body.renewalRequest,
+        });
+      }
+      setContractNotice(
+        body.alreadyRequested
+          ? "Ya tienes una solicitud de renovación en revisión."
+          : "Solicitud de renovación enviada a administración. Te contactaremos para coordinar la renovación.",
+      );
+    } catch (reason) {
+      setContractError(
+        reason instanceof Error
+          ? reason.message
+          : "No se pudo enviar la solicitud.",
+      );
+    } finally {
+      setRenewalBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeView !== "contracts" || !contractData) return;
+    const update = () =>
+      setContractCountdown(
+        contractRemainingLabel(contractData.contract.fechaFinEfectiva),
+      );
+    update();
+    const timer = window.setInterval(update, 30_000);
+    return () => window.clearInterval(timer);
+  }, [activeView, contractData]);
 
   const loadNotifications = useCallback(
     async (announceNew = false) => {
@@ -1294,6 +1450,23 @@ export default function ClientPortalPage() {
                 </span>
                 <ArrowRight aria-hidden className="portal-dashboard-card-arrow" />
               </button>
+              <button
+                type="button"
+                className="portal-dashboard-card portal-dashboard-card-contracts"
+                onClick={() => {
+                  setActiveView("contracts");
+                  void loadContracts();
+                }}
+              >
+                <span className="portal-dashboard-card-icons">
+                  <FileText aria-hidden />
+                </span>
+                <span className="portal-dashboard-card-copy">
+                  <strong>Contratos y Adendas</strong>
+                  <span>Consulta tu contrato, sus adendas y solicita renovación.</span>
+                </span>
+                <ArrowRight aria-hidden className="portal-dashboard-card-arrow" />
+              </button>
               <a
                 href={contactWhatsappUrl}
                 target="_blank"
@@ -1459,6 +1632,224 @@ export default function ClientPortalPage() {
                       </div>
                     </section>
                   ) : null}
+                </div>
+              )}
+            </section>
+          </>
+        ) : activeView === "contracts" ? (
+          <>
+            <button
+              type="button"
+              className="portal-report-back"
+              onClick={() => setActiveView("dashboard")}
+            >
+              <ArrowLeft aria-hidden />
+              Volver al Dashboard
+            </button>
+            <section className="space-y-5" aria-labelledby="portal-contracts-title">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h2 id="portal-contracts-title" className="text-2xl font-semibold">
+                    Contratos y Adendas
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Tu contrato vigente, sus adendas y el tiempo restante.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadContracts()}
+                  disabled={contractLoading}
+                  className="flex h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 hover:text-white disabled:opacity-50"
+                  aria-label="Actualizar contrato"
+                >
+                  <RefreshCw aria-hidden className="h-4 w-4" />
+                  Actualizar
+                </button>
+              </div>
+              {contractError ? (
+                <div role="alert" className="rounded-lg border border-red-900 bg-red-950/50 p-3 text-sm text-red-200">
+                  {contractError}
+                </div>
+              ) : null}
+              {contractNotice ? (
+                <div role="status" className="rounded-lg border border-emerald-900 bg-emerald-950/50 p-3 text-sm text-emerald-200">
+                  {contractNotice}
+                </div>
+              ) : null}
+              {contractLoading ? (
+                <div className="rounded-2xl border border-white/10 bg-slate-900 p-8 text-center text-sm text-slate-400">
+                  Cargando tu contrato…
+                </div>
+              ) : contractData ? (
+                <>
+                  <div className="rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-950 p-6 text-center sm:p-8">
+                    <p className="text-xs font-medium uppercase tracking-widest text-slate-400">
+                      <CalendarDays aria-hidden className="mr-2 inline h-4 w-4 text-cyan-400" />
+                      Tiempo restante de contrato
+                    </p>
+                    <p className="mt-3 text-4xl font-bold text-cyan-300 sm:text-5xl">
+                      {contractCountdown || "—"}
+                    </p>
+                    <p className="mt-3 text-sm text-slate-400">
+                      Vigencia: {formatDateOnly(contractData.contract.fechaInicio)} –{" "}
+                      {formatDateOnly(contractData.contract.fechaFinEfectiva)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-slate-900 p-5 sm:p-7">
+                    <div className="flex items-center gap-2">
+                      <FileText aria-hidden className="h-5 w-5 text-cyan-400" />
+                      <h3 className="text-lg font-semibold">Datos del contrato</h3>
+                    </div>
+                    <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
+                      <div>
+                        <dt className="text-slate-400">Código de contrato</dt>
+                        <dd className="mt-0.5 font-medium text-slate-100">
+                          {contractData.contract.codigoContrato}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-400">Departamento</dt>
+                        <dd className="mt-0.5 font-medium text-slate-100">
+                          {contractData.contract.departamentoNombre}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-400">Estado</dt>
+                        <dd className="mt-0.5 font-medium text-slate-100">
+                          {CONTRACT_ESTADO_LABELS[contractData.contract.estado] ??
+                            contractData.contract.estado}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-400">Canon mensual</dt>
+                        <dd className="mt-0.5 font-medium text-slate-100">
+                          {formatMoney(contractData.contract.montoCanonMensual)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-400">Mantenimiento</dt>
+                        <dd className="mt-0.5 font-medium text-slate-100">
+                          {formatMoney(contractData.contract.mantenimiento)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-400">Depósito de garantía</dt>
+                        <dd className="mt-0.5 font-medium text-slate-100">
+                          {formatMoney(contractData.contract.depositoGarantia)}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-slate-900 p-5 sm:p-7">
+                    <div className="flex items-center gap-2">
+                      <FileText aria-hidden className="h-5 w-5 text-cyan-400" />
+                      <h3 className="text-lg font-semibold">Contrato y adendas</h3>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {contractData.contratoPdf ? (
+                        <a
+                          href={`/api/portal-cliente/contratos/documento?id=${encodeURIComponent(contractData.contratoPdf.id)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-950 p-4 text-sm text-slate-200 hover:border-cyan-500/50"
+                        >
+                          <span>
+                            <span className="block font-medium">Contrato de alquiler (PDF)</span>
+                            {contractData.contratoPdf.createdAt ? (
+                              <span className="mt-0.5 block text-xs text-slate-500">
+                                Generado el {formatDate(contractData.contratoPdf.createdAt)}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="rounded-md border border-cyan-500/40 px-3 py-1.5 text-xs font-medium text-cyan-300">
+                            Ver
+                          </span>
+                        </a>
+                      ) : (
+                        <p className="text-sm text-slate-500">
+                          El PDF del contrato aún no está disponible.
+                        </p>
+                      )}
+                      {contractData.adendas.map((adenda) => (
+                        <a
+                          key={adenda.id}
+                          href={`/api/portal-cliente/contratos/documento?id=${encodeURIComponent(adenda.id)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-950 p-4 text-sm text-slate-200 hover:border-cyan-500/50"
+                        >
+                          <span>
+                            <span className="block font-medium">
+                              {adenda.tipo === "ADENDA_EXTENSION"
+                                ? "Adenda de prórroga"
+                                : "Adenda"}
+                              {adenda.fechaFinAdenda
+                                ? ` · nueva vigencia hasta ${formatDateOnly(adenda.fechaFinAdenda)}`
+                                : ""}
+                            </span>
+                            {adenda.createdAt ? (
+                              <span className="mt-0.5 block text-xs text-slate-500">
+                                Firmada el {formatDate(adenda.createdAt)}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="rounded-md border border-cyan-500/40 px-3 py-1.5 text-xs font-medium text-cyan-300">
+                            Ver
+                          </span>
+                        </a>
+                      ))}
+                      {!contractData.contratoPdf && contractData.adendas.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-slate-700 p-4 text-center text-sm text-slate-400">
+                          Aún no hay documentos disponibles para tu contrato.
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-slate-900 p-5 sm:p-7">
+                    <h3 className="text-lg font-semibold">Renovación de contrato</h3>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Si quieres quedarte más tiempo, solicita la renovación y administración
+                      coordinará los detalles contigo.
+                    </p>
+                    {contractData.renewalRequest?.status === "PENDING" ? (
+                      <p className="mt-4 rounded-lg border border-amber-800 bg-amber-950/40 p-3 text-sm text-amber-100">
+                        Ya enviaste una solicitud de renovación
+                        {contractData.renewalRequest.createdAt
+                          ? ` el ${formatDate(contractData.renewalRequest.createdAt)}`
+                          : ""}
+                        . Administración la revisará y te contactará.
+                      </p>
+                    ) : contractData.renewalRequest?.status === "APPROVED" ? (
+                      <p className="mt-4 rounded-lg border border-emerald-800 bg-emerald-950/40 p-3 text-sm text-emerald-100">
+                        Tu solicitud de renovación fue aprobada. Administración coordinará
+                        la firma de la nueva adenda contigo.
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void requestContractRenewal()}
+                        disabled={renewalBusy}
+                        className="mt-4 inline-flex h-11 items-center gap-2 rounded-lg bg-cyan-500 px-5 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-60"
+                      >
+                        {renewalBusy ? (
+                          <LoaderCircle aria-hidden className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send aria-hidden className="h-4 w-4" />
+                        )}
+                        {contractData.renewalRequest?.status === "REJECTED"
+                          ? "Volver a solicitar renovación"
+                          : "Solicitar renovación de contrato"}
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-400">
+                  No pudimos cargar tu contrato. Presiona Actualizar para reintentar.
                 </div>
               )}
             </section>
