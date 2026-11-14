@@ -30,6 +30,18 @@ import { AvailabilityPicker } from "./availability-picker";
 import "./portal-client.css";
 
 type PortalClient = { names: string; departmentCode: string };
+type ClientPayments = {
+  contract: { code: string; period: string | null } | null;
+  payment: {
+    canon: number;
+    maintenance: number;
+    total: number;
+    amountPaid: number;
+    balance: number;
+    status: "PAGADO" | "PARCIAL" | "PENDIENTE" | "VENCIDO";
+  } | null;
+  services: Array<{ type: "INTERNET" | "CARGA_ELECTRICA"; amount: number }>;
+};
 type Order = {
   id: string;
   code: string;
@@ -164,6 +176,25 @@ function timelineLabel(event: Order["events"][number]): string {
   return status ?? event.eventType.replace(/_/g, " ").toLowerCase();
 }
 
+function formatCurrency(amount: number): string {
+  return amount.toLocaleString("es-PE", { style: "currency", currency: "PEN" });
+}
+
+function paymentStatusLabel(
+  status: NonNullable<ClientPayments["payment"]>["status"],
+): string {
+  switch (status) {
+    case "PAGADO":
+      return "Pagado";
+    case "PARCIAL":
+      return "Pago parcial";
+    case "VENCIDO":
+      return "Pendiente vencido";
+    default:
+      return "Pendiente";
+  }
+}
+
 export default function ClientPortalPage() {
   const router = useRouter();
   const [client, setClient] = useState<PortalClient | null>(null);
@@ -171,7 +202,10 @@ export default function ClientPortalPage() {
   const [requests, setRequests] = useState<ClientRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const [activeView, setActiveView] = useState<"dashboard" | "reports">("dashboard");
+  const [activeView, setActiveView] = useState<"dashboard" | "reports" | "payments">("dashboard");
+  const [clientPayments, setClientPayments] = useState<ClientPayments | null>(null);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentsError, setPaymentsError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [submitStage, setSubmitStage] = useState<"uploading" | "saving" | "refreshing">("saving");
@@ -253,6 +287,30 @@ export default function ClientPortalPage() {
     setOrders(body.orders ?? []);
     setRequests(body.requests ?? []);
   }, [router]);
+
+  const loadPayments = useCallback(async () => {
+    setPaymentsLoading(true);
+    setPaymentsError("");
+    try {
+      const response = await fetch("/api/portal-cliente/pagos", { cache: "no-store" });
+      if (response.status === 401) {
+        router.replace("/portal-cliente/login");
+        return;
+      }
+      const body = (await response.json()) as ClientPayments & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "No se pudieron consultar tus pagos");
+      setClientPayments(body);
+    } catch (reason) {
+      setPaymentsError(reason instanceof Error ? reason.message : "No se pudieron consultar tus pagos");
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }, [router]);
+
+  function openPayments() {
+    setActiveView("payments");
+    void loadPayments();
+  }
 
   const loadNotifications = useCallback(
     async (announceNew = false) => {
@@ -631,6 +689,9 @@ export default function ClientPortalPage() {
     `Hola AlquilaYa, quisiera consultar sobre mis pagos del departamento ${client?.departmentCode ?? ""}.`,
   )}`;
   const unreadNotificationCount = notifications.filter((item) => !item.isRead).length;
+  const paymentsTotalDue =
+    (clientPayments?.payment?.balance ?? 0) +
+    (clientPayments?.services.reduce((total, service) => total + service.amount, 0) ?? 0);
 
   return (
     <main
@@ -805,10 +866,9 @@ export default function ClientPortalPage() {
                 </span>
                 <ArrowRight aria-hidden className="portal-dashboard-card-arrow" />
               </button>
-              <a
-                href={paymentWhatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={openPayments}
                 className="portal-dashboard-card portal-dashboard-card-payments"
               >
                 <span className="portal-dashboard-card-icons">
@@ -817,10 +877,10 @@ export default function ClientPortalPage() {
                 </span>
                 <span className="portal-dashboard-card-copy">
                   <strong>Pagos</strong>
-                  <span>Consulta tus pagos y recibe orientación por WhatsApp.</span>
+                  <span>Revisa lo que debes pagar este mes y el detalle por tipo.</span>
                 </span>
-                <ArrowUpRight aria-hidden className="portal-dashboard-card-arrow" />
-              </a>
+                <ArrowRight aria-hidden className="portal-dashboard-card-arrow" />
+              </button>
               <a
                 href={contactWhatsappUrl}
                 target="_blank"
@@ -838,6 +898,136 @@ export default function ClientPortalPage() {
               </a>
             </div>
           </section>
+        ) : activeView === "payments" ? (
+          <>
+            <button
+              type="button"
+              className="portal-report-back"
+              onClick={() => setActiveView("dashboard")}
+            >
+              <ArrowLeft aria-hidden />
+              Volver al Dashboard
+            </button>
+            <section className="portal-dashboard" aria-labelledby="portal-payments-title">
+              <div className="portal-dashboard-intro">
+                <h2 id="portal-payments-title">Pagos del mes</h2>
+                <p>
+                  {clientPayments?.contract?.period
+                    ? new Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric" }).format(
+                        new Date(`${clientPayments.contract.period}T12:00:00`),
+                      )
+                    : "Consulta la cuota mensual y tus servicios contratados."}
+                  {clientPayments?.contract?.code ? ` · Contrato ${clientPayments.contract.code}` : ""}
+                </p>
+              </div>
+              {paymentsError && (
+                <div role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                  <p>{paymentsError}</p>
+                  <button type="button" onClick={() => void loadPayments()} className="mt-2 font-semibold underline">
+                    Reintentar
+                  </button>
+                </div>
+              )}
+              {paymentsLoading ? (
+                <p role="status" className="text-slate-500">Cargando tus pagos…</p>
+              ) : !clientPayments?.contract ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 text-slate-700">
+                  No encontramos un contrato vigente asociado a tu cuenta.
+                </div>
+              ) : (
+                <>
+                  <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+                    <p className="text-sm font-semibold uppercase tracking-wide text-emerald-900">
+                      Total por pagar este mes
+                    </p>
+                    <p className="mt-1 text-3xl font-bold text-emerald-950">
+                      {formatCurrency(paymentsTotalDue)}
+                    </p>
+                  </div>
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <article className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm">
+                      <p className="text-sm font-semibold uppercase tracking-wide text-emerald-800">
+                        Pago mensual
+                      </p>
+                      {clientPayments.payment ? (
+                        <>
+                          <p className="mt-3 text-3xl font-bold text-slate-900">
+                            {formatCurrency(clientPayments.payment.total)}
+                          </p>
+                          <p className="mt-2 text-sm text-slate-600">
+                            Canon {formatCurrency(clientPayments.payment.canon)} + mantenimiento{" "}
+                            {formatCurrency(clientPayments.payment.maintenance)}
+                          </p>
+                          <p className="mt-3 text-sm font-semibold text-slate-700">
+                            {paymentStatusLabel(clientPayments.payment.status)}
+                            {clientPayments.payment.status === "PARCIAL"
+                              ? ` · Saldo ${formatCurrency(clientPayments.payment.balance)}`
+                              : ""}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="mt-3 text-sm text-slate-600">
+                          No hay una cuota mensual pendiente para este periodo.
+                        </p>
+                      )}
+                    </article>
+                    <article className="rounded-2xl border border-cyan-200 bg-white p-6 shadow-sm">
+                      <p className="text-sm font-semibold uppercase tracking-wide text-cyan-800">
+                        Servicios del mes
+                      </p>
+                      {clientPayments.services.length ? (
+                        <ul className="mt-3 divide-y divide-slate-100">
+                          {clientPayments.services.map((service) => (
+                            <li key={service.type} className="flex items-center justify-between gap-3 py-3 text-slate-700">
+                              <span>{service.type === "INTERNET" ? "Internet" : "Carga eléctrica"}</span>
+                              <strong>{formatCurrency(service.amount)}</strong>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-3 text-sm text-slate-600">
+                          No tienes servicios adicionales contratados.
+                        </p>
+                      )}
+                    </article>
+                  </div>
+                  <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" aria-labelledby="portal-payment-breakdown">
+                    <h3 id="portal-payment-breakdown" className="text-lg font-bold text-slate-900">
+                      Desglose por tipo
+                    </h3>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {clientPayments.payment && (
+                        <div className="rounded-xl bg-emerald-50 p-4">
+                          <p className="text-sm font-semibold text-emerald-900">Alquiler y mantenimiento</p>
+                          <p className="mt-1 text-xl font-bold text-slate-900">
+                            {formatCurrency(clientPayments.payment.total)}
+                          </p>
+                        </div>
+                      )}
+                      {clientPayments.services.map((service) => (
+                        <div key={service.type} className="rounded-xl bg-cyan-50 p-4">
+                          <p className="text-sm font-semibold text-cyan-900">
+                            {service.type === "INTERNET" ? "Internet" : "Carga eléctrica"}
+                          </p>
+                          <p className="mt-1 text-xl font-bold text-slate-900">
+                            {formatCurrency(service.amount)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <a
+                      href={paymentWhatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-5 inline-flex rounded-full bg-emerald-700 px-5 py-3 font-semibold text-white transition hover:bg-emerald-800"
+                    >
+                      Consultar sobre mis pagos por WhatsApp
+                    </a>
+                  </section>
+                </>
+              )}
+            </section>
+          </>
         ) : (
           <>
             <button
