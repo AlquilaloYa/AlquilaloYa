@@ -658,7 +658,7 @@ export default function ClientPortalPage() {
       }
       setPaymentNotice(
         item.targetType === "MONTHLY"
-          ? "Solicitud enviada a administración. Podrás subir un voucher total o parcial cuando aprueben el permiso."
+          ? "Solicitud enviada a administración. Podrás abonar montos parciales cuando aprueben el permiso."
           : "Solicitud enviada a administración. Podrás subir el voucher cuando aprueben el permiso.",
       );
       await loadPayments();
@@ -852,10 +852,10 @@ export default function ClientPortalPage() {
     const compact = variant === "compact";
     const overdue = item.dueDate < paymentToday;
     const canRequestApproval =
+      item.targetType === "MONTHLY" &&
       overdue &&
       Number(item.remainingAmount) > 0 &&
       item.status !== "PAID" &&
-      item.status !== "UPLOADED" &&
       item.approvalStatus !== "PENDING" &&
       item.approvalStatus !== "APPROVED";
     const partialAllowed =
@@ -863,8 +863,7 @@ export default function ClientPortalPage() {
       (item.dueDate > paymentToday ||
         (overdue && item.approvalStatus === "APPROVED"));
     const formOpen = openPaymentFormId === item.id;
-    const canUploadVoucher =
-      item.canUpload && item.status !== "PAID" && item.status !== "UPLOADED";
+    const canUploadVoucher = item.canUpload && item.status !== "PAID";
 
     return (
       <article
@@ -964,7 +963,9 @@ export default function ClientPortalPage() {
 
         {item.approvalStatus === "PENDING" ? (
           <p className={`rounded-lg border border-amber-800 bg-amber-950/40 p-3 text-amber-100 ${compact ? "text-xs" : "text-sm"}`}>
-            Solicitud enviada a administración. Espera la aprobación antes de depositar.
+            {item.targetType === "MONTHLY"
+              ? "Solicitud enviada a administración. Puedes pagar el saldo total sin esperar; el permiso solo habilita abonos parciales."
+              : "Solicitud enviada a administración."}
           </p>
         ) : item.approvalStatus === "APPROVED" ? (
           <p className={`rounded-lg border border-emerald-800 bg-emerald-950/40 p-3 text-emerald-100 ${compact ? "text-xs" : "text-sm"}`}>
@@ -1000,6 +1001,16 @@ export default function ClientPortalPage() {
                 ? "Solicitar permiso para pago parcial"
                 : "Solicitar autorización a administración"}
           </button>
+        ) : null}
+
+        {overdue &&
+        item.targetType === "MONTHLY" &&
+        item.status !== "PAID" &&
+        item.approvalStatus !== "APPROVED" ? (
+          <p className={`rounded-lg border border-amber-800 bg-amber-950/40 p-3 text-amber-100 ${compact ? "text-xs" : "text-sm"}`}>
+            Después de la fecha de pago solo se acepta el pago total. Para
+            abonos parciales, solicita permiso a administración.
+          </p>
         ) : null}
 
         {canUploadVoucher ? (

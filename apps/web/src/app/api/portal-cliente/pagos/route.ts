@@ -111,6 +111,18 @@ function pendingVoucherBalance(vouchers: ReturnType<typeof voucherRows>): {
   return { cents, hasUnpricedVoucher };
 }
 
+/** Máximo de vouchers que un cliente puede subir por pago. */
+const MAX_CLIENT_VOUCHERS = 2;
+
+/** Cuenta los vouchers subidos desde el portal (no los registrados por el ERP). */
+function clientVoucherCount(vouchers: ReturnType<typeof voucherRows>): number {
+  return vouchers.filter(
+    (voucher) =>
+      typeof voucher.storageKey === "string" &&
+      voucher.storageKey.startsWith("client-payment-vouchers/"),
+  ).length;
+}
+
 function serviceAmountCents(service: {
   montoTotal: string | null;
   incluyeInternet: boolean;
@@ -316,7 +328,7 @@ export async function GET(request: Request) {
           !pending.hasUnpricedVoucher &&
           !legacyVoucherPending &&
           pending.cents < totalCents &&
-          (dueDate >= today || approval?.status === "APPROVED"),
+          clientVoucherCount(vouchers) < MAX_CLIENT_VOUCHERS,
         approvalStatus: approval?.status ?? null,
         approvalId: approval?.id ?? null,
       };
@@ -344,10 +356,7 @@ export async function GET(request: Request) {
         paidAmount: "0.00",
         remainingAmount: uploaded ? "0.00" : centsToMoney(totalCents),
         status: uploaded ? "UPLOADED" : "DUE",
-        canUpload:
-          !uploaded &&
-          (String(row.dueDate).slice(0, 10) >= today ||
-            approval?.status === "APPROVED"),
+        canUpload: !uploaded,
         approvalStatus: approval?.status ?? null,
         approvalId: approval?.id ?? null,
         period: row.periodo,
@@ -534,9 +543,19 @@ export async function POST(request: Request) {
             );
           }
 
+          const clientVouchers = clientVoucherCount(existingVouchers);
+          if (clientVouchers >= MAX_CLIENT_VOUCHERS) {
+            throw new PortalPaymentError(
+              `Solo puedes subir un máximo de ${MAX_CLIENT_VOUCHERS} vouchers por pago.`,
+              409,
+            );
+          }
+
           let approvalId: string | null = null;
           let approvedAmountCents: number | null = null;
-          if (dueDate < today) {
+          const isPartialPayment = amountCents < remainingCents;
+          if (dueDate < today && isPartialPayment) {
+            // Abono parcial vencido: requiere permiso previo del ERP.
             const [approval] = await tx
               .select({
                 id: dbModule.schema.clientPaymentApprovalRequests.id,
@@ -567,7 +586,7 @@ export async function POST(request: Request) {
               .for("update");
             if (!approval || approvalRequestId !== approval.id) {
               throw new PortalPaymentError(
-                "El ERP debe aprobar primero la solicitud de pago vencido.",
+                "Para abonar un monto parcial después de la fecha de pago, primero solicita permiso a administración.",
                 403,
               );
             }
@@ -582,11 +601,40 @@ export async function POST(request: Request) {
                 403,
               );
             }
-          } else if (approvalRequestId !== null) {
-            throw new PortalPaymentError(
-              "La autorización no corresponde a este pago.",
-              400,
-            );
+          } else if (dueDate < today && approvalRequestId !== null) {
+            // Pago total vencido: no requiere permiso; si se envía una
+            // autorización debe ser válida y se marca como usada.
+            const [approval] = await tx
+              .select({ id: dbModule.schema.clientPaymentApprovalRequests.id })
+              .from(dbModule.schema.clientPaymentApprovalRequests)
+              .where(
+                and(
+                  eq(
+                    dbModule.schema.clientPaymentApprovalRequests.clientId,
+                    session.identity.client.id,
+                  ),
+                  eq(
+                    dbModule.schema.clientPaymentApprovalRequests.contractId,
+                    contract.id,
+                  ),
+                  eq(
+                    dbModule.schema.clientPaymentApprovalRequests.paymentId,
+                    payment.id,
+                  ),
+                  eq(
+                    dbModule.schema.clientPaymentApprovalRequests.status,
+                    "APPROVED",
+                  ),
+                ),
+              )
+              .for("update");
+            if (!approval || approvalRequestId !== approval.id) {
+              throw new PortalPaymentError(
+                "La autorización no corresponde a este pago.",
+                400,
+              );
+            }
+            approvalId = approval.id;
           }
           const amountError = validatePaymentAmount({
             amountCents,
@@ -715,7 +763,6 @@ export async function POST(request: Request) {
           );
         }
         const totalCents = serviceAmountCents(servicePayment);
-        const dueDate = String(servicePayment.dueDate).slice(0, 10);
         if (amountCents !== totalCents) {
           throw new PortalPaymentError(
             "Los servicios se pagan por el monto completo indicado por el ERP.",
@@ -723,7 +770,10 @@ export async function POST(request: Request) {
           );
         }
         let approvalId: string | null = null;
-        if (dueDate < today) {
+        if (approvalRequestId !== null) {
+          // Los servicios se pagan por el monto total, así que la subida
+          // vencida no requiere permiso; si se envía una autorización debe
+          // ser válida y se marca como usada.
           const [approval] = await tx
             .select()
             .from(dbModule.schema.clientPaymentApprovalRequests)
@@ -751,16 +801,11 @@ export async function POST(request: Request) {
             .for("update");
           if (!approval || approvalRequestId !== approval.id) {
             throw new PortalPaymentError(
-              "El ERP debe aprobar primero la solicitud de pago vencido.",
-              403,
+              "La autorización no corresponde a este servicio.",
+              400,
             );
           }
           approvalId = approval.id;
-        } else if (approvalRequestId !== null) {
-          throw new PortalPaymentError(
-            "La autorización no corresponde a este servicio.",
-            400,
-          );
         }
 
         const [updated] = await tx
