@@ -52,9 +52,9 @@ async function validateReferences(
     const [contact] = await dbModule.db
       .select({ id: schema.localContacts.id })
       .from(schema.localContacts)
-      .where(and(eq(schema.localContacts.id, record.contactId), eq(schema.localContacts.localId, record.localId)))
+      .where(eq(schema.localContacts.id, record.contactId))
       .limit(1);
-    if (!contact) return "El contacto no pertenece al local seleccionado.";
+    if (!contact) return "Contacto no encontrado.";
   }
   if (record.tipo === "contratos") {
     const [local] = await dbModule.db
