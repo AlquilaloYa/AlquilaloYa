@@ -9,6 +9,7 @@ import {
   maxLocalUploadBytes,
   MAX_LOCAL_SOURCE_UPLOAD_BYTES,
 } from "@/lib/locales-files";
+import { LocalAttachmentPreview } from "@/components/locales/local-attachment-preview";
 import { LOCAL_CODES } from "@contract/domain/locales";
 import { Pencil, Plus, RefreshCw, Upload, X } from "lucide-react";
 
@@ -82,6 +83,7 @@ function formatoBytes(bytes: number) {
 export default function LocalesPage() {
   const [locales, setLocales] = useState<LocalRecord[]>([]);
   const [files, setFiles] = useState<LocalFile[]>([]);
+  const [previewFile, setPreviewFile] = useState<LocalFile | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingSpecsFile, setPendingSpecsFile] = useState<File | null>(null);
   const [form, setForm] = useState<LocalForm>(EMPTY_FORM);
@@ -548,9 +550,9 @@ export default function LocalesPage() {
                   {files.filter((file) => file.categoria !== "ESPECIFICACIONES_TECNICAS").map((file) => (
                     <li key={file.id} className="flex items-center justify-between gap-3">
                       <span className="truncate">{file.nombre} · {formatoBytes(file.sizeBytes)}</span>
-                      <a href={file.url} target="_blank" rel="noreferrer" className="shrink-0 text-primary underline">
-                        Abrir
-                      </a>
+                      <button type="button" onClick={() => setPreviewFile(file)} className="shrink-0 text-primary underline">
+                        Vista previa
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -588,9 +590,9 @@ export default function LocalesPage() {
               {files.filter((file) => file.categoria === "ESPECIFICACIONES_TECNICAS").map((file) => (
                 <div key={file.id} className="flex items-center justify-between gap-3 text-sm">
                   <span className="truncate">{file.nombre} · {formatoBytes(file.sizeBytes)}</span>
-                  <a href={file.url} target="_blank" rel="noreferrer" className="shrink-0 text-primary underline">
-                    Abrir
-                  </a>
+                  <button type="button" onClick={() => setPreviewFile(file)} className="shrink-0 text-primary underline">
+                    Vista previa
+                  </button>
                 </div>
               ))}
             </section>
@@ -644,6 +646,14 @@ export default function LocalesPage() {
             </div>
           </section>
         </div>
+      ) : null}
+      {previewFile ? (
+        <LocalAttachmentPreview
+          src={previewFile.url}
+          filename={previewFile.nombre}
+          mimeType={previewFile.mimeType}
+          onClose={() => setPreviewFile(null)}
+        />
       ) : null}
     </DashboardShell>
   );
