@@ -7,12 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@contract/ui/component
 import { DashboardShell } from "@/components/dashboard-shell";
 import { TableScroll } from "@/components/table-scroll";
 import { BusquedaInput, filtrarFilas, ordenarColumna } from "@/components/tabla-busqueda";
+import { LocalAttachmentPreview } from "@/components/locales/local-attachment-preview";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 interface LocalClientView {
   id: string;
   localId: string;
+  contactLocalId: string;
   codigoLocal: string;
   nombres: string;
   apellidos?: string | null;
@@ -24,6 +26,9 @@ interface LocalClientView {
   codigoPais?: string | null;
   nacionalidad?: string | null;
   codigoContrato: string;
+  contractDocumentId?: string | null;
+  contractDocumentName?: string | null;
+  contractDocumentMimeType?: string | null;
   fechaInicioContrato?: string | null;
   fechaFinContrato?: string | null;
   fechaInicioAdenda?: string | null;
@@ -69,6 +74,11 @@ export default function ClientesLocalesPage() {
   const [busqueda, setBusqueda] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [documentPreview, setDocumentPreview] = useState<{
+    id: string;
+    filename: string;
+    mimeType: string;
+  } | null>(null);
 
   const clientesTabla = useMemo(() => {
     let rows = filtrarFilas(clients, busqueda, (client) => [
@@ -169,13 +179,14 @@ export default function ClientesLocalesPage() {
             ) : (
               <TableScroll className="max-h-[32rem] w-full rounded-md border">
                 <div className="max-h-[30rem] overflow-y-auto">
-                  <table className="w-full min-w-[1160px] text-sm">
+                  <table className="w-full min-w-[1280px] text-sm">
                     <thead className="sticky top-0 z-10 bg-[#151a24] text-left text-xs text-white/80">
                       <tr>
                         <th className="px-3 py-2 font-medium">WhatsApp</th>
                         <th onClick={() => cambiarOrden("local")} className="cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5">
                           Código local{sortKey === "local" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                         </th>
+                        <th className="px-3 py-2 font-medium">Contrato notariado</th>
                         <th onClick={() => cambiarOrden("nombre")} className="cursor-pointer select-none px-3 py-2 font-medium hover:bg-white/5">
                           Nombre{sortKey === "nombre" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                         </th>
@@ -225,8 +236,25 @@ export default function ClientesLocalesPage() {
                                 {client.codigoLocal}
                               </Link>
                             </td>
+                            <td className="px-3 py-2">
+                              {client.contractDocumentId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setDocumentPreview({
+                                    id: client.contractDocumentId!,
+                                    filename: client.contractDocumentName ?? `Contrato ${client.codigoContrato}`,
+                                    mimeType: client.contractDocumentMimeType ?? "",
+                                  })}
+                                  className="whitespace-nowrap rounded-md border px-3 py-1.5 text-xs text-primary hover:bg-muted"
+                                >
+                                  Ver contrato
+                                </button>
+                              ) : (
+                                <span className="text-muted-foreground">Sin archivo adjunto</span>
+                              )}
+                            </td>
                             <td className="px-3 py-2 font-medium">
-                              <Link href={`/locales/contactos?localId=${encodeURIComponent(client.localId)}`} className="text-primary hover:underline">
+                              <Link href={`/locales/contactos?localId=${encodeURIComponent(client.contactLocalId)}`} className="text-primary hover:underline">
                                 {[client.nombres, client.apellidos].filter(Boolean).join(" ")}
                               </Link>
                             </td>
@@ -261,6 +289,14 @@ export default function ClientesLocalesPage() {
             )}
           </CardContent>
         </Card>
+        {documentPreview ? (
+          <LocalAttachmentPreview
+            src={`/api/locales/documentos/${encodeURIComponent(documentPreview.id)}`}
+            filename={documentPreview.filename}
+            mimeType={documentPreview.mimeType}
+            onClose={() => setDocumentPreview(null)}
+          />
+        ) : null}
       </div>
     </DashboardShell>
   );

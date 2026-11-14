@@ -19,6 +19,7 @@ import {
   LocalDocumentsModal,
   type LocalDocumentOwner,
 } from "@/components/locales/local-documents-modal";
+import { LocalAttachmentPreview } from "@/components/locales/local-attachment-preview";
 import { ArrowLeft, ChevronLeft, ChevronRight, Plus, RefreshCw, X } from "lucide-react";
 
 type LocalRecord = {
@@ -358,6 +359,13 @@ function formatCell(value: string | number | boolean | null | undefined, format?
   return String(value);
 }
 
+function getDocumentOwner(module: LocalModule): LocalDocumentOwner | null {
+  if (module === "separaciones" || module === "contratos" || module === "adendas") {
+    return module;
+  }
+  return null;
+}
+
 export function LocalModulePage({ module }: { module: LocalModule }) {
   const config = MODULES[module];
   const [locales, setLocales] = useState<LocalRecord[]>([]);
@@ -375,7 +383,13 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contactDocuments, setContactDocuments] = useState<ContactDocumentPreview | null>(null);
+  const [previewContactAttachment, setPreviewContactAttachment] = useState<LocalContactAttachment | null>(null);
   const [loadingContactDocuments, setLoadingContactDocuments] = useState(false);
+  const [documentsToView, setDocumentsToView] = useState<{
+    ownerType: LocalDocumentOwner;
+    ownerId: string;
+    localId: string;
+  } | null>(null);
   const [workflow, setWorkflow] = useState<{
     ownerType: LocalDocumentOwner;
     ownerId: string;
@@ -959,7 +973,7 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
         ? [
             { tipo: "VOUCHER_GARANTIA", label: "Voucher de pago de garantía" },
             { tipo: "VOUCHER_PRIMERA_MENSUALIDAD", label: "Voucher de primera mensualidad" },
-            { tipo: "CONTRATO_FIRMADO", label: "Contrato firmado (PDF o imagen)" },
+            { tipo: "CONTRATO_FIRMADO", label: "Contrato notariado y firmado (PDF o imagen)" },
           ]
         : [{ tipo: "ADENDA_FIRMADA", label: "Adenda firmada (PDF o imagen)" }];
     setWorkflow({ ownerType, ownerId: record.id, localId: recordLocalId, action, requiredDocuments });
@@ -1065,6 +1079,7 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
                     const documentCount = Number(record.copiaDniCount ?? 0) +
                       Number(record.copiaBoletasCount ?? 0) +
                       Number(record.copiaAntecedentesCount ?? 0);
+                    const documentOwner = getDocumentOwner(module);
                     return (
                       <tr key={record.id} className="border-b last:border-0">
                         {config.columns.map((column) => (
@@ -1090,6 +1105,19 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
                         ) : null}
                         <td className="px-4 py-3 text-right">
                           <div className="flex justify-end gap-2">
+                            {documentOwner ? (
+                              <button
+                                type="button"
+                                onClick={() => setDocumentsToView({
+                                  ownerType: documentOwner,
+                                  ownerId: record.id,
+                                  localId: record.localId,
+                                })}
+                                className="rounded-md border px-3 py-1.5 text-sm text-primary hover:bg-muted"
+                              >
+                                Ver documentos
+                              </button>
+                            ) : null}
                             {module === "separaciones" && record.estado === "PENDIENTE" && separationNotExpired(record) ? (
                               <button type="button" onClick={() => void openWorkflow(record)} className="rounded-md border border-primary px-3 py-1.5 text-sm text-primary hover:bg-primary/5">
                                 Voucher y confirmar
@@ -1196,9 +1224,13 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
                         <ul className="space-y-1">
                           {parseContactAttachments(String(value)).map((attachment) => (
                             <li key={attachment.id} className="flex items-center justify-between gap-3 rounded border px-3 py-2 text-xs">
-                              <a href={attachment.dataUrl} target="_blank" rel="noreferrer" className="truncate text-primary hover:underline">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewContactAttachment(attachment)}
+                                className="truncate text-left text-primary hover:underline"
+                              >
                                 {attachment.nombre}
-                              </a>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1291,6 +1323,16 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
           onComplete={completeWorkflow}
         />
       ) : null}
+      {documentsToView ? (
+        <LocalDocumentsModal
+          localId={documentsToView.localId}
+          ownerId={documentsToView.ownerId}
+          ownerType={documentsToView.ownerType}
+          requiredDocuments={[]}
+          readOnly
+          onClose={() => setDocumentsToView(null)}
+        />
+      ) : null}
       {contactDocuments ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <section
@@ -1316,14 +1358,13 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
                   <ul className="mt-2 space-y-2">
                     {group.attachments.map((attachment) => (
                       <li key={attachment.id}>
-                        <a
-                          href={attachment.dataUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block truncate text-sm text-primary underline"
+                        <button
+                          type="button"
+                          onClick={() => setPreviewContactAttachment(attachment)}
+                          className="block max-w-full truncate text-left text-sm text-primary underline"
                         >
                           {attachment.nombre}
-                        </a>
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -1339,6 +1380,14 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
             </div>
           </section>
         </div>
+      ) : null}
+      {previewContactAttachment ? (
+        <LocalAttachmentPreview
+          src={previewContactAttachment.dataUrl}
+          filename={previewContactAttachment.nombre}
+          mimeType={previewContactAttachment.tipo}
+          onClose={() => setPreviewContactAttachment(null)}
+        />
       ) : null}
     </DashboardShell>
   );

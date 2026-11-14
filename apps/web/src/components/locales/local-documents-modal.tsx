@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { compressLocalUpload, maxLocalUploadBytes } from "@/lib/locales-files";
+import { LocalAttachmentPreview } from "@/components/locales/local-attachment-preview";
 import { X } from "lucide-react";
 
 export type LocalDocumentOwner = "separaciones" | "contratos" | "adendas";
@@ -27,6 +28,7 @@ export function LocalDocumentsModal({
   ownerId,
   ownerType,
   requiredDocuments,
+  readOnly = false,
   onClose,
   onComplete,
 }: {
@@ -34,14 +36,16 @@ export function LocalDocumentsModal({
   ownerId: string;
   ownerType: LocalDocumentOwner;
   requiredDocuments: RequiredDocument[];
+  readOnly?: boolean;
   onClose: () => void;
-  onComplete: () => Promise<void>;
+  onComplete?: () => Promise<void>;
 }) {
   const [documents, setDocuments] = useState<LocalDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewDocument, setPreviewDocument] = useState<LocalDocument | null>(null);
 
   const loadDocuments = useCallback(async () => {
     const params = new URLSearchParams({ localId, ownerId, ownerType });
@@ -105,6 +109,7 @@ export function LocalDocumentsModal({
   }
 
   async function complete() {
+    if (!onComplete) return;
     setError(null);
     setCompleting(true);
     try {
@@ -132,7 +137,9 @@ export function LocalDocumentsModal({
           <div>
             <h2 id="local-documents-title" className="text-xl font-semibold">Documentos del {OWNER_LABEL[ownerType]}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Adjunta los documentos requeridos para completar este paso.
+              {readOnly
+                ? "Consulta los archivos adjuntos a este registro."
+                : "Adjunta los documentos requeridos para completar este paso."}
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar" className="rounded p-1">
@@ -144,7 +151,7 @@ export function LocalDocumentsModal({
         {loading ? <p className="text-sm text-muted-foreground">Cargando documentos…</p> : null}
 
         <div className="space-y-3">
-          {requiredDocuments.map((required) => {
+          {!readOnly ? requiredDocuments.map((required) => {
             const existing = documents.filter((document) => document.tipo === required.tipo);
             return (
               <div key={required.tipo} className="rounded-lg border p-3">
@@ -163,58 +170,71 @@ export function LocalDocumentsModal({
                 </label>
                 {uploading === required.tipo ? <p className="mt-2 text-xs text-muted-foreground">Optimizando y guardando…</p> : null}
                 {existing.map((document) => (
-                  <a
+                  <button
                     key={document.id}
-                    href={document.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 block truncate text-sm text-primary underline"
+                    type="button"
+                    onClick={() => setPreviewDocument(document)}
+                    className="mt-2 block max-w-full truncate text-left text-sm text-primary underline"
                   >
-                    {document.nombre}
-                  </a>
+                    Ver: {document.nombre}
+                  </button>
                 ))}
               </div>
             );
-          })}
+          }) : null}
         </div>
-        {documents.some((document) => !requiredDocuments.some((required) => required.tipo === document.tipo)) ? (
+        {readOnly || documents.some((document) => !requiredDocuments.some((required) => required.tipo === document.tipo)) ? (
           <div className="rounded-lg border p-3">
-            <h3 className="text-sm font-medium">Documentos emitidos</h3>
+            <h3 className="text-sm font-medium">{readOnly ? "Archivos adjuntos" : "Documentos emitidos"}</h3>
             {documents
-              .filter((document) => !requiredDocuments.some((required) => required.tipo === document.tipo))
+              .filter((document) => readOnly || !requiredDocuments.some((required) => required.tipo === document.tipo))
               .map((document) => (
-                <a
+                <button
                   key={document.id}
-                  href={document.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 block truncate text-sm text-primary underline"
+                  type="button"
+                  onClick={() => setPreviewDocument(document)}
+                  className="mt-2 block max-w-full truncate text-left text-sm text-primary underline"
                 >
-                  {document.nombre}
-                </a>
+                  Ver: {document.nombre}
+                </button>
               ))}
+            {readOnly && documents.length === 0 && !loading ? (
+              <p className="mt-1 text-sm text-muted-foreground">No hay documentos adjuntos.</p>
+            ) : null}
           </div>
         ) : null}
 
         <div className="flex items-center justify-between border-t pt-4">
-          <p className="text-xs text-muted-foreground">
-            {missing.length ? `Falta adjuntar ${missing.length} documento(s).` : "Todos los documentos requeridos están adjuntos."}
-          </p>
+          {!readOnly ? (
+            <p className="text-xs text-muted-foreground">
+              {missing.length ? `Falta adjuntar ${missing.length} documento(s).` : "Todos los documentos requeridos están adjuntos."}
+            </p>
+          ) : <span />}
           <div className="flex gap-2">
             <button type="button" onClick={onClose} disabled={uploading !== null || completing} className="rounded-md border px-4 py-2 text-sm">
               Cerrar
             </button>
-            <button
-              type="button"
-              onClick={() => void complete()}
-              disabled={missing.length > 0 || loading || uploading !== null || completing}
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-            >
-              {completing ? "Completando…" : "Completar"}
-            </button>
+            {!readOnly ? (
+              <button
+                type="button"
+                onClick={() => void complete()}
+                disabled={missing.length > 0 || loading || uploading !== null || completing}
+                className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+              >
+                {completing ? "Completando…" : "Completar"}
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
+      {previewDocument ? (
+        <LocalAttachmentPreview
+          src={previewDocument.url}
+          filename={previewDocument.nombre}
+          mimeType={previewDocument.mimeType}
+          onClose={() => setPreviewDocument(null)}
+        />
+      ) : null}
     </div>
   );
 }

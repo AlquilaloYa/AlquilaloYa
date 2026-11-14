@@ -25,7 +25,8 @@ export async function GET(request: Request) {
     const rows = await dbModule.db
       .selectDistinctOn([schema.localContracts.contactId], {
         id: schema.localContacts.id,
-        localId: schema.localContacts.localId,
+        localId: schema.localContracts.localId,
+        contactLocalId: schema.localContacts.localId,
         codigoLocal: schema.locales.codigo,
         nombres: schema.localContacts.nombres,
         apellidos: schema.localContacts.apellidos,
@@ -40,18 +41,25 @@ export async function GET(request: Request) {
         codigoContrato: schema.localContracts.codigo,
         fechaInicioContrato: schema.localContracts.fechaInicio,
         fechaFinContrato: schema.localContracts.fechaFin,
+        contractDocumentId: schema.localContractDocuments.id,
+        contractDocumentName: schema.localContractDocuments.nombre,
+        contractDocumentMimeType: schema.localContractDocuments.mimeType,
       })
       .from(schema.localContracts)
       .innerJoin(
         schema.localContacts,
-        and(
-          eq(schema.localContracts.contactId, schema.localContacts.id),
-          eq(schema.localContracts.localId, schema.localContacts.localId),
-        ),
+        eq(schema.localContracts.contactId, schema.localContacts.id),
       )
       .innerJoin(
         schema.locales,
         eq(schema.localContracts.localId, schema.locales.id),
+      )
+      .leftJoin(
+        schema.localContractDocuments,
+        and(
+          eq(schema.localContractDocuments.contractId, schema.localContracts.id),
+          eq(schema.localContractDocuments.tipo, "CONTRATO_FIRMADO"),
+        ),
       )
       .where(
         and(
@@ -63,6 +71,7 @@ export async function GET(request: Request) {
         schema.localContracts.contactId,
         desc(schema.localContracts.fechaFin),
         desc(schema.localContracts.createdAt),
+        desc(schema.localContractDocuments.createdAt),
       );
     const contractIds = rows.map((client) => client.contractId);
     const annexes =
@@ -98,6 +107,7 @@ export async function GET(request: Request) {
         return {
           id: client.id,
           localId: client.localId,
+          contactLocalId: client.contactLocalId,
           codigoLocal: client.codigoLocal,
           nombres: client.nombres,
           apellidos: client.apellidos,
@@ -109,6 +119,9 @@ export async function GET(request: Request) {
           codigoPais: client.codigoPais,
           nacionalidad: client.nacionalidad,
           codigoContrato: client.codigoContrato,
+          contractDocumentId: client.contractDocumentId,
+          contractDocumentName: client.contractDocumentName,
+          contractDocumentMimeType: client.contractDocumentMimeType,
           fechaInicioContrato: String(client.fechaInicioContrato).slice(0, 10),
           fechaFinContrato: String(client.fechaFinContrato).slice(0, 10),
           fechaInicioAdenda: annex ? String(annex.fecha).slice(0, 10) : null,
