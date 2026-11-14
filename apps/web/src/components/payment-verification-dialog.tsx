@@ -36,6 +36,8 @@ type VerificationPayment = {
   estado: "DEPOSITADO" | "PAGADO" | "PARCIAL";
   monto: string;
   mantenimiento: string;
+  pagoLuz?: string;
+  pagoAgua?: string;
   montoPagado: string;
   vouchers: Voucher[];
   voucherVerificadoEn: string | null;
@@ -601,11 +603,17 @@ export function PaymentVerificationDialog({
                       !payment.codigoContrato
                         .toUpperCase()
                         .startsWith(verificationAccess.verifyPrefix)));
+                const totalPendiente =
+                  Number(payment.monto) +
+                  Number(payment.mantenimiento) +
+                  (localMode
+                    ? Number(payment.pagoLuz ?? 0) + Number(payment.pagoAgua ?? 0)
+                    : 0);
                 const recordedAmount = Number(payment.montoPagado || 0);
                 const amount =
                   verified && recordedAmount > 0
                     ? recordedAmount
-                    : Number(payment.monto) + Number(payment.mantenimiento);
+                    : totalPendiente;
                 const selected = activePaymentId === payment.id;
                 return (
                   <li
@@ -644,9 +652,7 @@ export function PaymentVerificationDialog({
                             ? ` · Falta ${moneda(
                                 Math.max(
                                   0,
-                                  Number(payment.monto) +
-                                    Number(payment.mantenimiento) -
-                                    recordedAmount,
+                                    totalPendiente - recordedAmount,
                                 ),
                               )}`
                             : ""}
@@ -677,8 +683,6 @@ export function PaymentVerificationDialog({
                                 return next;
                               });
                             } else {
-                              const totalPendiente =
-                                Number(payment.monto) + Number(payment.mantenimiento);
                               const saldo = Math.max(
                                 0,
                                 totalPendiente - Number(payment.montoPagado || 0),
@@ -771,7 +775,11 @@ export function PaymentVerificationDialog({
                         <div className="mt-4 rounded-md bg-surface-container p-3">
                           {(() => {
                             const totalPendiente =
-                              Number(payment.monto) + Number(payment.mantenimiento);
+                              Number(payment.monto) +
+                              Number(payment.mantenimiento) +
+                              (localMode
+                                ? Number(payment.pagoLuz ?? 0) + Number(payment.pagoAgua ?? 0)
+                                : 0);
                             const abonado = Number(payment.montoPagado || 0);
                             const saldo = Math.max(0, totalPendiente - abonado);
                             const sinVerificar = payment.vouchers

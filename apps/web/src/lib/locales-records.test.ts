@@ -125,10 +125,12 @@ describe("local module records", () => {
   });
 
   it("enforces local separation amounts and positive timing", () => {
-    expect(validateLocalSeparationAmount({ monto: "500.00", tipoSeparacion: "500" }, "1800")).toBeNull();
-    expect(validateLocalSeparationAmount({ monto: "499.00", tipoSeparacion: "500" }, "1800")).toContain("exactamente");
-    expect(validateLocalSeparationAmount({ monto: "900.00", tipoSeparacion: "TOTAL" }, "900")).toBeNull();
-    expect(validateLocalSeparationAmount({ monto: "499.00", tipoSeparacion: "FLUCTUANTE" }, "900")).toContain("al menos");
+    expect(validateLocalSeparationAmount({ monto: "500.00", tipoSeparacion: "500" }, "1800", "1800")).toBeNull();
+    expect(validateLocalSeparationAmount({ monto: "499.00", tipoSeparacion: "500" }, "1800", "1800")).toContain("exactamente");
+    expect(validateLocalSeparationAmount({ monto: "900.00", tipoSeparacion: "TOTAL" }, "900", "1200")).toBeNull();
+    expect(validateLocalSeparationAmount({ monto: "1200.00", tipoSeparacion: "GARANTIA" }, "900", "1200")).toBeNull();
+    expect(validateLocalSeparationAmount({ monto: "900.00", tipoSeparacion: "GARANTIA" }, "900", "1200")).toContain("garantía configurada");
+    expect(validateLocalSeparationAmount({ monto: "499.00", tipoSeparacion: "FLUCTUANTE" }, "900", "1200")).toContain("al menos");
 
     const result = parseLocalRecord({
       tipo: "separaciones",

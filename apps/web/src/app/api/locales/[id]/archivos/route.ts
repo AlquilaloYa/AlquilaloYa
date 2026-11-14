@@ -36,6 +36,7 @@ export async function GET(
       .select({
         id: dbModule.schema.localFiles.id,
         nombre: dbModule.schema.localFiles.nombre,
+        categoria: dbModule.schema.localFiles.categoria,
         mimeType: dbModule.schema.localFiles.mimeType,
         sizeBytes: dbModule.schema.localFiles.sizeBytes,
         createdAt: dbModule.schema.localFiles.createdAt,
@@ -101,6 +102,16 @@ export async function POST(
     if (!(file instanceof File) || file.size === 0) {
       return NextResponse.json({ error: "Selecciona un archivo." }, { status: 400 });
     }
+    const categoryInput = form.get("categoria");
+    const categoria =
+      categoryInput === "ESPECIFICACIONES_TECNICAS"
+        ? categoryInput
+        : categoryInput === null || categoryInput === "GENERAL"
+          ? "GENERAL"
+          : null;
+    if (!categoria) {
+      return NextResponse.json({ error: "Selecciona una categoría de archivo válida." }, { status: 400 });
+    }
     if (!MIME_TYPES.has(file.type)) {
       return NextResponse.json(
         { error: "Solo se admiten PDF, JPG, PNG y WebP." },
@@ -140,6 +151,7 @@ export async function POST(
         id,
         localId: params.id,
         nombre: file.name.slice(0, 255),
+        categoria,
         storageKey: stored.key,
         mimeType: file.type,
         sizeBytes: stored.sizeBytes,
@@ -148,6 +160,7 @@ export async function POST(
       .returning({
         id: dbModule.schema.localFiles.id,
         nombre: dbModule.schema.localFiles.nombre,
+        categoria: dbModule.schema.localFiles.categoria,
         mimeType: dbModule.schema.localFiles.mimeType,
         sizeBytes: dbModule.schema.localFiles.sizeBytes,
         createdAt: dbModule.schema.localFiles.createdAt,

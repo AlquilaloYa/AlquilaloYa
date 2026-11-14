@@ -10,6 +10,7 @@ import { PaymentVerificationDialog } from "@/components/payment-verification-dia
 import { CobranzaVendedores } from "@/components/cobranza-vendedores";
 import { CobranzaServiciosExtras } from "@/components/cobranza-servicios-extras";
 import { CobranzaDiasExtras } from "@/components/cobranza-dias-extras";
+import { LocalUtilityReceiptsDialog } from "@/components/locales/local-utility-receipts-dialog";
 import { apiFetch } from "@/lib/api";
 import {
   addMonths,
@@ -18,6 +19,7 @@ import {
   parseLocalDate,
 } from "@/lib/cronograma";
 import { compressImageFile, fileToDataUrl } from "@/lib/image-compression";
+import { calcularImpuestoRenta } from "@/lib/local-utility-billing";
 
 type PaymentVoucher = { nombre: string; url: string; monto?: number };
 
@@ -27,6 +29,12 @@ type PaymentRow = {
   periodo: string;
   monto: string;
   mantenimiento: string;
+  reciboLuzMonto?: string;
+  reciboAguaMonto?: string;
+  pagoLuz?: string;
+  pagoAgua?: string;
+  pagoLuzPorcentaje?: string;
+  pagoAguaPorcentaje?: string;
   penalidad?: string;
   montoPagado?: string;
   diasIndulgencia?: number;
@@ -79,6 +87,9 @@ type CuotaFila = {
   internet: number;
   luzEx: number;
   extras: number;
+  luz: number;
+  agua: number;
+  impuestoRenta: number;
   abonado: number;
   saldo: number;
   estadoPago:
@@ -542,7 +553,14 @@ function MoraModal({
   );
 }
 
-type LocalForCollection = { id: string; codigo: string; nombre: string };
+type LocalForCollection = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  pagoLuzPorcentaje: string;
+  pagoAguaPorcentaje: string;
+  impuestoRentaPorcentaje: string;
+};
 
 export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
   const [contracts, setContracts] = useState<ContractRow[]>([]);
@@ -555,11 +573,19 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
   const [busqueda, setBusqueda] = useState("");
   const [abono, setAbono] = useState<{ fila: CuotaFila; modo: AbonoModo } | null>(null);
+  const [reciboServicios, setReciboServicios] = useState<{
+    periodo: string;
+    existing: PaymentRow | null;
+  } | null>(null);
   const [mora, setMora] = useState(false);
   const [mostrarVerificacion, setMostrarVerificacion] = useState(false);
-  const [sortKey, setSortKey] = useState<"cuota" | "contrato" | "cliente" | "departamento" | "total" | "internet" | "luzEx" | "extras" | "estado" | "morosidad" | "penalidad" | null>(null);
+  const [sortKey, setSortKey] = useState<"cuota" | "contrato" | "cliente" | "departamento" | "total" | "internet" | "luzEx" | "extras" | "luz" | "agua" | "impuestoRenta" | "estado" | "morosidad" | "penalidad" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const paymentsApiBase = localMode ? "/api/locales/cobranza/pagos" : "/api/payments";
+  const localSeleccionado = useMemo(
+    () => locales.find((local) => local.id === localId) ?? null,
+    [localId, locales],
+  );
 
   useEffect(() => {
     if (!localMode) return;
@@ -702,6 +728,9 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
           internet,
           luzEx,
           extras: internet + luzEx,
+          luz: 0,
+          agua: 0,
+          impuestoRenta: 0,
           abonado: 0,
           saldo: 0,
           estadoPago: "FINALIZADO",
@@ -731,10 +760,23 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
       const verificadoTodos = Boolean(pago?.voucherVerificadoEn);
       // Cuando existe la fila de pago registrada con monto (> 0), respeta su
       // total: puede estar prorrateada por días (adenda de extensión).
-      const total =
+      const montoRenta =
         pago && Number(pago.monto) > 0
-          ? Number(pago.monto) + Number(pago.mantenimiento ?? 0)
-          : Number(c.montoCanonMensual ?? 0) + Number(c.mantenimiento ?? 50);
+          ? Number(pago.monto)
+          : Number(c.montoCanonMensual ?? 0);
+      const montoMantenimiento =
+        pago && Number(pago.monto) > 0
+          ? Number(pago.mantenimiento ?? 0)
+          : Number(c.mantenimiento ?? 50);
+      const luz = localMode ? Number(pago?.pagoLuz ?? 0) : 0;
+      const agua = localMode ? Number(pago?.pagoAgua ?? 0) : 0;
+      const total = montoRenta + montoMantenimiento + luz + agua;
+      const impuestoRenta = localMode
+        ? calcularImpuestoRenta(
+            montoRenta,
+            Number(localSeleccionado?.impuestoRentaPorcentaje ?? 5),
+          )
+        : 0;
       // Abonado real: los vouchers subidos llevan sus montos (sumados en
       // vouchersMonto); el montoPagado de la BD cubre lo registrado sin
       // voucher. Con ambos, prevalece el mayor para no subestimar el abono.
@@ -783,6 +825,9 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
         internet,
         luzEx,
         extras: internet + luzEx,
+        luz,
+        agua,
+        impuestoRenta,
         abonado,
         saldo,
         estadoPago,
@@ -793,7 +838,10 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
       });
     }
     return out.sort((a, b) => b.diasMora - a.diasMora || a.periodo.localeCompare(b.periodo));
-  }, [contracts, payments, serviciosPorContrato]);
+  }, [contracts, localMode, localSeleccionado, payments, serviciosPorContrato]);
+  const cuotaLocalActual = localMode
+    ? filas.find((fila) => fila.contrato.id === contracts[0]?.id)
+    : undefined;
 
   const ESTADO_META_LOCAL: Record<string, string> = {
     PAGADO: "Pagado",
@@ -823,6 +871,9 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
       internet: (f) => f.internet,
       luzEx: (f) => f.luzEx,
       extras: (f) => f.extras,
+      luz: (f) => f.luz,
+      agua: (f) => f.agua,
+      impuestoRenta: (f) => f.impuestoRenta,
       estado: (f) => f.estadoPago,
       morosidad: (f) => f.diasMora,
       penalidad: (f) => f.penalidad,
@@ -847,13 +898,22 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
     const prefijo = `${mesActual.getFullYear()}-${String(mesActual.getMonth() + 1).padStart(2, "0")}`;
     const recaudado = payments
       .filter((p) => p.estado === "PAGADO" && p.periodo.startsWith(prefijo))
-      .reduce((s, p) => s + Number(p.monto) + Number(p.mantenimiento), 0);
+      .reduce(
+        (s, p) =>
+          s +
+          Number(p.monto) +
+          Number(p.mantenimiento) +
+          Number(p.pagoLuz ?? 0) +
+          Number(p.pagoAgua ?? 0),
+        0,
+      );
     const vencido = filas
       .filter((f) => f.estadoPago === "VENCIDO")
       .reduce((s, f) => s + f.total, 0);
     const penalidades = filas.reduce((s, f) => s + f.penalidad, 0);
     const morosos = filas.filter((f) => f.estadoPago === "VENCIDO").length;
-    return { recaudado, vencido, penalidades, morosos };
+    const impuestoRenta = filas.reduce((s, f) => s + f.impuestoRenta, 0);
+    return { recaudado, vencido, penalidades, morosos, impuestoRenta };
   }, [filas, payments]);
 
   const gananciasEsperadas = useMemo(
@@ -923,10 +983,27 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                 {locales.map((local) => <option key={local.id} value={local.id}>{local.codigo} · {local.nombre}</option>)}
               </select>
             ) : null}
+            {localMode ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (cuotaLocalActual) {
+                    setReciboServicios({
+                      periodo: cuotaLocalActual.periodo,
+                      existing: cuotaLocalActual.pago,
+                    });
+                  }
+                }}
+                disabled={!cuotaLocalActual || loading || !localSeleccionado}
+                className="h-10 rounded-md bg-primary px-3 text-sm text-on-primary disabled:opacity-50"
+              >
+                Registrar recibos luz/agua
+              </button>
+            ) : null}
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
             <div className="text-xs uppercase tracking-wider text-on-surface-variant">
               Recaudado del mes
@@ -981,6 +1058,19 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
               {localMode ? "Canon mensual de contratos activos" : "Canon del mes · Miguel, Emely y Evelyn"}
             </div>
           </div>
+          {localMode ? (
+            <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
+              <div className="text-xs uppercase tracking-wider text-on-surface-variant">
+                Impuesto a la renta · separado
+              </div>
+              <div className="mt-1 font-headline-md text-on-surface">
+                {moneda(resumen.impuestoRenta)}
+              </div>
+              <div className="mt-0.5 text-xs text-on-surface-variant">
+                No incluido en el cobro al inquilino
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {!localMode ? <CobranzaVendedores /> : null}
@@ -1048,14 +1138,14 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                   <th onClick={() => cambiarOrden("total")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "total" ? "font-semibold text-on-surface" : "")}>
                     Total mes{sortKey === "total" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                   </th>
-                  <th onClick={() => cambiarOrden("internet")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "internet" ? "font-semibold text-on-surface" : "")}>
-                    Internet{sortKey === "internet" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  <th onClick={() => cambiarOrden(localMode ? "luz" : "internet")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === (localMode ? "luz" : "internet") ? "font-semibold text-on-surface" : "")}>
+                    {localMode ? "Luz" : "Internet"}{sortKey === (localMode ? "luz" : "internet") ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                   </th>
-                  <th onClick={() => cambiarOrden("luzEx")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "luzEx" ? "font-semibold text-on-surface" : "")}>
-                    Luz-Ex{sortKey === "luzEx" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  <th onClick={() => cambiarOrden(localMode ? "agua" : "luzEx")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === (localMode ? "agua" : "luzEx") ? "font-semibold text-on-surface" : "")}>
+                    {localMode ? "Agua" : "Luz-Ex"}{sortKey === (localMode ? "agua" : "luzEx") ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                   </th>
-                  <th onClick={() => cambiarOrden("extras")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "extras" ? "font-semibold text-on-surface" : "")}>
-                    Servicios extras{sortKey === "extras" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+                  <th onClick={() => cambiarOrden(localMode ? "impuestoRenta" : "extras")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === (localMode ? "impuestoRenta" : "extras") ? "font-semibold text-on-surface" : "")}>
+                    {localMode ? "IR separado" : "Servicios extras"}{sortKey === (localMode ? "impuestoRenta" : "extras") ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
                   </th>
                   <th onClick={() => cambiarOrden("estado")} className={"cursor-pointer select-none px-3 py-2 font-medium hover:text-on-surface " + (sortKey === "estado" ? "font-semibold text-on-surface" : "")}>
                     Estado{sortKey === "estado" ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
@@ -1111,13 +1201,19 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
                         {moneda(f.total)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2">
-                        {f.internet > 0 ? moneda(f.internet) : "—"}
+                        {localMode
+                          ? f.luz > 0 ? moneda(f.luz) : "—"
+                          : f.internet > 0 ? moneda(f.internet) : "—"}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2">
-                        {f.luzEx > 0 ? moneda(f.luzEx) : "—"}
+                        {localMode
+                          ? f.agua > 0 ? moneda(f.agua) : "—"
+                          : f.luzEx > 0 ? moneda(f.luzEx) : "—"}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 font-medium">
-                        {f.extras > 0 ? moneda(f.extras) : "—"}
+                        {localMode
+                          ? f.impuestoRenta > 0 ? moneda(f.impuestoRenta) : "—"
+                          : f.extras > 0 ? moneda(f.extras) : "—"}
                       </td>
                       <td className="px-3 py-2">
                         {f.pago?.tieneVoucher || f.pago?.voucherNombre ? (
@@ -1232,6 +1328,19 @@ export function CobranzaPage({ localMode = false }: { localMode?: boolean }) {
             onClose={() => setAbono(null)}
             onSaved={() => {
               setAbono(null);
+              void load();
+            }}
+          />
+        ) : null}
+
+        {reciboServicios && localSeleccionado ? (
+          <LocalUtilityReceiptsDialog
+            local={localSeleccionado}
+            periodo={reciboServicios.periodo}
+            existing={reciboServicios.existing}
+            onClose={() => setReciboServicios(null)}
+            onSaved={() => {
+              setReciboServicios(null);
               void load();
             }}
           />

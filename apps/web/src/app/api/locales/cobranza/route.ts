@@ -28,6 +28,9 @@ export async function GET(request: Request) {
       id: schema.locales.id,
       codigo: schema.locales.codigo,
       nombre: schema.locales.nombre,
+      pagoLuzPorcentaje: schema.locales.pagoLuzPorcentaje,
+      pagoAguaPorcentaje: schema.locales.pagoAguaPorcentaje,
+      impuestoRentaPorcentaje: schema.locales.impuestoRentaPorcentaje,
     }).from(schema.locales)
       .where(eq(schema.locales.id, localId))
       .limit(1);
@@ -68,6 +71,12 @@ export async function GET(request: Request) {
       periodo: schema.localPayments.periodo,
       monto: schema.localPayments.monto,
       mantenimiento: schema.localPayments.mantenimiento,
+      reciboLuzMonto: schema.localPayments.reciboLuzMonto,
+      reciboAguaMonto: schema.localPayments.reciboAguaMonto,
+      pagoLuz: schema.localPayments.pagoLuz,
+      pagoAgua: schema.localPayments.pagoAgua,
+      pagoLuzPorcentaje: schema.localPayments.pagoLuzPorcentaje,
+      pagoAguaPorcentaje: schema.localPayments.pagoAguaPorcentaje,
       penalidad: schema.localPayments.penalidad,
       montoPagado: schema.localPayments.montoPagado,
       diasIndulgencia: schema.localPayments.diasIndulgencia,
