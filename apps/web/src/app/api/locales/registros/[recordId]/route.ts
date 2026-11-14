@@ -168,13 +168,18 @@ export async function PATCH(
       .select({
         id: dbModule.schema.locales.id,
         precioAlquiler: dbModule.schema.locales.precioAlquiler,
+        garantia: dbModule.schema.locales.garantia,
       })
       .from(dbModule.schema.locales)
       .where(eq(dbModule.schema.locales.id, parsed.value.localId))
       .limit(1);
     if (!local) return NextResponse.json({ error: "Local no encontrado." }, { status: 404 });
     if (parsed.value.tipo === "separaciones") {
-      const amountError = validateLocalSeparationAmount(parsed.value, local.precioAlquiler);
+      const amountError = validateLocalSeparationAmount(
+        parsed.value,
+        local.precioAlquiler,
+        local.garantia,
+      );
       if (amountError) return NextResponse.json({ error: amountError }, { status: 400 });
     }
     const referenceError = await validateReferences(dbModule, parsed.value, params.recordId);

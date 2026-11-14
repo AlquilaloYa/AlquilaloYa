@@ -114,6 +114,8 @@ export async function POST(request: Request) {
 
     const [existing] = await db.select({
       diasIndulgencia: schema.localPayments.diasIndulgencia,
+      pagoLuz: schema.localPayments.pagoLuz,
+      pagoAgua: schema.localPayments.pagoAgua,
     }).from(schema.localPayments)
       .where(and(
         eq(schema.localPayments.contractId, contractId),
@@ -131,7 +133,10 @@ export async function POST(request: Request) {
       : DIAS_PRORROGA_POR_DEFECTO;
     const { montoPagado, estado } = derivarPago(
       vouchers,
-      Number(monto) + Number(mantenimiento),
+      Number(monto) +
+        Number(mantenimiento) +
+        Number(existing?.pagoLuz ?? 0) +
+        Number(existing?.pagoAgua ?? 0),
       typeof input.estado === "string" ? input.estado : "PENDIENTE",
     );
     if ((estado === "PARCIAL" || estado === "PAGADO") && vouchers.length === 0) {
@@ -220,7 +225,14 @@ export async function PATCH(request: Request) {
       if (!montoValido(monto) || !montoValido(mantenimiento)) {
         return NextResponse.json({ error: "El canon y mantenimiento deben ser montos válidos." }, { status: 400 });
       }
-      const payment = derivarPago(vouchers, Number(monto) + Number(mantenimiento), current.estado);
+      const payment = derivarPago(
+        vouchers,
+        Number(monto) +
+          Number(mantenimiento) +
+          Number(current.pagoLuz) +
+          Number(current.pagoAgua),
+        current.estado,
+      );
       if ((payment.estado === "PARCIAL" || payment.estado === "PAGADO") && vouchers.length === 0) {
         return NextResponse.json({ error: "El pago requiere al menos un voucher JPEG." }, { status: 400 });
       }

@@ -183,6 +183,13 @@
       "when": 1794566400000,
       "tag": "0038_client_contract_renewals",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794681524703,
+      "tag": "0039_local_utilities_and_catalog_details",
+      "breakpoints": true
     }
   ]
 }

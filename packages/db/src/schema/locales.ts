@@ -55,6 +55,33 @@ export const locales = pgTable(
     })
       .notNull()
       .default("0"),
+    pagoAguaPorcentaje: numeric("pago_agua_porcentaje", {
+      precision: 5,
+      scale: 2,
+    })
+      .notNull()
+      .default("0"),
+    montoJardineria: numeric("monto_jardineria", { precision: 15, scale: 2 })
+      .notNull()
+      .default("0"),
+    impuestoRentaPorcentaje: numeric("impuesto_renta_porcentaje", {
+      precision: 5,
+      scale: 2,
+    })
+      .notNull()
+      .default("5.00"),
+    letreroAltoCm: numeric("letrero_alto_cm", { precision: 10, scale: 2 })
+      .notNull()
+      .default("0"),
+    letreroAnchoCm: numeric("letrero_ancho_cm", { precision: 10, scale: 2 })
+      .notNull()
+      .default("0"),
+    letreroProfundidadCm: numeric("letrero_profundidad_cm", {
+      precision: 10,
+      scale: 2,
+    })
+      .notNull()
+      .default("0"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -87,6 +114,21 @@ export const locales = pgTable(
       "locales_pago_luz_porcentaje_check",
       sql`${table.pagoLuzPorcentaje} between 0 and 100`,
     ),
+    check(
+      "locales_pago_agua_porcentaje_check",
+      sql`${table.pagoAguaPorcentaje} between 0 and 100`,
+    ),
+    check(
+      "locales_impuesto_renta_porcentaje_check",
+      sql`${table.impuestoRentaPorcentaje} between 0 and 100`,
+    ),
+    check("locales_monto_jardineria_check", sql`${table.montoJardineria} >= 0`),
+    check("locales_letrero_alto_cm_check", sql`${table.letreroAltoCm} >= 0`),
+    check("locales_letrero_ancho_cm_check", sql`${table.letreroAnchoCm} >= 0`),
+    check(
+      "locales_letrero_profundidad_cm_check",
+      sql`${table.letreroProfundidadCm} >= 0`,
+    ),
     index("locales_sede_idx").on(table.sede),
     uniqueIndex("locales_sede_numero_unique").on(table.sede, table.numero),
     check(
@@ -104,6 +146,7 @@ export const localFiles = pgTable(
       .notNull()
       .references(() => locales.id, { onDelete: "cascade" }),
     nombre: varchar("nombre", { length: 255 }).notNull(),
+    categoria: varchar("categoria", { length: 40 }).notNull().default("GENERAL"),
     storageKey: text("storage_key").notNull().unique(),
     mimeType: varchar("mime_type", { length: 100 }).notNull(),
     sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
@@ -114,6 +157,10 @@ export const localFiles = pgTable(
   },
   (table) => [
     index("local_files_local_id_idx").on(table.localId),
+    check(
+      "local_files_categoria_check",
+      sql`${table.categoria} in ('GENERAL', 'ESPECIFICACIONES_TECNICAS')`,
+    ),
     check(
       "local_files_size_bytes_check",
       sql`${table.sizeBytes} > 0 and ${table.sizeBytes} <= 12582912`,
@@ -201,7 +248,7 @@ export const localSeparations = pgTable(
     ),
     check(
       "local_separations_tipo_check",
-      sql`${table.tipoSeparacion} in ('500', 'TOTAL', 'FLUCTUANTE')`,
+      sql`${table.tipoSeparacion} in ('500', 'TOTAL', 'GARANTIA', 'FLUCTUANTE')`,
     ),
   ],
 );
@@ -362,6 +409,24 @@ export const localPayments = pgTable(
     monto: numeric("monto", { precision: 15, scale: 2 }).notNull().default("0"),
     mantenimiento: numeric("mantenimiento", { precision: 15, scale: 2 }).notNull().default("0"),
     penalidad: numeric("penalidad", { precision: 15, scale: 2 }).notNull().default("0"),
+    reciboLuzMonto: numeric("recibo_luz_monto", { precision: 15, scale: 2 })
+      .notNull()
+      .default("0"),
+    reciboAguaMonto: numeric("recibo_agua_monto", { precision: 15, scale: 2 })
+      .notNull()
+      .default("0"),
+    pagoLuzPorcentaje: numeric("pago_luz_porcentaje", { precision: 5, scale: 2 })
+      .notNull()
+      .default("0"),
+    pagoAguaPorcentaje: numeric("pago_agua_porcentaje", { precision: 5, scale: 2 })
+      .notNull()
+      .default("0"),
+    pagoLuz: numeric("pago_luz", { precision: 15, scale: 2 })
+      .notNull()
+      .default("0"),
+    pagoAgua: numeric("pago_agua", { precision: 15, scale: 2 })
+      .notNull()
+      .default("0"),
     montoPagado: numeric("monto_pagado", { precision: 15, scale: 2 }).notNull().default("0"),
     diasIndulgencia: integer("dias_indulgencia").notNull().default(0),
     estado: varchar("estado", { length: 20 }).notNull().default("PENDIENTE"),
@@ -376,6 +441,18 @@ export const localPayments = pgTable(
     uniqueIndex("local_payments_contract_periodo_key").on(table.contractId, table.periodo),
     index("local_payments_local_periodo_idx").on(table.localId, table.periodo),
     index("local_payments_estado_periodo_idx").on(table.localId, table.estado, table.periodo),
+    check(
+      "local_payments_recibos_monto_check",
+      sql`${table.reciboLuzMonto} >= 0 and ${table.reciboAguaMonto} >= 0`,
+    ),
+    check(
+      "local_payments_recibos_porcentaje_check",
+      sql`${table.pagoLuzPorcentaje} between 0 and 100 and ${table.pagoAguaPorcentaje} between 0 and 100`,
+    ),
+    check(
+      "local_payments_servicios_monto_check",
+      sql`${table.pagoLuz} >= 0 and ${table.pagoAgua} >= 0`,
+    ),
   ],
 );
 

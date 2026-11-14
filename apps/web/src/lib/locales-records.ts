@@ -37,7 +37,7 @@ type SeparationInput = {
   localId: string;
   contactId: string;
   monto: string;
-  tipoSeparacion: "500" | "TOTAL" | "FLUCTUANTE";
+  tipoSeparacion: "500" | "TOTAL" | "GARANTIA" | "FLUCTUANTE";
   estado: "PENDIENTE" | "CONFIRMADA" | "CANCELADA";
   fecha: string;
   diasTiempo: number;
@@ -265,7 +265,7 @@ export function parseLocalRecord(input: unknown): ParseResult {
   if (tipo === "separaciones") {
     const contactId = uuidValue(input, "contactId", "contacto");
     const monto = amountValue(input, "monto", "El monto");
-    const tipoSeparacion = enumValue(input, "tipoSeparacion", ["500", "TOTAL", "FLUCTUANTE"], "tipo de separación");
+    const tipoSeparacion = enumValue(input, "tipoSeparacion", ["500", "TOTAL", "GARANTIA", "FLUCTUANTE"], "tipo de separación");
     const estado = enumValue(input, "estado", ["PENDIENTE", "CONFIRMADA", "CANCELADA"], "estado");
     const fecha = dateValue(input, "fecha", "la separación");
     const diasTiempo = Number(input.diasTiempo);
@@ -443,6 +443,7 @@ export function validateLocalContractCode(code: string, localCode: string): stri
 export function validateLocalSeparationAmount(
   record: Pick<SeparationInput, "monto" | "tipoSeparacion">,
   rentAmount: string | number,
+  guaranteeAmount: string | number,
 ): string | null {
   const amount = Number(record.monto);
   if (record.tipoSeparacion === "500" && amount !== 500) {
@@ -450,6 +451,9 @@ export function validateLocalSeparationAmount(
   }
   if (record.tipoSeparacion === "TOTAL" && amount !== Number(rentAmount)) {
     return "El monto de separación total debe coincidir con el alquiler del local.";
+  }
+  if (record.tipoSeparacion === "GARANTIA" && amount !== Number(guaranteeAmount)) {
+    return "El monto debe coincidir con la garantía configurada para el local.";
   }
   if (record.tipoSeparacion === "FLUCTUANTE" && amount < 500) {
     return "La separación fluctuante debe ser de al menos S/ 500.";

@@ -24,11 +24,18 @@ type LocalRecord = {
   mantenimiento: string;
   servicios: string;
   pagoLuzPorcentaje: string;
+  pagoAguaPorcentaje: string;
+  montoJardineria: string;
+  impuestoRentaPorcentaje: string;
+  letreroAltoCm: string;
+  letreroAnchoCm: string;
+  letreroProfundidadCm: string;
 };
 
 type LocalFile = {
   id: string;
   nombre: string;
+  categoria: "GENERAL" | "ESPECIFICACIONES_TECNICAS";
   mimeType: string;
   sizeBytes: number;
   createdAt: string;
@@ -46,6 +53,12 @@ const EMPTY_FORM: LocalForm = {
   mantenimiento: "",
   servicios: "",
   pagoLuzPorcentaje: "0",
+  pagoAguaPorcentaje: "0",
+  montoJardineria: "0",
+  impuestoRentaPorcentaje: "5",
+  letreroAltoCm: "0",
+  letreroAnchoCm: "0",
+  letreroProfundidadCm: "0",
 };
 
 const ACCEPTED_TYPES = new Set([
@@ -70,9 +83,11 @@ export default function LocalesPage() {
   const [locales, setLocales] = useState<LocalRecord[]>([]);
   const [files, setFiles] = useState<LocalFile[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingSpecsFile, setPendingSpecsFile] = useState<File | null>(null);
   const [form, setForm] = useState<LocalForm>(EMPTY_FORM);
   const [editing, setEditing] = useState<LocalRecord | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [showSignageDialog, setShowSignageDialog] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +136,7 @@ export default function LocalesPage() {
     setError(null);
     setEditing(local);
     setPendingFiles([]);
+    setPendingSpecsFile(null);
     setFiles([]);
     setForm(
       local
@@ -133,6 +149,12 @@ export default function LocalesPage() {
             mantenimiento: local.mantenimiento,
             servicios: local.servicios,
             pagoLuzPorcentaje: local.pagoLuzPorcentaje,
+            pagoAguaPorcentaje: local.pagoAguaPorcentaje ?? "0",
+            montoJardineria: local.montoJardineria ?? "0",
+            impuestoRentaPorcentaje: local.impuestoRentaPorcentaje ?? "5",
+            letreroAltoCm: local.letreroAltoCm ?? "0",
+            letreroAnchoCm: local.letreroAnchoCm ?? "0",
+            letreroProfundidadCm: local.letreroProfundidadCm ?? "0",
           }
         : { ...EMPTY_FORM, codigo: availableCodes[0]?.codigo ?? "" },
     );
@@ -148,9 +170,11 @@ export default function LocalesPage() {
 
   function closeEditor() {
     setIsOpen(false);
+    setShowSignageDialog(false);
     setEditing(null);
     setFiles([]);
     setPendingFiles([]);
+    setPendingSpecsFile(null);
   }
 
   function chooseFiles(selected: FileList | null) {
@@ -170,6 +194,21 @@ export default function LocalesPage() {
     setPendingFiles((current) => [...current, ...chosen]);
   }
 
+  function chooseSpecsFile(selected: FileList | null) {
+    const file = selected?.[0];
+    if (!file) return;
+    if (!ACCEPTED_TYPES.has(file.type)) {
+      setError(`${file.name}: las especificaciones deben ser PDF, JPG, PNG o WebP.`);
+      return;
+    }
+    if (file.size > MAX_LOCAL_SOURCE_UPLOAD_BYTES) {
+      setError(`${file.name}: el archivo original no puede superar 25 MB.`);
+      return;
+    }
+    setError(null);
+    setPendingSpecsFile(file);
+  }
+
   async function saveLocal(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -182,6 +221,12 @@ export default function LocalesPage() {
         garantia: Number(form.garantia),
         mantenimiento: Number(form.mantenimiento),
         pagoLuzPorcentaje: Number(form.pagoLuzPorcentaje),
+        pagoAguaPorcentaje: Number(form.pagoAguaPorcentaje),
+        montoJardineria: Number(form.montoJardineria),
+        impuestoRentaPorcentaje: Number(form.impuestoRentaPorcentaje),
+        letreroAltoCm: Number(form.letreroAltoCm),
+        letreroAnchoCm: Number(form.letreroAnchoCm),
+        letreroProfundidadCm: Number(form.letreroProfundidadCm),
       };
       const response = await apiFetch(
         editing ? `/api/locales/${editing.id}` : "/api/locales",
@@ -198,9 +243,15 @@ export default function LocalesPage() {
       const saved = (await response.json()) as LocalRecord;
       setEditing(saved);
 
-      const failedFiles: File[] = [];
+      const failedUploads: { file: File; categoria: LocalFile["categoria"] }[] = [];
       const uploadErrors: string[] = [];
-      for (const original of pendingFiles) {
+      const uploads: { file: File; categoria: LocalFile["categoria"] }[] = [
+        ...pendingFiles.map((file) => ({ file, categoria: "GENERAL" as const })),
+        ...(pendingSpecsFile
+          ? [{ file: pendingSpecsFile, categoria: "ESPECIFICACIONES_TECNICAS" as const }]
+          : []),
+      ];
+      for (const { file: original, categoria } of uploads) {
         try {
           const compressed = await compressLocalUpload(original);
           const maxBytes = maxLocalUploadBytes(compressed.type);
@@ -210,6 +261,7 @@ export default function LocalesPage() {
           }
           const data = new FormData();
           data.append("file", compressed);
+          data.append("categoria", categoria);
           const upload = await apiFetch(`/api/locales/${saved.id}/archivos`, {
             method: "POST",
             body: data,
@@ -219,11 +271,18 @@ export default function LocalesPage() {
             throw new Error(body.error ?? `Error HTTP ${upload.status}`);
           }
         } catch (uploadError) {
-          failedFiles.push(original);
+          failedUploads.push({ file: original, categoria });
           uploadErrors.push(`${original.name}: ${(uploadError as Error).message}`);
         }
       }
-      setPendingFiles(failedFiles);
+      setPendingFiles(
+        failedUploads
+          .filter((upload) => upload.categoria === "GENERAL")
+          .map((upload) => upload.file),
+      );
+      setPendingSpecsFile(
+        failedUploads.find((upload) => upload.categoria === "ESPECIFICACIONES_TECNICAS")?.file ?? null,
+      );
       await loadLocales();
       try {
         await loadFiles(saved.id);
@@ -305,10 +364,10 @@ export default function LocalesPage() {
           </div>
         ) : (
           <TableScroll className="rounded-lg border bg-card">
-            <table className="w-full min-w-[980px] text-left text-sm">
+            <table className="w-full min-w-[1260px] text-left text-sm">
               <thead className="border-b bg-muted/40">
                 <tr>
-                  {["Código", "Número", "Sede", "Nombre", "Área", "Alquiler", "Garantía", "Mantenimiento", "Pago luz"].map((heading) => (
+                  {["Código", "Número", "Sede", "Nombre", "Área", "Alquiler", "Garantía", "Mantenimiento", "Pago luz", "Pago agua", "Jardinería", "Impuesto renta"].map((heading) => (
                     <th key={heading} className="whitespace-nowrap px-4 py-3 font-medium">{heading}</th>
                   ))}
                   <th className="px-4 py-3" />
@@ -326,6 +385,9 @@ export default function LocalesPage() {
                     <td className="whitespace-nowrap px-4 py-3">{formatoDinero(local.garantia)}</td>
                     <td className="whitespace-nowrap px-4 py-3">{formatoDinero(local.mantenimiento)}</td>
                     <td className="px-4 py-3">{local.pagoLuzPorcentaje}%</td>
+                    <td className="px-4 py-3">{local.pagoAguaPorcentaje}%</td>
+                    <td className="whitespace-nowrap px-4 py-3">{formatoDinero(local.montoJardineria)}</td>
+                    <td className="px-4 py-3">{local.impuestoRentaPorcentaje}%</td>
                     <td className="px-4 py-3">
                       <button
                         type="button"
@@ -407,10 +469,40 @@ export default function LocalesPage() {
                 <span>Pago de luz (%)</span>
                 <input required type="number" min="0" max="100" step="0.01" value={form.pagoLuzPorcentaje} onChange={(event) => setForm((prev) => ({ ...prev, pagoLuzPorcentaje: event.target.value }))} className="h-10 w-full rounded-md border bg-background px-3" />
               </label>
+              <label className="space-y-1 text-sm">
+                <span>Pago de agua (%)</span>
+                <input required type="number" min="0" max="100" step="0.01" value={form.pagoAguaPorcentaje} onChange={(event) => setForm((prev) => ({ ...prev, pagoAguaPorcentaje: event.target.value }))} className="h-10 w-full rounded-md border bg-background px-3" />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span>Jardinería (S/)</span>
+                <input required type="number" min="0" step="0.01" value={form.montoJardineria} onChange={(event) => setForm((prev) => ({ ...prev, montoJardineria: event.target.value }))} className="h-10 w-full rounded-md border bg-background px-3" />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span>Impuesto a la renta (%)</span>
+                <input required type="number" min="0" max="100" step="0.01" value={form.impuestoRentaPorcentaje} onChange={(event) => setForm((prev) => ({ ...prev, impuestoRentaPorcentaje: event.target.value }))} className="h-10 w-full rounded-md border bg-background px-3" />
+                <span className="block text-xs text-muted-foreground">Se calcula por separado sobre el alquiler; base inicial 5%.</span>
+              </label>
               <label className="space-y-1 text-sm sm:col-span-2">
                 <span>Servicios</span>
                 <textarea maxLength={2000} rows={2} value={form.servicios} onChange={(event) => setForm((prev) => ({ ...prev, servicios: event.target.value }))} className="w-full rounded-md border bg-background px-3 py-2" />
               </label>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-medium">Medidas del letrero</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Alto {form.letreroAltoCm} cm · ancho {form.letreroAnchoCm} cm · profundidad {form.letreroProfundidadCm} cm
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSignageDialog(true)}
+                  className="rounded-md border px-3 py-2 text-sm hover:bg-muted/40"
+                >
+                  Configurar medidas
+                </button>
+              </div>
             </div>
 
             <section className="space-y-2 border-t pt-4">
@@ -451,9 +543,9 @@ export default function LocalesPage() {
                   ))}
                 </ul>
               ) : null}
-              {files.length > 0 ? (
+              {files.some((file) => file.categoria !== "ESPECIFICACIONES_TECNICAS") ? (
                 <ul className="space-y-1 text-sm">
-                  {files.map((file) => (
+                  {files.filter((file) => file.categoria !== "ESPECIFICACIONES_TECNICAS").map((file) => (
                     <li key={file.id} className="flex items-center justify-between gap-3">
                       <span className="truncate">{file.nombre} · {formatoBytes(file.sizeBytes)}</span>
                       <a href={file.url} target="_blank" rel="noreferrer" className="shrink-0 text-primary underline">
@@ -465,6 +557,44 @@ export default function LocalesPage() {
               ) : null}
             </section>
 
+            <section className="space-y-2 border-t pt-4">
+              <div>
+                <h3 className="font-medium">Especificaciones técnicas</h3>
+                <p className="text-xs text-muted-foreground">
+                  Adjunta planos o especificaciones en PDF o imagen. Los archivos se guardan en almacenamiento privado.
+                </p>
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/40">
+                <Upload className="h-4 w-4" />
+                Subir especificación técnica
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  onChange={(event) => {
+                    chooseSpecsFile(event.target.files);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+              {pendingSpecsFile ? (
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate">{pendingSpecsFile.name} · {formatoBytes(pendingSpecsFile.size)}</span>
+                  <button type="button" onClick={() => setPendingSpecsFile(null)} aria-label="Quitar especificación pendiente" className="rounded p-1 hover:bg-muted">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : null}
+              {files.filter((file) => file.categoria === "ESPECIFICACIONES_TECNICAS").map((file) => (
+                <div key={file.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate">{file.nombre} · {formatoBytes(file.sizeBytes)}</span>
+                  <a href={file.url} target="_blank" rel="noreferrer" className="shrink-0 text-primary underline">
+                    Abrir
+                  </a>
+                </div>
+              ))}
+            </section>
+
             <div className="flex justify-end gap-2 border-t pt-4">
               <button type="button" onClick={closeEditor} disabled={saving} className="rounded-md border px-4 py-2 text-sm">
                 Cancelar
@@ -474,6 +604,45 @@ export default function LocalesPage() {
               </button>
             </div>
           </form>
+        </div>
+      ) : null}
+      {showSignageDialog ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="signage-dialog-title"
+            className="w-full max-w-md space-y-4 rounded-xl bg-background p-5 shadow-xl"
+          >
+            <div>
+              <h2 id="signage-dialog-title" className="text-lg font-semibold">Medidas del letrero</h2>
+              <p className="text-sm text-muted-foreground">Ingresa las dimensiones en centímetros.</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {([
+                ["letreroAltoCm", "Alto"],
+                ["letreroAnchoCm", "Ancho"],
+                ["letreroProfundidadCm", "Profundidad"],
+              ] as const).map(([field, label]) => (
+                <label key={field} className="space-y-1 text-sm">
+                  <span>{label} (cm)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form[field]}
+                    onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))}
+                    className="h-10 w-full rounded-md border bg-background px-3"
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 border-t pt-3">
+              <button type="button" onClick={() => setShowSignageDialog(false)} className="rounded-md border px-4 py-2 text-sm">
+                Listo
+              </button>
+            </div>
+          </section>
         </div>
       ) : null}
     </DashboardShell>

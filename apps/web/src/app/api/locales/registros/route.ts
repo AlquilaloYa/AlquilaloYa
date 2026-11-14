@@ -211,7 +211,7 @@ export async function GET(request: Request) {
             const fechaLimiteManual = effectiveSeparationDeadline(separation);
             const vencida = Date.now() > new Date(fechaLimiteManual).getTime();
             const estadoVista = separation.estado === "PENDIENTE" && vencida
-              ? ["500", "FLUCTUANTE"].includes(separation.tipoSeparacion) && !separation.garantiaExtendida
+              ? ["500", "GARANTIA", "FLUCTUANTE"].includes(separation.tipoSeparacion) && !separation.garantiaExtendida
                 ? "PERDIDA"
                 : "VENCIDA"
               : separation.estado;
@@ -297,13 +297,18 @@ export async function POST(request: Request) {
     const [local] = await dbModule.db.select({
       id: schema.locales.id,
       precioAlquiler: schema.locales.precioAlquiler,
+      garantia: schema.locales.garantia,
     })
       .from(schema.locales)
       .where(eq(schema.locales.id, parsed.value.localId))
       .limit(1);
     if (!local) return NextResponse.json({ error: "Local no encontrado." }, { status: 404 });
     if (parsed.value.tipo === "separaciones") {
-      const amountError = validateLocalSeparationAmount(parsed.value, local.precioAlquiler);
+      const amountError = validateLocalSeparationAmount(
+        parsed.value,
+        local.precioAlquiler,
+        local.garantia,
+      );
       if (amountError) return NextResponse.json({ error: amountError }, { status: 400 });
     }
 

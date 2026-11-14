@@ -9,6 +9,12 @@ export type LocalInput = {
   mantenimiento?: unknown;
   servicios?: unknown;
   pagoLuzPorcentaje?: unknown;
+  pagoAguaPorcentaje?: unknown;
+  montoJardineria?: unknown;
+  impuestoRentaPorcentaje?: unknown;
+  letreroAltoCm?: unknown;
+  letreroAnchoCm?: unknown;
+  letreroProfundidadCm?: unknown;
 };
 
 export function parseLocal(input: LocalInput) {
@@ -60,6 +66,41 @@ export function parseLocal(input: LocalInput) {
     }
     numbers[key] = value.toFixed(2);
   }
+  const optionalNumberFields = [
+    ["pagoAguaPorcentaje", "Pago agua %", 100, 0],
+    ["montoJardineria", "Jardinería", 1_000_000_000_000, 0],
+    ["impuestoRentaPorcentaje", "Impuesto a la renta %", 100, 5],
+    ["letreroAltoCm", "Alto del letrero", 10_000_000, 0],
+    ["letreroAnchoCm", "Ancho del letrero", 10_000_000, 0],
+    ["letreroProfundidadCm", "Profundidad del letrero", 10_000_000, 0],
+  ] as const;
+  const optionalNumbers: Record<(typeof optionalNumberFields)[number][0], string> = {
+    pagoAguaPorcentaje: "0.00",
+    montoJardineria: "0.00",
+    impuestoRentaPorcentaje: "5.00",
+    letreroAltoCm: "0.00",
+    letreroAnchoCm: "0.00",
+    letreroProfundidadCm: "0.00",
+  };
+  for (const [key, label, max, fallback] of optionalNumberFields) {
+    const raw = input[key];
+    if (
+      raw === null ||
+      raw === undefined ||
+      (typeof raw === "string" && raw.trim() === "")
+    ) {
+      optionalNumbers[key] = fallback.toFixed(2);
+      continue;
+    }
+    if (typeof raw !== "number" && typeof raw !== "string") {
+      return { error: `${label} debe ser numérico.` } as const;
+    }
+    const value = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(value) || value < 0 || value > max) {
+      return { error: `${label} debe ser un número entre 0 y ${max}.` } as const;
+    }
+    optionalNumbers[key] = value.toFixed(2);
+  }
   const servicios =
     typeof input.servicios === "string" ? input.servicios.trim() : "";
   if (servicios.length > 2000) {
@@ -77,6 +118,7 @@ export function parseLocal(input: LocalInput) {
       mantenimiento: numbers.mantenimiento,
       servicios,
       pagoLuzPorcentaje: numbers.pagoLuzPorcentaje,
+      ...optionalNumbers,
     },
   } as const;
 }

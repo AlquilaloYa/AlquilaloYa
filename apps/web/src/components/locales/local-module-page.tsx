@@ -102,8 +102,7 @@ const STATUS_SEPARATION = [
   { value: "CANCELADA", label: "Cancelada" },
 ];
 const TYPE_SEPARATION = [
-  { value: "500", label: "S/ 500" },
-  { value: "TOTAL", label: "Total del alquiler" },
+  { value: "GARANTIA", label: "Pago de la garantía" },
   { value: "FLUCTUANTE", label: "Monto personalizado" },
 ];
 const STATUS_CONTRACT = [
@@ -601,7 +600,8 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
       if (module === "separaciones") {
         Object.assign(initialForm, {
           localId,
-          monto: "500",
+          tipoSeparacion: "GARANTIA",
+          monto: locales.find((item) => item.id === localId)?.garantia ?? "0",
           diasTiempo: "1",
           garantiaExtendida: false,
           fecha: new Date().toISOString().slice(0, 10),
@@ -869,7 +869,22 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
       const selected = options.find((option) => option.value === currentStatus) ?? options[0];
       return selected ? [selected] : [];
     }
-    if (field.options) return field.options;
+    if (field.options) {
+      if (field.name === "tipoSeparacion") {
+        const current = String(form.tipoSeparacion ?? "");
+        const currentIsLegacy = ["500", "TOTAL"].includes(current);
+        if (currentIsLegacy && !field.options.some((option) => option.value === current)) {
+          return [
+            {
+              value: current,
+              label: current === "500" ? "S/ 500 (registro anterior)" : "Total del alquiler (registro anterior)",
+            },
+            ...field.options,
+          ];
+        }
+      }
+      return field.options;
+    }
     const relationType = (
       Object.entries(config.references) as ["contactos" | "separaciones" | "contratos", string][]
     ).find(([, fieldName]) => fieldName === field.name)?.[0];
@@ -884,6 +899,14 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
     const rawValue = row[column.name];
     const value = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
     if (column.name === "estadoVista") return estadoLabel(String(value ?? ""));
+    if (column.name === "tipoSeparacion") {
+      return ({
+        GARANTIA: "Pago de la garantía",
+        FLUCTUANTE: "Monto personalizado",
+        "500": "S/ 500 (registro anterior)",
+        TOTAL: "Total del alquiler (registro anterior)",
+      } as Record<string, string>)[String(value ?? "")] ?? String(value ?? "—");
+    }
     if (column.name === "tipoPersona") {
       return value === PersonType.LEGAL ? "Jurídica" : "Natural";
     }
@@ -1140,10 +1163,24 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
                 const options = fieldOptions(field);
                 const missingOptions = field.type === "select" && !field.options && options.length === 0;
                 const required = field.required || (field.name === "ruc" && form.tipoPersona === PersonType.LEGAL);
+                const hasSelectedOption = options.some((option) => option.value === String(value));
+                const selectPlaceholder = field.name === "localId"
+                  ? "Selecciona un local"
+                  : field.name === "contactId"
+                    ? "Selecciona un contacto"
+                    : field.name === "contractId"
+                      ? "Selecciona un contrato"
+                      : "Selecciona una opción";
+                const fieldLabel =
+                  module === "separaciones" &&
+                  field.name === "monto" &&
+                  form.tipoSeparacion === "GARANTIA"
+                    ? "Pago de garantía (S/)"
+                    : field.label;
                 const Wrapper = field.type === "file" ? "div" : "label";
                 return (
                   <Wrapper key={field.name} className={`space-y-1 text-sm ${field.type === "textarea" || field.type === "file" ? "sm:col-span-2" : ""}`}>
-                    <span>{field.label}</span>
+                    <span>{fieldLabel}</span>
                     {field.type === "file" ? (
                       <div className="space-y-2">
                         <input
@@ -1197,24 +1234,37 @@ export function LocalModulePage({ module }: { module: LocalModule }) {
                           : {}),
                         ...(field.name === "localId" && module === "separaciones"
                           ? {
-                              monto: form.tipoSeparacion === "TOTAL"
-                                ? locales.find((item) => item.id === event.target.value)?.precioAlquiler ?? "0"
-                                : "500",
+                              monto: form.tipoSeparacion === "GARANTIA"
+                                ? locales.find((item) => item.id === event.target.value)?.garantia ?? "0"
+                                : form.tipoSeparacion === "TOTAL"
+                                  ? locales.find((item) => item.id === event.target.value)?.precioAlquiler ?? "0"
+                                  : form.tipoSeparacion === "500"
+                                    ? "500"
+                                    : form.monto,
                             }
                           : {}),
                         ...(field.name === "tipoSeparacion" && event.target.value !== "FLUCTUANTE"
-                          ? { monto: event.target.value === "TOTAL" ? contactFormLocal?.precioAlquiler ?? "0" : "500" }
+                          ? {
+                              monto: event.target.value === "GARANTIA"
+                                ? contactFormLocal?.garantia ?? "0"
+                                : event.target.value === "TOTAL"
+                                  ? contactFormLocal?.precioAlquiler ?? "0"
+                                  : "500",
+                            }
                           : {}),
                       }))} className="h-10 w-full rounded-md border bg-background px-3 disabled:opacity-50">
-                        {field.name === "localId" && !value ? <option value="">Selecciona un local</option> : null}
+                        {required && !hasSelectedOption ? <option value="">{selectPlaceholder}</option> : null}
                         {!field.required ? <option value="">Ninguno</option> : null}
                         {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                       </select>
                     ) : field.type === "checkbox" ? (
                       <input type="checkbox" checked={Boolean(value)} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.checked }))} className="ml-2 h-4 w-4 align-middle" />
                     ) : (
-                      <input required={required} type={field.type} min={field.type === "number" ? field.name === "diasTiempo" ? "1" : "0" : undefined} step={field.type === "number" ? field.name === "diasTiempo" ? "1" : "0.01" : undefined} value={String(value)} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))} className="h-10 w-full rounded-md border bg-background px-3" />
+                      <input required={required} type={field.type} min={field.type === "number" ? field.name === "diasTiempo" ? "1" : "0" : undefined} step={field.type === "number" ? field.name === "diasTiempo" ? "1" : "0.01" : undefined} readOnly={module === "separaciones" && field.name === "monto" && form.tipoSeparacion === "GARANTIA"} value={String(value)} onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))} className="h-10 w-full rounded-md border bg-background px-3 read-only:bg-muted" />
                     )}
+                    {module === "separaciones" && field.name === "monto" && form.tipoSeparacion === "GARANTIA" ? (
+                      <span className="block text-xs text-muted-foreground">Se toma del monto de garantía configurado para el local.</span>
+                    ) : null}
                     {field.name === "estado" && editing ? <span className="block text-xs text-muted-foreground">Estado actual: {estadoLabel(String(value))}. Usa las acciones del flujo para cambiarlo.</span> : null}
                     {missingOptions ? <span className="block text-xs text-muted-foreground">Primero registra elementos relacionados en su sección.</span> : null}
                   </Wrapper>
